@@ -18,19 +18,20 @@ import Logo from "../assets/Logo.svg"; // Import the SVG logo
 const Code = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  const email = route.params?.email || '';
+  const emailOrPhone = route.params?.emailOrPhone || '';
   const [code, setCode] = React.useState("");
   const [loading, setLoading] = React.useState(false);
 
   const handleContinue = async () => {
     setLoading(true);
     try {
-      const data = await verifyOtp(email, code.trim());
+      const data = await verifyOtp(emailOrPhone, code.trim());
       console.log('Full response data:', data);
       if (data.accessToken) {
         await AsyncStorage.setItem('token', data.accessToken);
       }
       setLoading(false);
+      setCode('');
       Alert.alert("Success", "OTP verified successfully!", [
         { text: "OK", onPress: () => navigation.navigate('HomeScreen') }
       ]);
@@ -47,7 +48,7 @@ const Code = () => {
    
       <Text style={styles.title}>Verify OTP</Text>
       <Text style={styles.description}>
-        Enter the code sent to your email 
+        Enter the code sent to your email or phone
       </Text>
       <TextInput
         style={styles.input}

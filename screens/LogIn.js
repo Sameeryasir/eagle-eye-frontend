@@ -25,7 +25,8 @@ const LogIn = () => {
     try {
       await sendOtp(input.trim());
       setLoading(false);
-      navigation.navigate("Verification Code", { email: input.trim() });
+      navigation.navigate("Verification Code", { emailOrPhone: input.trim() });
+      setInput(""); // Clear the input after successful navigation
     } catch (error) {
       setLoading(false);
       Alert.alert("Error", error.message || "Failed to send OTP");
@@ -46,7 +47,7 @@ const LogIn = () => {
         placeholder="Email or Phone Number"
         value={input}
         onChangeText={setInput}
-        keyboardType="email-address"
+        keyboardType="default"
         autoCapitalize="none"
       />
       <TouchableOpacity

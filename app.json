@@ -7,32 +7,28 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-
     "splash": {
       "image": "./assets/icons/splash-icon-dark.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-
     "plugins": [
       [
         "expo-splash-screen",
         {
           "backgroundColor": "#ffffff",
-          "image": "./assets/images/splash-icon-dark.png",
+          "image": "./assets/icons/splash-icon-dark.png",
           "dark": {
-            "image": "./assets/images/splash-icon-dark.png",
+            "image": "./assets/icons/splash-icon-dark.png",
             "backgroundColor": "#ffffff"
           },
           "imageWidth": 200
         }
       ]
     ],
-
     "ios": {
       "supportsTablet": true
     },
-
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icons/mobile-icon.png",
@@ -41,16 +37,15 @@
       "edgeToEdgeEnabled": true,
       "package": "com.sameer_yasir.eagleEye"
     },
-
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
-
     "extra": {
       "eas": {
-        "projectId": "595be4b1-2164-4fed-8bb5-4b026abcba17"
+        "projectId": "35012417-c75c-4b31-89df-1a71d6aa5491"
       }
-    }
+    },
+    "owner": "sameer-yasir"
   }
 }
