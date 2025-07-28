@@ -1,14 +1,13 @@
 {
   "cli": {
-    "version": ">= 16.15.0",
-    "appVersionSource": "remote"
+    "version": ">= 16.15.0"
   },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "API_URL": "${API_URL}"
+        "ENV_FILE": "https://a16df58e9d7e.ngrok-free.app"
       }
     },
     "preview": {
@@ -17,13 +16,13 @@
         "buildType": "apk"
       },
       "env": {
-        "API_URL": "${API_URL}"
+        "ENV_FILE": "https://a16df58e9d7e.ngrok-free.app"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "API_URL": "${API_URL}"
+        "ENV_FILE": "https://a16df58e9d7e.ngrok-free.app"
       }
     }
   },
