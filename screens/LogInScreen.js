@@ -36,7 +36,7 @@ const LogIn = () => {
   return (
     <SafeAreaView style={styles.container}>
       {/* Image at the top */}
-      <Logo width={120} height={120} />
+      <Logo width={90} height={90} />
 
       <Text style={styles.title}>Login</Text>
       <Text style={styles.description}>

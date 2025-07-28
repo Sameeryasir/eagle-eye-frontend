@@ -2,8 +2,7 @@ import { API_URL } from '@env';
 
 export async function verifyOtp(emailOrPhone, code) {
   try {
-    // Determine if the input is an email or phone number
-    // Check if the input is numeric (phone) or contains characters (email)
+    
     const isNumeric = /^\d+$/.test(emailOrPhone);
     const requestBody = isNumeric 
       ? { phone: emailOrPhone, code }

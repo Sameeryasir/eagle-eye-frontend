@@ -16,12 +16,11 @@ const SignIn = () => {
   return (
     <SafeAreaView style={styles.container}>
       {/* Sharp image at the top */}
-           <Logo width={120} height={120} />
+           <Logo width={90} height={90} />
 
       <Text style={styles.title}>Welcome to{"\n"}EagleEye</Text>
       <Text style={styles.description}>
-        Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
-        tempor incididunt ut labore et dolore magna aliqua.
+  
       </Text>
       <TouchableOpacity
         style={styles.loginButton}
