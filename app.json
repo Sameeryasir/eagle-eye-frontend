@@ -17,17 +17,29 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#ffffff",
-          "image": "./assets/icons/splash-icon.png ",
+          "image": "./assets/icons/splash-icon.png",
           "dark": {
             "image": "./assets/icons/splash-icon-dark.png",
             "backgroundColor": "#ffffff"
           },
           "imageWidth": 200
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#000000",
+          "sounds": ["default"],
+          "mode": "production"
+        }
       ]
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIBackgroundModes": ["remote-notification"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -35,7 +47,18 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.sameer_yasir.eagleEye"
+      "package": "com.sameer_yasir.eagleEye",
+      "permissions": [
+        "NOTIFICATIONS",
+        "VIBRATE",
+        "WAKE_LOCK",
+        "RECEIVE_BOOT_COMPLETED"
+      ],
+      "notification": {
+        "icon": "./assets/icon.png",
+        "color": "#000000",
+        "defaultChannelId": "task-reminders"
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png",
