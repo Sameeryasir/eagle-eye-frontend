@@ -27,19 +27,34 @@ const Code = () => {
     try {
       const data = await verifyOtp(emailOrPhone, code.trim());
       console.log('Full response data:', data);
-      if (data.accessToken) {
-        await AsyncStorage.setItem('token', data.accessToken);
+  
+      // Store access_token and refresh_token in AsyncStorage
+      if (data.access_token) {
+        await AsyncStorage.setItem('token', data.access_token);
       }
+      if (data.refresh_token) {
+        await AsyncStorage.setItem('refreshToken', data.refresh_token);
+      }
+  
+      // Optional: store role and user info
+      const roleName = data.user?.role?.name;
+      if (roleName) {
+        await AsyncStorage.setItem('userRole', roleName);
+      }
+  
       setLoading(false);
       setCode('');
+  
       Alert.alert("Success", "OTP verified successfully!", [
         { text: "OK", onPress: () => navigation.navigate('HomeScreen') }
       ]);
+  
     } catch (error) {
       setLoading(false);
       Alert.alert("Error", error.message || "Failed to verify OTP");
     }
   };
+  
 
   return (
     <SafeAreaView style={styles.container}>

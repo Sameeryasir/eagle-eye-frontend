@@ -6,12 +6,16 @@ import {
   TouchableOpacity,
   Animated,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
 const Sidebar = ({ isVisible, onClose, onNavigate }) => {
+  const navigation = useNavigation();
   const slideAnim = React.useRef(new Animated.Value(-width)).current;
 
   React.useEffect(() => {
@@ -42,6 +46,46 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
     onClose();
   };
 
+  const handleLogout = async () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Clear all stored tokens and user data
+              await AsyncStorage.multiRemove([
+                'token',
+                'refreshToken',
+                'userRole',
+                'userId'
+              ]);
+              
+              // Close sidebar
+              onClose();
+              
+              // Navigate to SignIn screen
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'SignIn' }],
+              });
+            } catch (error) {
+              console.error('Error during logout:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <>
       {/* Backdrop */}
@@ -65,10 +109,10 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
         {/* User Profile Section */}
         <View style={styles.userSection}>
           <View style={styles.avatar}>
-            <Ionicons name="person" size={40} color="#666" />
+            <Ionicons name="person" size={40} color="black" />
           </View>
           <Text style={styles.userName}>Wen</Text>
-          <Text style={styles.userRole}>Admin</Text>
+          <Text style={styles.userRole}>Owner</Text>
         </View>
 
         {/* Navigation Items */}
@@ -85,7 +129,7 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
               <Ionicons
                 name={item.icon}
                 size={24}
-                color={item.isActive ? '#007AFF' : '#666'}
+                color={item.isActive ? 'black' : '#8E8E93'}
               />
               <Text
                 style={[
@@ -101,7 +145,7 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
 
         {/* Logout Section */}
         <View style={styles.logoutSection}>
-          <TouchableOpacity style={styles.logoutButton}>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Ionicons name="log-out" size={24} color="white" />
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
@@ -118,79 +162,86 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    zIndex: 999,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    zIndex: 9999,
   },
   sidebar: {
     position: 'absolute',
     top: 0,
     left: 0,
-    width: width * 0.8,
+    width: width * 0.75,
     height: '100%',
-    backgroundColor: 'white',
-    zIndex: 1000,
+    backgroundColor: '#FFFFFF',
+    zIndex: 10000,
     shadowColor: '#000',
     shadowOffset: {
-      width: 2,
+      width: 4,
       height: 0,
     },
     shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 10,
+    shadowRadius: 12,
+    elevation: 12,
   },
   userSection: {
     alignItems: 'center',
     paddingTop: 60,
     paddingBottom: 30,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#F2F2F7',
+    backgroundColor: 'white',
   },
   avatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: "#f0f0f0",
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 15,
+    marginBottom: 16,
+ 
   },
   userName: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 5,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 6,
+    letterSpacing: 0.5,
   },
   userRole: {
     fontSize: 14,
-    color: '#666',
+    color: '#8E8E93',
+    fontWeight: '500',
+    letterSpacing: 0.3,
   },
   navSection: {
     flex: 1,
     paddingTop: 20,
+    paddingHorizontal: 16,
   },
   navItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 15,
-    marginHorizontal: 15,
-    marginBottom: 5,
-    borderRadius: 10,
+    paddingVertical: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+    backgroundColor: 'transparent',
   },
   activeNavItem: {
-    backgroundColor: '#f0f8ff',
-    borderLeftWidth: 3,
-    borderLeftColor: '#007AFF',
+    backgroundColor: '#f0f0f0',
+    borderLeftWidth: 4,
+    borderLeftColor: 'black',
   },
   navText: {
     fontSize: 16,
-    color: '#666',
-    marginLeft: 15,
-    fontWeight: '500',
+    color: 'black',
+    marginLeft: 16,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   activeNavText: {
-    color: '#007AFF',
-    fontWeight: '600',
+    color: 'black',
+    fontWeight: '700',
   },
   logoutSection: {
     paddingHorizontal: 20,
@@ -199,16 +250,26 @@ const styles = StyleSheet.create({
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 15,
+    justifyContent: 'center',
+    paddingVertical: 16,
     paddingHorizontal: 20,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: 'black',
+    shadowColor: '#6c757d',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   logoutText: {
     fontSize: 16,
     color: 'white',
-    marginLeft: 15,
-    fontWeight: '500',
+    marginLeft: 12,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
 });
 

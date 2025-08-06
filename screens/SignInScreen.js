@@ -1,3 +1,4 @@
+import React, { useEffect } from "react";
 import {
   View,
   Text,
@@ -9,9 +10,29 @@ import {
 
 import Logo from "../assets/Logo.svg"; // Import the SVG logo
 import { useNavigation } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const SignIn = () => {
   const navigation = useNavigation(); // Get navigation object
+
+  useEffect(() => {
+    checkAuthStatus();
+  }, []);
+
+  const checkAuthStatus = async () => {
+    try {
+      // Check if token and user role exist
+      const token = await AsyncStorage.getItem('token');
+      const userRole = await AsyncStorage.getItem('userRole');
+
+      if (token && userRole === 'Owner') {
+        // User is authenticated and has Owner role, navigate to HomeScreen
+        navigation.replace("HomeScreen");
+      }
+    } catch (error) {
+      console.error('Error checking auth status:', error);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -22,7 +43,7 @@ const SignIn = () => {
       <Text style={styles.description}></Text>
       <TouchableOpacity
         style={styles.loginButton}
-        onPress={() => navigation.navigate("Login")} // Navigate to Login screen
+        onPress={() => navigation.navigate("LogIn")} // Navigate to Login screen
       >
         <Text style={styles.loginButtonText}>Login</Text>
       </TouchableOpacity>

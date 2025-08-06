@@ -25,7 +25,7 @@ const LogIn = () => {
     try {
       await sendOtp(input.trim());
       setLoading(false);
-      navigation.navigate("Verification Code", { emailOrPhone: input.trim() });
+      navigation.navigate("OtpScreen", { emailOrPhone: input.trim() });
       setInput(""); // Clear the input after successful navigation
     } catch (error) {
       setLoading(false);

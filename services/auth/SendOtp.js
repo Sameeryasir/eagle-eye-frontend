@@ -16,7 +16,6 @@ export async function sendOtp(emailOrPhone) {
     console.log('Request body:', requestBody);
 
     const response = await axios.post(`${API_URL}/auth/send-otp`, requestBody, {
-      timeout: 10000, // 10 second timeout
       headers: {
         'Content-Type': 'application/json',
       }
