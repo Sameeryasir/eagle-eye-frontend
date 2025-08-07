@@ -5,9 +5,12 @@ import LogIn from "./screens/LogInScreen";
 import Code from "./screens/OtpScreen";
 
 import HomeScreen from "./screens/HomeScreen";
+import AdminDetailScreen from "./screens/AdminDetailScreen";
 import CalenderScreen from "./screens/CalenderScreen";
 import TaskDetailScreen from "./screens/TaskDetailScreen";
+import ViewAllTasksScreen from "./screens/ViewAllTasksScreen";
 import CreateProjectScreen from "./screens/CreateProjectScreen";
+import CreateTaskScreen from "./screens/CreateTaskScreen";
 import UpdateProjectScreen from "./screens/UpdateProjectScreen";
 const Stack = createNativeStackNavigator();
 
@@ -47,6 +50,16 @@ export default function App() {
           }}
         />
         <Stack.Screen
+          name="AdminDetailScreen"
+          component={AdminDetailScreen}
+          options={{
+            headerShown: false,
+            title: "Admin Dashboard",
+            headerBackTitleVisible: false,
+            headerTitleAlign: "center",
+          }}
+        />
+        <Stack.Screen
           name="CalenderScreen"
           component={CalenderScreen}
           options={{
@@ -67,11 +80,31 @@ export default function App() {
           }}
         />
         <Stack.Screen
+          name="ViewAllTasksScreen"
+          component={ViewAllTasksScreen}
+          options={{
+            headerShown: false,
+            title: "All Tasks",
+            headerBackTitleVisible: false,
+            headerTitleAlign: "center",
+          }}
+        />
+        <Stack.Screen
           name="CreateProject"
           component={CreateProjectScreen}
           options={{
             headerShown: true,
             title: "Create Project",
+            headerBackTitleVisible: false,
+            headerTitleAlign: "center",
+          }}
+        />
+        <Stack.Screen
+          name="CreateTask"
+          component={CreateTaskScreen}
+          options={{
+            headerShown: true,
+            title: "Create Task",
             headerBackTitleVisible: false,
             headerTitleAlign: "center",
           }}

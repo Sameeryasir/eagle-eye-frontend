@@ -4,7 +4,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
   StyleSheet,
   Alert,
   KeyboardAvoidingView,
@@ -14,19 +13,29 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { createProject } from '../services/projects/createProject';
 
-function CreateProjectScreen({ navigation }) {
-  const [projectData, setProjectData] = useState({
-    name: '',
+import { createTask } from '../services/tasks/createTask';
+
+function CreateTaskScreen({ navigation, route }) {
+  const [taskData, setTaskData] = useState({
+    title: '',
     description: '',
+    assignedTo: '',
   });
-  const [startDate, setStartDate] = useState(new Date());
-  const [endDate, setEndDate] = useState(new Date());
+  const [startDateTime, setStartDateTime] = useState(new Date());
+  const [endDateTime, setEndDateTime] = useState(new Date());
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  
+  // Get projectId from route params if available
+  const { projectId } = route.params || {};
+  
+  // Log projectId for debugging
+  console.log('CreateTaskScreen - projectId:', projectId);
 
   useEffect(() => {
     // Add keyboard listeners
@@ -51,7 +60,7 @@ function CreateProjectScreen({ navigation }) {
   }, []);
 
   const handleInputChange = (field, value) => {
-    setProjectData(prev => ({
+    setTaskData(prev => ({
       ...prev,
       [field]: value
     }));
@@ -60,14 +69,29 @@ function CreateProjectScreen({ navigation }) {
   const handleStartDateChange = (event, selectedDate) => {
     setShowStartDatePicker(false);
     if (selectedDate) {
-      // Set time to midnight (00:00:00) for consistency
       const newDate = new Date(selectedDate);
-      newDate.setHours(0, 0, 0, 0);
-      setStartDate(newDate);
+      newDate.setHours(startDateTime.getHours());
+      newDate.setMinutes(startDateTime.getMinutes());
+      setStartDateTime(newDate);
       
       // Ensure end date is not before start date
-      if (newDate > endDate) {
-        setEndDate(newDate);
+      if (newDate > endDateTime) {
+        setEndDateTime(newDate);
+      }
+    }
+  };
+
+  const handleStartTimeChange = (event, selectedDate) => {
+    setShowStartTimePicker(false);
+    if (selectedDate) {
+      const newDate = new Date(startDateTime);
+      newDate.setHours(selectedDate.getHours());
+      newDate.setMinutes(selectedDate.getMinutes());
+      setStartDateTime(newDate);
+      
+      // Ensure end date is not before start date
+      if (newDate > endDateTime) {
+        setEndDateTime(newDate);
       }
     }
   };
@@ -75,60 +99,102 @@ function CreateProjectScreen({ navigation }) {
   const handleEndDateChange = (event, selectedDate) => {
     setShowEndDatePicker(false);
     if (selectedDate) {
-      // Set time to midnight (00:00:00) for consistency
       const newDate = new Date(selectedDate);
-      newDate.setHours(0, 0, 0, 0);
-      setEndDate(newDate);
+      newDate.setHours(endDateTime.getHours());
+      newDate.setMinutes(endDateTime.getMinutes());
+      setEndDateTime(newDate);
     }
   };
 
-  const handleCreateProject = async () => {
+  const handleEndTimeChange = (event, selectedDate) => {
+    setShowEndTimePicker(false);
+    if (selectedDate) {
+      const newDate = new Date(endDateTime);
+      newDate.setHours(selectedDate.getHours());
+      newDate.setMinutes(selectedDate.getMinutes());
+      setEndDateTime(newDate);
+    }
+  };
+
+  const formatDateTime = (date) => {
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  const handleCreateTask = async () => {
     // Validate required fields
-    if (!projectData.name.trim()) {
-      Alert.alert('Error', 'Project name is required');
+    if (!taskData.title.trim()) {
+      Alert.alert('Error', 'Task title is required');
       return;
     }
 
-    if (!projectData.description.trim()) {
-      Alert.alert('Error', 'Project description is required');
+    if (!taskData.description.trim()) {
+      Alert.alert('Error', 'Task description is required');
+      return;
+    }
+
+    // Validate that projectId is available
+    if (!projectId) {
+      Alert.alert('Error', 'Project ID is required to create a task');
       return;
     }
 
     // Validate and format dates
     const now = new Date();
-    now.setHours(0, 0, 0, 0); // Set to midnight for date-only comparison
     
-    // Ensure start date is not in the past
-    if (startDate <= now) {
-      Alert.alert('Error', 'Start date must be in the future');
+    // Ensure start time is not in the past
+    if (startDateTime <= now) {
+      Alert.alert('Error', 'Start date and time must be in the future');
       return;
     }
 
-    // Ensure end date is after start date
-    if (endDate <= startDate) {
-      Alert.alert('Error', 'End date must be after start date');
+    // Ensure end time is after start time
+    if (endDateTime <= startDateTime) {
+      Alert.alert('Error', 'End date and time must be after start date and time');
       return;
     }
 
-    const startDateISO = startDate.toISOString();
-    const endDateISO = endDate.toISOString();
+    // Additional validation for reasonable time ranges
+    const timeDifference = endDateTime.getTime() - startDateTime.getTime();
+    const minDuration = 15 * 60 * 1000; // 15 minutes in milliseconds
+    const maxDuration = 365 * 24 * 60 * 60 * 1000; // 1 year in milliseconds
+    
+    if (timeDifference < minDuration) {
+      Alert.alert('Error', 'Task duration must be at least 15 minutes');
+      return;
+    }
+    
+    if (timeDifference > maxDuration) {
+      Alert.alert('Error', 'Task duration cannot exceed 1 year');
+      return;
+    }
+
+    const startTime = startDateTime.toISOString();
+    const endTime = endDateTime.toISOString();
 
     setIsLoading(true);
     
     try {
       // Prepare the data for API call
-      const projectPayload = {
-        name: projectData.name.trim(),
-        description: projectData.description.trim(),
-        startDate: startDateISO,
-        endDate: endDateISO,
+      const taskPayload = {
+        title: taskData.title.trim(),
+        description: taskData.description.trim(),
+        startTime: startTime,
+        endTime: endTime,
+        projectId: projectId, // Include projectId if available
       };
 
-      const response = await createProject(projectPayload);
+      const response = await createTask(taskPayload);
       
       Alert.alert(
         'Success',
-        'Project created successfully!',
+        'Task created successfully!',
         [
           {
             text: 'OK',
@@ -137,9 +203,9 @@ function CreateProjectScreen({ navigation }) {
         ]
       );
     } catch (error) {
-      console.error('Error creating project:', error);
+      console.error('Error creating task:', error);
       
-      let errorMessage = 'Failed to create project. Please try again.';
+      let errorMessage = 'Failed to create task. Please try again.';
       
       // Handle different types of error responses
       if (error.response?.data?.message) {
@@ -176,9 +242,7 @@ function CreateProjectScreen({ navigation }) {
     );
   };
 
-  const dismissKeyboard = () => {
-    Keyboard.dismiss();
-  };
+
 
   return (
     <View style={styles.container}>
@@ -188,36 +252,30 @@ function CreateProjectScreen({ navigation }) {
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
         <View style={styles.mainContainer}>
-          <ScrollView 
-            style={styles.scrollView} 
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            onScrollBeginDrag={dismissKeyboard}
-          >
+          <View style={styles.content}>
             <View style={styles.header}>
-              <Text style={styles.headerTitle}>Create New Project</Text>
-              <Text style={styles.headerSubtitle}>Fill in the details below to create your project</Text>
+              <Text style={styles.headerTitle}>Create New Task</Text>
+              <Text style={styles.headerSubtitle}>Fill in the details below to create your task</Text>
             </View>
 
             <View style={styles.formContainer}>
-              {/* Project Name */}
+              {/* Task Title */}
               <View style={styles.inputGroup}>
                 <View style={styles.labelRow}>
-                  <Ionicons name="folder" size={20} color="black" style={styles.labelIcon} />
-                  <Text style={styles.label}>Project Name *</Text>
+                  <Ionicons name="checkmark-circle" size={20} color="black" style={styles.labelIcon} />
+                  <Text style={styles.label}>Task Title *</Text>
                 </View>
                 <TextInput
                   style={styles.textInput}
-                  placeholder="Enter project name"
-                  value={projectData.name}
-                  onChangeText={(value) => handleInputChange('name', value)}
+                  placeholder="Enter task title"
+                  value={taskData.title}
+                  onChangeText={(value) => handleInputChange('title', value)}
                   placeholderTextColor="#999"
                   returnKeyType="next"
                 />
               </View>
 
-              {/* Project Description */}
+              {/* Task Description */}
               <View style={styles.inputGroup}>
                 <View style={styles.labelRow}>
                   <Ionicons name="document-text" size={20} color="black" style={styles.labelIcon} />
@@ -225,8 +283,8 @@ function CreateProjectScreen({ navigation }) {
                 </View>
                 <TextInput
                   style={[styles.textInput, styles.textArea]}
-                  placeholder="Describe your project"
-                  value={projectData.description}
+                  placeholder="Describe your task"
+                  value={taskData.description}
                   onChangeText={(value) => handleInputChange('description', value)}
                   multiline
                   numberOfLines={4}
@@ -235,41 +293,64 @@ function CreateProjectScreen({ navigation }) {
                 />
               </View>
 
-              {/* Start Date */}
+
+              {/* Start Date & Time */}
               <View style={styles.inputGroup}>
                 <View style={styles.labelRow}>
                   <Ionicons name="calendar" size={20} color="black" style={styles.labelIcon} />
-                  <Text style={styles.label}>Start Date *</Text>
+                  <Text style={styles.label}>Start Date & Time *</Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.dateButton}
-                  onPress={() => setShowStartDatePicker(true)}
-                >
-                  <Text style={styles.dateButtonText}>
-                    {startDate.toLocaleDateString()}
-                  </Text>
-                  <Ionicons name="calendar-outline" size={16} color="#666" />
-                </TouchableOpacity>
+                <View style={styles.dateTimeContainer}>
+                  <TouchableOpacity
+                    style={[styles.dateTimeButton, styles.dateButton]}
+                    onPress={() => setShowStartDatePicker(true)}
+                  >
+                    <Text style={styles.dateTimeButtonText}>
+                      {startDateTime.toLocaleDateString()}
+                    </Text>
+                    <Ionicons name="calendar-outline" size={16} color="#666" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.dateTimeButton, styles.timeButton]}
+                    onPress={() => setShowStartTimePicker(true)}
+                  >
+                    <Text style={styles.dateTimeButtonText}>
+                      {startDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                    <Ionicons name="time-outline" size={16} color="#666" />
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              {/* End Date */}
+              {/* End Date & Time */}
               <View style={styles.inputGroup}>
                 <View style={styles.labelRow}>
                   <Ionicons name="calendar" size={20} color="black" style={styles.labelIcon} />
-                  <Text style={styles.label}>End Date *</Text>
+                  <Text style={styles.label}>End Date & Time *</Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.dateButton}
-                  onPress={() => setShowEndDatePicker(true)}
-                >
-                  <Text style={styles.dateButtonText}>
-                    {endDate.toLocaleDateString()}
-                  </Text>
-                  <Ionicons name="calendar-outline" size={16} color="#666" />
-                </TouchableOpacity>
+                <View style={styles.dateTimeContainer}>
+                  <TouchableOpacity
+                    style={[styles.dateTimeButton, styles.dateButton]}
+                    onPress={() => setShowEndDatePicker(true)}
+                  >
+                    <Text style={styles.dateTimeButtonText}>
+                      {endDateTime.toLocaleDateString()}
+                    </Text>
+                    <Ionicons name="calendar-outline" size={16} color="#666" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.dateTimeButton, styles.timeButton]}
+                    onPress={() => setShowEndTimePicker(true)}
+                  >
+                    <Text style={styles.dateTimeButtonText}>
+                      {endDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                    <Ionicons name="time-outline" size={16} color="#666" />
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
-          </ScrollView>
+          </View>
 
           {/* Action Buttons - Only show when keyboard is not visible */}
           {!keyboardVisible && (
@@ -283,36 +364,53 @@ function CreateProjectScreen({ navigation }) {
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.createButton, isLoading && styles.disabledButton]} 
-                onPress={handleCreateProject}
+                onPress={handleCreateTask}
                 disabled={isLoading}
               >
                 {isLoading ? (
                   <ActivityIndicator color="#ffffff" size="small" />
                 ) : (
-                  <Text style={styles.createButtonText}>Create Project</Text>
+                  <Text style={styles.createButtonText}>Create Task</Text>
                 )}
               </TouchableOpacity>
             </View>
           )}
 
-          {/* Date Pickers */}
+          {/* Date and Time Pickers */}
           {showStartDatePicker && (
             <DateTimePicker
-              value={startDate}
+              value={startDateTime}
               mode="date"
               onChange={handleStartDateChange}
               minimumDate={new Date()}
             />
           )}
 
-          {showEndDatePicker && (
+          {showStartTimePicker && (
             <DateTimePicker
-              value={endDate}
-              mode="date"
-              onChange={handleEndDateChange}
-              minimumDate={startDate}
+              value={startDateTime}
+              mode="time"
+              onChange={handleStartTimeChange}
             />
           )}
+
+          {showEndDatePicker && (
+            <DateTimePicker
+              value={endDateTime}
+              mode="date"
+              onChange={handleEndDateChange}
+              minimumDate={startDateTime}
+            />
+          )}
+
+          {showEndTimePicker && (
+            <DateTimePicker
+              value={endDateTime}
+              mode="time"
+              onChange={handleEndTimeChange}
+            />
+          )}
+
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -331,11 +429,8 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
   },
-  scrollView: {
+  content: {
     flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 100, // Extra padding for buttons when keyboard is not visible
   },
   header: {
     marginBottom: 30,
@@ -384,7 +479,11 @@ const styles = StyleSheet.create({
     height: 100,
     textAlignVertical: 'top',
   },
-  dateButton: {
+  dateTimeContainer: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  dateTimeButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -394,11 +493,18 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: '#f8f9fa',
   },
-  dateButtonText: {
+  dateButton: {
+    flex: 2,
+  },
+  timeButton: {
+    flex: 1,
+  },
+  dateTimeButtonText: {
     fontSize: 16,
     color: '#333333',
     fontWeight: '500',
   },
+
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -438,4 +544,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CreateProjectScreen;
+export default CreateTaskScreen;

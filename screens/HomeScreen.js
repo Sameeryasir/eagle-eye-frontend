@@ -32,9 +32,8 @@ function HomeScreen({ navigation }) {
   const [selectedProject, setSelectedProject] = useState(null);
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
-  const [refreshing, setRefreshing] = useState(false);
 
-  // Use useFocusEffect to refresh data when screen comes into focus
+  // Use useFocusEffect to fetch projects every time screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       fetchProjects();
@@ -188,57 +187,35 @@ function HomeScreen({ navigation }) {
     setSelectedProject(null);
   };
 
-  const onRefresh = React.useCallback(async () => {
-    setRefreshing(true);
-    try {
-      await fetchProjects();
-    } finally {
-      setRefreshing(false);
-    }
-  }, []);
-
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="white" />
-      
-      <KeyboardAvoidingView 
-        style={styles.keyboardAvoidingView}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
-      >
-        <SafeAreaView style={styles.safeArea}>
-          {/* Custom Header */}
-          <View style={styles.customHeader}>
-            <TouchableOpacity
-              style={styles.menuButton}
-              onPress={handleSidebarToggle}
-            >
-              <Ionicons name="menu" size={24} color="#333" />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Projects</Text>
-            <TouchableOpacity style={styles.notificationButton}>
-              <Ionicons name="notifications" size={24} color="#333" />
-            </TouchableOpacity>
-          </View>
 
-          {/* Project Cards */}
-          <ScrollView 
-            style={styles.content} 
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
-            bounces={true}
-            alwaysBounceVertical={false}
-            keyboardShouldPersistTaps="handled"
-            onScrollBeginDrag={dismissKeyboard}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={["#007AFF"]}
-                tintColor="#007AFF"
-              />
-            }
-          >
+      {/* Custom Header */}
+      <View style={styles.customHeader}>
+        <TouchableOpacity
+          style={styles.menuButton}
+          onPress={handleSidebarToggle}
+        >
+          <Ionicons name="menu" size={24} color="#333" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Projects</Text>
+        <TouchableOpacity style={styles.notificationButton}>
+          <Ionicons name="notifications" size={24} color="#333" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Content Area */}
+      <View style={styles.contentContainer}>
+        <ScrollView 
+          style={styles.content} 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          bounces={true}
+          alwaysBounceVertical={false}
+          keyboardShouldPersistTaps="handled"
+          onScrollBeginDrag={dismissKeyboard}
+        >
             {/* Search Bar */}
             <View style={styles.searchContainer}>
               <View style={styles.searchBar}>
@@ -278,7 +255,11 @@ function HomeScreen({ navigation }) {
               </View>
             ) : (
               filteredProjects.map((project) => (
-                <TouchableOpacity key={project.id} style={styles.projectCard}>
+                <TouchableOpacity 
+                  key={project.id} 
+                  style={styles.projectCard}
+                  onPress={() => navigation.navigate('AdminDetailScreen', { projectId: project.id })}
+                >
                   <View style={styles.cardContent}>
                     <View style={styles.cardHeader}>
                       <Text style={styles.projectTitle}>{project.name}</Text>
@@ -306,19 +287,20 @@ function HomeScreen({ navigation }) {
                 </TouchableOpacity>
               ))
             )}
-          </ScrollView>
+        </ScrollView>
+      </View>
 
-          {/* Sidebar */}
-          <Sidebar
-            isVisible={sidebarVisible}
-            onClose={handleSidebarClose}
-            onNavigate={handleNavigation}
-          />
-        </SafeAreaView>
-      </KeyboardAvoidingView>
+      {/* Sidebar */}
+      <Sidebar
+        isVisible={sidebarVisible}
+        onClose={handleSidebarClose}
+        onNavigate={handleNavigation}
+      />
 
-      {/* Custom Bottom Navigation - Outside KeyboardAvoidingView */}
-      <CustomBottomNav keyboardVisible={keyboardVisible} />
+      {/* Bottom Navigation - Only show when keyboard is not visible */}
+      {!keyboardVisible && (
+        <CustomBottomNav />
+      )}
 
           {/* Dropdown Menu */}
           {menuVisible && (
@@ -366,16 +348,17 @@ const styles = StyleSheet.create({
   keyboardAvoidingView: {
     flex: 1,
   },
-  safeArea: {
+  contentContainer: {
     flex: 1,
+    backgroundColor: "white",
   },
   customHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingVertical: 20,
-    paddingTop: 15,
+    paddingVertical: 15,
+    paddingTop: Platform.OS === 'ios' ? 0 : StatusBar.currentHeight - 20,
     backgroundColor: "white",
     borderBottomWidth: 1,
     borderBottomColor: "#f0f0f0",

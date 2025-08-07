@@ -5,13 +5,19 @@ import { useNavigation } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
-export default function CustomBottomNav({ keyboardVisible = false }) {
+export default function CustomBottomNav({ keyboardVisible = false, task = false, projectId = null }) {
   const navigation = useNavigation();
 
   const handleAddPress = () => {
-    navigation.navigate('CreateProject');
+    if (task) {
+      navigation.navigate('CreateTask', { projectId: projectId });
+    } else {
+      navigation.navigate('CreateProject');
+    }
   };
-
+ const navigateToHome =()=>{
+  navigation.navigate('HomeScreen')
+ }
   // Hide the bottom navigation when keyboard is visible
   if (keyboardVisible) {
     return null;
@@ -21,7 +27,7 @@ export default function CustomBottomNav({ keyboardVisible = false }) {
     <View style={styles.container}>
       {/* Bottom Nav Bar */}
       <View style={styles.navBar}>
-        <TouchableOpacity style={styles.iconButton}>
+        <TouchableOpacity style={styles.iconButton} onPress={navigateToHome}>
           <Icon name="home-outline" size={24} color="#fff" />
         </TouchableOpacity>
 
