@@ -286,7 +286,7 @@ export default function UpdateTaskModal({
               {/* Task Title */}
               <View className="mb-5">
                 <View className="flex-row items-center mb-2">
-                  <Ionicons name="checkmark-circle" size={20} color="black" style={{ marginRight: 8 }} />
+                  <Ionicons name="document-text" size={16} color="#374151" style={{ marginRight: 6 }} />
                   <Text className="text-[16px] font-semibold text-[#333]">Task Title *</Text>
                 </View>
                 <TextInput
@@ -302,7 +302,7 @@ export default function UpdateTaskModal({
               {/* Task Description */}
               <View className="mb-5">
                 <View className="flex-row items-center mb-2">
-                  <Ionicons name="document-text" size={20} color="black" style={{ marginRight: 8 }} />
+                  <Ionicons name="chatbubble-ellipses" size={16} color="#374151" style={{ marginRight: 6 }} />
                   <Text className="text-[16px] font-semibold text-[#333]">Description *</Text>
                 </View>
                 <TextInput
@@ -321,7 +321,7 @@ export default function UpdateTaskModal({
               {/* Start Date & Time */}
               <View className="mb-5">
                 <View className="flex-row items-center mb-2">
-                  <Ionicons name="calendar" size={20} color="black" style={{ marginRight: 8 }} />
+                  <Ionicons name="time" size={16} color="#374151" style={{ marginRight: 6 }} />
                   <Text className="text-[16px] font-semibold text-[#333]">Start Date & Time *</Text>
                 </View>
                 <View className="flex-row gap-2">
@@ -349,7 +349,7 @@ export default function UpdateTaskModal({
               {/* End Date & Time */}
               <View className="mb-5">
                 <View className="flex-row items-center mb-2">
-                  <Ionicons name="calendar" size={20} color="black" style={{ marginRight: 8 }} />
+                  <Ionicons name="calendar" size={16} color="#374151" style={{ marginRight: 6 }} />
                   <Text className="text-[16px] font-semibold text-[#333]">End Date & Time *</Text>
                 </View>
                 <View className="flex-row gap-2">

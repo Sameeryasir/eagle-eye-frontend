@@ -11,6 +11,7 @@ import {
   Platform,
   TouchableWithoutFeedback,
   ActivityIndicator,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,6 +23,7 @@ import UpdateTaskModal from "./components/UpdateTaskModal";
 import { deleteTaskById } from "../services/tasks/deleteTaskById";
 import { getTaskByProjectId } from "../services/tasks/getTaskByProjectId";
 import { createTask } from "../services/tasks/createTask";
+import { getEmployeesToAssignTask } from "../services/employees/getEmployeesOfTheCompany";
 import Loader from "../services/utils/loader";
 
 const searchBarClasses = `flex-row items-center rounded-2xl px-4 py-3 bg-[#F8FAFC] border border-[#EAECF0]`;
@@ -81,6 +83,10 @@ function ViewAllTasksScreen({ navigation, route }) {
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [pendingTimePicker, setPendingTimePicker] = useState(null); // 'start' or 'end'
   const [updateTaskModalVisible, setUpdateTaskModalVisible] = useState(false);
+  const [employees, setEmployees] = useState([]);
+  const [showAssignedDropdown, setShowAssignedDropdown] = useState(false);
+  const [activeAssignedDraftId, setActiveAssignedDraftId] = useState(null);
+  const [dropdownPosition, setDropdownPosition] = useState({ x: 0, y: 0, width: 0 });
 
   const { projectId } = route.params || {};
 
@@ -88,6 +94,7 @@ function ViewAllTasksScreen({ navigation, route }) {
     React.useCallback(() => {
       if (projectId) {
         loadProjectData();
+        loadEmployees();
       }
     }, [projectId])
   );
@@ -135,6 +142,17 @@ function ViewAllTasksScreen({ navigation, route }) {
         draft.id === draftId ? { ...draft, [field]: value } : draft
       )
     );
+  };
+
+  const loadEmployees = async () => {
+    try {
+      const response = await getEmployeesToAssignTask();
+      if (response && Array.isArray(response)) {
+        setEmployees(response);
+      }
+    } catch (error) {
+      console.error("Error loading employees:", error);
+    }
   };
 
   const removeDraftTask = (draftId) => {
@@ -284,6 +302,7 @@ function ViewAllTasksScreen({ navigation, route }) {
         startTime: draftTask.startTime.toISOString(),
         endTime: draftTask.endTime.toISOString(),
         projectId: projectId,
+        assignedToUserId: draftTask.assignedToUserId || null,
       };
 
       const response = await createTask(taskPayload);
@@ -484,106 +503,157 @@ function ViewAllTasksScreen({ navigation, route }) {
   const renderTaskCard = (task) => {
     if (task.isDraft) {
       return (
-        <View className="bg-[#f8f9fa] rounded-[16px] p-4 mb-3 border border-[#e9ecef]">
-          <View className="gap-4">
-            <View className="flex-row justify-between items-start mb-4">
-              <View className="flex-1 mr-3">
+        <View className="bg-[#f8f9fa] rounded-[8px] p-4 mb-4 border border-[#e9ecef] shadow-sm" style={{ overflow: 'visible' }}>
+          <View style={{ overflow: 'visible' }}>
+            <View className="flex-row justify-between items-center mb-4">
+              <View className="flex-row items-center flex-1">
+                <View className="flex-row items-center mr-1 min-w-[70px]">
+                  <Ionicons name="document-text" size={14} color="#374151" style={{ marginRight: 4 }} />
+                  <Text className="text-[15px] text-black font-semibold tracking-[0.3px]">
+                    Title:
+                  </Text>
+                </View>
                 <TextInput
-                  className="text-[18px] font-bold text-[#333] leading-6"
+                  className="flex-1 text-[15px] text-[#333] leading-6 bg-transparent"
                   placeholder="Enter task title..."
-                  placeholderTextColor="#999"
+                  placeholderTextColor="#9ca3af"
                   value={task.title}
                   onChangeText={(text) =>
                     updateDraftTask(task.id, "title", text)
                   }
+                  style={{ padding: 0, margin: 0 }}
                 />
               </View>
               <TouchableOpacity
-                className="p-1 rounded"
+                className="mb-1 rounded-full bg-red-50 ml-3"
                 onPress={() => removeDraftTask(task.id)}
               >
-                <Ionicons name="trash-outline" size={20} color="#666" />
+                <Ionicons name="trash-outline" size={16} color="#dc3545" />
               </TouchableOpacity>
             </View>
 
-            <View className="gap-4">
-              <View className="mb-2">
-                <Text className="text-[14px] text-[#666] font-semibold mb-1.5 uppercase tracking-[0.5px]">
-                  Description
-                </Text>
-                <TextInput
-                  className="text-[15px] text-[#555] leading-5 italic min-h-[40px]"
-                  placeholder="Enter task description..."
-                  placeholderTextColor="#999"
-                  value={task.description}
-                  onChangeText={(text) =>
-                    updateDraftTask(task.id, "description", text)
-                  }
-                  multiline
-                  style={{ textAlignVertical: "top" }}
-                />
-              </View>
-
-              <View className="flex-row justify-between gap-3">
-                <View className="flex-1 items-center py-2 px-1.5 bg-white rounded-[8px] border border-[#e0e0e0]">
-                  <Ionicons name="person" size={16} color="#666" />
-                  <Text className="text-[11px] text-[#666] font-medium mt-1 mb-0.5 text-center">
-                    Assigned
-                  </Text>
-                  <Text className="text-[13px] font-semibold text-[#333] text-center leading-4">
-                    Unassigned
-                  </Text>
+            <View>
+              
+              <View className="mb-1">
+                <View className="flex-row items-start">
+                  <View className="flex-row items-center mr-3 min-w-[85px]">
+                    <Ionicons name="chatbubble-ellipses" size={14} color="#374151" style={{ marginRight: 4 }} />
+                    <Text className="text-[15px] text-black font-semibold tracking-[0.3px]">
+                      Description:
+                    </Text>
+                  </View>
+                  <TextInput
+                    className="flex-1 text-[15px] text-[#333] leading-6 min-h-[30px] bg-transparent"
+                    placeholder="Enter task description..."
+                    placeholderTextColor="#9ca3af"
+                    value={task.description}
+                    onChangeText={(text) =>
+                      updateDraftTask(task.id, "description", text)
+                    }
+                    multiline
+                    style={{ textAlignVertical: "top", padding: 0, margin: 0 }}
+                  />
                 </View>
-
-                <TouchableOpacity
-                  className="flex-1 items-center py-2 px-1.5 bg-white rounded-[8px] border border-[#e0e0e0]"
-                  onPress={() => {
-                    setActiveDraftId(task.id);
-                    setShowStartDatePicker(true);
-                  }}
-                >
-                  <Ionicons name="calendar" size={16} color="#666" />
-                  <Text className="text-[11px] text-[#666] font-medium mt-1 mb-0.5 text-center">
-                    Start Date
-                  </Text>
-                  <Text className="text-[13px] font-semibold text-[#333] text-center leading-4">
-                    {task.startTime
-                      ? `${task.startTime.toLocaleDateString()} ${task.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-                      : "Not set"}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  className="flex-1 items-center py-2 px-1.5 bg-white rounded-[8px] border border-[#e0e0e0]"
-                  onPress={() => {
-                    setActiveDraftId(task.id);
-                    setShowEndDatePicker(true);
-                  }}
-                >
-                  <Ionicons name="calendar-outline" size={16} color="#666" />
-                  <Text className="text-[11px] text-[#666] font-medium mt-1 mb-0.5 text-center">
-                    End Date
-                  </Text>
-                  <Text className="text-[13px] font-semibold text-[#333] text-center leading-4">
-                    {task.endTime
-                      ? `${task.endTime.toLocaleDateString()} ${task.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-                      : "Not set"}
-                  </Text>
-                </TouchableOpacity>
               </View>
+
+              <View className="mb-3">
+                <View className="flex-row items-start">
+                  <View className="flex-row items-center mr-3 min-w-[70px]">
+                    <Ionicons name="person" size={14} color="#374151" style={{ marginRight: 4 }} />
+                    <Text className="text-[15px] text-black font-semibold tracking-[0.3px]">
+                      Assigned:
+                    </Text>
+                  </View>
+                  <View className="flex-1">
+                    <TouchableOpacity
+                      className="flex-row items-center"
+                      onPress={() => {
+                        if (activeAssignedDraftId === task.id && showAssignedDropdown) {
+                          setShowAssignedDropdown(false);
+                          setActiveAssignedDraftId(null);
+                        } else {
+                          setActiveAssignedDraftId(task.id);
+                          setShowAssignedDropdown(true);
+                        }
+                      }}
+                    >
+                      <Text className="text-[15px] text-[#333] leading-6">
+                        {task.assignedTo
+                          ? `${task.assignedTo.first_name || ""} ${task.assignedTo.last_name || ""}`.trim() ||
+                            task.assignedTo.email
+                          : "Select Employee"}
+                      </Text>
+                      <Ionicons 
+                        name={showAssignedDropdown && activeAssignedDraftId === task.id ? "chevron-up" : "chevron-down"} 
+                        size={16} 
+                        color="#6b7280" 
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                className="mb-3"
+                onPress={() => {
+                  setActiveDraftId(task.id);
+                  setShowStartDatePicker(true);
+                }}
+              >
+                <View className="flex-row items-start">
+                  <View className="flex-row items-center mr-3 min-w-[85px]">
+                    <Ionicons name="time" size={14} color="#374151" style={{ marginRight: 4 }} />
+                    <Text className="text-[15px] text-black font-semibold tracking-[0.3px]">
+                      Start Date:
+                    </Text>
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-[15px] text-[#333] leading-6">
+                      {task.startTime
+                        ? `${task.startTime.toLocaleDateString()} ${task.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                        : "Not set"}
+                    </Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                className="mb-3"
+                onPress={() => {
+                  setActiveDraftId(task.id);
+                  setShowEndDatePicker(true);
+                }}
+              >
+                <View className="flex-row items-start">
+                  <View className="flex-row items-center mr-3 min-w-[85px]">
+                    <Ionicons name="calendar" size={14} color="#374151" style={{ marginRight: 4 }} />
+                    <Text className="text-[15px] text-black font-semibold tracking-[0.3px]">
+                      End Date:
+                    </Text>
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-[15px] text-[#333] leading-6">
+                      {task.endTime
+                        ? `${task.endTime.toLocaleDateString()} ${task.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                        : "Not set"}
+                    </Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
             </View>
 
-            <View className="pt-3">
+            <View className="mt-3">
               <View className="items-center">
                 <TouchableOpacity
-                  className={`bg-black py-2 px-6 rounded-lg ${isCreatingTask ? "opacity-60" : ""}`}
+                  className={`bg-black py-2 px-6 rounded-lg shadow-sm ${isCreatingTask ? "opacity-60" : "active:opacity-80"}`}
+                  style={{ minWidth: 120, alignItems: 'center', justifyContent: 'center' }}
                   onPress={() => handleCreateTaskFromDraft(task)}
                   disabled={isCreatingTask}
                 >
                   {isCreatingTask ? (
                     <ActivityIndicator color="white" size="small" />
                   ) : (
-                    <Text className="text-white text-[14px] font-semibold">
+                    <Text className="text-white text-[15px] font-semibold tracking-[0.3px] ">
                       Create Task
                     </Text>
                   )}
@@ -596,66 +666,60 @@ function ViewAllTasksScreen({ navigation, route }) {
     }
 
     return (
-      <View className="bg-[#f8f9fa] rounded-[16px] p-4 mb-3 border border-[#e9ecef]">
-        <View className="gap-4">
-          <View className="flex-row justify-between items-start mb-4">
-            <View className="flex-1 mr-3">
-              <Text className="text-[18px] font-bold text-[#333] leading-6">
+      <View className="bg-[#f8f9fa] rounded-[8px] p-4 mb-4 border border-[#e9ecef] shadow-sm">
+        <View>
+          <View className="flex-row justify-between items-center mb-3">
+            <View className="flex-row items-center flex-1">
+              <View className="flex-row items-center mr-2 min-w-[70px]">
+                <Ionicons name="document-text" size={14} color="#374151" style={{ marginRight: 4 }} />
+                <Text className="text-[15px] text-black font-semibold tracking-[0.3px]">
+                  Title:
+                </Text>
+              </View>
+              <Text className="flex-1 text-[15px] text-[#333] leading-6">
                 {task.title}
               </Text>
             </View>
             <TouchableOpacity
-              className="p-1 rounded"
+              className="mb-1 rounded-full bg-gray-50 ml-3"
               onPress={(event) => handleMenuPress(task, event)}
             >
-              <Ionicons name="ellipsis-vertical" size={20} color="#666" />
+              <Ionicons name="ellipsis-vertical" size={16} color="#6b7280" />
             </TouchableOpacity>
           </View>
 
-          <View className="gap-4">
-            <View className="mb-2">
-              <Text className="text-[14px] text-[#666] font-semibold mb-1.5 uppercase tracking-[0.5px]">
-                Description
-              </Text>
-              <Text
-                className="text-[15px] text-[#555] leading-5 italic"
-                numberOfLines={2}
-              >
-                {task.description || "No description"}
-              </Text>
-            </View>
+          <View>
 
-            <View className="flex-row justify-between gap-3">
-              <View className="flex-1 items-center py-2 px-1.5 bg-white rounded-[8px] border border-[#e0e0e0]">
-                <Ionicons name="person" size={16} color="#666" />
-                <Text className="text-[11px] text-[#666] font-medium mt-1 mb-0.5 text-center">
-                  Assigned
-                </Text>
-                <Text className="text-[13px] font-semibold text-[#333] text-center leading-4">
+
+
+            <View className="mb-3">
+              <View className="flex-row items-start">
+                <View className="flex-row items-center mr-3 min-w-[85px]">
+                  <Ionicons name="person" size={14} color="#374151" style={{ marginRight: 4 }} />
+                  <Text className="text-[15px] text-black font-semibold tracking-[0.3px]">
+                    Assigned:
+                  </Text>
+                </View>
+                <Text className="flex-1 text-[15px] text-[#333] leading-6">
                   {getAssignedToName(task.assignedTo)}
                 </Text>
               </View>
+            </View>
 
-              <View className="flex-1 items-center py-2 px-1.5 bg-white rounded-[8px] border border-[#e0e0e0]">
-                <Ionicons name="calendar" size={16} color="#666" />
-                <Text className="text-[11px] text-[#666] font-medium mt-1 mb-0.5 text-center">
-                  Start Date
-                </Text>
-                <Text className="text-[13px] font-semibold text-[#333] text-center leading-4">
+            <View className="mb-3">
+              <View className="flex-row items-start">
+                <View className="flex-row items-center mr-3 min-w-[85px]">
+                  <Ionicons name="time" size={14} color="#374151" style={{ marginRight: 4 }} />
+                  <Text className="text-[15px] text-black font-semibold tracking-[0.3px]">
+                    Start Date:
+                  </Text>
+                </View>
+                <Text className="flex-1 text-[15px] text-[#333] leading-6">
                   {formatDateTime(task.startTime)}
                 </Text>
               </View>
-
-              <View className="flex-1 items-center py-2 px-1.5 bg-white rounded-[8px] border border-[#e0e0e0]">
-                <Ionicons name="calendar-outline" size={16} color="#666" />
-                <Text className="text-[11px] text-[#666] font-medium mt-1 mb-0.5 text-center">
-                  End Date
-                </Text>
-                <Text className="text-[13px] font-semibold text-[#333] text-center leading-4">
-                  {formatDateTime(task.endTime)}
-                </Text>
-              </View>
             </View>
+
           </View>
         </View>
       </View>
@@ -724,8 +788,72 @@ function ViewAllTasksScreen({ navigation, route }) {
           </TouchableOpacity>
         </View>
 
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View className="flex-1 bg-white">{renderContent()}</View>
+        <TouchableWithoutFeedback onPress={() => {
+          Keyboard.dismiss();
+          if (showAssignedDropdown) {
+            setShowAssignedDropdown(false);
+            setActiveAssignedDraftId(null);
+          }
+        }}>
+          <View className="flex-1 bg-white" style={{ position: 'relative' }}>
+            {renderContent()}
+            
+            {/* Global Dropdown for Employee Selection */}
+            {showAssignedDropdown && activeAssignedDraftId && (
+              <View 
+                className="absolute bg-white border border-gray-300 rounded-lg shadow-lg"
+                style={{
+                  top: dropdownPosition.y + 10,
+                  left: dropdownPosition.x,
+                  width: dropdownPosition.width,
+                  maxHeight: 120,
+                  elevation: 999999,
+                  zIndex: 999999,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 3.84,
+                }}
+              >
+                <ScrollView 
+                  showsVerticalScrollIndicator={true}
+                  nestedScrollEnabled={true}
+                  style={{ maxHeight: 160 }}
+                  contentContainerStyle={{ paddingVertical: 2 }}
+                >
+                  {employees.length > 0 ? (
+                    employees.map((employee) => (
+                      <TouchableOpacity
+                        key={employee.id}
+                        className="px-3 py-3 border-b border-gray-100 active:bg-gray-50"
+                        onPress={() => {
+                          updateDraftTask(activeAssignedDraftId, "assignedTo", employee);
+                          setShowAssignedDropdown(false);
+                          setActiveAssignedDraftId(null);
+                        }}
+                      >
+                        <Text className="text-[15px] text-[#333] font-medium">
+                          {`${employee.first_name || ""} ${employee.last_name || ""}`.trim() ||
+                            employee.email}
+                        </Text>
+                        {employee.email && (
+                          <Text className="text-[12px] text-[#666] mt-1">
+                            {employee.email}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    ))
+                  ) : (
+                    <View className="px-3 py-4">
+                      <Text className="text-[14px] text-[#666] text-center">
+                        No employees available
+                      </Text>
+                    </View>
+                  )}
+                </ScrollView>
+              </View>
+            )}
+          </View>
         </TouchableWithoutFeedback>
 
         {!keyboardVisible && <CustomBottomNav onAddPress={handleFabPress} />}
@@ -849,6 +977,64 @@ function ViewAllTasksScreen({ navigation, route }) {
         onClose={handleUpdateTaskClose}
         onSuccess={handleUpdateTaskSuccess}
       />
+
+      {/* Global Dropdown for Employee Selection */}
+      {showAssignedDropdown && activeAssignedDraftId && (
+        <View 
+          className="absolute bg-white border border-gray-300 rounded-lg shadow-lg"
+          style={{
+            top: 280,
+            left: 160,
+            right: 40,
+            maxHeight: 160,
+            elevation: 999999,
+            zIndex: 999999,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 3.84,
+          }}
+        >
+          <ScrollView 
+            showsVerticalScrollIndicator={true}
+            nestedScrollEnabled={true}
+            style={{ maxHeight: 160 }}
+            contentContainerStyle={{ paddingVertical: 2 }}
+          >
+            {employees.length > 0 ? (
+              employees.map((employee) => (
+                <TouchableOpacity
+                  key={employee.id}
+                  className="px-3 py-3 border-b border-gray-100 active:bg-gray-50"
+                  onPress={() => {
+                    updateDraftTask(activeAssignedDraftId, "assignedTo", employee);
+                    updateDraftTask(activeAssignedDraftId, "assignedToUserId", employee.id);
+                    setShowAssignedDropdown(false);
+                    setActiveAssignedDraftId(null);
+                  }}
+                >
+                  <Text className="text-[15px] text-[#333] font-medium">
+                    {`${employee.first_name || ""} ${employee.last_name || ""}`.trim() ||
+                      employee.email}
+                  </Text>
+                  {employee.email && (
+                    <Text className="text-[12px] text-[#666] mt-1">
+                      {employee.email}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              ))
+            ) : (
+              <View className="px-3 py-4">
+                <Text className="text-[14px] text-[#666] text-center">
+                  No employees available
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      )}
+
     </View>
   );
 }

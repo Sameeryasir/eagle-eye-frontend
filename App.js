@@ -24,7 +24,7 @@ import UpdateProjectScreen from "./screens/UpdateProjectScreen";
 const Stack = createNativeStackNavigator();
 
 // Custom Header Component with Header + Search Bar
-const CustomHeader = ({ navigation, route, onMenuPress }) => {
+const CustomHeader = ({onMenuPress }) => {
   return (
     <SafeAreaView style={{ backgroundColor: '#3155A1' }} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
