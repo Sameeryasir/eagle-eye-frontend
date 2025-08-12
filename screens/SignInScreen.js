@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  StyleSheet,
   SafeAreaView,
   Image,
 } from "react-native";
@@ -35,74 +34,20 @@ const SignIn = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView className="flex-1 bg-white items-center justify-center p-6">
       {/* Sharp image at the top */}
       <Logo width={90} height={90} />
 
-      <Text style={styles.title}>Welcome to{"\n"}EagleEye</Text>
-      <Text style={styles.description}></Text>
+      <Text className="text-[28px] font-bold text-center mb-3 text-[#222]">Welcome to{"\n"}EagleEye</Text>
+      <Text className="text-[14px] text-[#888] text-center mb-8 leading-[20px]"></Text>
       <TouchableOpacity
-        style={styles.loginButton}
+        className="w-full bg-[#222] py-4 rounded-xl mb-4 items-center"
         onPress={() => navigation.navigate("LogIn")} // Navigate to Login screen
       >
-        <Text style={styles.loginButtonText}>Login</Text>
+        <Text className="text-white text-[18px] font-semibold">Login</Text>
       </TouchableOpacity>
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  sharpImage: {
-    width: 100,
-    height: 100,
-    marginBottom: 32,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 12,
-    color: "#222",
-  },
-  description: {
-    fontSize: 14,
-    color: "#888",
-    textAlign: "center",
-    marginBottom: 32,
-    lineHeight: 20,
-  },
-  loginButton: {
-    width: "100%",
-    backgroundColor: "#222",
-    paddingVertical: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-    alignItems: "center",
-  },
-  loginButtonText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  registerButton: {
-    width: "100%",
-    backgroundColor: "#E5E5E5",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  registerButtonText: {
-    color: "#222",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-});
 
 export default SignIn;

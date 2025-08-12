@@ -1,172 +1,202 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
-  ScrollView,
   TextInput,
-  SafeAreaView,
   StatusBar,
-  KeyboardAvoidingView,
-  Platform,
   Keyboard,
   Alert,
-  RefreshControl,
+  FlatList,
+  useWindowDimensions,
+  Platform,
+  TouchableWithoutFeedback,
+  Modal,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
+import CreateProject from "./components/CreateProject";
+import UpdateProjectModal from "./components/UpdateProjectModal";
+import Header from "../components/Header";
 import { getMyProjects } from "../services/projects/getProjectsByLoginUserId";
 import { deleteProjectById } from "../services/projects/deleteProjectById";
+import Loader from "../services/utils/loader";
+
+const searchBarClasses = `flex-row items-center rounded-2xl px-4 py-3 bg-[#F8FAFC] border border-[#EAECF0]`;
+
+const SearchBarHeader = React.memo(function SearchBarHeader({
+  searchTerm,
+  onChange,
+}) {
+  return (
+    <View className="py-5 px-5">
+      <View
+        className={searchBarClasses}
+        style={{ width: "100%", maxWidth: 600 }}
+      >
+        <Ionicons
+          name="search"
+          size={18}
+          color="#6B7280"
+          style={{ marginRight: 8 }}
+        />
+        <TextInput
+          className="flex-1 text-[15px] text-[#111827]"
+          placeholder="Search projects"
+          placeholderTextColor="#9CA3AF"
+          value={searchTerm}
+          onChangeText={onChange}
+          returnKeyType="search"
+          blurOnSubmit={false}
+        />
+        {searchTerm.length > 0 && (
+          <TouchableOpacity onPress={() => onChange("")} className="ml-2">
+            <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+});
 
 function HomeScreen({ navigation }) {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [projects, setProjects] = useState([]);
   const [filteredProjects, setFilteredProjects] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
+  const [createProjectModalVisible, setCreateProjectModalVisible] =
+    useState(false);
+  const [updateProjectModalVisible, setUpdateProjectModalVisible] =
+    useState(false);
+  const menuButtonRefs = useRef({});
+  const { width: screenWidth } = useWindowDimensions();
 
-  // Use useFocusEffect to fetch projects every time screen comes into focus
+  const numColumns = screenWidth >= 1024 ? 3 : screenWidth >= 768 ? 2 : 1;
+  const horizontalPadding = 40; // px-5 on container (20 left + 20 right)
+  const interItemSpacing = 16; // mb-4 used for vertical; also used between columns
+  const cardWidth =
+    (screenWidth - horizontalPadding - (numColumns - 1) * interItemSpacing) /
+    numColumns;
+
   useFocusEffect(
     React.useCallback(() => {
-      fetchProjects();
-    }, [])
+      if (projects.length === 0) {
+        fetchProjects({ silent: false });
+      } else {
+        fetchProjects({ silent: true });
+      }
+    }, [projects.length])
   );
 
   useEffect(() => {
-    // Add keyboard listeners
     const keyboardDidShowListener = Keyboard.addListener(
-      'keyboardDidShow',
-      () => {
-        setKeyboardVisible(true);
-      }
+      "keyboardDidShow",
+      () => setKeyboardVisible(true)
     );
     const keyboardDidHideListener = Keyboard.addListener(
-      'keyboardDidHide',
-      () => {
-        setKeyboardVisible(false);
-      }
+      "keyboardDidHide",
+      () => setKeyboardVisible(false)
     );
 
-    // Cleanup listeners
     return () => {
       keyboardDidShowListener?.remove();
       keyboardDidHideListener?.remove();
     };
   }, []);
 
-  const fetchProjects = async () => {
+  const fetchProjects = async (options = { silent: false }) => {
+    const { silent } = options;
     try {
-      setLoading(true);
+      if (!silent) {
+        setInitialLoading(true);
+      }
+      setError(null);
+
       const projectsData = await getMyProjects();
       setProjects(projectsData);
       setFilteredProjects(projectsData);
-      setError(null);
     } catch (err) {
-      console.error('Error fetching projects:', err);
-      setError('Failed to load projects');
+      console.error("Error fetching projects:", err);
+      if (!silent) {
+        setError("Failed to load projects");
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setInitialLoading(false);
+      }
     }
   };
 
   const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
+    if (!dateString) return "N/A";
     const date = new Date(dateString);
     return date.toLocaleDateString();
   };
 
-  const handleSidebarToggle = () => {
-    setSidebarVisible(!sidebarVisible);
-  };
-
-  const handleSidebarClose = () => {
-    setSidebarVisible(false);
-  };
-
-  const handleNavigation = (itemId) => {
-    console.log("Navigating to:", itemId);
-    // Add your navigation logic here
-  };
-
   const handleSearch = (text) => {
     setSearchTerm(text);
-    if (text.trim() === '') {
+    if (text.trim() === "") {
       setFilteredProjects(projects);
     } else {
-      const filtered = projects.filter(project => 
-        project.name.toLowerCase().includes(text.toLowerCase()) ||
-        project.description.toLowerCase().includes(text.toLowerCase())
+      const filtered = projects.filter(
+        (project) =>
+          project.name.toLowerCase().includes(text.toLowerCase()) ||
+          project.description.toLowerCase().includes(text.toLowerCase())
       );
       setFilteredProjects(filtered);
     }
   };
 
-  const dismissKeyboard = () => {
-    Keyboard.dismiss();
-  };
-
-  const handleMenuPress = (project, event) => {
-    // Get the position of the pressed button
-    event.target.measure((x, y, width, height, pageX, pageY) => {
-      setMenuPosition({
-        x: pageX + width - 120, // Position dropdown to the right of the button
-        y: pageY + height + 5, // Position below the button
+  const handleMenuPress = (project) => {
+    const ref = menuButtonRefs.current[project.id];
+    if (ref && typeof ref.measure === "function") {
+      ref.measure((x, y, width, height, pageX, pageY) => {
+        setMenuPosition({ x: pageX + width - 120, y: pageY + height + 5 });
       });
-    });
-    
+    } else {
+      setMenuPosition({ x: 20, y: 80 });
+    }
     setSelectedProject(project);
     setMenuVisible(true);
   };
 
   const handleUpdate = () => {
-    console.log("Update project:", selectedProject?.id);
     setMenuVisible(false);
-    setSelectedProject(null);
-    
-    // Navigate to UpdateProjectScreen with the project data
-    if (selectedProject) {
-      navigation.navigate('UpdateProject', { project: selectedProject });
-    }
+    setUpdateProjectModalVisible(true);
   };
 
   const handleDelete = () => {
     const projectId = selectedProject?.id;
     const projectName = selectedProject?.name;
-    
+
     if (!projectId) {
       console.error("No project ID found");
       return;
     }
-    
-    // Close the dropdown menu before showing the alert
+
     setMenuVisible(false);
     setSelectedProject(null);
-    
+
     Alert.alert(
       "Delete Project",
       `Are you sure you want to delete "${projectName}" permanently? This action is not reversible.`,
       [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
+        { text: "Cancel", style: "cancel" },
         {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
             try {
-              console.log("Delete project:", projectId);
               await deleteProjectById(projectId);
-              
-              // Refresh the projects list after successful deletion
               await fetchProjects();
             } catch (error) {
               console.error("Error deleting project:", error);
@@ -176,10 +206,30 @@ function HomeScreen({ navigation }) {
                 [{ text: "OK" }]
               );
             }
-          }
-        }
+          },
+        },
       ]
     );
+  };
+
+  const handleCreateProjectSuccess = () => {
+    setCreateProjectModalVisible(false);
+    fetchProjects(); // Refresh the projects list
+  };
+
+  const handleCreateProjectCancel = () => {
+    setCreateProjectModalVisible(false);
+  };
+
+  const handleUpdateProjectSuccess = () => {
+    setUpdateProjectModalVisible(false);
+    setSelectedProject(null);
+    fetchProjects(); // Refresh the projects list
+  };
+
+  const handleUpdateProjectClose = () => {
+    setUpdateProjectModalVisible(false);
+    setSelectedProject(null);
   };
 
   const closeMenu = () => {
@@ -187,357 +237,186 @@ function HomeScreen({ navigation }) {
     setSelectedProject(null);
   };
 
-  return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="white" />
-
-      {/* Custom Header */}
-      <View style={styles.customHeader}>
+  const ProjectCard = ({ project, cardWidth }) => (
+    <TouchableOpacity
+      key={project.id}
+      className="bg-white rounded-2xl p-0 mb-4 border border-[#f0f0f0] overflow-hidden"
+      style={{ width: cardWidth }}
+      onPress={() =>
+        navigation.navigate("WidgetScreen", { projectId: project.id })
+      }
+    >
+      {/* Navbar-like header */}
+      <View className="bg-black py-3 px-5 flex-row justify-between items-center">
+        <Text
+          className="text-white text-[16px] font-bold flex-1"
+          numberOfLines={1}
+        >
+          {project.name}
+        </Text>
         <TouchableOpacity
-          style={styles.menuButton}
-          onPress={handleSidebarToggle}
+          onPress={() => handleMenuPress(project)}
+          ref={(ref) => {
+            if (ref) menuButtonRefs.current[project.id] = ref;
+          }}
         >
-          <Ionicons name="menu" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Projects</Text>
-        <TouchableOpacity style={styles.notificationButton}>
-          <Ionicons name="notifications" size={24} color="#333" />
+          <Ionicons name="ellipsis-vertical" size={20} color="white" />
         </TouchableOpacity>
       </View>
 
-      {/* Content Area */}
-      <View style={styles.contentContainer}>
-        <ScrollView 
-          style={styles.content} 
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-          bounces={true}
-          alwaysBounceVertical={false}
-          keyboardShouldPersistTaps="handled"
-          onScrollBeginDrag={dismissKeyboard}
-        >
-            {/* Search Bar */}
-            <View style={styles.searchContainer}>
-              <View style={styles.searchBar}>
-                <Ionicons
-                  name="search"
-                  size={20}
-                  color="#666"
-                  style={styles.searchIcon}
-                />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search projects..."
-                  placeholderTextColor="#999"
-                  value={searchTerm}
-                  onChangeText={handleSearch}
-                  returnKeyType="search"
-                  blurOnSubmit={true}
-                />
-              </View>
-            </View>
-            {loading ? (
-              <View style={styles.centerContainer}>
-                <Text style={styles.loadingText}>Loading projects...</Text>
-              </View>
-            ) : error ? (
-              <View style={styles.centerContainer}>
-                <Text style={styles.errorText}>{error}</Text>
-                <TouchableOpacity style={styles.retryButton} onPress={fetchProjects}>
-                  <Text style={styles.retryButtonText}>Retry</Text>
-                </TouchableOpacity>
-              </View>
-            ) : filteredProjects.length === 0 ? (
-              <View style={styles.centerContainer}>
-                <Text style={styles.noProjectsText}>
-                  {searchTerm.trim() !== '' ? 'No projects match your search' : 'No projects found'}
-                </Text>
-              </View>
-            ) : (
-              filteredProjects.map((project) => (
-                <TouchableOpacity 
-                  key={project.id} 
-                  style={styles.projectCard}
-                  onPress={() => navigation.navigate('AdminDetailScreen', { projectId: project.id })}
-                >
-                  <View style={styles.cardContent}>
-                    <View style={styles.cardHeader}>
-                      <Text style={styles.projectTitle}>{project.name}</Text>
-                      <TouchableOpacity
-                        style={styles.menuButton}
-                        onPress={(event) => handleMenuPress(project, event)}
-                      >
-                        <Ionicons name="ellipsis-vertical" size={20} color="#666" />
-                      </TouchableOpacity>
-                    </View>
-                    <Text style={styles.projectDescription}>
-                      {project.description}
-                    </Text>
-                    <View style={styles.dateContainer}>
-                      <View style={styles.dateItem}>
-                        <Text style={styles.dateLabel}>Start Date:</Text>
-                        <Text style={styles.dateValue}>{formatDate(project.startDate)}</Text>
-                      </View>
-                      <View style={styles.dateItem}>
-                        <Text style={styles.dateLabel}>End Date:</Text>
-                        <Text style={styles.dateValue}>{formatDate(project.endDate)}</Text>
-                      </View>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              ))
-            )}
-        </ScrollView>
+      {/* Rest of the card content */}
+      <View className="p-6 py-8">
+        <View className="flex-row items-center justify-between">
+          <Text className="text-[14px] text-[#666] leading-[22px] flex-1 mr-3">
+            {project.description}
+          </Text>
+          <Text className="text-[12px] text-[#999] font-medium">
+            {formatDate(project.startDate)}
+          </Text>
+        </View>
       </View>
+    </TouchableOpacity>
+  );
+
+  const renderContent = () => (
+    <FlatList
+      data={filteredProjects}
+      key={numColumns}
+      numColumns={numColumns}
+      keyExtractor={(item) => String(item.id)}
+      contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+      ListHeaderComponent={
+        <SearchBarHeader searchTerm={searchTerm} onChange={handleSearch} />
+      }
+      ListHeaderComponentStyle={{ marginHorizontal: -20 }}
+      ListEmptyComponent={() => (
+        <View className="flex-1 justify-center items-center p-5 min-h-[400px]">
+          {error ? (
+            <>
+              <Text className="text-[16px] text-[#dc3545] text-center mb-4 font-semibold">
+                {error}
+              </Text>
+              <TouchableOpacity
+                className="bg-black py-3 px-6 rounded-xl"
+                onPress={fetchProjects}
+              >
+                <Text className="text-white text-[16px] font-semibold">
+                  Retry
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <Text className="text-[16px] text-[#666] text-center font-medium">
+              {searchTerm.trim() !== ""
+                ? "No projects match your search"
+                : "No projects found"}
+            </Text>
+          )}
+        </View>
+      )}
+      renderItem={({ item }) => (
+        <ProjectCard project={item} cardWidth={cardWidth} />
+      )}
+    />
+  );
+
+  return (
+    <View className="flex-1 bg-white">
+      {/* Content (Header fixed; search bar scrolls inside list) */}
+      {initialLoading ? (
+        <View className="flex-1 justify-center items-center p-5 min-h-[100px]">
+          <Loader size="large" color="#000000" text="Loading Projects" />
+        </View>
+      ) : (
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View className="flex-1 bg-white">{renderContent()}</View>
+        </TouchableWithoutFeedback>
+      )}
+
+      {/* Context Menu */}
+      {menuVisible && (
+        <>
+          <TouchableOpacity
+            className="absolute top-0 bottom-0 left-0 right-0"
+            activeOpacity={1}
+            onPress={closeMenu}
+          />
+          <View
+            className="bg-white rounded-lg p-2"
+            style={{
+              position: "absolute",
+              top: menuPosition.y,
+              left: menuPosition.x,
+              shadowColor: "#000",
+              shadowOpacity: 0.15,
+              shadowRadius: 6,
+              shadowOffset: { width: 0, height: 3 },
+              elevation: 3,
+            }}
+          >
+            <TouchableOpacity
+              className="flex-row items-center py-2.5 px-4 rounded"
+              onPress={handleUpdate}
+            >
+              <Ionicons name="create-outline" size={18} color="#000" />
+              <Text className="ml-2.5 text-[14px] font-semibold text-black">
+                Update
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="flex-row items-center py-2.5 px-4 rounded"
+              onPress={handleDelete}
+            >
+              <Ionicons name="trash-outline" size={18} color="#dc3545" />
+              <Text className="ml-2.5 text-[14px] font-semibold text-[#dc3545]">
+                Delete
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
 
       {/* Sidebar */}
       <Sidebar
         isVisible={sidebarVisible}
-        onClose={handleSidebarClose}
-        onNavigate={handleNavigation}
+        onClose={() => setSidebarVisible(false)}
+        onNavigate={() => {}}
       />
 
-      {/* Bottom Navigation - Only show when keyboard is not visible */}
-      {!keyboardVisible && (
-        <CustomBottomNav />
-      )}
+      {/* Bottom Nav */}
+      <CustomBottomNav
+        keyboardVisible={keyboardVisible}
+        project
+        onAddPress={() => setCreateProjectModalVisible(true)}
+      />
 
-          {/* Dropdown Menu */}
-          {menuVisible && (
-            <TouchableOpacity
-              style={styles.dropdownOverlay}
-              activeOpacity={1}
-              onPress={closeMenu}
-            >
-              <View 
-                style={[
-                  styles.dropdownContainer,
-                  {
-                    position: 'absolute',
-                    top: menuPosition.y,
-                    left: menuPosition.x,
-                  }
-                ]}
-              >
-                <TouchableOpacity
-                  style={styles.dropdownItem}
-                  onPress={handleUpdate}
-                >
-                  <Ionicons name="create-outline" size={18} color="black" />
-                  <Text style={styles.dropdownItemText}>Update</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.dropdownItem}
-                  onPress={handleDelete}
-                >
-                  <Ionicons name="trash-outline" size={18} color="#FF3B30" />
-                  <Text style={[styles.dropdownItemText, { color: "#FF3B30" }]}>Delete</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          )}
+      {/* Create Project Modal */}
+      <Modal
+        visible={createProjectModalVisible}
+        animationType="slide"
+        presentationStyle="formSheet" // changed from "pageSheet"
+        onRequestClose={() => setCreateProjectModalVisible(false)}
+      >
+        <CreateProject
+          navigation={{
+            goBack: () => setCreateProjectModalVisible(false),
+          }}
+          onSuccess={handleCreateProjectSuccess}
+          onCancel={handleCreateProjectCancel}
+        />
+      </Modal>
+
+      {/* Update Project Modal */}
+      <UpdateProjectModal
+        visible={updateProjectModalVisible}
+        project={selectedProject}
+        onClose={handleUpdateProjectClose}
+        onSuccess={handleUpdateProjectSuccess}
+      />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "white",
-  },
-  keyboardAvoidingView: {
-    flex: 1,
-  },
-  contentContainer: {
-    flex: 1,
-    backgroundColor: "white",
-  },
-  customHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    paddingTop: Platform.OS === 'ios' ? 0 : StatusBar.currentHeight - 20,
-    backgroundColor: "white",
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
-  menuButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: "#f8f9fa",
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#333",
-    letterSpacing: 0.5,
-  },
-  notificationButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: "#f8f9fa",
-  },
-  searchContainer: {
-    paddingVertical: 20,
-    backgroundColor: "white",
-  },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f8f9fa",
-    borderRadius: 25,
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderWidth: 1,
-    borderColor: "#e9ecef",
-  },
-  searchIcon: {
-    marginRight: 12,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: "#333",
-    fontWeight: "500",
-  },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 120, // Proper spacing for bottom nav
-  },
-  projectCard: {
-    backgroundColor: "white",
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: "#f0f0f0",
-  },
-  cardContent: {
-    gap: 12,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  projectTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#333",
-    letterSpacing: 0.3,
-    flex: 1,
-  },
-  projectDescription: {
-    fontSize: 14,
-    color: "#666",
-    lineHeight: 22,
-    fontWeight: "400",
-  },
-  dateContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 8,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
-  },
-  dateItem: {
-    flexDirection: "column",
-  },
-  dateLabel: {
-    fontSize: 12,
-    color: "#999",
-    marginBottom: 4,
-    fontWeight: "500",
-  },
-  dateValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-    minHeight: 300,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: "#666",
-    fontWeight: "500",
-  },
-  errorText: {
-    fontSize: 16,
-    color: "#dc3545",
-    textAlign: "center",
-    marginBottom: 15,
-    fontWeight: "500",
-  },
-  retryButton: {
-    backgroundColor: "#007AFF",
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  noProjectsText: {
-    fontSize: 16,
-    color: "#666",
-    textAlign: "center",
-    fontWeight: "500",
-  },
-  menuButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: "#f8f9fa",
-  },
-  dropdownOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  dropdownContainer: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  dropdownItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 6,
-  },
-  dropdownItemText: {
-    marginLeft: 10,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-});
 
 export default HomeScreen;

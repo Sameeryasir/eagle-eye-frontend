@@ -36,17 +36,41 @@ const Code = () => {
         await AsyncStorage.setItem('refreshToken', data.refresh_token);
       }
   
-      // Optional: store role and user info
+      // Store user role and user info
       const roleName = data.user?.role?.name;
       if (roleName) {
         await AsyncStorage.setItem('userRole', roleName);
+      }
+      
+      // Store user name
+      const firstName = data.user?.first_name;
+      const lastName = data.user?.last_name;
+      if (firstName) {
+        await AsyncStorage.setItem('userFirstName', firstName);
+      }
+      if (lastName) {
+        await AsyncStorage.setItem('userLastName', lastName);
       }
   
       setLoading(false);
       setCode('');
   
+      // Check user role and navigate accordingly
+      const userRole = data.user?.role?.name;
+      console.log('User role received:', userRole);
+      let targetScreen = 'HomeScreen'; // Default to HomeScreen
+      
+      if (userRole === 'Owner') {
+        targetScreen = 'HomeScreen';
+      } else if (userRole === 'Employee' || userRole === 'Manager') {
+        targetScreen = 'WidgetScreen';
+      }
+      // Other roles will default to HomeScreen
+      
+      console.log('Navigating to screen:', targetScreen);
+      
       Alert.alert("Success", "OTP verified successfully!", [
-        { text: "OK", onPress: () => navigation.navigate('HomeScreen') }
+        { text: "OK", onPress: () => navigation.navigate(targetScreen) }
       ]);
   
     } catch (error) {

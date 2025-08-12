@@ -2,30 +2,70 @@ import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
-  ScrollView,
   TextInput,
-  SafeAreaView,
   StatusBar,
-  KeyboardAvoidingView,
-  Platform,
   Keyboard,
   Alert,
+  FlatList,
+  Platform,
+  TouchableWithoutFeedback,
+  ActivityIndicator,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
+import UpdateTaskModal from "./components/UpdateTaskModal";
 import { deleteTaskById } from "../services/tasks/deleteTaskById";
 import { getTaskByProjectId } from "../services/tasks/getTaskByProjectId";
+import { createTask } from "../services/tasks/createTask";
+import Loader from "../services/utils/loader";
 
+const searchBarClasses = `flex-row items-center rounded-2xl px-4 py-3 bg-[#F8FAFC] border border-[#EAECF0]`;
+
+const SearchBarHeader = React.memo(function SearchBarHeader({
+  searchTerm,
+  onChange,
+}) {
+  return (
+    <View className="py-5 px-5">
+      <View
+        className={searchBarClasses}
+        style={{ width: "100%", maxWidth: 600 }}
+      >
+        <Ionicons
+          name="search"
+          size={18}
+          color="#6B7280"
+          style={{ marginRight: 8 }}
+        />
+        <TextInput
+          className="flex-1 text-[15px] text-[#111827]"
+          placeholder="Search tasks"
+          placeholderTextColor="#9CA3AF"
+          value={searchTerm}
+          onChangeText={onChange}
+          returnKeyType="search"
+          blurOnSubmit={false}
+        />
+        {searchTerm.length > 0 && (
+          <TouchableOpacity onPress={() => onChange("")} className="ml-2">
+            <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+});
 
 function ViewAllTasksScreen({ navigation, route }) {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [tasks, setTasks] = useState([]);
   const [filteredTasks, setFilteredTasks] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -33,11 +73,17 @@ function ViewAllTasksScreen({ navigation, route }) {
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   const [project, setProject] = useState(null);
+  const [draftTasks, setDraftTasks] = useState([]);
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const [pendingTimePicker, setPendingTimePicker] = useState(null); // 'start' or 'end'
+  const [updateTaskModalVisible, setUpdateTaskModalVisible] = useState(false);
 
-  // Get projectId from route params
   const { projectId } = route.params || {};
 
-  // Use useFocusEffect to refresh data when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       if (projectId) {
@@ -46,7 +92,6 @@ function ViewAllTasksScreen({ navigation, route }) {
     }, [projectId])
   );
 
-  // Reset search when tasks change
   useEffect(() => {
     if (tasks.length > 0) {
       setFilteredTasks(tasks);
@@ -54,92 +99,267 @@ function ViewAllTasksScreen({ navigation, route }) {
   }, [tasks]);
 
   useEffect(() => {
-    // Add keyboard listeners
     const keyboardDidShowListener = Keyboard.addListener(
-      'keyboardDidShow',
-      () => {
-        setKeyboardVisible(true);
-      }
+      "keyboardDidShow",
+      () => setKeyboardVisible(true)
     );
     const keyboardDidHideListener = Keyboard.addListener(
-      'keyboardDidHide',
-      () => {
-        setKeyboardVisible(false);
-      }
+      "keyboardDidHide",
+      () => setKeyboardVisible(false)
     );
 
-    // Cleanup listeners
     return () => {
       keyboardDidShowListener?.remove();
       keyboardDidHideListener?.remove();
     };
   }, []);
 
+  const handleFabPress = () => {
+    const now = new Date();
+    const newDraftTask = {
+      id: Math.floor(Math.random() * 1000000) + 1, // Integer ID
+      title: "",
+      description: "",
+      startTime: now,
+      endTime: new Date(now.getTime() + 60 * 60 * 1000), // 1 hour later
+      assignedTo: null,
+      isDraft: true,
+    };
+
+    setDraftTasks((prev) => [newDraftTask, ...prev]);
+  };
+
+  const updateDraftTask = (draftId, field, value) => {
+    setDraftTasks((prev) =>
+      prev.map((draft) =>
+        draft.id === draftId ? { ...draft, [field]: value } : draft
+      )
+    );
+  };
+
+  const removeDraftTask = (draftId) => {
+    setDraftTasks((prev) => prev.filter((draft) => draft.id !== draftId));
+  };
+
+  const [activeDraftId, setActiveDraftId] = useState(null);
+
+  const handleStartDateChange = (event, selectedDate) => {
+    setShowStartDatePicker(false);
+    if (selectedDate && activeDraftId) {
+      const newDate = new Date(selectedDate);
+      const currentDraft = draftTasks.find(
+        (draft) => draft.id === activeDraftId
+      );
+      if (currentDraft) {
+        // Preserve the current time
+        newDate.setHours(currentDraft.startTime.getHours());
+        newDate.setMinutes(currentDraft.startTime.getMinutes());
+        updateDraftTask(activeDraftId, "startTime", newDate);
+
+        // Ensure end date is not before start date
+        if (newDate > currentDraft.endTime) {
+          updateDraftTask(activeDraftId, "endTime", newDate);
+        }
+      }
+      // Automatically open time picker after date selection
+      setPendingTimePicker("start");
+      setTimeout(() => setShowStartTimePicker(true), 100);
+    }
+  };
+
+  const handleStartTimeChange = (event, selectedDate) => {
+    setShowStartTimePicker(false);
+    setPendingTimePicker(null);
+    if (selectedDate && activeDraftId) {
+      const currentDraft = draftTasks.find(
+        (draft) => draft.id === activeDraftId
+      );
+      if (currentDraft) {
+        const newDate = new Date(currentDraft.startTime);
+        newDate.setHours(selectedDate.getHours());
+        newDate.setMinutes(selectedDate.getMinutes());
+        updateDraftTask(activeDraftId, "startTime", newDate);
+
+        // Ensure end date is not before start date
+        if (newDate > currentDraft.endTime) {
+          updateDraftTask(activeDraftId, "endTime", newDate);
+        }
+      }
+    }
+  };
+
+  const handleEndDateChange = (event, selectedDate) => {
+    setShowEndDatePicker(false);
+    if (selectedDate && activeDraftId) {
+      const currentDraft = draftTasks.find(
+        (draft) => draft.id === activeDraftId
+      );
+      if (currentDraft) {
+        const newDate = new Date(selectedDate);
+        newDate.setHours(currentDraft.endTime.getHours());
+        newDate.setMinutes(currentDraft.endTime.getMinutes());
+        updateDraftTask(activeDraftId, "endTime", newDate);
+      }
+      // Automatically open time picker after date selection
+      setPendingTimePicker("end");
+      setTimeout(() => setShowEndTimePicker(true), 100);
+    }
+  };
+
+  const handleEndTimeChange = (event, selectedDate) => {
+    setShowEndTimePicker(false);
+    setPendingTimePicker(null);
+    if (selectedDate && activeDraftId) {
+      const currentDraft = draftTasks.find(
+        (draft) => draft.id === activeDraftId
+      );
+      if (currentDraft) {
+        const newDate = new Date(currentDraft.endTime);
+        newDate.setHours(selectedDate.getHours());
+        newDate.setMinutes(selectedDate.getMinutes());
+        updateDraftTask(activeDraftId, "endTime", newDate);
+      }
+    }
+  };
+
+  const handleCreateTaskFromDraft = async (draftTask) => {
+    // Validate required fields
+    if (!draftTask.title.trim()) {
+      Alert.alert("Error", "Task title is required");
+      return;
+    }
+
+    if (!draftTask.description.trim()) {
+      Alert.alert("Error", "Task description is required");
+      return;
+    }
+
+    // Validate that projectId is available
+    if (!projectId) {
+      Alert.alert("Error", "Project ID is required to create a task");
+      return;
+    }
+
+    // Validate and format dates
+    const now = new Date();
+
+    // Ensure start time is not in the past
+    if (draftTask.startTime <= now) {
+      Alert.alert("Error", "Start date and time must be in the future");
+      return;
+    }
+
+    // Ensure end time is after start time
+    if (draftTask.endTime <= draftTask.startTime) {
+      Alert.alert(
+        "Error",
+        "End date and time must be after start date and time"
+      );
+      return;
+    }
+
+    // Additional validation for reasonable time ranges
+    const timeDifference =
+      draftTask.endTime.getTime() - draftTask.startTime.getTime();
+    const minDuration = 15 * 60 * 1000; // 15 minutes in milliseconds
+    const maxDuration = 365 * 24 * 60 * 60 * 1000; // 1 year in milliseconds
+
+    if (timeDifference < minDuration) {
+      Alert.alert("Error", "Task duration must be at least 15 minutes");
+      return;
+    }
+
+    if (timeDifference > maxDuration) {
+      Alert.alert("Error", "Task duration cannot exceed 1 year");
+      return;
+    }
+
+    setIsCreatingTask(true);
+
+    try {
+      // Prepare the data for API call
+      const taskPayload = {
+        title: draftTask.title.trim(),
+        description: draftTask.description.trim(),
+        startTime: draftTask.startTime.toISOString(),
+        endTime: draftTask.endTime.toISOString(),
+        projectId: projectId,
+      };
+
+      const response = await createTask(taskPayload);
+
+      // Remove the draft task after successful creation
+      removeDraftTask(draftTask.id);
+
+      // Reload the tasks to show the newly created task
+      await loadProjectData();
+
+      Alert.alert("Success", "Task created successfully!", [{ text: "OK" }]);
+    } catch (error) {
+      console.error("Error creating task:", error);
+
+      let errorMessage = "Failed to create task. Please try again.";
+
+      // Handle different types of error responses
+      if (error.response?.data?.message) {
+        // If message is an array, join it, otherwise use as string
+        if (Array.isArray(error.response.data.message)) {
+          errorMessage = error.response.data.message.join(", ");
+        } else {
+          errorMessage = String(error.response.data.message);
+        }
+      } else if (error.message) {
+        errorMessage = String(error.message);
+      }
+
+      Alert.alert("Error", errorMessage);
+    } finally {
+      setIsCreatingTask(false);
+    }
+  };
+
   const loadProjectData = async () => {
     try {
       setLoading(true);
       setError(null);
-      
-      console.log('Fetching tasks for project ID:', projectId);
-      
-      // Fetch project and tasks data using getTaskByProjectId
+
       const response = await getTaskByProjectId(projectId);
-      
-      console.log('API Response from getTaskByProjectId:', response);
-      console.log('Response type:', typeof response);
-      console.log('Is response an array?', Array.isArray(response));
-      
-      if (response) {
-        console.log('Response keys:', Object.keys(response));
-        console.log('Response.project:', response.project);
-        console.log('Response.tasks:', response.tasks);
-      }
-      
-      // Set project data
+
       if (response && response.project) {
-        console.log('Setting project from response.project');
         setProject(response.project);
       } else if (response) {
-        console.log('Setting project from response directly');
-        // If the API returns project data directly
         setProject(response);
       }
-      
-      // Set tasks data
+
       if (response && response.tasks) {
-        console.log('Setting tasks from response.tasks, count:', response.tasks.length);
         setTasks(response.tasks);
         setFilteredTasks(response.tasks);
       } else if (response && Array.isArray(response)) {
-        console.log('Setting tasks from response array, count:', response.length);
-        // If the API returns tasks array directly
         setTasks(response);
         setFilteredTasks(response);
       } else {
-        console.log('No tasks found, setting empty array');
         setTasks([]);
         setFilteredTasks([]);
       }
-      
-      // Reset search term when loading new data
-      setSearchTerm('');
+
+      setSearchTerm("");
     } catch (err) {
-      console.error('Error loading project data:', err);
-      console.error('Error details:', {
-        message: err.message,
-        stack: err.stack,
-        response: err.response
-      });
-      setError('Failed to load project data');
+      setError("Failed to load project data");
     } finally {
       setLoading(false);
     }
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
+  const formatDateTime = (dateString) => {
+    if (!dateString) return "N/A";
     const date = new Date(dateString);
-    return date.toLocaleDateString();
+    const dateStr = date.toLocaleDateString();
+    const timeStr = date.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+    return `${dateStr} ${timeStr}`;
   };
 
   const getAssignedToName = (assignedTo) => {
@@ -153,148 +373,94 @@ function ViewAllTasksScreen({ navigation, route }) {
     return fullName || "Unassigned";
   };
 
-  const handleSidebarToggle = () => {
-    setSidebarVisible(!sidebarVisible);
-  };
-
-  const handleSidebarClose = () => {
-    setSidebarVisible(false);
-  };
-
-  const handleNavigation = (itemId) => {
-    console.log("Navigating to:", itemId);
-    // Add your navigation logic here
-  };
-
   const handleSearch = (text) => {
     setSearchTerm(text);
-    console.log('Search term:', text);
-    console.log('Current tasks count:', tasks.length);
-    
-    if (text.trim() === '') {
+
+    if (text.trim() === "") {
       setFilteredTasks(tasks);
-      console.log('Empty search, showing all tasks:', tasks.length);
     } else {
       const searchLower = text.toLowerCase().trim();
-      console.log('Searching for:', searchLower);
-      
-      const filtered = tasks.filter(task => {
+
+      const filtered = tasks.filter((task) => {
         try {
-          // Search only in task title
-          const titleMatch = task.title && task.title.toLowerCase().includes(searchLower);
-          
-          if (titleMatch) {
-            console.log('Task matches search:', task.title, 'Search term:', searchLower);
-          }
-          
+          const titleMatch =
+            task.title && task.title.toLowerCase().includes(searchLower);
           return titleMatch;
         } catch (error) {
-          console.error('Error filtering task:', task, error);
           return false;
         }
       });
-      
-      console.log('Filtered tasks count:', filtered.length);
+
       setFilteredTasks(filtered);
     }
   };
 
-  const dismissKeyboard = () => {
-    Keyboard.dismiss();
-  };
+  // Combine regular tasks and draft tasks for display
+  const allTasks = [...draftTasks, ...filteredTasks];
 
   const handleMenuPress = (task, event) => {
-    // Get the position of the pressed button
     event.target.measure((x, y, width, height, pageX, pageY) => {
       setMenuPosition({
-        x: pageX + width - 120, // Position dropdown to the right of the button
-        y: pageY + height + 5, // Position below the button
+        x: pageX + width - 120,
+        y: pageY + height + 5,
       });
     });
-    
+
     setSelectedTask(task);
     setMenuVisible(true);
   };
 
   const handleUpdate = () => {
-    console.log("Update task:", selectedTask?.id);
     setMenuVisible(false);
-    setSelectedTask(null);
-    
-         // Navigate to UpdateTaskScreen with the task data
-     if (selectedTask) {
-       navigation.navigate('UpdateTask', { task: selectedTask, projectId: project?.id });
-     }
+    setUpdateTaskModalVisible(true);
   };
 
   const handleDelete = () => {
     const taskId = selectedTask?.id;
     const taskTitle = selectedTask?.title;
-    
+
     if (!taskId) {
-      console.error("No task ID found");
       return;
     }
-    
-    // Close the dropdown menu before showing the alert
+
     setMenuVisible(false);
     setSelectedTask(null);
-    
+
     Alert.alert(
       "Delete Task",
       `Are you sure you want to delete "${taskTitle}" permanently? This action is not reversible.`,
       [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
+        { text: "Cancel", style: "cancel" },
         {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
             try {
-              console.log("Calling delete API for task:", taskId);
-              
-              // Call the delete task API first
               await deleteTaskById(taskId);
-              
-              // Only remove from local state if API call is successful
-              console.log("API call successful, removing task from local state:", taskId);
-              
-              // Remove the task from both tasks and filteredTasks arrays
-              const updatedTasks = tasks.filter(task => task.id !== taskId);
-              const updatedFilteredTasks = filteredTasks.filter(task => task.id !== taskId);
-              
-              // Update the state
+
+              const updatedTasks = tasks.filter((task) => task.id !== taskId);
+              const updatedFilteredTasks = filteredTasks.filter(
+                (task) => task.id !== taskId
+              );
+
               setTasks(updatedTasks);
               setFilteredTasks(updatedFilteredTasks);
-              
-              // Show success message
-              Alert.alert(
-                "Success",
-                "Task deleted successfully!",
-                [{ text: "OK" }]
-              );
-              
+
+              Alert.alert("Success", "Task deleted successfully!", [
+                { text: "OK" },
+              ]);
             } catch (error) {
-              console.error("Error deleting task:", error);
-              
-              // Show error message with more details
               let errorMessage = "Failed to delete task. Please try again.";
               if (error.response?.data?.message) {
                 errorMessage = error.response.data.message;
               } else if (error.message) {
                 errorMessage = error.message;
               }
-              
-              Alert.alert(
-                "Error",
-                errorMessage,
-                [{ text: "OK" }]
-              );
+
+              Alert.alert("Error", errorMessage, [{ text: "OK" }]);
             }
-          }
-        }
+          },
+        },
       ]
     );
   };
@@ -304,419 +470,387 @@ function ViewAllTasksScreen({ navigation, route }) {
     setSelectedTask(null);
   };
 
+  const handleUpdateTaskSuccess = () => {
+    setUpdateTaskModalVisible(false);
+    setSelectedTask(null);
+    loadProjectData(); // Refresh the tasks list
+  };
 
+  const handleUpdateTaskClose = () => {
+    setUpdateTaskModalVisible(false);
+    setSelectedTask(null);
+  };
 
-  return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="white" />
-
-      {/* Custom Header */}
-      <View style={styles.customHeader}>
-        <TouchableOpacity
-          style={styles.menuButton}
-          onPress={handleSidebarToggle}
-        >
-          <Ionicons name="menu" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          Tasks
-        </Text>
-        <TouchableOpacity style={styles.notificationButton}>
-          <Ionicons name="notifications" size={24} color="#333" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Content Area */}
-      <View style={styles.contentContainer}>
-        <ScrollView 
-          style={styles.content}
-          contentContainerStyle={styles.contentContainerStyle}
-        >
-            {/* Search Bar */}
-            <View style={styles.searchContainer}>
-              <View style={styles.searchBar}>
-                <Ionicons
-                  name="search"
-                  size={20}
-                  color="#666"
-                  style={styles.searchIcon}
-                />
+  const renderTaskCard = (task) => {
+    if (task.isDraft) {
+      return (
+        <View className="bg-[#f8f9fa] rounded-[16px] p-4 mb-3 border border-[#e9ecef]">
+          <View className="gap-4">
+            <View className="flex-row justify-between items-start mb-4">
+              <View className="flex-1 mr-3">
                 <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search tasks..."
+                  className="text-[18px] font-bold text-[#333] leading-6"
+                  placeholder="Enter task title..."
                   placeholderTextColor="#999"
-                  value={searchTerm}
-                  onChangeText={handleSearch}
-                  returnKeyType="search"
-                  blurOnSubmit={true}
-                  onFocus={() => console.log('Search input focused')}
-                  onBlur={() => console.log('Search input blurred')}
+                  value={task.title}
+                  onChangeText={(text) =>
+                    updateDraftTask(task.id, "title", text)
+                  }
                 />
-                {searchTerm.length > 0 && (
-                  <TouchableOpacity
-                    style={styles.clearButton}
-                    onPress={() => handleSearch('')}
-                  >
-                    <Ionicons name="close-circle" size={20} color="#999" />
-                  </TouchableOpacity>
-                )}
+              </View>
+              <TouchableOpacity
+                className="p-1 rounded"
+                onPress={() => removeDraftTask(task.id)}
+              >
+                <Ionicons name="trash-outline" size={20} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <View className="gap-4">
+              <View className="mb-2">
+                <Text className="text-[14px] text-[#666] font-semibold mb-1.5 uppercase tracking-[0.5px]">
+                  Description
+                </Text>
+                <TextInput
+                  className="text-[15px] text-[#555] leading-5 italic min-h-[40px]"
+                  placeholder="Enter task description..."
+                  placeholderTextColor="#999"
+                  value={task.description}
+                  onChangeText={(text) =>
+                    updateDraftTask(task.id, "description", text)
+                  }
+                  multiline
+                  style={{ textAlignVertical: "top" }}
+                />
+              </View>
+
+              <View className="flex-row justify-between gap-3">
+                <View className="flex-1 items-center py-2 px-1.5 bg-white rounded-[8px] border border-[#e0e0e0]">
+                  <Ionicons name="person" size={16} color="#666" />
+                  <Text className="text-[11px] text-[#666] font-medium mt-1 mb-0.5 text-center">
+                    Assigned
+                  </Text>
+                  <Text className="text-[13px] font-semibold text-[#333] text-center leading-4">
+                    Unassigned
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  className="flex-1 items-center py-2 px-1.5 bg-white rounded-[8px] border border-[#e0e0e0]"
+                  onPress={() => {
+                    setActiveDraftId(task.id);
+                    setShowStartDatePicker(true);
+                  }}
+                >
+                  <Ionicons name="calendar" size={16} color="#666" />
+                  <Text className="text-[11px] text-[#666] font-medium mt-1 mb-0.5 text-center">
+                    Start Date
+                  </Text>
+                  <Text className="text-[13px] font-semibold text-[#333] text-center leading-4">
+                    {task.startTime
+                      ? `${task.startTime.toLocaleDateString()} ${task.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                      : "Not set"}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  className="flex-1 items-center py-2 px-1.5 bg-white rounded-[8px] border border-[#e0e0e0]"
+                  onPress={() => {
+                    setActiveDraftId(task.id);
+                    setShowEndDatePicker(true);
+                  }}
+                >
+                  <Ionicons name="calendar-outline" size={16} color="#666" />
+                  <Text className="text-[11px] text-[#666] font-medium mt-1 mb-0.5 text-center">
+                    End Date
+                  </Text>
+                  <Text className="text-[13px] font-semibold text-[#333] text-center leading-4">
+                    {task.endTime
+                      ? `${task.endTime.toLocaleDateString()} ${task.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                      : "Not set"}
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
-            {loading ? (
-              <View style={styles.centerContainer}>
-                <Text style={styles.loadingText}>Loading tasks...</Text>
-              </View>
-            ) : error ? (
-              <View style={styles.centerContainer}>
-                <Text style={styles.errorText}>{error}</Text>
-                <TouchableOpacity style={styles.retryButton} onPress={loadProjectData}>
-                  <Text style={styles.retryButtonText}>Retry</Text>
+
+            <View className="pt-3">
+              <View className="items-center">
+                <TouchableOpacity
+                  className={`bg-black py-2 px-6 rounded-lg ${isCreatingTask ? "opacity-60" : ""}`}
+                  onPress={() => handleCreateTaskFromDraft(task)}
+                  disabled={isCreatingTask}
+                >
+                  {isCreatingTask ? (
+                    <ActivityIndicator color="white" size="small" />
+                  ) : (
+                    <Text className="text-white text-[14px] font-semibold">
+                      Create Task
+                    </Text>
+                  )}
                 </TouchableOpacity>
               </View>
-            ) : filteredTasks.length === 0 ? (
-              <View style={styles.centerContainer}>
-                <Text style={styles.noTasksText}>
-                  {searchTerm.trim() !== '' ? 'No tasks match your search' : 'No tasks found'}
+            </View>
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <View className="bg-[#f8f9fa] rounded-[16px] p-4 mb-3 border border-[#e9ecef]">
+        <View className="gap-4">
+          <View className="flex-row justify-between items-start mb-4">
+            <View className="flex-1 mr-3">
+              <Text className="text-[18px] font-bold text-[#333] leading-6">
+                {task.title}
+              </Text>
+            </View>
+            <TouchableOpacity
+              className="p-1 rounded"
+              onPress={(event) => handleMenuPress(task, event)}
+            >
+              <Ionicons name="ellipsis-vertical" size={20} color="#666" />
+            </TouchableOpacity>
+          </View>
+
+          <View className="gap-4">
+            <View className="mb-2">
+              <Text className="text-[14px] text-[#666] font-semibold mb-1.5 uppercase tracking-[0.5px]">
+                Description
+              </Text>
+              <Text
+                className="text-[15px] text-[#555] leading-5 italic"
+                numberOfLines={2}
+              >
+                {task.description || "No description"}
+              </Text>
+            </View>
+
+            <View className="flex-row justify-between gap-3">
+              <View className="flex-1 items-center py-2 px-1.5 bg-white rounded-[8px] border border-[#e0e0e0]">
+                <Ionicons name="person" size={16} color="#666" />
+                <Text className="text-[11px] text-[#666] font-medium mt-1 mb-0.5 text-center">
+                  Assigned
+                </Text>
+                <Text className="text-[13px] font-semibold text-[#333] text-center leading-4">
+                  {getAssignedToName(task.assignedTo)}
                 </Text>
               </View>
-                         ) : (
-               <>
-                                   {filteredTasks.map((task) => (
-                   <View key={task.id} style={styles.taskCard}>
-                     <View style={styles.cardContent}>
-                       <View style={styles.cardHeader}>
-                         <View style={styles.titleContainer}>
-                           <Text style={styles.taskTitle}>{task.title}</Text>
-                         </View>
-                         <TouchableOpacity
-                           style={styles.menuButton}
-                           onPress={(event) => handleMenuPress(task, event)}
-                         >
-                           <Ionicons name="ellipsis-vertical" size={20} color="#666" />
-                         </TouchableOpacity>
-                       </View>
 
-                       <View style={styles.taskDetails}>
-                         <View style={styles.taskDetailSection}>
-                           <Text style={styles.taskSectionLabel}>Description</Text>
-                           <Text style={styles.taskDescription} numberOfLines={2}>
-                             {task.description || "No description"}
-                           </Text>
-                         </View>
-                         
-                         <View style={styles.taskInfoRow}>
-                           <View style={styles.taskInfoItem}>
-                             <Ionicons name="person" size={16} color="#666" />
-                             <Text style={styles.taskInfoLabel}>Assigned</Text>
-                             <Text style={styles.taskInfoValue}>
-                               {getAssignedToName(task.assignedTo)}
-                             </Text>
-                           </View>
-                           
-                           <View style={styles.taskInfoItem}>
-                             <Ionicons name="calendar" size={16} color="#666" />
-                             <Text style={styles.taskInfoLabel}>Start Date</Text>
-                             <Text style={styles.taskInfoValue}>
-                               {formatDate(task.startTime)}
-                             </Text>
-                           </View>
-                           
-                           <View style={styles.taskInfoItem}>
-                             <Ionicons name="calendar-outline" size={16} color="#666" />
-                             <Text style={styles.taskInfoLabel}>End Date</Text>
-                             <Text style={styles.taskInfoValue}>
-                               {formatDate(task.endTime)}
-                             </Text>
-                           </View>
-                         </View>
-                       </View>
-                     </View>
-                   </View>
-                 ))}
-              </>
-            )}
-        </ScrollView>
+              <View className="flex-1 items-center py-2 px-1.5 bg-white rounded-[8px] border border-[#e0e0e0]">
+                <Ionicons name="calendar" size={16} color="#666" />
+                <Text className="text-[11px] text-[#666] font-medium mt-1 mb-0.5 text-center">
+                  Start Date
+                </Text>
+                <Text className="text-[13px] font-semibold text-[#333] text-center leading-4">
+                  {formatDateTime(task.startTime)}
+                </Text>
+              </View>
+
+              <View className="flex-1 items-center py-2 px-1.5 bg-white rounded-[8px] border border-[#e0e0e0]">
+                <Ionicons name="calendar-outline" size={16} color="#666" />
+                <Text className="text-[11px] text-[#666] font-medium mt-1 mb-0.5 text-center">
+                  End Date
+                </Text>
+                <Text className="text-[13px] font-semibold text-[#333] text-center leading-4">
+                  {formatDateTime(task.endTime)}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
       </View>
+    );
+  };
 
-      {/* Sidebar */}
+  const renderContent = () => (
+    <FlatList
+      data={allTasks}
+      keyExtractor={(item) => String(item.id)}
+      contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+      ListHeaderComponent={
+        <SearchBarHeader searchTerm={searchTerm} onChange={handleSearch} />
+      }
+      ListHeaderComponentStyle={{ marginHorizontal: -20 }}
+      ListEmptyComponent={() => (
+        <View className="flex-1 justify-center items-center p-5 min-h-[300px]">
+          {loading ? (
+            <Loader size="large" color="#000000" text="Loading tasks..." />
+          ) : error ? (
+            <>
+              <Text className="text-[16px] text-[#dc3545] text-center mb-4 font-medium">
+                {error}
+              </Text>
+              <TouchableOpacity
+                className="bg-[#007AFF] py-3 px-6 rounded-lg"
+                onPress={loadProjectData}
+              >
+                <Text className="text-white text-[16px] font-semibold">
+                  Retry
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <Text className="text-[16px] text-[#666] text-center font-medium">
+              {searchTerm.trim() !== ""
+                ? "No tasks match your search"
+                : "No tasks found"}
+            </Text>
+          )}
+        </View>
+      )}
+      renderItem={({ item }) => renderTaskCard(item)}
+    />
+  );
+
+  return (
+    <View className="flex-1 bg-white">
+      <StatusBar barStyle="dark-content" backgroundColor="white" />
+
+      <SafeAreaView className="flex-1">
+        <View className="flex-row items-center justify-between px-5 py-[15px] bg-white border-b border-[#f0f0f0]">
+          <TouchableOpacity
+            className="p-2 rounded-lg bg-[#f8f9fa]"
+            onPress={() => setSidebarVisible(!sidebarVisible)}
+          >
+            <Ionicons name="menu" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text className="text-[20px] font-bold text-[#333] tracking-[0.5px]">
+            Tasks
+          </Text>
+          <TouchableOpacity className="p-2 rounded-lg bg-[#f8f9fa]">
+            <Ionicons name="notifications" size={24} color="#333" />
+          </TouchableOpacity>
+        </View>
+
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View className="flex-1 bg-white">{renderContent()}</View>
+        </TouchableWithoutFeedback>
+
+        {!keyboardVisible && <CustomBottomNav onAddPress={handleFabPress} />}
+      </SafeAreaView>
+
       <Sidebar
         isVisible={sidebarVisible}
-        onClose={handleSidebarClose}
-        onNavigate={handleSidebarClose}
+        onClose={() => setSidebarVisible(false)}
+        onNavigate={() => setSidebarVisible(false)}
       />
 
-      {/* Bottom Navigation - Only show when keyboard is not visible */}
-      {!keyboardVisible && (
-        <CustomBottomNav task={true} projectId={projectId} />
+      {/* Date and Time Pickers */}
+      {showStartDatePicker && (
+        <DateTimePicker
+          value={
+            activeDraftId
+              ? draftTasks.find((draft) => draft.id === activeDraftId)
+                  ?.startTime || new Date()
+              : new Date()
+          }
+          mode="date"
+          onChange={handleStartDateChange}
+          minimumDate={new Date()}
+        />
       )}
 
-          {/* Dropdown Menu */}
-          {menuVisible && (
+      {showStartTimePicker && (
+        <DateTimePicker
+          value={
+            activeDraftId
+              ? draftTasks.find((draft) => draft.id === activeDraftId)
+                  ?.startTime || new Date()
+              : new Date()
+          }
+          mode="time"
+          onChange={handleStartTimeChange}
+        />
+      )}
+
+      {showEndDatePicker && (
+        <DateTimePicker
+          value={
+            activeDraftId
+              ? draftTasks.find((draft) => draft.id === activeDraftId)
+                  ?.endTime || new Date()
+              : new Date()
+          }
+          mode="date"
+          onChange={handleEndDateChange}
+          minimumDate={
+            activeDraftId
+              ? draftTasks.find((draft) => draft.id === activeDraftId)
+                  ?.startTime || new Date()
+              : new Date()
+          }
+        />
+      )}
+
+      {showEndTimePicker && (
+        <DateTimePicker
+          value={
+            activeDraftId
+              ? draftTasks.find((draft) => draft.id === activeDraftId)
+                  ?.endTime || new Date()
+              : new Date()
+          }
+          mode="time"
+          onChange={handleEndTimeChange}
+        />
+      )}
+
+      {menuVisible && (
+        <TouchableOpacity
+          className="absolute top-0 left-0 right-0 bottom-0"
+          activeOpacity={1}
+          onPress={closeMenu}
+        >
+          <View
+            className="bg-white rounded-lg p-2"
+            style={{
+              position: "absolute",
+              top: menuPosition.y,
+              left: menuPosition.x,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.2,
+              shadowRadius: 4,
+              elevation: 3,
+            }}
+          >
             <TouchableOpacity
-              style={styles.dropdownOverlay}
-              activeOpacity={1}
-              onPress={closeMenu}
+              className="flex-row items-center py-2.5 px-4 rounded"
+              onPress={handleUpdate}
             >
-              <View 
-                style={[
-                  styles.dropdownContainer,
-                  {
-                    position: 'absolute',
-                    top: menuPosition.y,
-                    left: menuPosition.x,
-                  }
-                ]}
-              >
-                <TouchableOpacity
-                  style={styles.dropdownItem}
-                  onPress={handleUpdate}
-                >
-                  <Ionicons name="create-outline" size={18} color="black" />
-                  <Text style={styles.dropdownItemText}>Update</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.dropdownItem}
-                  onPress={handleDelete}
-                >
-                  <Ionicons name="trash-outline" size={18} color="#FF3B30" />
-                  <Text style={[styles.dropdownItemText, { color: "#FF3B30" }]}>Delete</Text>
-                </TouchableOpacity>
-              </View>
+              <Ionicons name="create-outline" size={18} color="black" />
+              <Text className="ml-2.5 text-[14px] font-semibold text-black">
+                Update
+              </Text>
             </TouchableOpacity>
-          )}
+            <TouchableOpacity
+              className="flex-row items-center py-2.5 px-4 rounded"
+              onPress={handleDelete}
+            >
+              <Ionicons name="trash-outline" size={18} color="#FF3B30" />
+              <Text
+                className="ml-2.5 text-[14px] font-semibold"
+                style={{ color: "#FF3B30" }}
+              >
+                Delete
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {/* Update Task Modal */}
+      <UpdateTaskModal
+        visible={updateTaskModalVisible}
+        task={selectedTask}
+        projectId={projectId}
+        onClose={handleUpdateTaskClose}
+        onSuccess={handleUpdateTaskSuccess}
+      />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "white",
-  },
-
-  safeArea: {
-    flex: 1,
-    backgroundColor: "white",
-  },
-  customHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    paddingTop: Platform.OS === 'ios' ? 0 : StatusBar.currentHeight - 20,
-    backgroundColor: "white",
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
-  contentContainer: {
-    flex: 1,
-    backgroundColor: "white",
-  },
-  menuButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: "#f8f9fa",
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#333",
-    letterSpacing: 0.5,
-  },
-  notificationButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: "#f8f9fa",
-  },
-  searchContainer: {
-    paddingVertical: 10,
-    backgroundColor: "white",
-    paddingBottom:20,
-  },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f8f9fa",
-    borderRadius: 25,
-    paddingHorizontal: 25,
-    paddingVertical: 15,
-    borderWidth: 1,
-    borderColor: "#e9ecef",
-  },
-  searchIcon: {
-    marginRight: 12,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: "#333",
-    fontWeight: "500",
-  },
-  clearButton: {
-    padding: 5,
-    marginLeft: 8,
-  },
-  searchResultsInfo: {
-    paddingVertical: 10,
-    paddingHorizontal: 5,
-    marginBottom: 10,
-  },
-  searchResultsText: {
-    fontSize: 14,
-    color: "#666",
-    fontWeight: "500",
-  },
-  content: {
-    flex: 1,
-  },
-  contentContainerStyle: {
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    paddingBottom: 100, // Space for bottom navigation
-  },
-  taskCard: {
-    backgroundColor: "#f8f9fa",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#e9ecef",
-  },
-  cardContent: {
-    gap: 16,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 16,
-  },
-  titleContainer: {
-    flex: 1,
-    marginRight: 12,
-  },
-  taskTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#333",
-    lineHeight: 24,
-  },
-  taskDetails: {
-    gap: 16,
-  },
-  taskDetailSection: {
-    marginBottom: 8,
-  },
-  taskSectionLabel: {
-    fontSize: 14,
-    color: "#666",
-    fontWeight: "600",
-    marginBottom: 6,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  taskDescription: {
-    fontSize: 15,
-    color: "#555",
-    lineHeight: 20,
-    fontStyle: "italic",
-  },
-  taskInfoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  taskInfoItem: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    backgroundColor: "white",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-  },
-  taskInfoLabel: {
-    fontSize: 11,
-    color: "#666",
-    fontWeight: "500",
-    marginTop: 4,
-    marginBottom: 2,
-    textAlign: "center",
-  },
-  taskInfoValue: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#333",
-    textAlign: "center",
-    lineHeight: 16,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-    minHeight: 300,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: "#666",
-    fontWeight: "500",
-  },
-  errorText: {
-    fontSize: 16,
-    color: "#dc3545",
-    textAlign: "center",
-    marginBottom: 15,
-    fontWeight: "500",
-  },
-  retryButton: {
-    backgroundColor: "#007AFF",
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  noTasksText: {
-    fontSize: 16,
-    color: "#666",
-    textAlign: "center",
-    fontWeight: "500",
-  },
-  dropdownOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  dropdownContainer: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  dropdownItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 6,
-  },
-  dropdownItemText: {
-    marginLeft: 10,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-});
 
 export default ViewAllTasksScreen;

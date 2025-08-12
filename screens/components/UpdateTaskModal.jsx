@@ -4,24 +4,29 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  ScrollView,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
   Keyboard,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { updateTask } from '../../services/tasks/updateTaskById';
 
-import { createTask } from '../services/tasks/createTask';
-
-function CreateTaskScreen({ navigation, route }) {
+export default function UpdateTaskModal({ 
+  visible, 
+  onClose, 
+  task, 
+  projectId,
+  onSuccess 
+}) {
   const [taskData, setTaskData] = useState({
     title: '',
     description: '',
     assignedTo: '',
   });
-  const [ startDateTime, setStartDateTime] = useState(new Date());
+  const [startDateTime, setStartDateTime] = useState(new Date());
   const [endDateTime, setEndDateTime] = useState(new Date());
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
@@ -29,12 +34,6 @@ function CreateTaskScreen({ navigation, route }) {
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  
-  // Get projectId from route params if available
-  const { projectId } = route.params || {};
-  
-  // Log projectId for debugging
-  console.log('CreateTaskScreen - projectId:', projectId);
 
   useEffect(() => {
     // Add keyboard listeners
@@ -51,12 +50,29 @@ function CreateTaskScreen({ navigation, route }) {
       }
     );
 
+    // Initialize form with existing task data
+    if (task) {
+      setTaskData({
+        title: task.title || '',
+        description: task.description || '',
+        assignedTo: task.assignedTo || '',
+      });
+      
+      if (task.startTime) {
+        setStartDateTime(new Date(task.startTime));
+      }
+      
+      if (task.endTime) {
+        setEndDateTime(new Date(task.endTime));
+      }
+    }
+
     // Cleanup listeners
     return () => {
       keyboardDidShowListener?.remove();
       keyboardDidHideListener?.remove();
     };
-  }, []);
+  }, [task]);
 
   const handleInputChange = (field, value) => {
     setTaskData(prev => ({
@@ -74,9 +90,9 @@ function CreateTaskScreen({ navigation, route }) {
       setStartDateTime(newDate);
       
       // Ensure end date is not before start date
-        if (newDate > endDateTime) {
-          setEndDateTime(newDate);
-        }
+      if (newDate > endDateTime) {
+        setEndDateTime(newDate);
+      }
     }
   };
 
@@ -115,18 +131,7 @@ function CreateTaskScreen({ navigation, route }) {
     }
   };
 
-  const formatDateTime = (date) => {
-    return date.toLocaleString('en-US', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    });
-  };
-
-  const handleCreateTask = async () => {
+  const handleUpdateTask = async () => {
     // Validate required fields
     if (!taskData.title.trim()) {
       Alert.alert('Error', 'Task title is required');
@@ -138,18 +143,18 @@ function CreateTaskScreen({ navigation, route }) {
       return;
     }
 
-    // Validate that projectId is available
-    if (!projectId) {
-      Alert.alert('Error', 'Project ID is required to create a task');
+    // Validate that task ID is available
+    if (!task?.id) {
+      Alert.alert('Error', 'Task ID is required to update a task');
       return;
     }
 
     // Validate and format dates
     const now = new Date();
     
-    // Ensure start time is not in the past
-    if (startDateTime <= now) {
-      Alert.alert('Error', 'Start date and time must be in the future');
+    // Ensure start time is not in the past (allow current time for updates)
+    if (startDateTime < now) {
+      Alert.alert('Error', 'Start date and time cannot be in the past');
       return;
     }
 
@@ -189,22 +194,25 @@ function CreateTaskScreen({ navigation, route }) {
         projectId: projectId, // Include projectId if available
       };
 
-      const response = await createTask(taskPayload);
+      const response = await updateTask(task.id, taskPayload);
       
       Alert.alert(
         'Success',
-        'Task created successfully!',
+        'Task updated successfully!',
         [
           {
             text: 'OK',
-            onPress: () => navigation.goBack()
+            onPress: () => {
+              onClose();
+              if (onSuccess) onSuccess();
+            }
           }
         ]
       );
     } catch (error) {
-      console.error('Error creating task:', error);
+      console.error('Error updating task:', error);
       
-      let errorMessage = 'Failed to create task. Please try again.';
+      let errorMessage = 'Failed to update task. Please try again.';
       
       // Handle different types of error responses
       if (error.response?.data?.message) {
@@ -227,7 +235,7 @@ function CreateTaskScreen({ navigation, route }) {
   const handleCancel = () => {
     Alert.alert(
       'Cancel',
-      'Are you sure you want to cancel? All data will be lost.',
+      'Are you sure you want to cancel? All changes will be lost.',
       [
         {
           text: 'No',
@@ -235,26 +243,43 @@ function CreateTaskScreen({ navigation, route }) {
         },
         {
           text: 'Yes',
-          onPress: () => navigation.goBack()
+          onPress: () => onClose()
         }
       ]
     );
   };
 
-
+  const dismissKeyboard = () => {
+    Keyboard.dismiss();
+  };
 
   return (
-    <View className="flex-1 bg-white">
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      >
-        <View className="flex-1 p-5">
-          <View className="flex-1">
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="formSheet"
+      onRequestClose={onClose}
+    >
+      <View className="flex-1 bg-white">
+        {/* Black Navbar */}
+        <View className="bg-black px-4 py-3 flex-row items-center justify-between">
+          <Text className="text-black text-[18px] font-semibold">Update Task</Text>
+          <TouchableOpacity onPress={onClose}>
+            <Ionicons name="close" size={24} color="white" />
+          </TouchableOpacity>
+        </View>
+        
+        <View className="flex-1 p-5 items-center">
+          <ScrollView
+            className="flex-1 w-full max-w-md"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 20 }}
+            keyboardShouldPersistTaps="handled"
+            onScrollBeginDrag={dismissKeyboard}
+          >
             <View className="mb-8 items-center">
-              <Text className="text-[28px] font-bold text-[#333]">Create New Task</Text>
-              <Text className="text-[16px] text-[#666] text-center">Fill in the details below to create your task</Text>
+              <Text className="text-[28px] font-bold text-[#333]">Update Task</Text>
+              <Text className="text-[16px] text-[#666] text-center">Modify the task details below</Text>
             </View>
 
             <View className="mb-5">
@@ -349,71 +374,64 @@ function CreateTaskScreen({ navigation, route }) {
                 </View>
               </View>
             </View>
-          </View>
-
-          {/* Action Buttons - Only show when keyboard is not visible */}
-          {!keyboardVisible && (
-            <View className="flex-row justify-between gap-4 pt-5 pb-2.5 bg-white">
-              <TouchableOpacity
-                className={`flex-1 bg-[#f8f9fa] border border-[#dee2e6] rounded-lg p-4 items-center ${isLoading ? 'opacity-60' : ''}`}
-                onPress={handleCancel}
-                disabled={isLoading}
-              >
-                <Text className="text-[#6c757d] text-[16px] font-semibold">Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className={`flex-1 bg-black rounded-lg p-4 items-center ${isLoading ? 'opacity-60' : ''}`}
-                onPress={handleCreateTask}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text className="text-white text-[16px] font-semibold">Create Task</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Date and Time Pickers */}
-          {showStartDatePicker && (
-            <DateTimePicker
-              value={startDateTime}
-              mode="date"
-              onChange={handleStartDateChange}
-              minimumDate={new Date()}
-            />
-          )}
-
-          {showStartTimePicker && (
-            <DateTimePicker
-              value={startDateTime}
-              mode="time"
-              onChange={handleStartTimeChange}
-            />
-          )}
-
-          {showEndDatePicker && (
-            <DateTimePicker
-              value={endDateTime}
-              mode="date"
-              onChange={handleEndDateChange}
-              minimumDate={startDateTime}
-            />
-          )}
-
-          {showEndTimePicker && (
-            <DateTimePicker
-              value={endDateTime}
-              mode="time"
-              onChange={handleEndTimeChange}
-            />
-          )}
-
+          </ScrollView>
         </View>
-      </KeyboardAvoidingView>
-    </View>
+
+        {/* Fixed Action Button - Always positioned at bottom, hidden when keyboard is visible */}
+        {!keyboardVisible && (
+          <View className="absolute bottom-0 left-0 right-0 px-5 pt-5 pb-8 bg-white items-center">
+            <TouchableOpacity
+              className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
+              onPress={handleUpdateTask}
+              disabled={isLoading}
+              activeOpacity={0.8}
+            >
+              {isLoading ? (
+                <View className="flex-row items-center">
+                  <ActivityIndicator color="#ffffff" size="small" />
+                </View>
+              ) : (
+                <Text className="text-white text-[16px] font-semibold">Update Task</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Date and Time Pickers */}
+        {showStartDatePicker && (
+          <DateTimePicker
+            value={startDateTime}
+            mode="date"
+            onChange={handleStartDateChange}
+            minimumDate={new Date()}
+          />
+        )}
+
+        {showStartTimePicker && (
+          <DateTimePicker
+            value={startDateTime}
+            mode="time"
+            onChange={handleStartTimeChange}
+          />
+        )}
+
+        {showEndDatePicker && (
+          <DateTimePicker
+            value={endDateTime}
+            mode="date"
+            onChange={handleEndDateChange}
+            minimumDate={startDateTime}
+          />
+        )}
+
+        {showEndTimePicker && (
+          <DateTimePicker
+            value={endDateTime}
+            mode="time"
+            onChange={handleEndTimeChange}
+          />
+        )}
+      </View>
+    </Modal>
   );
 }
-
-export default CreateTaskScreen;

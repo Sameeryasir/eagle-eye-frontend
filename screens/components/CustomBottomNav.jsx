@@ -1,122 +1,130 @@
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet, Dimensions, Animated } from 'react-native';
-import Icon from 'react-native-vector-icons/Ionicons';
+import { View, TouchableOpacity, Dimensions, Animated } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
-export default function CustomBottomNav({ keyboardVisible = false, task = false, projectId = null }) {
+export default function CustomBottomNav({ keyboardVisible = false, task = false, projectId = null, project = false, onAddPress ,handleFabPress}) {
   const navigation = useNavigation();
+  const [activeTab, setActiveTab] = React.useState('home'); // Track active tab
 
   const handleAddPress = () => {
-    if (task) {
+    if (onAddPress) {
+      onAddPress();
+    } else if (task) {
       navigation.navigate('CreateTask', { projectId: projectId });
-    } else {
-      navigation.navigate('CreateProject');
+    } else if (project) {
+      navigation.navigate("CreateProject");
+    }
+    else if(handleFabPress){
+      handleFabPress();
     }
   };
- const navigateToHome =()=>{
-  navigation.navigate('HomeScreen')
- }
+ 
+  const navigateToHome = () => {
+    setActiveTab('home');
+    navigation.navigate('HomeScreen')
+  }
+
+  const navigateToChats = () => {
+    setActiveTab('chats');
+    navigation.navigate('HomeScreen') // You can change this to actual chat screen later
+  }
+
+  const navigateToNotifications = () => {
+    setActiveTab('notifications');
+    navigation.navigate('HomeScreen') // You can change this to actual notification screen later
+  }
+
+  const navigateToProfile = () => {
+    setActiveTab('profile');
+    navigation.navigate('HomeScreen') // You can change this to actual profile screen later
+  }
   // Hide the bottom navigation when keyboard is visible
   if (keyboardVisible) {
     return null;
   }
 
   return (
-    <View style={styles.container}>
+    <View className="absolute bottom-0 w-full items-center z-[1000]">
       {/* Bottom Nav Bar */}
-      <View style={styles.navBar}>
-        <TouchableOpacity style={styles.iconButton} onPress={navigateToHome}>
-          <Icon name="home-outline" size={24} color="#fff" />
+      <View 
+        className="flex-row items-center justify-between w-[90%] h-[70px] bg-black rounded-[35px] px-[15px] pb-[5px] mb-5"
+        style={{
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.15,
+          shadowRadius: 4,
+          elevation: 6,
+        }}
+      >
+        <TouchableOpacity 
+          className="items-center justify-center relative"
+          style={{ width: (width * 0.9 - 30) / 5 }}
+          onPress={navigateToHome}
+        >
+          <Ionicons name="home-outline" size={24} color="#fff" />
+          {activeTab === 'home' && (
+            <View className="absolute bottom-[-6px] w-5 h-[3px] bg-white rounded-[2px]" />
+          )}
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.iconButton}>
-          <Icon name="chatbubble-outline" size={24} color="#fff" />
-          <View style={styles.activeIndicator} />
+        <TouchableOpacity 
+          className="items-center justify-center relative"
+          style={{ width: (width * 0.9 - 30) / 5 }}
+          onPress={navigateToChats}
+        >
+          <Ionicons name="chatbubble-outline" size={24} color="#fff" />
+          {activeTab === 'chats' && (
+            <View className="absolute bottom-[-6px] w-5 h-[3px] bg-white rounded-[2px]" />
+          )}
         </TouchableOpacity>
 
-        <View style={styles.spacer} />
+        <View style={{ width: 65 }} />
 
-        <TouchableOpacity style={styles.iconButton}>
-          <Icon name="notifications-outline" size={24} color="#fff" />
+        <TouchableOpacity 
+          className="items-center justify-center relative"
+          style={{ width: (width * 0.9 - 30) / 5 }}
+          onPress={navigateToNotifications}
+        >
+          <Ionicons name="notifications-outline" size={24} color="#fff" />
+          {activeTab === 'notifications' && (
+            <View className="absolute bottom-[-6px] w-5 h-[3px] bg-white rounded-[2px]" />
+          )}
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.iconButton}>
-          <Icon name="person-outline" size={24} color="#fff" />
-        </TouchableOpacity>
+        <TouchableOpacity 
+  className="items-center justify-center relative"
+  style={{ width: (width * 0.9 - 30) / 5 }}
+  onPress={navigateToProfile}
+>
+  {/* Calendar icon (fixed spelling + valid icon) */}
+  <Ionicons name="calendar-outline" size={24} color="#fff" />
+
+  {activeTab === 'profile' && (
+    <View className="absolute bottom-[-6px] w-5 h-[3px] bg-white rounded-[2px]" />
+  )}
+</TouchableOpacity>
+
       </View>
 
       {/* Floating Action Button */}
-      <View style={styles.fabContainer}>
-        <TouchableOpacity style={styles.fab} onPress={handleAddPress}>
-          <Icon name="add" size={30} color="white" />
+      <View className="absolute bottom-[45px] z-[1001]">
+        <TouchableOpacity 
+          className="w-[65px] h-[65px] rounded-[32.5px] bg-black justify-center items-center border-[3px] border-white"
+          style={{
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.2,
+            shadowRadius: 8,
+            elevation: 8,
+          }}
+          onPress={handleAddPress}
+        >
+          <Ionicons name="add" size={30} color="white" />
         </TouchableOpacity>
       </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    bottom: 0,
-    width,
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  navBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: width * 0.9,
-    height: 70,
-    backgroundColor: 'black', // slightly transparent gray background
-    borderRadius: 35,
-    paddingHorizontal: 15,
-    paddingBottom: 5,
-    marginBottom: 20, // reduced from 25
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 }, // reduced shadow
-    shadowOpacity: 0.15, // reduced opacity
-    shadowRadius: 4, // reduced radius
-    elevation: 6, // reduced elevation
-  },
-  iconButton: {
-    width: (width * 0.9 - 30) / 5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  spacer: {
-    width: 65, // matches FAB width
-  },
-  activeIndicator: {
-    position: 'absolute',
-    bottom: -6,
-    width: 20,
-    height: 3,
-    backgroundColor: 'white',
-    borderRadius: 2,
-  },
-  fabContainer: {
-    position: 'absolute',
-    bottom: 45, // adjusted from 50
-    zIndex: 1001,
-  },
-  fab: {
-    width: 65,
-    height: 65,
-    borderRadius: 32.5,
-    backgroundColor: 'black',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 }, // reduced shadow
-    shadowOpacity: 0.2, // reduced opacity
-    shadowRadius: 8, // reduced radius
-    elevation: 8, // reduced elevation
-    borderWidth: 3,
-    borderColor: 'white', // outer ring of FAB
-  },
-});

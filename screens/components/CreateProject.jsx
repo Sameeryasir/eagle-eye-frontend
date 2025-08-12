@@ -11,17 +11,15 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { createProject } from '../services/projects/createProject';
+import { createProject } from '../../services/projects/createProject';
 
-function CreateProjectScreen({ navigation }) {
+function CreateProject({ navigation }) {
   const [projectData, setProjectData] = useState({
     name: '',
     description: '',
   });
   const [startDate, setStartDate] = useState(new Date());
-  const [endDate, setEndDate] = useState(new Date());
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
@@ -61,21 +59,6 @@ function CreateProjectScreen({ navigation }) {
       const newDate = new Date(selectedDate);
       newDate.setHours(0, 0, 0, 0);
       setStartDate(newDate);
-      
-      // Ensure end date is not before start date
-      if (newDate > endDate) {
-        setEndDate(newDate);
-      }
-    }
-  };
-
-  const handleEndDateChange = (event, selectedDate) => {
-    setShowEndDatePicker(false);
-    if (selectedDate) {
-      // Set time to midnight (00:00:00) for consistency
-      const newDate = new Date(selectedDate);
-      newDate.setHours(0, 0, 0, 0);
-      setEndDate(newDate);
     }
   };
 
@@ -95,20 +78,13 @@ function CreateProjectScreen({ navigation }) {
     const now = new Date();
     now.setHours(0, 0, 0, 0); // Set to midnight for date-only comparison
     
-    // Ensure start date is not in the past
-    if (startDate <= now) {
-      Alert.alert('Error', 'Start date must be in the future');
-      return;
-    }
-
-    // Ensure end date is after start date
-    if (endDate <= startDate) {
-      Alert.alert('Error', 'End date must be after start date');
+    // Allow creating projects on the same date or in the future
+    if (startDate < now) {
+      Alert.alert('Error', 'Start date cannot be in the past');
       return;
     }
 
     const startDateISO = startDate.toISOString();
-    const endDateISO = endDate.toISOString();
 
     setIsLoading(true);
     
@@ -118,7 +94,6 @@ function CreateProjectScreen({ navigation }) {
         name: projectData.name.trim(),
         description: projectData.description.trim(),
         startDate: startDateISO,
-        endDate: endDateISO,
       };
 
       const response = await createProject(projectPayload);
@@ -179,9 +154,17 @@ function CreateProjectScreen({ navigation }) {
 
   return (
     <View className="flex-1 bg-white">
-      <View className="flex-1 p-5">
+      {/* Black Navbar */}
+      <View className="bg-black px-4 py-3 flex-row items-center justify-between">
+        <Text className="text-black text-[18px] font-semibold">Create Project</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="close" size={24} color="white" />
+        </TouchableOpacity>
+      </View>
+      
+      <View className="flex-1 p-5 items-center">
         <ScrollView
-          className="flex-1"
+          className="flex-1 w-full max-w-md"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 20 }}
           keyboardShouldPersistTaps="handled"
@@ -245,56 +228,34 @@ function CreateProjectScreen({ navigation }) {
               </TouchableOpacity>
             </View>
 
-            {/* End Date */}
-            <View className="mb-5">
-              <View className="flex-row items-center mb-2">
-                <Ionicons name="calendar" size={20} color="black" style={{ marginRight: 8 }} />
-                <Text className="text-[16px] font-semibold text-[#333]">End Date *</Text>
-              </View>
-              <TouchableOpacity
-                className="flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                onPress={() => setShowEndDatePicker(true)}
-              >
-                <Text className="text-[16px] text-[#333] font-medium">
-                  {endDate.toLocaleDateString()}
-                </Text>
-                <Ionicons name="calendar-outline" size={16} color="#666" />
-              </TouchableOpacity>
-            </View>
+          
+          
           </View>
         </ScrollView>
       </View>
 
-      {/* Fixed Action Buttons - Always positioned at bottom, hidden when keyboard is visible */}
+      {/* Fixed Action Button - Always positioned at bottom, hidden when keyboard is visible */}
       {!keyboardVisible && (
-        <View className="absolute bottom-0 left-0 right-0 flex-row justify-between gap-4 px-5 pt-5 pb-8 bg-white">
-          <TouchableOpacity
-            className="flex-1 bg-[#f8f9fa] border border-[#dee2e6] rounded-lg p-4 items-center"
-            onPress={handleCancel}
-            disabled={isLoading}
-            style={{ opacity: isLoading ? 0.6 : 1 }}
-          >
-            <Text className="text-[#6c757d] text-[16px] font-semibold">Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            className="flex-1 bg-black rounded-lg p-4 items-center justify-center"
-            onPress={handleCreateProject}
-            disabled={isLoading}
-            style={{ opacity: isLoading ? 0.6 : 1 }}
-          >
-            {isLoading ? (
-              <View className="flex-row items-center justify-center">
-                <ActivityIndicator color="#ffffff" size="small" style={{ marginRight: 8 }} />
-                <Text className="text-white text-[16px] font-semibold">Creating...</Text>
-              </View>
-            ) : (
-              <Text className="text-white text-[16px] font-semibold">Create Project</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+      <View className="absolute bottom-0 left-0 right-0 px-5 pt-5 pb-8 bg-white items-center">
+      <TouchableOpacity
+        className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
+        onPress={handleCreateProject}
+        disabled={isLoading}          // blocks double-taps but keeps same style
+        activeOpacity={0.8}
+      >
+        {isLoading ? (
+          <View className="flex-row items-center">
+            <ActivityIndicator color="#ffffff" size="small" />
+          </View>
+        ) : (
+          <Text className="text-white text-[16px] font-semibold">Create Project</Text>
+        )}
+      </TouchableOpacity>
+    </View>
+    
       )}
 
-      {/* Date Pickers */}
+      {/* Date Picker */}
       {showStartDatePicker && (
         <DateTimePicker
           value={startDate}
@@ -303,19 +264,8 @@ function CreateProjectScreen({ navigation }) {
           minimumDate={new Date()}
         />
       )}
-
-      {showEndDatePicker && (
-        <DateTimePicker
-          value={endDate}
-          mode="date"
-          onChange={handleEndDateChange}
-          minimumDate={startDate}
-        />
-      )}
     </View>
   );
 }
 
- 
-
-export default CreateProjectScreen;
+export default CreateProject;

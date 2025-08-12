@@ -5,10 +5,7 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  StyleSheet,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
   Keyboard,
 } from "react-native";
@@ -202,255 +199,142 @@ export default function UpdateProjectScreen({ navigation, route }) {
   };
 
   return (
-    <View style={styles.container}>
-      <KeyboardAvoidingView
-        style={styles.keyboardAvoidingView}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
-      >
-        <View style={styles.mainContainer}>
-          <ScrollView
-            style={styles.scrollView}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            onScrollBeginDrag={dismissKeyboard}
+    <View className="flex-1 bg-white">
+      <View className="flex-1 p-5">
+        <ScrollView
+          className="flex-1"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 20 }}
+          keyboardShouldPersistTaps="handled"
+          onScrollBeginDrag={dismissKeyboard}
+        >
+          <View className="mb-8 items-center">
+            <Text className="text-[28px] font-bold text-[#333]">Update Project</Text>
+            <Text className="text-[16px] text-[#666] text-center">
+              Modify the details below to update your project
+            </Text>
+          </View>
+
+          <View className="mb-5">
+            {/* Project Name */}
+            <View className="mb-5">
+              <View className="flex-row items-center mb-2">
+                <Ionicons
+                  name="folder"
+                  size={20}
+                  color="black"
+                  style={{ marginRight: 8 }}
+                />
+                <Text className="text-[16px] font-semibold text-[#333]">Project Name *</Text>
+              </View>
+              <TextInput
+                className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333]"
+                placeholder="Enter project name"
+                value={projectData.name}
+                onChangeText={(value) => handleInputChange("name", value)}
+                placeholderTextColor="#999"
+                returnKeyType="next"
+              />
+            </View>
+
+            {/* Project Description */}
+            <View className="mb-5">
+              <View className="flex-row items-center mb-2">
+                <Ionicons
+                  name="document-text"
+                  size={20}
+                  color="black"
+                  style={{ marginRight: 8 }}
+                />
+                <Text className="text-[16px] font-semibold text-[#333]">Description *</Text>
+              </View>
+              <TextInput
+                className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333] h-24"
+                placeholder="Describe your project"
+                value={projectData.description}
+                onChangeText={(value) =>
+                  handleInputChange("description", value)
+                }
+                multiline
+                numberOfLines={4}
+                placeholderTextColor="#999"
+                returnKeyType="next"
+                style={{ textAlignVertical: 'top' }}
+              />
+            </View>
+
+            {/* Start Date */}
+            <View className="mb-5">
+              <View className="flex-row items-center mb-2">
+                <Ionicons
+                  name="calendar"
+                  size={20}
+                  color="black"
+                  style={{ marginRight: 8 }}
+                />
+                <Text className="text-[16px] font-semibold text-[#333]">Start Date</Text>
+              </View>
+              <TextInput
+                className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333]"
+                placeholder="MM/DD/YYYY"
+                value={projectData.startDate}
+                onChangeText={(value) =>
+                  handleInputChange("startDate", value)
+                }
+                placeholderTextColor="#999"
+                returnKeyType="next"
+              />
+            </View>
+
+            {/* End Date */}
+            <View className="mb-5">
+              <View className="flex-row items-center mb-2">
+                <Ionicons
+                  name="calendar"
+                  size={20}
+                  color="black"
+                  style={{ marginRight: 8 }}
+                />
+                <Text className="text-[16px] font-semibold text-[#333]">End Date</Text>
+              </View>
+              <TextInput
+                className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333]"
+                placeholder="MM/DD/YYYY"
+                value={projectData.endDate}
+                onChangeText={(value) => handleInputChange("endDate", value)}
+                placeholderTextColor="#999"
+                returnKeyType="done"
+                blurOnSubmit={true}
+              />
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+
+      {/* Fixed Action Buttons - Always positioned at bottom, hidden when keyboard is visible */}
+      {!keyboardVisible && (
+        <View className="absolute bottom-0 left-0 right-0 flex-row justify-between gap-4 px-5 pt-5 pb-8 bg-white">
+          <TouchableOpacity
+            className={`flex-1 bg-[#f8f9fa] border border-[#dee2e6] rounded-lg p-4 items-center ${isLoading ? 'opacity-60' : ''}`}
+            onPress={handleCancel}
+            disabled={isLoading}
           >
-            <View style={styles.header}>
-              <Text style={styles.headerTitle}>Update Project</Text>
-              <Text style={styles.headerSubtitle}>
-                Modify the details below to update your project
-              </Text>
-            </View>
-
-            <View style={styles.formContainer}>
-              {/* Project Name */}
-              <View style={styles.inputGroup}>
-                <View style={styles.labelRow}>
-                  <Ionicons
-                    name="folder"
-                    size={20}
-                    color="black"
-                    style={styles.labelIcon}
-                  />
-                  <Text style={styles.label}>Project Name *</Text>
-                </View>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Enter project name"
-                  value={projectData.name}
-                  onChangeText={(value) => handleInputChange("name", value)}
-                  placeholderTextColor="#999"
-                  returnKeyType="next"
-                />
-              </View>
-
-              {/* Project Description */}
-              <View style={styles.inputGroup}>
-                <View style={styles.labelRow}>
-                  <Ionicons
-                    name="document-text"
-                    size={20}
-                    color="black"
-                    style={styles.labelIcon}
-                  />
-                  <Text style={styles.label}>Description *</Text>
-                </View>
-                <TextInput
-                  style={[styles.textInput, styles.textArea]}
-                  placeholder="Describe your project"
-                  value={projectData.description}
-                  onChangeText={(value) =>
-                    handleInputChange("description", value)
-                  }
-                  multiline
-                  numberOfLines={4}
-                  placeholderTextColor="#999"
-                  returnKeyType="next"
-                />
-              </View>
-
-              {/* Start Date */}
-              <View style={styles.inputGroup}>
-                <View style={styles.labelRow}>
-                  <Ionicons
-                    name="calendar"
-                    size={20}
-                    color="black"
-                    style={styles.labelIcon}
-                  />
-                  <Text style={styles.label}>Start Date</Text>
-                </View>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="MM/DD/YYYY"
-                  value={projectData.startDate}
-                  onChangeText={(value) =>
-                    handleInputChange("startDate", value)
-                  }
-                  placeholderTextColor="#999"
-                  returnKeyType="next"
-                />
-              </View>
-
-              {/* End Date */}
-              <View style={styles.inputGroup}>
-                <View style={styles.labelRow}>
-                  <Ionicons
-                    name="calendar"
-                    size={20}
-                    color="black"
-                    style={styles.labelIcon}
-                  />
-                  <Text style={styles.label}>End Date</Text>
-                </View>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="MM/DD/YYYY"
-                  value={projectData.endDate}
-                  onChangeText={(value) => handleInputChange("endDate", value)}
-                  placeholderTextColor="#999"
-                  returnKeyType="done"
-                  blurOnSubmit={true}
-                />
-              </View>
-            </View>
-          </ScrollView>
-
-          {/* Action Buttons - Only show when keyboard is not visible */}
-          {!keyboardVisible && (
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.cancelButton,
-                  isLoading && styles.disabledButton,
-                ]}
-                onPress={handleCancel}
-                disabled={isLoading}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.createButton,
-                  isLoading && styles.disabledButton,
-                ]}
-                onPress={handleUpdateProject}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.createButtonText}>Update Project</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
+            <Text className="text-[#6c757d] text-[16px] font-semibold">Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            className={`flex-1 bg-black rounded-lg p-4 items-center ${isLoading ? 'opacity-60' : ''}`}
+            onPress={handleUpdateProject}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#ffffff" size="small" />
+            ) : (
+              <Text className="text-white text-[16px] font-semibold">Update Project</Text>
+            )}
+          </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      )}
     </View>
   );
 }
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "white",
-  },
-  keyboardAvoidingView: {
-    flex: 1,
-  },
-  mainContainer: {
-    flex: 1,
-    padding: 20,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 100, // Extra padding for buttons when keyboard is not visible
-  },
-  header: {
-    marginBottom: 30,
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#333333",
-    marginBottom: 8,
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    color: "#666666",
-    textAlign: "center",
-  },
-  formContainer: {
-    marginBottom: 20,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  labelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  labelIcon: {
-    marginRight: 8,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333333",
-  },
-  textInput: {
-    borderWidth: 1,
-    borderColor: "#e1e8ed",
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: "#f8f9fa",
-    color: "#333333",
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: "top",
-  },
-  buttonContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 15,
-    paddingTop: 20,
-    paddingBottom: 10,
-    backgroundColor: "white",
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: "#f8f9fa",
-    borderWidth: 1,
-    borderColor: "#dee2e6",
-    borderRadius: 8,
-    padding: 15,
-    alignItems: "center",
-  },
-  cancelButtonText: {
-    color: "#6c757d",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  createButton: {
-    flex: 1,
-    backgroundColor: "black",
-    borderRadius: 8,
-    padding: 15,
-    alignItems: "center",
-  },
-  createButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-});
+ 
