@@ -62,7 +62,7 @@ const Code = () => {
       
       if (userRole === 'Owner') {
         targetScreen = 'HomeScreen';
-      } else if (userRole === 'Employee' || userRole === 'Manager') {
+      } else if (userRole === 'Employee' || userRole=== 'Manager') {
         targetScreen = 'WidgetScreen';
       }
       // Other roles will default to HomeScreen

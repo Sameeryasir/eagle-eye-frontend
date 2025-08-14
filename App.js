@@ -14,12 +14,12 @@ import Sidebar from "./screens/components/Sidebar";
 import HomeScreen from "./screens/HomeScreen";
 import WidgetScreen from "./screens/WidgetScreen";
 import CalenderScreen from "./screens/CalenderScreen";
-import TaskDetailScreen from "./screens/TaskDetailScreen";
 import ViewAllTasksScreen from "./screens/ViewAllTasksScreen";
 import CreateProjectScreen from "./screens/CreateProjectScreen";
 import CreateTaskScreen from "./screens/CreateTaskScreen";
 import UpdateTaskScreen from "./screens/UpdateTaskScreen";
 import UpdateProjectScreen from "./screens/UpdateProjectScreen";
+import TaskDetailsScreen from "./screens/TaskDetailsScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -30,6 +30,24 @@ const CustomHeader = ({onMenuPress }) => {
       <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
       <Header 
         title="Projects"
+        onMenuPress={onMenuPress}
+        onRightPress={() => {}}
+        rightIcon="person"
+        backgroundColor="#3155A1"
+        textColor="white"
+        iconColor="white"
+      />
+    </SafeAreaView>
+  );
+};
+
+// Custom Header Component for all other screens (without search bar)
+const CustomHeaderForScreens = ({ onMenuPress, title = "Screen" }) => {
+  return (
+    <SafeAreaView style={{ backgroundColor: '#3155A1' }} edges={['top']}>
+      <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
+      <Header 
+        title={title}
         onMenuPress={onMenuPress}
         onRightPress={() => {}}
         rightIcon="person"
@@ -121,10 +139,13 @@ export default function App() {
           name="WidgetScreen"
           component={WidgetScreen}
           options={{
-            headerShown: false,
-            title: "Widget Dashboard",
+            headerShown: true,
+            header: () => <CustomHeaderForScreens onMenuPress={handleMenuPress} title="Widget Dashboard" />,
             headerBackTitleVisible: false,
-            headerTitleAlign: "center",
+            headerStyle: {
+              backgroundColor: 'white',
+            },
+            headerShadowVisible: false,
           }}
         />
         <Stack.Screen
@@ -132,29 +153,26 @@ export default function App() {
           component={CalenderScreen}
           options={{
             headerShown: true,
-            title: "Calendar",
+            header: () => <CustomHeaderForScreens onMenuPress={handleMenuPress} title="Calendar" />,
             headerBackTitleVisible: false,
-            headerTitleAlign: "center",
+            headerStyle: {
+              backgroundColor: 'white',
+            },
+            headerShadowVisible: false,
           }}
         />
-        <Stack.Screen
-          name="TaskDetailScreen"
-          component={TaskDetailScreen}
-          options={{
-            headerShown: true,
-            title: "Task Details",
-            headerBackTitleVisible: false,
-            headerTitleAlign: "center",
-          }}
-        />
+     
         <Stack.Screen
           name="ViewAllTasksScreen"
           component={ViewAllTasksScreen}
           options={{
-            headerShown: false,
-            title: "All Tasks",
+            headerShown: true,
+            header: () => <CustomHeaderForScreens onMenuPress={handleMenuPress} title="All Tasks" />,
             headerBackTitleVisible: false,
-            headerTitleAlign: "center",
+            headerStyle: {
+              backgroundColor: 'white',
+            },
+            headerShadowVisible: false,
           }}
         />
         <Stack.Screen
@@ -162,9 +180,12 @@ export default function App() {
           component={CreateProjectScreen}
           options={{
             headerShown: true,
-            title: "Create Project",
+            header: () => <CustomHeaderForScreens onMenuPress={handleMenuPress} title="Create Project" />,
             headerBackTitleVisible: false,
-            headerTitleAlign: "center",
+            headerStyle: {
+              backgroundColor: 'white',
+            },
+            headerShadowVisible: false,
           }}
         />
         <Stack.Screen
@@ -172,9 +193,12 @@ export default function App() {
           component={CreateTaskScreen}
           options={{
             headerShown: true,
-            title: "Create Task",
+            header: () => <CustomHeaderForScreens onMenuPress={handleMenuPress} title="Create Task" />,
             headerBackTitleVisible: false,
-            headerTitleAlign: "center",
+            headerStyle: {
+              backgroundColor: 'white',
+            },
+            headerShadowVisible: false,
           }}
         />
         <Stack.Screen
@@ -182,9 +206,12 @@ export default function App() {
           component={UpdateTaskScreen}
           options={{
             headerShown: true,
-            title: "Update Task",
+            header: () => <CustomHeaderForScreens onMenuPress={handleMenuPress} title="Update Task" />,
             headerBackTitleVisible: false,
-            headerTitleAlign: "center",
+            headerStyle: {
+              backgroundColor: 'white',
+            },
+            headerShadowVisible: false,
           }}
         />
         <Stack.Screen
@@ -192,11 +219,28 @@ export default function App() {
           component={UpdateProjectScreen}
           options={{
             headerShown: true,
-            title: "Update Project",
+            header: () => <CustomHeaderForScreens onMenuPress={handleMenuPress} title="Update Project" />,
             headerBackTitleVisible: false,
-            headerTitleAlign: "center",
+            headerStyle: {
+              backgroundColor: 'white',
+            },
+            headerShadowVisible: false,
           }}
         />
+        <Stack.Screen
+          name="TaskDetails"
+          component={TaskDetailsScreen}
+          options={{
+            headerShown: true,
+            header: () => <CustomHeaderForScreens onMenuPress={handleMenuPress} title="Task Details" />,
+            headerBackTitleVisible: false,
+            headerStyle: {
+              backgroundColor: 'white',
+            },
+            headerShadowVisible: false,
+          }}
+        />
+   
         </Stack.Navigator>
         </NavigationContainer>
         

@@ -15,6 +15,7 @@ import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
 import { getTaskByProjectId } from "../services/tasks/getTaskByProjectId";
 import { getTaskAssignedToEmployee } from "../services/tasks/getTaskAssignedToEmployee";
+import getTasksByloginId from "../services/tasks/getTasksByloginId";
 import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
 
@@ -73,6 +74,10 @@ function WidgetScreen({ navigation, route }) {
       if (role === 'Employee') {
         response = await getTaskAssignedToEmployee();
         setProject({ name: 'My Tasks' });
+        setTasks(response || []);
+      } else if (role === 'Manager') {
+        response = await getTasksByloginId();
+        setProject({ name: 'All Tasks' });
         setTasks(response || []);
       } else {
         response = await getTaskByProjectId(projectId);
@@ -283,17 +288,7 @@ function WidgetScreen({ navigation, route }) {
       <StatusBar barStyle="dark-content" backgroundColor="white" />
 
       <SafeAreaView className="flex-1">
-        <View className="flex-row items-center justify-between px-5 py-5 pt-2.5 bg-white border-b border-[#f0f0f0]">
-          <TouchableOpacity className="p-2 rounded-lg bg-[#f8f9fa]" onPress={() => setSidebarVisible(true)}>
-            <Ionicons name="menu" size={24} color="#333" />
-          </TouchableOpacity>
-          <Text className="text-[20px] font-bold text-[#333] tracking-[0.5px]">
-            {project ? project.name : ''}
-          </Text>
-          <TouchableOpacity className="p-2 rounded-lg bg-[#f8f9fa]">
-            <Ionicons name="notifications" size={24} color="#333" />
-          </TouchableOpacity>
-        </View>
+       
 
         <ScrollView className="flex-1 px-5 py-5 pb-[100px]">
           {renderContent()}
@@ -306,7 +301,12 @@ function WidgetScreen({ navigation, route }) {
         onNavigate={() => setSidebarVisible(false)}
       />
 
-      <CustomBottomNav task={tasks.length === 0} />
+      <CustomBottomNav 
+        onAddPress={() => {
+          const navigationParams = userRole === 'Employee' ? { createDraft: true } : { projectId, createDraft: true };
+          navigation.navigate('ViewAllTasksScreen', navigationParams);
+        }}
+      />
     </View>
   );
 }

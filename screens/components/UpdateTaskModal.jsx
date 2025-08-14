@@ -9,10 +9,12 @@ import {
   ActivityIndicator,
   Keyboard,
   Modal,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { updateTask } from '../../services/tasks/updateTaskById';
+import { getEmployeesToAssignTask } from '../../services/employees/getEmployeesOfTheCompany';
 
 export default function UpdateTaskModal({ 
   visible, 
@@ -24,7 +26,8 @@ export default function UpdateTaskModal({
   const [taskData, setTaskData] = useState({
     title: '',
     description: '',
-    assignedTo: '',
+    assignedTo: null,
+    priority: null,
   });
   const [startDateTime, setStartDateTime] = useState(new Date());
   const [endDateTime, setEndDateTime] = useState(new Date());
@@ -34,6 +37,17 @@ export default function UpdateTaskModal({
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [employees, setEmployees] = useState([]);
+  const [showAssignedDropdown, setShowAssignedDropdown] = useState(false);
+  const [employeeSearchTerm, setEmployeeSearchTerm] = useState("");
+  const [filteredEmployees, setFilteredEmployees] = useState([]);
+  const [showPriorityDropdown, setShowPriorityDropdown] = useState(false);
+  const [priorityOptions] = useState([
+    { id: 'low', label: 'Low', color: '#10B981' },
+    { id: 'medium', label: 'Medium', color: '#F59E0B' },
+    { id: 'high', label: 'High', color: '#EF4444' },
+    { id: 'critical', label: 'Critical', color: '#DC2626' }
+  ]);
 
   useEffect(() => {
     // Add keyboard listeners
@@ -50,12 +64,12 @@ export default function UpdateTaskModal({
       }
     );
 
-    // Initialize form with existing task data
     if (task) {
       setTaskData({
         title: task.title || '',
         description: task.description || '',
-        assignedTo: task.assignedTo || '',
+        assignedTo: task.assigned_to || task.assignedTo || null,
+        priority: task.priority || null,
       });
       
       if (task.startTime) {
@@ -73,6 +87,51 @@ export default function UpdateTaskModal({
       keyboardDidHideListener?.remove();
     };
   }, [task]);
+
+  // Load employees when modal opens
+  useEffect(() => {
+    if (visible) {
+      loadEmployees();
+    }
+  }, [visible]);
+
+  const loadEmployees = async () => {
+    try {
+      const response = await getEmployeesToAssignTask();
+      if (response && Array.isArray(response)) {
+        setEmployees(response);
+        setFilteredEmployees(response);
+      }
+    } catch (error) {
+      console.error("Error loading employees:", error);
+    }
+  };
+
+  const handleEmployeeSearch = (text) => {
+    setEmployeeSearchTerm(text);
+
+    if (text.trim() === "") {
+      setFilteredEmployees(employees);
+    } else {
+      const searchLower = text.toLowerCase().trim();
+
+      const filtered = employees.filter((employee) => {
+        const firstName = (employee.first_name || "").toLowerCase();
+        const lastName = (employee.last_name || "").toLowerCase();
+        const email = (employee.email || "").toLowerCase();
+        const fullName = `${firstName} ${lastName}`.trim();
+
+        return (
+          firstName.includes(searchLower) ||
+          lastName.includes(searchLower) ||
+          fullName.includes(searchLower) ||
+          email.includes(searchLower)
+        );
+      });
+
+      setFilteredEmployees(filtered);
+    }
+  };
 
   const handleInputChange = (field, value) => {
     setTaskData(prev => ({
@@ -149,51 +208,72 @@ export default function UpdateTaskModal({
       return;
     }
 
-    // Validate and format dates
-    const now = new Date();
-    
-    // Ensure start time is not in the past (allow current time for updates)
-    if (startDateTime < now) {
-      Alert.alert('Error', 'Start date and time cannot be in the past');
+    // Check which fields have changed and build payload with only changed fields
+    const originalTask = {
+      title: task.title || '',
+      description: task.description || '',
+      assignedTo: task.assignedTo || null,
+      priority: task.priority || null,
+      startTime: task.startTime ? new Date(task.startTime) : new Date(),
+      endTime: task.endTime ? new Date(task.endTime) : new Date(),
+    };
+
+    const currentTask = {
+      title: taskData.title.trim(),
+      description: taskData.description.trim(),
+      assignedTo: taskData.assignedTo,
+      priority: taskData.priority,
+      startTime: startDateTime,
+      endTime: endDateTime,
+    };
+
+    // Build payload with only changed fields
+    const taskPayload = {};
+
+    // Check title changes
+    if (originalTask.title !== currentTask.title) {
+      taskPayload.title = currentTask.title;
+    }
+
+    // Check description changes
+    if (originalTask.description !== currentTask.description) {
+      taskPayload.description = currentTask.description;
+    }
+
+    // Check assignedTo changes
+    if (originalTask.assignedTo?.id !== currentTask.assignedTo?.id) {
+      taskPayload.assignedToUserId = currentTask.assignedTo?.id || null;
+    }
+
+    // Check priority changes
+    if (originalTask.priority !== currentTask.priority) {
+      taskPayload.priority = currentTask.priority;
+    }
+
+    // Check startTime changes
+    if (originalTask.startTime.getTime() !== currentTask.startTime.getTime()) {
+      taskPayload.startTime = currentTask.startTime.toISOString();
+    }
+
+    // Check endTime changes
+    if (originalTask.endTime.getTime() !== currentTask.endTime.getTime()) {
+      taskPayload.endTime = currentTask.endTime.toISOString();
+    }
+
+    // Check if any changes were made
+    const hasChanges = Object.keys(taskPayload).length > 0;
+
+    if (!hasChanges) {
+      Alert.alert('No Changes', 'No changes were made to the task.');
       return;
     }
 
-    // Ensure end time is after start time
-    if (endDateTime <= startDateTime) {
-      Alert.alert('Error', 'End date and time must be after start date and time');
-      return;
-    }
-
-    // Additional validation for reasonable time ranges
-    const timeDifference = endDateTime.getTime() - startDateTime.getTime();
-    const minDuration = 15 * 60 * 1000; // 15 minutes in milliseconds
-    const maxDuration = 365 * 24 * 60 * 60 * 1000; // 1 year in milliseconds
-    
-    if (timeDifference < minDuration) {
-      Alert.alert('Error', 'Task duration must be at least 15 minutes');
-      return;
-    }
-    
-    if (timeDifference > maxDuration) {
-      Alert.alert('Error', 'Task duration cannot exceed 1 year');
-      return;
-    }
-
-    const startTime = startDateTime.toISOString();
-    const endTime = endDateTime.toISOString();
+    // Always include projectId for the API
+    taskPayload.projectId = projectId;
 
     setIsLoading(true);
     
     try {
-      // Prepare the data for API call
-      const taskPayload = {
-        title: taskData.title.trim(),
-        description: taskData.description.trim(),
-        startTime: startTime,
-        endTime: endTime,
-        projectId: projectId, // Include projectId if available
-      };
-
       const response = await updateTask(task.id, taskPayload);
       
       Alert.alert(
@@ -269,14 +349,25 @@ export default function UpdateTaskModal({
           </TouchableOpacity>
         </View>
         
-        <View className="flex-1 p-5 items-center">
-          <ScrollView
-            className="flex-1 w-full max-w-md"
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 20 }}
-            keyboardShouldPersistTaps="handled"
-            onScrollBeginDrag={dismissKeyboard}
-          >
+        <TouchableWithoutFeedback onPress={() => {
+          Keyboard.dismiss();
+          if (showAssignedDropdown) {
+            setShowAssignedDropdown(false);
+            setEmployeeSearchTerm("");
+            setFilteredEmployees(employees);
+          }
+          if (showPriorityDropdown) {
+            setShowPriorityDropdown(false);
+          }
+        }}>
+          <View className="flex-1 p-5 items-center">
+            <ScrollView
+              className="flex-1 w-full max-w-md"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 20 }}
+              keyboardShouldPersistTaps="handled"
+              onScrollBeginDrag={dismissKeyboard}
+            >
             <View className="mb-8 items-center">
               <Text className="text-[28px] font-bold text-[#333]">Update Task</Text>
               <Text className="text-[16px] text-[#666] text-center">Modify the task details below</Text>
@@ -316,6 +407,57 @@ export default function UpdateTaskModal({
                   returnKeyType="next"
                   style={{ textAlignVertical: 'top' }}
                 />
+              </View>
+
+              {/* Priority Dropdown */}
+              <View className="mb-5">
+                <View className="flex-row items-center mb-2">
+                  <Ionicons name="flag" size={16} color="#374151" style={{ marginRight: 6 }} />
+                  <Text className="text-[16px] font-semibold text-[#333]">Priority</Text>
+                </View>
+                <TouchableOpacity
+                  className="flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                  onPress={() => {
+                    setShowPriorityDropdown(!showPriorityDropdown);
+                    setShowAssignedDropdown(false); // Close assigned dropdown
+                  }}
+                >
+                  <Text className={`text-[16px] ${taskData.priority ? "text-[#333]" : "text-[#9ca3af]"}`}>
+                    {taskData.priority ? priorityOptions.find(p => p.id === taskData.priority)?.label : "Select Priority"}
+                  </Text>
+                  <Ionicons 
+                    name={showPriorityDropdown ? "chevron-up" : "chevron-down"} 
+                    size={16} 
+                    color="#6b7280" 
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {/* Assigned Employee Dropdown */}
+              <View className="mb-5">
+                <View className="flex-row items-center mb-2">
+                  <Ionicons name="person" size={16} color="#374151" style={{ marginRight: 6 }} />
+                  <Text className="text-[16px] font-semibold text-[#333]">Assigned To</Text>
+                </View>
+                <TouchableOpacity
+                  className="flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                  onPress={() => {
+                    setShowAssignedDropdown(!showAssignedDropdown);
+                    setShowPriorityDropdown(false); // Close priority dropdown
+                  }}
+                >
+                  <Text className={`text-[16px] ${taskData.assignedTo ? "text-[#333]" : "text-[#9ca3af]"}`}>
+                    {taskData.assignedTo
+                      ? `${taskData.assignedTo.first_name || ""} ${taskData.assignedTo.last_name || ""}`.trim() ||
+                        taskData.assignedTo.email
+                      : "Select Employee"}
+                  </Text>
+                  <Ionicons 
+                    name={showAssignedDropdown ? "chevron-up" : "chevron-down"} 
+                    size={16} 
+                    color="#6b7280" 
+                  />
+                </TouchableOpacity>
               </View>
 
               {/* Start Date & Time */}
@@ -376,6 +518,138 @@ export default function UpdateTaskModal({
             </View>
           </ScrollView>
         </View>
+        </TouchableWithoutFeedback>
+
+        {/* Dropdowns */}
+        {showAssignedDropdown && (
+          <View 
+            className="absolute bg-white border border-gray-300 rounded-lg shadow-lg"
+            style={{
+              top: 545,
+              left: 20,
+              right: 20,
+              maxHeight: 200,
+              elevation: 999999,
+              zIndex: 999999,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 3.84,
+            }}
+          >
+            {/* Search Bar */}
+            <View className="p-2 border-b border-gray-200">
+              <View className="flex-row items-center rounded-lg px-3 py-1.5 bg-gray-50 border border-gray-200">
+                <Ionicons
+                  name="search"
+                  size={14}
+                  color="#6B7280"
+                  style={{ marginRight: 6 }}
+                />
+                <TextInput
+                  className="flex-1 text-[13px] text-[#111827]"
+                  placeholder="Search employees..."
+                  placeholderTextColor="#9CA3AF"
+                  value={employeeSearchTerm}
+                  onChangeText={handleEmployeeSearch}
+                  returnKeyType="search"
+                  blurOnSubmit={false}
+                />
+                {employeeSearchTerm.length > 0 && (
+                  <TouchableOpacity onPress={() => handleEmployeeSearch("")} className="ml-2">
+                    <Ionicons name="close-circle" size={14} color="#9CA3AF" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+      
+            <ScrollView 
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              style={{ maxHeight: 160 }}
+              contentContainerStyle={{ paddingVertical: 2 }}
+            >
+              {filteredEmployees.length > 0 ? (
+                filteredEmployees.map((employee) => (
+                  <TouchableOpacity
+                    key={employee.id}
+                    className="px-3 py-3 border-b border-gray-100 active:bg-gray-50"
+                                      onPress={() => {
+                    handleInputChange('assignedTo', employee);
+                    setShowAssignedDropdown(false);
+                    setShowPriorityDropdown(false); // Close priority dropdown
+                    setEmployeeSearchTerm("");
+                    setFilteredEmployees(employees);
+                  }}
+                  >
+                    <Text className="text-[15px] text-[#333] font-medium">
+                      {`${employee.first_name || ""} ${employee.last_name || ""}`.trim() ||
+                        employee.email}
+                    </Text>
+                    {employee.email && (
+                      <Text className="text-[12px] text-[#666] mt-1">
+                        {employee.email}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <View className="px-3 py-4">
+                  <Text className="text-[14px] text-[#666] text-center">
+                    {employeeSearchTerm.trim() !== "" ? "No employees match your search" : "No employees available"}
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        )}
+
+        {showPriorityDropdown && (
+          <View 
+            className="absolute bg-white border border-gray-300 rounded-lg shadow-lg"
+            style={{
+              top: 454,
+              left: 20,
+              right: 20,
+              maxHeight: 200,
+              elevation: 999999,
+              zIndex: 999999,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 3.84,
+            }}
+          >
+            <ScrollView 
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              style={{ maxHeight: 160 }}
+              contentContainerStyle={{ paddingVertical: 2 }}
+            >
+              {priorityOptions.map((priority) => (
+                <TouchableOpacity
+                  key={priority.id}
+                  className="px-3 py-3 border-b border-gray-100 active:bg-gray-50"
+                  onPress={() => {
+                    handleInputChange('priority', priority.id);
+                    setShowPriorityDropdown(false);
+                    setShowAssignedDropdown(false); // Close assigned dropdown
+                  }}
+                >
+                  <View className="flex-row items-center">
+                    <View 
+                      className="w-3 h-3 rounded-full mr-3"
+                      style={{ backgroundColor: priority.color }}
+                    />
+                    <Text className="text-[15px] text-[#333] font-medium">
+                      {priority.label}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         {/* Fixed Action Button - Always positioned at bottom, hidden when keyboard is visible */}
         {!keyboardVisible && (
