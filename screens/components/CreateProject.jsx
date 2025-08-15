@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { createProject } from '../../services/projects/createProject';
 
-function CreateProject({ navigation }) {
+function CreateProject({ navigation, onSuccess, onCancel }) {
   const [projectData, setProjectData] = useState({
     name: '',
     description: '',
@@ -104,7 +104,13 @@ function CreateProject({ navigation }) {
         [
           {
             text: 'OK',
-            onPress: () => navigation.goBack()
+            onPress: () => {
+              if (onSuccess) {
+                onSuccess();
+              } else {
+                navigation.goBack();
+              }
+            }
           }
         ]
       );
@@ -142,7 +148,13 @@ function CreateProject({ navigation }) {
         },
         {
           text: 'Yes',
-          onPress: () => navigation.goBack()
+          onPress: () => {
+            if (onCancel) {
+              onCancel();
+            } else {
+              navigation.goBack();
+            }
+          }
         }
       ]
     );
@@ -157,7 +169,13 @@ function CreateProject({ navigation }) {
       {/* Black Navbar */}
       <View className="bg-black px-4 py-3 flex-row items-center justify-between">
         <Text className="text-black text-[18px] font-semibold">Create Project</Text>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => {
+          if (onCancel) {
+            onCancel();
+          } else {
+            navigation.goBack();
+          }
+        }}>
           <Ionicons name="close" size={24} color="white" />
         </TouchableOpacity>
       </View>

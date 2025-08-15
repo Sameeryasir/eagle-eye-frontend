@@ -12,12 +12,13 @@ import {
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { verifyOtp } from '../services/auth/VerifyOtp';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../context/AuthContext';
 import Logo from "../assets/Logo.svg"; // Import the SVG logo
 
 const Code = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const { login } = useAuth();
   const emailOrPhone = route.params?.emailOrPhone || '';
   const [code, setCode] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -28,29 +29,8 @@ const Code = () => {
       const data = await verifyOtp(emailOrPhone, code.trim());
       console.log('Full response data:', data);
   
-      // Store access_token and refresh_token in AsyncStorage
-      if (data.access_token) {
-        await AsyncStorage.setItem('token', data.access_token);
-      }
-      if (data.refresh_token) {
-        await AsyncStorage.setItem('refreshToken', data.refresh_token);
-      }
-  
-      // Store user role and user info
-      const roleName = data.user?.role?.name;
-      if (roleName) {
-        await AsyncStorage.setItem('userRole', roleName);
-      }
-      
-      // Store user name
-      const firstName = data.user?.first_name;
-      const lastName = data.user?.last_name;
-      if (firstName) {
-        await AsyncStorage.setItem('userFirstName', firstName);
-      }
-      if (lastName) {
-        await AsyncStorage.setItem('userLastName', lastName);
-      }
+      // Use AuthContext to handle login
+      await login(data);
   
       setLoading(false);
       setCode('');
@@ -62,7 +42,7 @@ const Code = () => {
       
       if (userRole === 'Owner') {
         targetScreen = 'HomeScreen';
-      } else if (userRole === 'Employee' || userRole=== 'Manager') {
+      } else if (userRole === 'Employee' || userRole === 'Manager') {
         targetScreen = 'WidgetScreen';
       }
       // Other roles will default to HomeScreen

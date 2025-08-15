@@ -23,9 +23,11 @@ import UpdateTaskModal from "./components/UpdateTaskModal";
 import { deleteTaskById } from "../services/tasks/deleteTaskById";
 import { getTaskByProjectId } from "../services/tasks/getTaskByProjectId";
 import { createTask } from "../services/tasks/createTask";
+import { getTasksAssignedToEmployees } from "../services/tasks/getTasksAssignedToEmployees";
 
 import { getEmployeesToAssignTask } from "../services/employees/getEmployeesOfTheCompany";
 import Loader from "../services/utils/loader";
+import { getUserRole } from "../services/utils/userRole";
 
 const searchBarClasses = `flex-row items-center rounded-2xl px-4 py-3 bg-[#F8FAFC] border border-[#EAECF0]`;
 
@@ -69,7 +71,7 @@ function ViewAllTasksScreen({ navigation, route }) {
   const [tasks, setTasks] = useState([]);
   const [filteredTasks, setFilteredTasks] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
@@ -99,21 +101,23 @@ function ViewAllTasksScreen({ navigation, route }) {
     { id: 'high', label: 'High', color: '#EF4444' },
     { id: 'critical', label: 'Critical', color: '#DC2626' }
   ]);
+  const [userRole, setUserRole] = useState(null);
 
   const { projectId, createDraft } = route.params || {};
 
   useFocusEffect(
     React.useCallback(() => {
-      if (projectId) {
-        loadProjectData();
-        loadEmployees();
-      }
+      console.log('ViewAllTasksScreen - useFocusEffect triggered');
+      console.log('ViewAllTasksScreen - projectId:', projectId, 'createDraft:', createDraft, 'userRole:', userRole);
       
-      // If createDraft is true, automatically create a draft task
-      if (createDraft) {
+      // Load data regardless of projectId for employees
+      loadProjectData();
+      
+      // Only create draft if user is not an Employee and createDraft is true
+      if (userRole && userRole !== 'Employee' && createDraft) {
         handleFabPress();
       }
-    }, [projectId, createDraft])
+    }, [projectId, createDraft, userRole])
   );
 
   useEffect(() => {
@@ -121,6 +125,13 @@ function ViewAllTasksScreen({ navigation, route }) {
       setFilteredTasks(tasks);
     }
   }, [tasks]);
+
+  // Load employees when userRole becomes available and user is not an Employee
+  useEffect(() => {
+    if (userRole && userRole !== 'Employee') {
+      loadEmployees();
+    }
+  }, [userRole]);
 
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
@@ -139,6 +150,12 @@ function ViewAllTasksScreen({ navigation, route }) {
   }, []);
 
   const handleFabPress = () => {
+    // Only allow creating tasks if user is not an Employee
+    if (userRole === 'Employee') {
+      Alert.alert("Access Denied", "Employees cannot create tasks.");
+      return;
+    }
+
     const now = new Date();
     const newDraftTask = {
       id: Math.floor(Math.random() * 1000000) + 1, // Integer ID
@@ -361,33 +378,53 @@ function ViewAllTasksScreen({ navigation, route }) {
 
   const loadProjectData = async () => {
     try {
-      setLoading(true);
+      setInitialLoading(true);
       setError(null);
 
-      const response = await getTaskByProjectId(projectId);
+      // Get user role first
+      const role = await getUserRole();
+      console.log('ViewAllTasksScreen - User Role:', role);
+      setUserRole(role);
 
-      if (response && response.project) {
-        setProject(response.project);
-      } else if (response) {
-        setProject(response);
-      }
+      let response;
 
-      if (response && response.tasks) {
-        setTasks(response.tasks);
-        setFilteredTasks(response.tasks);
-      } else if (response && Array.isArray(response)) {
-        setTasks(response);
-        setFilteredTasks(response);
+      if (role === 'Employee') {
+        // For employees, get tasks assigned to them
+        console.log('ViewAllTasksScreen - Calling getTasksAssignedToEmployees for Employee');
+        response = await getTasksAssignedToEmployees();
+        console.log('ViewAllTasksScreen - Employee tasks response:', response);
+        setProject({ name: 'My Tasks' });
+        setTasks(response || []);
+        setFilteredTasks(response || []);
       } else {
-        setTasks([]);
-        setFilteredTasks([]);
+        // For other roles, get tasks by project ID
+        console.log('ViewAllTasksScreen - Calling getTaskByProjectId for role:', role, 'projectId:', projectId);
+        response = await getTaskByProjectId(projectId);
+
+        if (response && response.project) {
+          setProject(response.project);
+        } else if (response) {
+          setProject(response);
+        }
+
+        if (response && response.tasks) {
+          setTasks(response.tasks);
+          setFilteredTasks(response.tasks);
+        } else if (response && Array.isArray(response)) {
+          setTasks(response);
+          setFilteredTasks(response);
+        } else {
+          setTasks([]);
+          setFilteredTasks([]);
+        }
       }
 
       setSearchTerm("");
     } catch (err) {
+      console.error('ViewAllTasksScreen - Error loading project data:', err);
       setError("Failed to load project data");
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
     }
   };
 
@@ -471,7 +508,7 @@ function ViewAllTasksScreen({ navigation, route }) {
     event.target.measure((x, y, width, height, pageX, pageY) => {
       setMenuPosition({
         x: pageX + width - 120,
-        y: pageY + height + 5,
+        y: pageY + height - 125,
       });
     });
 
@@ -480,11 +517,27 @@ function ViewAllTasksScreen({ navigation, route }) {
   };
 
   const handleUpdate = () => {
+    // Only allow updating tasks if user is not an Employee
+    if (userRole === 'Employee') {
+      Alert.alert("Access Denied", "Employees cannot update tasks.");
+      setMenuVisible(false);
+      setSelectedTask(null);
+      return;
+    }
+
     setMenuVisible(false);
     setUpdateTaskModalVisible(true);
   };
 
   const handleDelete = () => {
+    // Only allow deleting tasks if user is not an Employee
+    if (userRole === 'Employee') {
+      Alert.alert("Access Denied", "Employees cannot delete tasks.");
+      setMenuVisible(false);
+      setSelectedTask(null);
+      return;
+    }
+
     const taskId = selectedTask?.id;
     const taskTitle = selectedTask?.title;
 
@@ -770,28 +823,32 @@ function ViewAllTasksScreen({ navigation, route }) {
                 {task.title}
               </Text>
             </View>
-            <TouchableOpacity
-              className="mb-1 rounded-full bg-gray-50 ml-3"
-              onPress={(event) => handleMenuPress(task, event)}
-            >
-              <Ionicons name="ellipsis-vertical" size={16} color="#6b7280" />
-            </TouchableOpacity>
+            {userRole !== 'Employee' && (
+              <TouchableOpacity
+                className="mb-1 rounded-full bg-gray-50 ml-3"
+                onPress={(event) => handleMenuPress(task, event)}
+              >
+                <Ionicons name="ellipsis-vertical" size={16} color="#6b7280" />
+              </TouchableOpacity>
+            )}
           </View>
 
           <View>
-            <View className="mb-3">
-              <View className="flex-row items-start">
-                <View className="flex-row items-center mr-3 min-w-[85px]">
-                  <Ionicons name="person" size={14} color="#374151" style={{ marginRight: 4 }} />
-                  <Text className="text-[15px] text-black font-semibold tracking-[0.3px]">
-                    Assigned:
+            {userRole !== 'Employee' && (
+              <View className="mb-3">
+                <View className="flex-row items-start">
+                  <View className="flex-row items-center mr-3 min-w-[85px]">
+                    <Ionicons name="person" size={14} color="#374151" style={{ marginRight: 4 }} />
+                    <Text className="text-[15px] text-black font-semibold tracking-[0.3px]">
+                      Assigned:
+                    </Text>
+                  </View>
+                  <Text className="flex-1 text-[15px] text-[#333] leading-6">
+                    {getAssignedToName(task.assignedTo)}
                   </Text>
                 </View>
-                <Text className="flex-1 text-[15px] text-[#333] leading-6">
-                  {getAssignedToName(task.assignedTo)}
-                </Text>
               </View>
-            </View>
+            )}
 
             <View className="mb-3">
               <View className="flex-row items-start">
@@ -853,9 +910,7 @@ function ViewAllTasksScreen({ navigation, route }) {
       ListHeaderComponentStyle={{ marginHorizontal: -20 }}
       ListEmptyComponent={() => (
         <View className="flex-1 justify-center items-center p-5 min-h-[300px]">
-          {loading ? (
-            <Loader size="large" color="#000000" text="Loading tasks..." />
-          ) : error ? (
+          {error ? (
             <>
               <Text className="text-[16px] text-[#dc3545] text-center mb-4 font-medium">
                 {error}
@@ -886,21 +941,27 @@ function ViewAllTasksScreen({ navigation, route }) {
     <View className="flex-1 bg-white">
       <StatusBar barStyle="dark-content" backgroundColor="white" />
 
-      <TouchableWithoutFeedback onPress={() => {
-        Keyboard.dismiss();
-        if (showAssignedDropdown) {
-          setShowAssignedDropdown(false);
-          setActiveAssignedDraftId(null);
-          setEmployeeSearchTerm("");
-          setFilteredEmployees(employees);
-        }
-        if (showPriorityDropdown) {
-          setShowPriorityDropdown(false);
-          setActivePriorityDraftId(null);
-        }
-      }}>
-        <View className="flex-1 bg-white" style={{ position: 'relative' }}>
-          {renderContent()}
+      {/* Content */}
+      {initialLoading ? (
+        <View className="flex-1 justify-center items-center p-5 min-h-[300px]">
+          <Loader size="large" color="#000000" text="Loading tasks..." />
+        </View>
+      ) : (
+        <TouchableWithoutFeedback onPress={() => {
+          Keyboard.dismiss();
+          if (showAssignedDropdown) {
+            setShowAssignedDropdown(false);
+            setActiveAssignedDraftId(null);
+            setEmployeeSearchTerm("");
+            setFilteredEmployees(employees);
+          }
+          if (showPriorityDropdown) {
+            setShowPriorityDropdown(false);
+            setActivePriorityDraftId(null);
+          }
+        }}>
+          <View className="flex-1 bg-white" style={{ position: 'relative' }}>
+            {renderContent()}
             
             {/* Global Dropdown for Employee Selection */}
             {showAssignedDropdown && activeAssignedDraftId && (
@@ -1036,6 +1097,7 @@ function ViewAllTasksScreen({ navigation, route }) {
             )}
           </View>
         </TouchableWithoutFeedback>
+        )}
 
         {!keyboardVisible && <CustomBottomNav onAddPress={handleFabPress} />}
 
@@ -1149,14 +1211,16 @@ function ViewAllTasksScreen({ navigation, route }) {
         </TouchableOpacity>
       )}
 
-      {/* Update Task Modal */}
-      <UpdateTaskModal
-        visible={updateTaskModalVisible}
-        task={selectedTask}
-        projectId={projectId}
-        onClose={handleUpdateTaskClose}
-        onSuccess={handleUpdateTaskSuccess}
-      />
+      {/* Update Task Modal - Only show for non-employees */}
+      {userRole !== 'Employee' && (
+        <UpdateTaskModal
+          visible={updateTaskModalVisible}
+          task={selectedTask}
+          projectId={projectId}
+          onClose={handleUpdateTaskClose}
+          onSuccess={handleUpdateTaskSuccess}
+        />
+      )}
 
     </View>
   );

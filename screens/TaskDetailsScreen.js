@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -14,13 +14,27 @@ import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
 import UpdateTaskModal from "./components/UpdateTaskModal";
 import { deleteTaskById } from "../services/tasks/deleteTaskById";
+import { getUserRole } from "../services/utils/userRole";
 
 function TaskDetailsScreen({ navigation, route }) {
   const { task } = route.params || {};
-  const [sidebarVisible, setSidebarVisible] = React.useState(false);
-  const [showMenu, setShowMenu] = React.useState(false);
-  const [isUpdateMode, setIsUpdateMode] = React.useState(false);
-  const [showUpdateModal, setShowUpdateModal] = React.useState(false);
+  const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [isUpdateMode, setIsUpdateMode] = useState(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [userRole, setUserRole] = useState(null);
+
+  useEffect(() => {
+    const loadUserRole = async () => {
+      try {
+        const role = await getUserRole();
+        setUserRole(role);
+      } catch (error) {
+        console.error("Error loading user role:", error);
+      }
+    };
+    loadUserRole();
+  }, []);
 
   const formatDateTime = (dateString) => {
     if (!dateString) return "N/A";
@@ -133,9 +147,9 @@ function TaskDetailsScreen({ navigation, route }) {
       {/* Header */}
 
 
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+      <ScrollView className="flex-1 mb-4" showsVerticalScrollIndicator={false}>
         {/* Task Title Card */}
-        <View className="mx-6 mt-6 mb-4">
+        <View className="mx-6 mt-4 mb-3">
           <TouchableWithoutFeedback onPress={handleCloseMenu}>
             <View className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
               <View className="flex-row items-center mb-4">
@@ -148,12 +162,14 @@ function TaskDetailsScreen({ navigation, route }) {
                     {task.title || "Untitled Task"}
                   </Text>
                 </View>
-                <TouchableOpacity 
-                  onPress={() => setShowMenu(!showMenu)}
-                  className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center"
-                >
-                  <Ionicons name="ellipsis-vertical" size={16} color="#374151" />
-                </TouchableOpacity>
+                {userRole !== 'Employee' && (
+                  <TouchableOpacity 
+                    onPress={() => setShowMenu(!showMenu)}
+                    className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center"
+                  >
+                    <Ionicons name="ellipsis-vertical" size={16} color="#374151" />
+                  </TouchableOpacity>
+                )}
               </View>
 
               {/* Menu Options */}
@@ -190,7 +206,7 @@ function TaskDetailsScreen({ navigation, route }) {
 
         {/* Task Details Grid */}
         <TouchableWithoutFeedback onPress={handleCloseMenu}>
-          <View className="mx-6 mb-6">
+          <View className="mx-6 mb-3">
             <View className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               {/* Priority Section */}
               <View className="p-6 border-b border-gray-100">
@@ -234,22 +250,7 @@ function TaskDetailsScreen({ navigation, route }) {
                 </View>
               </View>
 
-              {/* Project Section */}
-              {task.project && (
-                <View className="p-6 border-b border-gray-100">
-                  <View className="flex-row items-center">
-                    <View className="w-10 h-10 rounded-lg bg-purple-100 items-center justify-center mr-3">
-                      <Ionicons name="folder" size={20} color="#8B5CF6" />
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-sm font-medium text-gray-600 mb-1">PROJECT</Text>
-                      <Text className="text-lg font-semibold text-gray-900">
-                        {task.project.name || "N/A"}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              )}
+
 
               {/* Timeline Section */}
               <View className="p-6 mt-5">
@@ -295,7 +296,7 @@ function TaskDetailsScreen({ navigation, route }) {
         </TouchableWithoutFeedback>
 
         {/* Bottom Spacing */}
-        <View className="h-20" />
+        <View className="h-16" />
       </ScrollView>
 
       {/* Update Task Button - Only show when in update mode */}

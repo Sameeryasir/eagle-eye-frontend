@@ -9,6 +9,7 @@ import {
   Platform,
   ActivityIndicator,
   Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -244,13 +245,14 @@ function CreateTaskScreen({ navigation, route }) {
 
 
   return (
-    <View className="flex-1 bg-white">
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      >
-        <View className="flex-1 p-5">
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <View className="flex-1 bg-white">
+        <KeyboardAvoidingView
+          className="flex-1"
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
+          <View className="flex-1 p-5">
           <View className="flex-1">
             <View className="mb-8 items-center">
               <Text className="text-[28px] font-bold text-[#333]">Create New Task</Text>
@@ -351,29 +353,22 @@ function CreateTaskScreen({ navigation, route }) {
             </View>
           </View>
 
-          {/* Action Buttons - Only show when keyboard is not visible */}
-          {!keyboardVisible && (
-            <View className="flex-row justify-between gap-4 pt-5 pb-2.5 bg-white">
-              <TouchableOpacity
-                className={`flex-1 bg-[#f8f9fa] border border-[#dee2e6] rounded-lg p-4 items-center ${isLoading ? 'opacity-60' : ''}`}
-                onPress={handleCancel}
-                disabled={isLoading}
-              >
-                <Text className="text-[#6c757d] text-[16px] font-semibold">Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className={`flex-1 bg-black rounded-lg p-4 items-center ${isLoading ? 'opacity-60' : ''}`}
-                onPress={handleCreateTask}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text className="text-white text-[16px] font-semibold">Create Task</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
+                                           {/* Action Button - Only show when keyboard is not visible */}
+            {!keyboardVisible && (
+              <View className="pt-5 pb-2.5 bg-white items-center">
+                <TouchableOpacity
+                  className={`bg-black rounded-lg items-center justify-center w-48 h-14 ${isLoading ? 'opacity-60' : ''}`}
+                  onPress={handleCreateTask}
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Text className="text-white text-[16px] font-semibold">Create Task</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
 
           {/* Date and Time Pickers */}
           {showStartDatePicker && (
@@ -413,6 +408,7 @@ function CreateTaskScreen({ navigation, route }) {
         </View>
       </KeyboardAvoidingView>
     </View>
+    </TouchableWithoutFeedback>
   );
 }
 

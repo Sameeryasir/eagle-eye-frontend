@@ -1,24 +1,28 @@
-import axios from "axios";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import {API_URL} from '@env'
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {API_URL} from "@env"
 import refreshToken from '../utils/tokenRefresh';
 
-export async function updateProjectById(id, updateData) {
+export async function getEmployeeToAssingeTasks() {
     let token = await AsyncStorage.getItem('token');
     let refreshTokenValue = await AsyncStorage.getItem('refreshToken');
+    
+    console.log('Token retrieved:', token ? 'Token exists' : 'No token');
 
     if (!token) {
         throw new Error('No token found');
     }
-    
+
     try {
-        const response = await axios.put(`${API_URL}/project/${id}`, updateData, {
+        console.log('Making API call to:', `${API_URL}/task`);
+        const response = await axios.get(`${API_URL}/task`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
             }
         });
-        
+
+        console.log('API response:', response.data);
         return response.data;
     } catch (err) {
         if (axios.isAxiosError(err) && err.response?.status === 401 && refreshTokenValue) {
@@ -28,16 +32,18 @@ export async function updateProjectById(id, updateData) {
             if (!newToken) throw new Error('Unable to refresh token.');
 
             // Retry the original request with new token
-            const retryResponse = await axios.put(`${API_URL}/project/${id}`, updateData, {
+            const retryResponse = await axios.get(`${API_URL}/task`, {
                 headers: {
                     'Authorization': `Bearer ${newToken}`,
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
                 }
             });
             return retryResponse.data;
         }
 
-        console.error('Error updating project:', err);
+        console.error('Error fetching tasks for employee:', err);
+        console.error('Error response:', err.response?.data);
+        console.error('Error status:', err.response?.status);
         throw err;
     }
 }

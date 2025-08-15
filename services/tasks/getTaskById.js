@@ -1,14 +1,17 @@
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_URL } from "@env";
+import refreshToken from '../utils/tokenRefresh';
 
 export async function getTaskById(taskId) {
+  let token = await AsyncStorage.getItem("token");
+  let refreshTokenValue = await AsyncStorage.getItem('refreshToken');
+
+  if (!token) {
+    throw new Error("No token Found");
+  }
+  
   try {
-    const token = await AsyncStorage.getItem("token");
-    if (!token) {
-      throw new Error("No token Found");
-    }
-    
     console.log('Fetching task with ID:', taskId);
     console.log('API URL:', `${API_URL}/tasks/${taskId}`);
     
@@ -21,8 +24,24 @@ export async function getTaskById(taskId) {
     
     console.log('API Response:', response.data);
     return response.data;
-  } catch (error) {
-    console.error("Error fetching the Task:", error.response?.data || error.message);
-    throw error;
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 401 && refreshTokenValue) {
+      // Refresh the token
+      const newToken = await refreshToken(refreshTokenValue);
+
+      if (!newToken) throw new Error('Unable to refresh token.');
+
+      // Retry the original request with new token
+      const retryResponse = await axios.get(`${API_URL}/tasks/${taskId}`, {
+        headers: {
+          Authorization: `Bearer ${newToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+      return retryResponse.data;
+    }
+
+    console.error("Error fetching the Task:", err.response?.data || err.message);
+    throw err;
   }
 }

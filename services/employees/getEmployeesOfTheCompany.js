@@ -1,10 +1,11 @@
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_URL } from "@env";
+import refreshToken from '../utils/tokenRefresh';
 
 export async function getEmployeesToAssignTask() {
-  // Get token from storage
-  const token = await AsyncStorage.getItem("token");
+  let token = await AsyncStorage.getItem("token");
+  let refreshTokenValue = await AsyncStorage.getItem('refreshToken');
 
   // If no token, stop here
   if (!token) {
@@ -22,8 +23,23 @@ export async function getEmployeesToAssignTask() {
     // Return data from API
     return response.data;
 
-  } catch (error) {
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 401 && refreshTokenValue) {
+      // Refresh the token
+      const newToken = await refreshToken(refreshTokenValue);
+
+      if (!newToken) throw new Error('Unable to refresh token.');
+
+      // Retry the original request with new token
+      const retryResponse = await axios.get(`${API_URL}/task/assignTo`, {
+        headers: {
+          Authorization: `Bearer ${newToken}`,
+        },
+      });
+      return retryResponse.data;
+    }
+
     // Handle any errors
-    throw new Error(error.response?.data?.message || "Failed to fetch employees");
+    throw new Error(err.response?.data?.message || "Failed to fetch employees");
   }
 }

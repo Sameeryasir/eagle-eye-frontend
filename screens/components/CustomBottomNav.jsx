@@ -2,6 +2,7 @@ import React from "react";
 import { View, TouchableOpacity, Dimensions, Animated } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { getUserRole } from "../../services/utils/userRole";
 
 const { width } = Dimensions.get("window");
 
@@ -9,6 +10,7 @@ export default function CustomBottomNav({
   keyboardVisible = false,
   task = false,
   projectId = null,
+  managerProjectId = null,
   project = false,
   onAddPress,
   handleFabPress,
@@ -16,11 +18,13 @@ export default function CustomBottomNav({
   const navigation = useNavigation();
   const [activeTab, setActiveTab] = React.useState("home"); // Track active tab
 
-  const handleAddPress = () => {
+  const handleAddPress = async () => {
     if (onAddPress) {
       onAddPress();
     } else if (task) {
-      navigation.navigate("CreateTask", { projectId: projectId });
+      const userRole = await getUserRole();
+      const navigationParams = userRole === 'Manager' ? { projectId: managerProjectId } : { projectId: projectId };
+      navigation.navigate("CreateTask", navigationParams);
     } else if (project) {
       navigation.navigate("CreateProject");
     } else if (handleFabPress) {

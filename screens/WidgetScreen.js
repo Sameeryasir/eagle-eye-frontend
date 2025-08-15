@@ -14,8 +14,9 @@ import { useFocusEffect } from "@react-navigation/native";
 import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
 import { getTaskByProjectId } from "../services/tasks/getTaskByProjectId";
-import { getTaskAssignedToEmployee } from "../services/tasks/getTaskAssignedToEmployee";
+import { getTasksAssignedToEmployees } from "../services/tasks/getTasksAssignedToEmployees";
 import getTasksByloginId from "../services/tasks/getTasksByloginId";
+import { getMyProjects } from "../services/projects/getProjectsByLoginUserId";
 import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
 
@@ -26,6 +27,7 @@ function WidgetScreen({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [userRole, setUserRole] = useState(null);
+  const [managerProjectId, setManagerProjectId] = useState(null);
 
   const { projectId } = route.params || {};
 
@@ -72,14 +74,40 @@ function WidgetScreen({ navigation, route }) {
       let response;
       
       if (role === 'Employee') {
-        response = await getTaskAssignedToEmployee();
+        response = await getTasksAssignedToEmployees();
         setProject({ name: 'My Tasks' });
         setTasks(response || []);
       } else if (role === 'Manager') {
-        response = await getTasksByloginId();
-        setProject({ name: 'All Tasks' });
-        setTasks(response || []);
-      } else {
+        // First get the manager's projects
+        const projectsResponse = await getMyProjects();
+        
+        if (projectsResponse && projectsResponse.length > 0) {
+          // Use the first project's ID to get tasks
+          const firstProjectId = projectsResponse[0].id;
+          setManagerProjectId(firstProjectId);
+          response = await getTaskByProjectId(firstProjectId);
+          
+          if (response && response.project) {
+            setProject(response.project);
+            setTasks(response.tasks || []);
+          } else if (response && response.tasks) {
+            setProject(response);
+            setTasks(response.tasks || []);
+          } else if (response && Array.isArray(response)) {
+            setProject({ name: 'Project' });
+            setTasks(response);
+          } else if (response) {
+            setProject(response);
+            setTasks([]);
+          } else {
+            setProject({ name: 'Project' });
+            setTasks([]);
+          }
+        } else {
+          setProject({ name: 'No Projects' });
+          setTasks([]);
+        }
+      } else if(role === 'Admin' || role === 'Owner'){
         response = await getTaskByProjectId(projectId);
         
         if (response && response.project) {
@@ -147,7 +175,7 @@ function WidgetScreen({ navigation, route }) {
         <TouchableOpacity
           className={`flex-row items-center ${tasks.length === 0 ? 'opacity-70' : ''}`}
           onPress={() => {
-            const navigationParams = userRole === 'Employee' ? {} : { projectId };
+            const navigationParams = userRole === 'Employee' ? {} : { projectId: userRole === 'Manager' ? managerProjectId : projectId };
             navigation.navigate('ViewAllTasksScreen', navigationParams);
           }}
           disabled={tasks.length === 0}
@@ -175,13 +203,15 @@ function WidgetScreen({ navigation, route }) {
                     {formatDate(task.endTime)}
                   </Text>
                 </View>
-                <View className="flex-row items-center">
-                  <Ionicons name="person" size={14} color="#666" />
-                  <Text className="text-[13px] text-[#666] font-medium ml-1">Assigned:</Text>
-                  <Text className="text-[13px] text-[#666] font-medium ml-1">
-                    {getAssignedToName(task.assignedTo)}
-                  </Text>
-                </View>
+                {userRole !== 'Employee' && (
+                  <View className="flex-row items-center">
+                    <Ionicons name="person" size={14} color="#666" />
+                    <Text className="text-[13px] text-[#666] font-medium ml-1">Assigned:</Text>
+                    <Text className="text-[13px] text-[#666] font-medium ml-1">
+                      {getAssignedToName(task.assignedTo)}
+                    </Text>
+                  </View>
+                )}
               </View>
             ))}
           </ScrollView>
@@ -249,7 +279,7 @@ function WidgetScreen({ navigation, route }) {
   const renderContent = () => {
     if (loading) {
       return (
-        <View className="flex-1 justify-center items-center p-5 min-h-[400px]">
+        <View className="flex-1 justify-center items-center p-5 min-h-[700px]">
           <Loader size="large" color="#000000" text="Loading tasks and logs..." />
         </View>
       );
@@ -303,8 +333,17 @@ function WidgetScreen({ navigation, route }) {
 
       <CustomBottomNav 
         onAddPress={() => {
-          const navigationParams = userRole === 'Employee' ? { createDraft: true } : { projectId, createDraft: true };
-          navigation.navigate('ViewAllTasksScreen', navigationParams);
+          if (userRole === 'Employee') {
+            Alert.alert("Access Denied", "Employees cannot create tasks.");
+            return;
+          }
+          
+          if (tasks.length === 0) {
+            // Only navigate to create task screen if no tasks found
+            const navigationParams = userRole === 'Employee' ? {} : { projectId: userRole === 'Manager' ? managerProjectId : projectId };
+            navigation.navigate('CreateTask', navigationParams);
+          }
+          // If tasks exist, do nothing (don't navigate anywhere)
         }}
       />
     </View>

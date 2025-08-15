@@ -1,4 +1,4 @@
-const { getDefaultConfig, mergeConfig } = require("@react-native/metro-config");
+const { getDefaultConfig } = require("@react-native/metro-config");
 const { withNativeWind } = require("nativewind/metro");
 
 // Base Expo config
@@ -13,9 +13,7 @@ config.transformer = {
 config.resolver.assetExts = config.resolver.assetExts.filter((ext) => ext !== "svg");
 config.resolver.sourceExts = [...config.resolver.sourceExts, "svg"];
 
-// Merge with metro default and apply nativewind
-config = mergeConfig(config, {
-  /* your custom metro options can go here */
-});
+// Apply nativewind
+config = withNativeWind(config, { input: "./global.css" });
 
-module.exports = withNativeWind(config, { input: "./global.css" });
+module.exports = config;
