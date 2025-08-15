@@ -256,8 +256,7 @@ export default function UpdateProjectModal({
         </View>
 
         {/* Fixed Action Button - Always positioned at bottom, hidden when keyboard is visible */}
-        {!keyboardVisible && (
-          <View className="absolute bottom-0 left-0 right-0 px-5 pt-5 pb-8 bg-white items-center">
+          <View className="absolute bottom-0 left-0 right-0 px-5 pt-5 pb-5 bg-white items-center">
             <TouchableOpacity
               className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
               onPress={handleUpdateProject}
@@ -273,7 +272,6 @@ export default function UpdateProjectModal({
               )}
             </TouchableOpacity>
           </View>
-        )}
 
         {/* Date Picker */}
         {showStartDatePicker && (

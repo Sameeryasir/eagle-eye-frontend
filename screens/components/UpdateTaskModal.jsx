@@ -349,25 +349,13 @@ export default function UpdateTaskModal({
           </TouchableOpacity>
         </View>
         
-        <TouchableWithoutFeedback onPress={() => {
-          Keyboard.dismiss();
-          if (showAssignedDropdown) {
-            setShowAssignedDropdown(false);
-            setEmployeeSearchTerm("");
-            setFilteredEmployees(employees);
-          }
-          if (showPriorityDropdown) {
-            setShowPriorityDropdown(false);
-          }
-        }}>
-          <View className="flex-1 p-5 items-center">
-            <ScrollView
-              className="flex-1 w-full max-w-md"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 20 }}
-              keyboardShouldPersistTaps="handled"
-              onScrollBeginDrag={dismissKeyboard}
-            >
+        <View className="flex-1 p-5 items-center">
+          <ScrollView
+            className="flex-1 w-full max-w-md"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 20 }}
+            keyboardShouldPersistTaps="handled"
+          >
             <View className="mb-8 items-center">
               <Text className="text-[28px] font-bold text-[#333]">Update Task</Text>
               <Text className="text-[16px] text-[#666] text-center">Modify the task details below</Text>
@@ -518,7 +506,6 @@ export default function UpdateTaskModal({
             </View>
           </ScrollView>
         </View>
-        </TouchableWithoutFeedback>
 
         {/* Dropdowns */}
         {showAssignedDropdown && (
@@ -528,7 +515,7 @@ export default function UpdateTaskModal({
               top: 545,
               left: 20,
               right: 20,
-              maxHeight: 200,
+              maxHeight: 180,
               elevation: 999999,
               zIndex: 999999,
               shadowColor: '#000',
@@ -566,7 +553,7 @@ export default function UpdateTaskModal({
             <ScrollView 
               showsVerticalScrollIndicator={true}
               nestedScrollEnabled={true}
-              style={{ maxHeight: 160 }}
+              style={{ maxHeight: 110 }}
               contentContainerStyle={{ paddingVertical: 2 }}
             >
               {filteredEmployees.length > 0 ? (
@@ -651,25 +638,23 @@ export default function UpdateTaskModal({
           </View>
         )}
 
-        {/* Fixed Action Button - Always positioned at bottom, hidden when keyboard is visible */}
-        {!keyboardVisible && (
-          <View className="absolute bottom-0 left-0 right-0 px-5 pt-5 pb-8 bg-white items-center">
-            <TouchableOpacity
-              className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
-              onPress={handleUpdateTask}
-              disabled={isLoading}
-              activeOpacity={0.8}
-            >
-              {isLoading ? (
-                <View className="flex-row items-center">
-                  <ActivityIndicator color="#ffffff" size="small" />
-                </View>
-              ) : (
-                <Text className="text-white text-[16px] font-semibold">Update Task</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        )}
+        {/* Fixed Action Button - Always positioned at bottom */}
+        <View className="absolute bottom-0 left-0 right-0 px-5 pt-5 pb-5 bg-transparent items-center">
+          <TouchableOpacity
+            className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
+            onPress={handleUpdateTask}
+            disabled={isLoading}
+            activeOpacity={0.8}
+          >
+            {isLoading ? (
+              <View className="flex-row items-center ">
+                <ActivityIndicator color="#ffffff" size="small" />
+              </View>
+            ) : (
+              <Text className="text-white text-[16px] font-semibold">Update Task</Text>
+            )}
+          </TouchableOpacity>
+        </View>
 
         {/* Date and Time Pickers */}
         {showStartDatePicker && (

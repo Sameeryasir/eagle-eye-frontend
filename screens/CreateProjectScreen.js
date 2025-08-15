@@ -265,34 +265,32 @@ function CreateProjectScreen({ navigation }) {
         </ScrollView>
       </View>
 
-      {/* Fixed Action Buttons - Always positioned at bottom, hidden when keyboard is visible */}
-      {!keyboardVisible && (
-        <View className="absolute bottom-0 left-0 right-0 flex-row justify-between gap-4 px-5 pt-5 pb-8 bg-white">
-          <TouchableOpacity
-            className="flex-1 bg-[#f8f9fa] border border-[#dee2e6] rounded-lg p-4 items-center"
-            onPress={handleCancel}
-            disabled={isLoading}
-            style={{ opacity: isLoading ? 0.6 : 1 }}
-          >
-            <Text className="text-[#6c757d] text-[16px] font-semibold">Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            className="flex-1 bg-black rounded-lg p-4 items-center justify-center"
-            onPress={handleCreateProject}
-            disabled={isLoading}
-            style={{ opacity: isLoading ? 0.6 : 1 }}
-          >
-            {isLoading ? (
-              <View className="flex-row items-center justify-center">
-                <ActivityIndicator color="#ffffff" size="small" style={{ marginRight: 8 }} />
-                <Text className="text-white text-[16px] font-semibold">Creating...</Text>
-              </View>
-            ) : (
-              <Text className="text-white text-[16px] font-semibold">Create Project</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      )}
+      {/* Fixed Action Buttons - Always positioned at bottom */}
+      <View className="absolute bottom-0 left-0 right-0 flex-row justify-between gap-4 px-5 pt-5 pb-8 bg-white" style={{ zIndex: 1000 }}>
+        <TouchableOpacity
+          className="flex-1 bg-[#f8f9fa] border border-[#dee2e6] rounded-lg p-4 items-center"
+          onPress={handleCancel}
+          disabled={isLoading}
+          style={{ opacity: isLoading ? 0.6 : 1 }}
+        >
+          <Text className="text-[#6c757d] text-[16px] font-semibold">Cancel</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          className="flex-1 bg-black rounded-lg p-4 items-center justify-center"
+          onPress={handleCreateProject}
+          disabled={isLoading}
+          style={{ opacity: isLoading ? 0.6 : 1 }}
+        >
+          {isLoading ? (
+            <View className="flex-row items-center justify-center">
+              <ActivityIndicator color="#ffffff" size="small" style={{ marginRight: 8 }} />
+              <Text className="text-white text-[16px] font-semibold">Creating...</Text>
+            </View>
+          ) : (
+            <Text className="text-white text-[16px] font-semibold">Create Project</Text>
+          )}
+        </TouchableOpacity>
+      </View>
 
       {/* Date Pickers */}
       {showStartDatePicker && (

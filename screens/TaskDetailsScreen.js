@@ -155,12 +155,11 @@ function TaskDetailsScreen({ navigation, route }) {
       {/* Header */}
 
 
-      <ScrollView 
+      <View 
         className="flex-1" 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ 
+        style={{ 
           paddingBottom: bottomSpacing,
-          paddingTop: topSpacing
+          paddingTop: topSpacing + 20
         }}
       >
         {/* Task Title Card */}
@@ -345,7 +344,7 @@ function TaskDetailsScreen({ navigation, route }) {
 
         {/* Bottom Spacing */}
         <View style={{ height: bottomSpacing }} />
-      </ScrollView>
+      </View>
 
       {/* Update Task Button - Only show when in update mode */}
       {isUpdateMode && (

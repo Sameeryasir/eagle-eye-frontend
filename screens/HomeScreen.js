@@ -160,7 +160,7 @@ function HomeScreen({ navigation }) {
     const ref = menuButtonRefs.current[project.id];
     if (ref && typeof ref.measure === "function") {
       ref.measure((x, y, width, height, pageX, pageY) => {
-        setMenuPosition({ x: pageX + width - 120, y: pageY + height - 125 });
+        setMenuPosition({ x: pageX + width - 120, y: pageY + height - 75 });
       });
     } else {
       setMenuPosition({ x: 20, y: 80 });

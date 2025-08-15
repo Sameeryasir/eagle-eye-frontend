@@ -21,29 +21,7 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
   const [startDate, setStartDate] = useState(new Date());
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
-  useEffect(() => {
-    // Add keyboard listeners
-    const keyboardDidShowListener = Keyboard.addListener(
-      'keyboardDidShow',
-      () => {
-        setKeyboardVisible(true);
-      }
-    );
-    const keyboardDidHideListener = Keyboard.addListener(
-      'keyboardDidHide',
-      () => {
-        setKeyboardVisible(false);
-      }
-    );
-
-    // Cleanup listeners
-    return () => {
-      keyboardDidShowListener?.remove();
-      keyboardDidHideListener?.remove();
-    };
-  }, []);
 
   const handleInputChange = (field, value) => {
     setProjectData(prev => ({
@@ -245,33 +223,27 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
                 <Ionicons name="calendar-outline" size={16} color="#666" />
               </TouchableOpacity>
             </View>
-
-          
-          
           </View>
         </ScrollView>
       </View>
 
-      {/* Fixed Action Button - Always positioned at bottom, hidden when keyboard is visible */}
-      {!keyboardVisible && (
-      <View className="absolute bottom-0 left-0 right-0 px-5 pt-5 pb-8 bg-white items-center">
-      <TouchableOpacity
-        className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
-        onPress={handleCreateProject}
-        disabled={isLoading}          // blocks double-taps but keeps same style
-        activeOpacity={0.8}
-      >
-        {isLoading ? (
-          <View className="flex-row items-center">
-            <ActivityIndicator color="#ffffff" size="small" />
-          </View>
-        ) : (
-          <Text className="text-white text-[16px] font-semibold">Create Project</Text>
-        )}
-      </TouchableOpacity>
-    </View>
-    
-      )}
+      {/* Fixed Action Button - Always positioned at bottom */}
+      <View className="absolute bottom-0 left-0 right-0 px-5 pt-5 pb-5 bg-white items-center">
+        <TouchableOpacity
+          className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
+          onPress={handleCreateProject}
+          disabled={isLoading}
+          activeOpacity={0.8}
+        >
+          {isLoading ? (
+            <View className="flex-row items-center">
+              <ActivityIndicator color="#ffffff" size="small" />
+            </View>
+          ) : (
+            <Text className="text-white text-[16px] font-semibold">Create Project</Text>
+          )}
+        </TouchableOpacity>
+      </View>
 
       {/* Date Picker */}
       {showStartDatePicker && (

@@ -152,7 +152,7 @@ function ViewAllTasksScreen({ navigation, route }) {
   const handleFabPress = () => {
     // Only allow creating tasks if user is not an Employee
     if (userRole === 'Employee') {
-      Alert.alert("Access Denied", "Employees cannot create tasks.");
+      // Employees cannot create tasks, so do nothing (no alert, no response)
       return;
     }
 
@@ -508,7 +508,7 @@ function ViewAllTasksScreen({ navigation, route }) {
     event.target.measure((x, y, width, height, pageX, pageY) => {
       setMenuPosition({
         x: pageX + width - 120,
-        y: pageY + height - 125,
+        y: pageY + height - 75,
       });
     });
 
@@ -1099,7 +1099,7 @@ function ViewAllTasksScreen({ navigation, route }) {
         </TouchableWithoutFeedback>
         )}
 
-        {!keyboardVisible && <CustomBottomNav onAddPress={handleFabPress} />}
+        <CustomBottomNav onAddPress={handleFabPress} />
 
       <Sidebar
         isVisible={sidebarVisible}

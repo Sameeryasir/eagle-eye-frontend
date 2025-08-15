@@ -35,24 +35,27 @@ export default function CustomBottomNav({
     }
   };
 
-  const navigateToHome = () => {
+  const navigateToHome = async () => {
     setActiveTab("home");
-    navigation.navigate("HomeScreen");
+    const userRole = await getUserRole();
+    
+    if (userRole === "Owner" || userRole === "Admin") {
+      navigation.navigate("HomeScreen");
+    } else {
+      // For Manager and Employee roles
+      navigation.navigate("WidgetScreen");
+    }
   };
 
   const navigateToChats = () => {
-    setActiveTab("chats");
-    navigation.navigate("HomeScreen"); // You can change this to actual chat screen later
   };
 
   const navigateToNotifications = () => {
     setActiveTab("notifications");
-    navigation.navigate("HomeScreen"); // You can change this to actual notification screen later
   };
 
   const navigateToProfile = () => {
     setActiveTab("profile");
-    navigation.navigate("HomeScreen"); // You can change this to actual profile screen later
   };
   // Hide the bottom navigation when keyboard is visible
   if (keyboardVisible) {
