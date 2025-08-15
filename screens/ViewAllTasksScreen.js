@@ -939,7 +939,7 @@ function ViewAllTasksScreen({ navigation, route }) {
 
   return (
     <View className="flex-1 bg-white">
-      <StatusBar barStyle="dark-content" backgroundColor="white" />
+      <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
 
       {/* Content */}
       {initialLoading ? (

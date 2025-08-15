@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Image,
+  StatusBar,
 } from "react-native";
 
 import Logo from "../assets/Logo.svg"; // Import the SVG logo
@@ -34,7 +35,8 @@ const SignIn = () => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white items-center justify-center p-6">
+    <SafeAreaView className="flex-1 bg-white items-center justify-center p-6 ">
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       {/* Sharp image at the top */}
       <Logo width={90} height={90} />
 

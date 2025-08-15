@@ -48,6 +48,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.sameer_yasir.eagleEye",
+      "softwareKeyboardLayoutMode": "pan",
       "permissions": [
         "NOTIFICATIONS",
         "VIBRATE",

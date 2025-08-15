@@ -31,8 +31,6 @@ function WidgetScreen({ navigation, route }) {
 
   const { projectId } = route.params || {};
 
-
-
   const mockLogs = [
     {
       id: 1,
@@ -67,26 +65,26 @@ function WidgetScreen({ navigation, route }) {
     try {
       setLoading(true);
       setError(null);
-      
+
       const role = await getUserRole();
       setUserRole(role);
-      
+
       let response;
-      
-      if (role === 'Employee') {
+
+      if (role === "Employee") {
         response = await getTasksAssignedToEmployees();
-        setProject({ name: 'My Tasks' });
+        setProject({ name: "My Tasks" });
         setTasks(response || []);
-      } else if (role === 'Manager') {
+      } else if (role === "Manager") {
         // First get the manager's projects
         const projectsResponse = await getMyProjects();
-        
+
         if (projectsResponse && projectsResponse.length > 0) {
           // Use the first project's ID to get tasks
           const firstProjectId = projectsResponse[0].id;
           setManagerProjectId(firstProjectId);
           response = await getTaskByProjectId(firstProjectId);
-          
+
           if (response && response.project) {
             setProject(response.project);
             setTasks(response.tasks || []);
@@ -94,22 +92,22 @@ function WidgetScreen({ navigation, route }) {
             setProject(response);
             setTasks(response.tasks || []);
           } else if (response && Array.isArray(response)) {
-            setProject({ name: 'Project' });
+            setProject({ name: "Project" });
             setTasks(response);
           } else if (response) {
             setProject(response);
             setTasks([]);
           } else {
-            setProject({ name: 'Project' });
+            setProject({ name: "Project" });
             setTasks([]);
           }
         } else {
-          setProject({ name: 'No Projects' });
+          setProject({ name: "No Projects" });
           setTasks([]);
         }
-      } else if(role === 'Admin' || role === 'Owner'){
+      } else if (role === "Admin" || role === "Owner") {
         response = await getTaskByProjectId(projectId);
-        
+
         if (response && response.project) {
           setProject(response.project);
           setTasks(response.tasks || []);
@@ -117,20 +115,19 @@ function WidgetScreen({ navigation, route }) {
           setProject(response);
           setTasks(response.tasks || []);
         } else if (response && Array.isArray(response)) {
-          setProject({ name: 'Project' });
+          setProject({ name: "Project" });
           setTasks(response);
         } else if (response) {
           setProject(response);
           setTasks([]);
         } else {
-          setProject({ name: 'Project' });
+          setProject({ name: "Project" });
           setTasks([]);
         }
       }
-      
     } catch (err) {
-      setError('Failed to load project data');
-      Alert.alert('Error', 'Failed to load project data. Please try again.');
+      setError("Failed to load project data");
+      Alert.alert("Error", "Failed to load project data. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -156,9 +153,9 @@ function WidgetScreen({ navigation, route }) {
 
   const TaskWidget = () => (
     <View
-      className="bg-white rounded-[20px] p-[25px] mb-4 mt-4"
+      className="bg-white rounded-[20px] p-[25px] mb-4 mt-2"
       style={{
-        shadowColor: '#000',
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.12,
         shadowRadius: 12,
@@ -173,40 +170,60 @@ function WidgetScreen({ navigation, route }) {
           </Text>
         </View>
         <TouchableOpacity
-          className={`flex-row items-center ${tasks.length === 0 ? 'opacity-70' : ''}`}
+          className={`flex-row items-center ${tasks.length === 0 ? "opacity-70" : ""}`}
           onPress={() => {
-            const navigationParams = userRole === 'Employee' ? {} : { projectId: userRole === 'Manager' ? managerProjectId : projectId };
-            navigation.navigate('ViewAllTasksScreen', navigationParams);
+            const navigationParams =
+              userRole === "Employee"
+                ? {}
+                : {
+                    projectId:
+                      userRole === "Manager" ? managerProjectId : projectId,
+                  };
+            navigation.navigate("ViewAllTasksScreen", navigationParams);
           }}
           disabled={tasks.length === 0}
         >
-          <Text className={`text-[14px] font-bold mr-1 ${tasks.length === 0 ? 'text-[#ccc]' : 'text-black'}`}>
+          <Text
+            className={`text-[14px] font-bold mr-1 ${tasks.length === 0 ? "text-[#ccc]" : "text-black"}`}
+          >
             View All
           </Text>
-          <Ionicons name="chevron-forward" size={16} color={tasks.length === 0 ? '#ccc' : 'black'} />
+          <Ionicons
+            name="chevron-forward"
+            size={16}
+            color={tasks.length === 0 ? "#ccc" : "black"}
+          />
         </TouchableOpacity>
       </View>
 
       <View className="h-[160px]">
         {tasks && tasks.length > 0 ? (
-          <ScrollView showsVerticalScrollIndicator={false} nestedScrollEnabled={true}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled={true}
+          >
             {tasks.slice(0, 4).map((task) => (
               <View
                 key={task.id}
                 className="bg-[#f8f9fa] rounded-[12px] p-3 mb-2 border border-[#e9ecef]"
               >
                 <View className="flex-row justify-between items-center mb-1.5">
-                  <Text className="text-[16px] font-bold text-[#333] flex-1 mr-2" numberOfLines={1}>
+                  <Text
+                    className="text-[16px] font-bold text-[#333] flex-1 mr-2"
+                    numberOfLines={1}
+                  >
                     {task.title}
                   </Text>
                   <Text className="text-[12px] text-[#666] font-medium">
                     {formatDate(task.endTime)}
                   </Text>
                 </View>
-                {userRole !== 'Employee' && (
+                {userRole !== "Employee" && (
                   <View className="flex-row items-center">
                     <Ionicons name="person" size={14} color="#666" />
-                    <Text className="text-[13px] text-[#666] font-medium ml-1">Assigned:</Text>
+                    <Text className="text-[13px] text-[#666] font-medium ml-1">
+                      Assigned:
+                    </Text>
                     <Text className="text-[13px] text-[#666] font-medium ml-1">
                       {getAssignedToName(task.assignedTo)}
                     </Text>
@@ -218,8 +235,12 @@ function WidgetScreen({ navigation, route }) {
         ) : (
           <View className="flex-1 justify-center items-center py-10 min-h-[120px]">
             <Ionicons name="list-outline" size={48} color="#ccc" />
-            <Text className="text-[16px] text-[#666] font-semibold mt-3 mb-1">No tasks found</Text>
-            <Text className="text-[14px] text-[#999] font-normal text-center">Tasks will appear here once created</Text>
+            <Text className="text-[16px] text-[#666] font-semibold mt-3 mb-1">
+              No tasks found
+            </Text>
+            <Text className="text-[14px] text-[#999] font-normal text-center">
+              Tasks will appear here once created
+            </Text>
           </View>
         )}
       </View>
@@ -230,7 +251,7 @@ function WidgetScreen({ navigation, route }) {
     <View
       className="bg-white rounded-[20px] p-5 mb-4"
       style={{
-        shadowColor: '#000',
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.12,
         shadowRadius: 12,
@@ -245,28 +266,48 @@ function WidgetScreen({ navigation, route }) {
           </Text>
         </View>
         <TouchableOpacity className="flex-row items-center">
-          <Text className="text-[14px] font-bold text-black mr-1">View All</Text>
+          <Text className="text-[14px] font-bold text-black mr-1">
+            View All
+          </Text>
           <Ionicons name="chevron-forward" size={16} color="black" />
         </TouchableOpacity>
       </View>
 
       <View className="h-[200px]">
-        <ScrollView showsVerticalScrollIndicator={false} nestedScrollEnabled={true}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled={true}
+        >
           {mockLogs.slice(0, 4).map((log) => (
-            <View key={log.id} className="bg-[#f8f9fa] rounded-2xl p-4 mb-3 border border-[#e9ecef]">
+            <View
+              key={log.id}
+              className="bg-[#f8f9fa] rounded-2xl p-4 mb-3 border border-[#e9ecef]"
+            >
               <View className="flex-row justify-between items-center mb-3">
-                <Text className="text-[16px] font-semibold text-[#333]">{log.action}</Text>
-                <Text className="text-[12px] text-[#666] font-medium">{formatDateTime(log.timestamp)}</Text>
+                <Text className="text-[16px] font-semibold text-[#333]">
+                  {log.action}
+                </Text>
+                <Text className="text-[12px] text-[#666] font-medium">
+                  {formatDateTime(log.timestamp)}
+                </Text>
               </View>
 
               <View className="gap-2">
                 <View className="flex-row justify-between items-start">
-                  <Text className="text-[14px] text-[#666] font-medium min-w-[60px]">User:</Text>
-                  <Text className="text-[14px] font-semibold text-[#333] flex-1 text-right">{log.user}</Text>
+                  <Text className="text-[14px] text-[#666] font-medium min-w-[60px]">
+                    User:
+                  </Text>
+                  <Text className="text-[14px] font-semibold text-[#333] flex-1 text-right">
+                    {log.user}
+                  </Text>
                 </View>
                 <View className="flex-row justify-between items-start">
-                  <Text className="text-[14px] text-[#666] font-medium min-w-[60px]">Details:</Text>
-                  <Text className="text-[14px] font-semibold text-[#333] flex-1 text-right">{log.details}</Text>
+                  <Text className="text-[14px] text-[#666] font-medium min-w-[60px]">
+                    Details:
+                  </Text>
+                  <Text className="text-[14px] font-semibold text-[#333] flex-1 text-right">
+                    {log.details}
+                  </Text>
                 </View>
               </View>
             </View>
@@ -280,7 +321,11 @@ function WidgetScreen({ navigation, route }) {
     if (loading) {
       return (
         <View className="flex-1 justify-center items-center p-5 min-h-[700px]">
-          <Loader size="large" color="#000000" text="Loading tasks and logs..." />
+          <Loader
+            size="large"
+            color="#000000"
+            text="Loading tasks and logs..."
+          />
         </View>
       );
     }
@@ -288,8 +333,13 @@ function WidgetScreen({ navigation, route }) {
     if (error) {
       return (
         <View className="flex-1 justify-center items-center p-5 min-h-[400px]">
-          <Text className="text-[16px] text-[#dc3545] text-center mb-4 font-medium">{error}</Text>
-          <TouchableOpacity className="bg-[#007AFF] py-3 px-6 rounded-lg" onPress={loadData}>
+          <Text className="text-[16px] text-[#dc3545] text-center mb-4 font-medium">
+            {error}
+          </Text>
+          <TouchableOpacity
+            className="bg-[#007AFF] py-3 px-6 rounded-lg"
+            onPress={loadData}
+          >
             <Text className="text-white text-[16px] font-semibold">Retry</Text>
           </TouchableOpacity>
         </View>
@@ -308,18 +358,17 @@ function WidgetScreen({ navigation, route }) {
 
     return (
       <View className="flex-1 justify-center items-center p-5 min-h-[400px]">
-        <Text className="text-[16px] text-[#dc3545] text-center mb-4 font-medium">Project not found</Text>
+        <Text className="text-[16px] text-[#dc3545] text-center mb-4 font-medium">
+          Project not found
+        </Text>
       </View>
     );
   };
 
   return (
     <View className="flex-1 bg-white">
-      <StatusBar barStyle="dark-content" backgroundColor="white" />
-
+      <StatusBar backgroundColor="#3155A1" barStyle="light-content" />
       <SafeAreaView className="flex-1">
-       
-
         <ScrollView className="flex-1 px-5 py-5 pb-[100px]">
           {renderContent()}
         </ScrollView>
@@ -331,17 +380,23 @@ function WidgetScreen({ navigation, route }) {
         onNavigate={() => setSidebarVisible(false)}
       />
 
-      <CustomBottomNav 
+      <CustomBottomNav
         onAddPress={() => {
-          if (userRole === 'Employee') {
+          if (userRole === "Employee") {
             Alert.alert("Access Denied", "Employees cannot create tasks.");
             return;
           }
-          
+
           if (tasks.length === 0) {
             // Only navigate to create task screen if no tasks found
-            const navigationParams = userRole === 'Employee' ? {} : { projectId: userRole === 'Manager' ? managerProjectId : projectId };
-            navigation.navigate('CreateTask', navigationParams);
+            const navigationParams =
+              userRole === "Employee"
+                ? {}
+                : {
+                    projectId:
+                      userRole === "Manager" ? managerProjectId : projectId,
+                  };
+            navigation.navigate("CreateTask", navigationParams);
           }
           // If tasks exist, do nothing (don't navigate anywhere)
         }}
@@ -349,8 +404,5 @@ function WidgetScreen({ navigation, route }) {
     </View>
   );
 }
-
-
-
 
 export default WidgetScreen;

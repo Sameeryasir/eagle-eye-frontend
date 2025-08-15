@@ -23,7 +23,10 @@ export default function CustomBottomNav({
       onAddPress();
     } else if (task) {
       const userRole = await getUserRole();
-      const navigationParams = userRole === 'Manager' ? { projectId: managerProjectId } : { projectId: projectId };
+      const navigationParams =
+        userRole === "Manager"
+          ? { projectId: managerProjectId }
+          : { projectId: projectId };
       navigation.navigate("CreateTask", navigationParams);
     } else if (project) {
       navigation.navigate("CreateProject");
@@ -79,7 +82,7 @@ export default function CustomBottomNav({
             <View className="absolute bottom-[-6px] w-5 h-[3px] bg-white rounded-[2px]" />
           )}
         </TouchableOpacity>
- <TouchableOpacity
+        <TouchableOpacity
           className="items-center justify-center relative"
           style={{ width: (width * 0.9 - 30) / 5 }}
           onPress={navigateToProfile}
@@ -91,9 +94,19 @@ export default function CustomBottomNav({
             <View className="absolute bottom-[-6px] w-5 h-[3px] bg-white rounded-[2px]" />
           )}
         </TouchableOpacity>
-    
 
         <View style={{ width: 65 }} />
+
+        <TouchableOpacity
+          className="items-center justify-center relative"
+          style={{ width: (width * 0.9 - 30) / 5 }}
+          onPress={navigateToChats}
+        >
+          <Ionicons name="chatbubble-outline" size={24} color="#fff" />
+          {activeTab === "chats" && (
+            <View className="absolute bottom-[-6px] w-5 h-[3px] bg-white rounded-[2px]" />
+          )}
+        </TouchableOpacity>
 
         <TouchableOpacity
           className="items-center justify-center relative"
@@ -102,17 +115,6 @@ export default function CustomBottomNav({
         >
           <Ionicons name="notifications-outline" size={24} color="#fff" />
           {activeTab === "notifications" && (
-            <View className="absolute bottom-[-6px] w-5 h-[3px] bg-white rounded-[2px]" />
-          )}
-        </TouchableOpacity>
-
-         <TouchableOpacity
-          className="items-center justify-center relative"
-          style={{ width: (width * 0.9 - 30) / 5 }}
-          onPress={navigateToChats}
-        >
-          <Ionicons name="chatbubble-outline" size={24} color="#fff" />
-          {activeTab === "chats" && (
             <View className="absolute bottom-[-6px] w-5 h-[3px] bg-white rounded-[2px]" />
           )}
         </TouchableOpacity>

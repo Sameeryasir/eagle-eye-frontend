@@ -8,7 +8,7 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "ENV_FILE": "https://a16df58e9d7e.ngrok-free.app"
+        "ENV_FILE": "https://your-api-url.com"
       }
     },
     "preview": {
@@ -17,13 +17,13 @@
         "buildType": "apk"
       },
       "env": {
-        "ENV_FILE": "https://a16df58e9d7e.ngrok-free.app"
+        "ENV_FILE": "https://your-api-url.com"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "ENV_FILE": "https://a16df58e9d7e.ngrok-free.app"
+        "ENV_FILE": "https://your-api-url.com"
       }
     }
   },

@@ -11,6 +11,7 @@ import LogIn from "./screens/LogInScreen";
 import Code from "./screens/OtpScreen";
 import Header from "./components/Header";
 import Sidebar from "./screens/components/Sidebar";
+import { AuthProvider } from "./context/AuthContext";
 
 import HomeScreen from "./screens/HomeScreen";
 import WidgetScreen from "./screens/WidgetScreen";
@@ -130,12 +131,13 @@ export default function App() {
   }
 
   return (
-    <SafeAreaProvider>
-      <NavigationContainer 
-        ref={setNavigationRef}
-        initialState={initialState}
-        onStateChange={onStateChange}
-      >
+    <AuthProvider>
+      <SafeAreaProvider>
+        <NavigationContainer 
+          ref={setNavigationRef}
+          initialState={initialState}
+          onStateChange={onStateChange}
+        >
         <Stack.Navigator>
           <Stack.Screen
             name="SignIn"
@@ -177,7 +179,7 @@ export default function App() {
             component={WidgetScreen}
             options={{
               headerShown: true,
-              header: () => <CustomHeaderForScreens onMenuPress={handleMenuPress} title="Widget Dashboard" />,
+              header: () => <CustomHeaderForScreens onMenuPress={handleMenuPress} title="Dashboard" />,
               headerBackTitleVisible: false,
               headerStyle: {
                 backgroundColor: 'white',
@@ -288,5 +290,6 @@ export default function App() {
         />
       </NavigationContainer>
     </SafeAreaProvider>
+    </AuthProvider>
   );
 }

@@ -7,6 +7,7 @@ import {
   ScrollView,
   Alert,
   TouchableWithoutFeedback,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -23,6 +24,13 @@ function TaskDetailsScreen({ navigation, route }) {
   const [isUpdateMode, setIsUpdateMode] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [userRole, setUserRole] = useState(null);
+  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
+  
+  // Responsive spacing calculations
+  const isLargeScreen = screenHeight > 800;
+  const topSpacing = isLargeScreen ? 16 : 12;
+  const bottomSpacing = isLargeScreen ? 24 : 16;
+  const cardSpacing = isLargeScreen ? 20 : 16;
 
   useEffect(() => {
     const loadUserRole = async () => {
@@ -142,16 +150,34 @@ function TaskDetailsScreen({ navigation, route }) {
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
-      <StatusBar barStyle="dark-content" backgroundColor="#f9fafb" />
+      <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
       
       {/* Header */}
 
 
-      <ScrollView className="flex-1 mb-4" showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        className="flex-1" 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ 
+          paddingBottom: bottomSpacing,
+          paddingTop: topSpacing
+        }}
+      >
         {/* Task Title Card */}
-        <View className="mx-6 mt-4 mb-3">
+        <View style={{ marginHorizontal: 24, marginBottom: cardSpacing }}>
           <TouchableWithoutFeedback onPress={handleCloseMenu}>
-            <View className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <View style={{ 
+              backgroundColor: 'white', 
+              borderRadius: 16, 
+              padding: isLargeScreen ? 24 : 20, 
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.05,
+              shadowRadius: 2,
+              elevation: 2,
+              borderWidth: 1,
+              borderColor: '#f3f4f6'
+            }}>
               <View className="flex-row items-center mb-4">
                 <View className="w-12 h-12 rounded-xl bg-blue-100 items-center justify-center mr-4">
                   <Ionicons name="document-text" size={24} color="#3B82F6" />
@@ -206,10 +232,25 @@ function TaskDetailsScreen({ navigation, route }) {
 
         {/* Task Details Grid */}
         <TouchableWithoutFeedback onPress={handleCloseMenu}>
-          <View className="mx-6 mb-3">
-            <View className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <View style={{ marginHorizontal: 24, marginBottom: cardSpacing }}>
+            <View style={{ 
+              backgroundColor: 'white', 
+              borderRadius: 16, 
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.05,
+              shadowRadius: 2,
+              elevation: 2,
+              borderWidth: 1,
+              borderColor: '#f3f4f6',
+              overflow: 'hidden'
+            }}>
               {/* Priority Section */}
-              <View className="p-6 border-b border-gray-100">
+              <View style={{ 
+                padding: isLargeScreen ? 24 : 20, 
+                borderBottomWidth: 1, 
+                borderBottomColor: '#f3f4f6' 
+              }}>
                 <View className="flex-row items-center justify-between">
                   <View className="flex-row items-center">
                     <View className="w-10 h-10 rounded-lg bg-red-100 items-center justify-center mr-3">
@@ -236,7 +277,11 @@ function TaskDetailsScreen({ navigation, route }) {
               </View>
 
               {/* Assigned To Section */}
-              <View className="p-6 border-b border-gray-100">
+              <View style={{ 
+                padding: isLargeScreen ? 24 : 20, 
+                borderBottomWidth: 1, 
+                borderBottomColor: '#f3f4f6' 
+              }}>
                 <View className="flex-row items-center">
                   <View className="w-10 h-10 rounded-lg bg-green-100 items-center justify-center mr-3">
                     <Ionicons name="person" size={20} color="#10B981" />
@@ -253,11 +298,14 @@ function TaskDetailsScreen({ navigation, route }) {
 
 
               {/* Timeline Section */}
-              <View className="p-6 mt-5">
+              <View style={{ 
+                padding: isLargeScreen ? 24 : 20, 
+                marginTop: isLargeScreen ? 20 : 16 
+              }}>
               
                 
                 <View className="space-y-4">
-                  <View className="flex-row items-center justify-between bg-gray-50 rounded-xl p-4">
+                  <View className="flex-row items-center justify-between mb-4">
                     <View className="flex-row items-center">
                       <View className="w-8 h-8 rounded-lg bg-blue-100 items-center justify-center mr-3">
                         <Ionicons name="play" size={16} color="#3B82F6" />
@@ -269,7 +317,7 @@ function TaskDetailsScreen({ navigation, route }) {
                     </Text>
                   </View>
 
-                  <View className="flex-row items-center justify-between bg-gray-50 rounded-xl p-4">
+                  <View className="flex-row items-center justify-between">
                     <View className="flex-row items-center">
                       <View className="w-8 h-8 rounded-lg bg-red-100 items-center justify-center mr-3">
                         <Ionicons name="stop" size={16} color="#EF4444" />
@@ -281,7 +329,7 @@ function TaskDetailsScreen({ navigation, route }) {
                     </Text>
                   </View>
 
-                  <View className="flex-row justify-end mt-3 mr-2">
+                  <View className="flex-row justify-end mt-3 ">
                     <View className="flex-row items-center">
                       <Text className="text-sm font-medium text-gray-600 mr-2">Created At:</Text>
                     </View>
@@ -296,12 +344,18 @@ function TaskDetailsScreen({ navigation, route }) {
         </TouchableWithoutFeedback>
 
         {/* Bottom Spacing */}
-        <View className="h-16" />
+        <View style={{ height: bottomSpacing }} />
       </ScrollView>
 
       {/* Update Task Button - Only show when in update mode */}
       {isUpdateMode && (
-        <View className="absolute bottom-20 left-6 right-6 z-20">
+        <View style={{ 
+          position: 'absolute', 
+          bottom: isLargeScreen ? 100 : 80, 
+          left: 24, 
+          right: 24, 
+          zIndex: 20 
+        }}>
           <View className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4">
             <View className="flex-row space-x-3">
               <TouchableOpacity 

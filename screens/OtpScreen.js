@@ -4,16 +4,22 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   TextInput,
   Image,
   Alert,
   ActivityIndicator,
+  StatusBar,
+  Platform,
+  Keyboard,
+  Dimensions,
+  AppState,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { verifyOtp } from '../services/auth/VerifyOtp';
 import { useAuth } from '../context/AuthContext';
 import Logo from "../assets/Logo.svg"; // Import the SVG logo
+
+const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
 const Code = () => {
   const navigation = useNavigation();
@@ -22,8 +28,28 @@ const Code = () => {
   const emailOrPhone = route.params?.emailOrPhone || '';
   const [code, setCode] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  const [appState, setAppState] = React.useState(AppState.currentState);
+
+  React.useEffect(() => {
+    const handleAppStateChange = (nextAppState) => {
+      if (appState.match(/inactive|background/) && nextAppState === 'active') {
+        // App has come to the foreground - force re-render
+        setAppState(nextAppState);
+        // Force a small delay to ensure proper layout restoration
+        setTimeout(() => {
+          setAppState('active');
+        }, 100);
+      } else {
+        setAppState(nextAppState);
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription?.remove();
+  }, [appState]);
 
   const handleContinue = async () => {
+    Keyboard.dismiss(); // Dismiss keyboard before proceeding
     setLoading(true);
     try {
       const data = await verifyOtp(emailOrPhone, code.trim());
@@ -61,54 +87,86 @@ const Code = () => {
   
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Image at the top */}
-              <Logo width={90} height={90} />
-   
-      <Text style={styles.title}>Verify OTP</Text>
-      <Text style={styles.description}>
-        Enter the code sent to your email or phone
-      </Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Enter Code"
-        value={code}
-        onChangeText={setCode}
-        keyboardType="number-pad"
-        autoCapitalize="none"
+    <>
+      {/* Background layer to ensure full coverage */}
+      <View 
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: '#FFFFFF',
+          zIndex: 0,
+        }}
       />
-      <TouchableOpacity 
-        style={[
-          styles.continueButton,
-          !code.trim() && styles.disabledButton
-        ]} 
-        onPress={handleContinue} 
-        disabled={loading || !code.trim()}
+      
+      {/* Main content layer */}
+      <View 
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: '#FFFFFF',
+          zIndex: 1,
+        }}
       >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.continueButtonText}>Verify</Text>
-        )}
-      </TouchableOpacity>
-    </SafeAreaView>
+        <StatusBar 
+          barStyle="dark-content" 
+          backgroundColor="#FFFFFF" 
+          translucent={false}
+        />
+        
+        <View 
+          style={{
+            flex: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingHorizontal: 24,
+            paddingTop: Platform.OS === 'android' ? -110 : -160,
+            backgroundColor: '#FFFFFF',
+          }}
+        >
+          <Logo width={90} height={90} />
+       
+          <Text style={styles.title}>Verify OTP</Text>
+          <Text style={styles.description}>
+            Enter the code sent to your email or phone
+          </Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Enter Code"
+            value={code}
+            onChangeText={setCode}
+            keyboardType="number-pad"
+            autoCapitalize="none"
+            returnKeyType="done"
+            onSubmitEditing={handleContinue}
+            blurOnSubmit={false}
+          />
+          <TouchableOpacity 
+            style={[
+              styles.continueButton,
+              !code.trim() && styles.disabledButton
+            ]} 
+            onPress={handleContinue} 
+            disabled={loading || !code.trim()}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.continueButtonText}>Verify</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-    marginTop: -110, // Shift content even more upward to align with SignIn
-  },
-  sharpImage: {
-    width: 100,
-    height: 100,
-    marginBottom: 32,
-  },
   title: {
     fontSize: 28,
     fontWeight: "bold",
