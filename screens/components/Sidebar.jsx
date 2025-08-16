@@ -3,16 +3,18 @@ import { View, Text, TouchableOpacity, Animated, Dimensions, Alert } from 'react
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getUserRole } from '../../services/utils/userRole';
+import { useNavigation } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
-const Sidebar = ({ isVisible, onClose, onNavigate, navigation }) => {
+const Sidebar = ({ isVisible, onClose, onNavigate }) => {
   const slideAnim = React.useRef(new Animated.Value(-width)).current;
   const [userData, setUserData] = React.useState({
     name: '',
     role: ''
   });
   const [userRole, setUserRole] = React.useState(null);
+  const navigation = useNavigation();
 
   React.useEffect(() => {
     if (isVisible) {

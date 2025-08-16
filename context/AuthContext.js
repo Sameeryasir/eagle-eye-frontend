@@ -101,6 +101,7 @@ export const AuthProvider = ({ children }) => {
         'userRole',
         'userFirstName',
         'userLastName',
+        'userId',
         'lastVisitedScreen'
       ]);
       console.log('Tokens cleared from storage');

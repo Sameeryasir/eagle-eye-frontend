@@ -6,6 +6,7 @@ import { SafeAreaView, SafeAreaProvider } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState, useEffect } from "react";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { MenuProvider } from 'react-native-popup-menu';
 import SignIn from "./screens/SignInScreen";
 import LogIn from "./screens/LogInScreen";
 import Code from "./screens/OtpScreen";
@@ -79,15 +80,15 @@ export default function App() {
         if (state !== undefined) {
           setInitialState(state);
         }
-      } catch (error) {
-        console.log('Error restoring navigation state:', error);
       } finally {
         setIsReady(true);
       }
     };
 
-    restoreState();
-  }, []); // Remove isReady dependency to prevent infinite loop
+    if (!isReady) {
+      restoreState();
+    }
+  }, [isReady]);
 
   const onStateChange = (state) => {
     return AsyncStorage.setItem(PERSISTENCE_KEY, JSON.stringify(state));
@@ -132,12 +133,13 @@ export default function App() {
 
   return (
     <AuthProvider>
-      <SafeAreaProvider>
-        <NavigationContainer 
-          ref={setNavigationRef}
-          initialState={initialState}
-          onStateChange={onStateChange}
-        >
+      <MenuProvider>
+        <SafeAreaProvider>
+          <NavigationContainer 
+            ref={setNavigationRef}
+            initialState={initialState}
+            onStateChange={onStateChange}
+          >
         <Stack.Navigator>
           <Stack.Screen
             name="SignIn"
@@ -179,7 +181,7 @@ export default function App() {
             component={WidgetScreen}
             options={{
               headerShown: true,
-              header: () => <CustomHeaderForScreens onMenuPress={handleMenuPress} title="Dashboard" />,
+              header: () => <CustomHeaderForScreens onMenuPress={handleMenuPress} title=" Dashboard" />,
               headerBackTitleVisible: false,
               headerStyle: {
                 backgroundColor: 'white',
@@ -289,7 +291,8 @@ export default function App() {
           navigation={navigationRef}
         />
       </NavigationContainer>
-    </SafeAreaProvider>
+      </SafeAreaProvider>
+      </MenuProvider>
     </AuthProvider>
   );
 }

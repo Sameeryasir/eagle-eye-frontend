@@ -16,9 +16,11 @@ import CustomBottomNav from "./components/CustomBottomNav";
 import { getTaskByProjectId } from "../services/tasks/getTaskByProjectId";
 import { getTasksAssignedToEmployees } from "../services/tasks/getTasksAssignedToEmployees";
 import getTasksByloginId from "../services/tasks/getTasksByloginId";
+import { deleteTaskById } from "../services/tasks/deleteTaskById";
 import { getMyProjects } from "../services/projects/getProjectsByLoginUserId";
 import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
+import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
 
 function WidgetScreen({ navigation, route }) {
   const [sidebarVisible, setSidebarVisible] = useState(false);
@@ -151,6 +153,67 @@ function WidgetScreen({ navigation, route }) {
     return fullName || assignedTo.email || "Unassigned";
   };
 
+  const handleUpdate = (task) => {
+    // Only allow updating tasks if user is not an Employee
+    if (userRole === 'Employee') {
+      Alert.alert("Access Denied", "Employees cannot update tasks.");
+      return;
+    }
+
+    // Navigate to task details or update screen
+    navigation.navigate('TaskDetails', { task });
+  };
+
+  const handleDelete = (task) => {
+    // Only allow deleting tasks if user is not an Employee
+    if (userRole === 'Employee') {
+      Alert.alert("Access Denied", "Employees cannot delete tasks.");
+      return;
+    }
+
+    const taskId = task?.id;
+    const taskTitle = task?.title;
+
+    if (!taskId) {
+      return;
+    }
+
+    Alert.alert(
+      "Delete Task",
+      `Are you sure you want to delete "${taskTitle}" permanently? This action is not reversible.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // Import and use deleteTaskById here
+              const { deleteTaskById } = require("../services/tasks/deleteTaskById");
+              await deleteTaskById(taskId);
+
+              // Refresh the data
+              await loadData();
+
+              Alert.alert("Success", "Task deleted successfully!", [
+                { text: "OK" },
+              ]);
+            } catch (error) {
+              let errorMessage = "Failed to delete task. Please try again.";
+              if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+              } else if (error.message) {
+                errorMessage = error.message;
+              }
+
+              Alert.alert("Error", errorMessage, [{ text: "OK" }]);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const TaskWidget = () => (
     <View
       className="bg-white rounded-[20px] p-[25px] mb-4 mt-2"
@@ -214,9 +277,11 @@ function WidgetScreen({ navigation, route }) {
                   >
                     {task.title}
                   </Text>
-                  <Text className="text-[12px] text-[#666] font-medium">
-                    {formatDate(task.endTime)}
-                  </Text>
+                  <View className="flex-row items-center">
+                    <Text className="text-[12px] text-[#666] font-medium">
+                      {formatDate(task.endTime)}
+                    </Text>
+                  </View>
                 </View>
                 {userRole !== "Employee" && (
                   <View className="flex-row items-center">
@@ -368,11 +433,9 @@ function WidgetScreen({ navigation, route }) {
   return (
     <View className="flex-1 bg-white">
       <StatusBar backgroundColor="#3155A1" barStyle="light-content" />
-      <SafeAreaView className="flex-1">
-        <ScrollView className="flex-1 px-5 py-5 pb-[100px]">
-          {renderContent()}
-        </ScrollView>
-      </SafeAreaView>
+      <ScrollView className="flex-1 px-5 py-5 pb-[100px]" style={{ paddingTop: 20 }}>
+        {renderContent()}
+      </ScrollView>
 
       <Sidebar
         isVisible={sidebarVisible}

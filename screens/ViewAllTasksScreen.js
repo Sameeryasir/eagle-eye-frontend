@@ -28,6 +28,7 @@ import { getTasksAssignedToEmployees } from "../services/tasks/getTasksAssignedT
 import { getEmployeesToAssignTask } from "../services/employees/getEmployeesOfTheCompany";
 import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
+import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
 
 const searchBarClasses = `flex-row items-center rounded-2xl px-4 py-3 bg-[#F8FAFC] border border-[#EAECF0]`;
 
@@ -75,8 +76,6 @@ function ViewAllTasksScreen({ navigation, route }) {
   const [error, setError] = useState(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
-  const [menuVisible, setMenuVisible] = useState(false);
-  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   const [project, setProject] = useState(null);
   const [draftTasks, setDraftTasks] = useState([]);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
@@ -504,49 +503,30 @@ function ViewAllTasksScreen({ navigation, route }) {
   // Combine regular tasks and draft tasks for display
   const allTasks = [...draftTasks, ...filteredTasks];
 
-  const handleMenuPress = (task, event) => {
-    event.target.measure((x, y, width, height, pageX, pageY) => {
-      setMenuPosition({
-        x: pageX + width - 120,
-        y: pageY + height - 75,
-      });
-    });
-
-    setSelectedTask(task);
-    setMenuVisible(true);
-  };
-
-  const handleUpdate = () => {
+  const handleUpdate = (task) => {
     // Only allow updating tasks if user is not an Employee
     if (userRole === 'Employee') {
       Alert.alert("Access Denied", "Employees cannot update tasks.");
-      setMenuVisible(false);
-      setSelectedTask(null);
       return;
     }
 
-    setMenuVisible(false);
+    setSelectedTask(task);
     setUpdateTaskModalVisible(true);
   };
 
-  const handleDelete = () => {
+  const handleDelete = (task) => {
     // Only allow deleting tasks if user is not an Employee
     if (userRole === 'Employee') {
       Alert.alert("Access Denied", "Employees cannot delete tasks.");
-      setMenuVisible(false);
-      setSelectedTask(null);
       return;
     }
 
-    const taskId = selectedTask?.id;
-    const taskTitle = selectedTask?.title;
+    const taskId = task?.id;
+    const taskTitle = task?.title;
 
     if (!taskId) {
       return;
     }
-
-    setMenuVisible(false);
-    setSelectedTask(null);
 
     Alert.alert(
       "Delete Task",
@@ -585,11 +565,6 @@ function ViewAllTasksScreen({ navigation, route }) {
         },
       ]
     );
-  };
-
-  const closeMenu = () => {
-    setMenuVisible(false);
-    setSelectedTask(null);
   };
 
   const handleUpdateTaskSuccess = () => {
@@ -824,12 +799,56 @@ function ViewAllTasksScreen({ navigation, route }) {
               </Text>
             </View>
             {userRole !== 'Employee' && (
-              <TouchableOpacity
-                className="mb-1 rounded-full bg-gray-50 ml-3"
-                onPress={(event) => handleMenuPress(task, event)}
-              >
-                <Ionicons name="ellipsis-vertical" size={16} color="#6b7280" />
-              </TouchableOpacity>
+              <Menu rendererProps={{ placement: 'bottom-end', anchorStyle: { marginRight: 0 } }}>
+                <MenuTrigger>
+                  <View style={{ activeOpacity: 1 }}>
+                    <Ionicons name="ellipsis-vertical" size={16} color="#6b7280" />
+                  </View>
+                </MenuTrigger>
+                <MenuOptions customStyles={{
+                  optionsContainer: {
+                    backgroundColor: 'white',
+                    borderRadius: 8,
+                    padding: 8,
+                    width: 120,
+                    marginRight: -20,
+                    shadowColor: "#000",
+                    shadowOpacity: 0.15,
+                    shadowRadius: 6,
+                    shadowOffset: { width: 0, height: 3 },
+                    elevation: 3,
+                  }
+                }}>
+                  <MenuOption onSelect={() => handleUpdate(task)} customStyles={{
+                    optionWrapper: {
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 10,
+                      paddingHorizontal: 16,
+                      borderRadius: 4,
+                    }
+                  }}>
+                    <Ionicons name="create-outline" size={18} color="#000" />
+                    <Text style={{ marginLeft: 10, fontSize: 14, fontWeight: '600', color: 'black' }}>
+                      Update
+                    </Text>
+                  </MenuOption>
+                  <MenuOption onSelect={() => handleDelete(task)} customStyles={{
+                    optionWrapper: {
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 10,
+                      paddingHorizontal: 16,
+                      borderRadius: 4,
+                    }
+                  }}>
+                    <Ionicons name="trash-outline" size={18} color="#dc3545" />
+                    <Text style={{ marginLeft: 10, fontSize: 14, fontWeight: '600', color: '#dc3545' }}>
+                      Delete
+                    </Text>
+                  </MenuOption>
+                </MenuOptions>
+              </Menu>
             )}
           </View>
 
@@ -1167,49 +1186,7 @@ function ViewAllTasksScreen({ navigation, route }) {
         />
       )}
 
-      {menuVisible && (
-        <TouchableOpacity
-          className="absolute top-0 left-0 right-0 bottom-0"
-          activeOpacity={1}
-          onPress={closeMenu}
-        >
-          <View
-            className="bg-white rounded-lg p-2"
-            style={{
-              position: "absolute",
-              top: menuPosition.y,
-              left: menuPosition.x,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.2,
-              shadowRadius: 4,
-              elevation: 3,
-            }}
-          >
-            <TouchableOpacity
-              className="flex-row items-center py-2.5 px-4 rounded"
-              onPress={handleUpdate}
-            >
-              <Ionicons name="create-outline" size={18} color="black" />
-              <Text className="ml-2.5 text-[14px] font-semibold text-black">
-                Update
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="flex-row items-center py-2.5 px-4 rounded"
-              onPress={handleDelete}
-            >
-              <Ionicons name="trash-outline" size={18} color="#FF3B30" />
-              <Text
-                className="ml-2.5 text-[14px] font-semibold"
-                style={{ color: "#FF3B30" }}
-              >
-                Delete
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      )}
+
 
       {/* Update Task Modal - Only show for non-employees */}
       {userRole !== 'Employee' && (

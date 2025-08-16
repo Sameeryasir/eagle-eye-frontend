@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
+import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
 import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
 import CreateProject from "./components/CreateProject";
@@ -71,13 +72,10 @@ function HomeScreen({ navigation }) {
   const [error, setError] = useState(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
-  const [menuVisible, setMenuVisible] = useState(false);
-  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   const [createProjectModalVisible, setCreateProjectModalVisible] =
     useState(false);
   const [updateProjectModalVisible, setUpdateProjectModalVisible] =
     useState(false);
-  const menuButtonRefs = useRef({});
   const { width: screenWidth } = useWindowDimensions();
 
   const numColumns = screenWidth >= 1024 ? 3 : screenWidth >= 768 ? 2 : 1;
@@ -156,35 +154,19 @@ function HomeScreen({ navigation }) {
     }
   };
 
-  const handleMenuPress = (project) => {
-    const ref = menuButtonRefs.current[project.id];
-    if (ref && typeof ref.measure === "function") {
-      ref.measure((x, y, width, height, pageX, pageY) => {
-        setMenuPosition({ x: pageX + width - 120, y: pageY + height - 75 });
-      });
-    } else {
-      setMenuPosition({ x: 20, y: 80 });
-    }
+  const handleUpdate = (project) => {
     setSelectedProject(project);
-    setMenuVisible(true);
-  };
-
-  const handleUpdate = () => {
-    setMenuVisible(false);
     setUpdateProjectModalVisible(true);
   };
 
-  const handleDelete = () => {
-    const projectId = selectedProject?.id;
-    const projectName = selectedProject?.name;
+  const handleDelete = (project) => {
+    const projectId = project?.id;
+    const projectName = project?.name;
 
     if (!projectId) {
       console.error("No project ID found");
       return;
     }
-
-    setMenuVisible(false);
-    setSelectedProject(null);
 
     Alert.alert(
       "Delete Project",
@@ -235,10 +217,7 @@ function HomeScreen({ navigation }) {
     setSelectedProject(null);
   };
 
-  const closeMenu = () => {
-    setMenuVisible(false);
-    setSelectedProject(null);
-  };
+
 
   const ProjectCard = ({ project, cardWidth }) => (
     <TouchableOpacity
@@ -257,14 +236,56 @@ function HomeScreen({ navigation }) {
         >
           {project.name}
         </Text>
-        <TouchableOpacity
-          onPress={() => handleMenuPress(project)}
-          ref={(ref) => {
-            if (ref) menuButtonRefs.current[project.id] = ref;
-          }}
-        >
-          <Ionicons name="ellipsis-vertical" size={20} color="white" />
-        </TouchableOpacity>
+        <Menu rendererProps={{ placement: 'bottom-end', anchorStyle: { marginRight: 0 } }}>
+          <MenuTrigger>
+            <View style={{ activeOpacity: 1 }}>
+              <Ionicons name="ellipsis-vertical" size={20} color="white" />
+            </View>
+          </MenuTrigger>
+          <MenuOptions customStyles={{
+            optionsContainer: {
+              backgroundColor: 'white',
+              borderRadius: 8,
+              padding: 8,
+              width: 120,
+              marginRight: -20,
+              shadowColor: "#000",
+              shadowOpacity: 0.15,
+              shadowRadius: 6,
+              shadowOffset: { width: 0, height: 3 },
+              elevation: 3,
+            }
+          }}>
+            <MenuOption onSelect={() => handleUpdate(project)} customStyles={{
+              optionWrapper: {
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: 10,
+                paddingHorizontal: 16,
+                borderRadius: 4,
+              }
+            }}>
+              <Ionicons name="create-outline" size={18} color="#000" />
+              <Text style={{ marginLeft: 10, fontSize: 14, fontWeight: '600', color: 'black' }}>
+                Update
+              </Text>
+            </MenuOption>
+            <MenuOption onSelect={() => handleDelete(project)} customStyles={{
+              optionWrapper: {
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: 10,
+                paddingHorizontal: 16,
+                borderRadius: 4,
+              }
+            }}>
+              <Ionicons name="trash-outline" size={18} color="#dc3545" />
+              <Text style={{ marginLeft: 10, fontSize: 14, fontWeight: '600', color: '#dc3545' }}>
+                Delete
+              </Text>
+            </MenuOption>
+          </MenuOptions>
+        </Menu>
       </View>
 
       {/* Rest of the card content */}
@@ -338,48 +359,7 @@ function HomeScreen({ navigation }) {
         </TouchableWithoutFeedback>
       )}
 
-      {/* Context Menu */}
-      {menuVisible && (
-        <>
-          <TouchableOpacity
-            className="absolute top-0 bottom-0 left-0 right-0"
-            activeOpacity={1}
-            onPress={closeMenu}
-          />
-          <View
-            className="bg-white rounded-lg p-2"
-            style={{
-              position: "absolute",
-              top: menuPosition.y,
-              left: menuPosition.x,
-              shadowColor: "#000",
-              shadowOpacity: 0.15,
-              shadowRadius: 6,
-              shadowOffset: { width: 0, height: 3 },
-              elevation: 3,
-            }}
-          >
-            <TouchableOpacity
-              className="flex-row items-center py-2.5 px-4 rounded"
-              onPress={handleUpdate}
-            >
-              <Ionicons name="create-outline" size={18} color="#000" />
-              <Text className="ml-2.5 text-[14px] font-semibold text-black">
-                Update
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="flex-row items-center py-2.5 px-4 rounded"
-              onPress={handleDelete}
-            >
-              <Ionicons name="trash-outline" size={18} color="#dc3545" />
-              <Text className="ml-2.5 text-[14px] font-semibold text-[#dc3545]">
-                Delete
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
+
 
       {/* Sidebar */}
       <Sidebar

@@ -16,11 +16,12 @@ import CustomBottomNav from "./components/CustomBottomNav";
 import UpdateTaskModal from "./components/UpdateTaskModal";
 import { deleteTaskById } from "../services/tasks/deleteTaskById";
 import { getUserRole } from "../services/utils/userRole";
+import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
 
 function TaskDetailsScreen({ navigation, route }) {
   const { task } = route.params || {};
   const [sidebarVisible, setSidebarVisible] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
+
   const [isUpdateMode, setIsUpdateMode] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [userRole, setUserRole] = useState(null);
@@ -75,7 +76,6 @@ function TaskDetailsScreen({ navigation, route }) {
   ];
 
   const handleUpdate = () => {
-    setShowMenu(false);
     setShowUpdateModal(true);
   };
 
@@ -95,7 +95,6 @@ function TaskDetailsScreen({ navigation, route }) {
   };
 
   const handleDelete = () => {
-    setShowMenu(false);
     Alert.alert(
       "Delete Task",
       "Are you sure you want to delete this task?",
@@ -136,9 +135,7 @@ function TaskDetailsScreen({ navigation, route }) {
     );
   };
 
-  const handleCloseMenu = () => {
-    setShowMenu(false);
-  };
+
 
   if (!task) {
     return (
@@ -149,88 +146,106 @@ function TaskDetailsScreen({ navigation, route }) {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <View className="flex-1 bg-gray-50">
       <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
       
-      {/* Header */}
-
-
       <View 
         className="flex-1" 
         style={{ 
           paddingBottom: bottomSpacing,
-          paddingTop: topSpacing + 20
+          paddingTop: 20
         }}
       >
         {/* Task Title Card */}
         <View style={{ marginHorizontal: 24, marginBottom: cardSpacing }}>
-          <TouchableWithoutFeedback onPress={handleCloseMenu}>
-            <View style={{ 
-              backgroundColor: 'white', 
-              borderRadius: 16, 
-              padding: isLargeScreen ? 24 : 20, 
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: 0.05,
-              shadowRadius: 2,
-              elevation: 2,
-              borderWidth: 1,
-              borderColor: '#f3f4f6'
-            }}>
-              <View className="flex-row items-center mb-4">
-                <View className="w-12 h-12 rounded-xl bg-blue-100 items-center justify-center mr-4">
-                  <Ionicons name="document-text" size={24} color="#3B82F6" />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-medium text-blue-600 mb-1">TASK TITLE</Text>
-                  <Text className="text-xl font-bold text-gray-900 leading-tight">
-                    {task.title || "Untitled Task"}
-                  </Text>
-                </View>
-                {userRole !== 'Employee' && (
-                  <TouchableOpacity 
-                    onPress={() => setShowMenu(!showMenu)}
-                    className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center"
-                  >
-                    <Ionicons name="ellipsis-vertical" size={16} color="#374151" />
-                  </TouchableOpacity>
-                )}
+          <View style={{ 
+            backgroundColor: 'white', 
+            borderRadius: 16, 
+            padding: isLargeScreen ? 24 : 20, 
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.05,
+            shadowRadius: 2,
+            elevation: 2,
+            borderWidth: 1,
+            borderColor: '#f3f4f6'
+          }}>
+            <View className="flex-row items-center mb-4">
+              <View className="w-12 h-12 rounded-xl bg-blue-100 items-center justify-center mr-4">
+                <Ionicons name="document-text" size={24} color="#3B82F6" />
               </View>
-
-              {/* Menu Options */}
-              {showMenu && (
-                <View className="absolute top-16 right-6 bg-white rounded-lg shadow-lg border border-gray-200 z-10 min-w-[120px]">
-                  <TouchableOpacity 
-                    onPress={handleUpdate}
-                    className="flex-row items-center px-4 py-3 border-b border-gray-100"
-                  >
-                    <Ionicons name="create-outline" size={16} color="#3B82F6" style={{ marginRight: 8 }} />
-                    <Text className="text-sm font-medium text-gray-700">Update</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    onPress={handleDelete}
-                    className="flex-row items-center px-4 py-3"
-                  >
-                    <Ionicons name="trash-outline" size={16} color="#EF4444" style={{ marginRight: 8 }} />
-                    <Text className="text-sm font-medium text-red-500">Delete</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-              
-              {task.description && (
-                <View className="pt-4 border-t border-gray-100">
-                  <Text className="text-sm font-medium text-gray-600 mb-2">DESCRIPTION</Text>
-                  <Text className="text-base text-gray-700 leading-relaxed">
-                    {task.description}
-                  </Text>
-                </View>
+              <View className="flex-1">
+                <Text className="text-sm font-medium text-blue-600 mb-1">TASK TITLE</Text>
+                <Text className="text-xl font-bold text-gray-900 leading-tight">
+                  {task.title || "Untitled Task"}
+                </Text>
+              </View>
+              {userRole !== 'Employee' && (
+                <Menu rendererProps={{ placement: 'bottom-end', anchorStyle: { marginRight: 0 } }}>
+                  <MenuTrigger>
+                    <View style={{ activeOpacity: 1 }}>
+                      <Ionicons name="ellipsis-vertical" size={16} color="#374151" />
+                    </View>
+                  </MenuTrigger>
+                  <MenuOptions customStyles={{
+                    optionsContainer: {
+                      backgroundColor: 'white',
+                      borderRadius: 8,
+                      padding: 8,
+                      width: 120,
+                      marginRight: -20,
+                      shadowColor: "#000",
+                      shadowOpacity: 0.15,
+                      shadowRadius: 6,
+                      shadowOffset: { width: 0, height: 3 },
+                      elevation: 3,
+                    }
+                  }}>
+                    <MenuOption onSelect={handleUpdate} customStyles={{
+                      optionWrapper: {
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingVertical: 10,
+                        paddingHorizontal: 16,
+                        borderRadius: 4,
+                      }
+                    }}>
+                      <Ionicons name="create-outline" size={18} color="#000" />
+                      <Text style={{ marginLeft: 10, fontSize: 14, fontWeight: '600', color: 'black' }}>
+                        Update
+                      </Text>
+                    </MenuOption>
+                    <MenuOption onSelect={handleDelete} customStyles={{
+                      optionWrapper: {
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingVertical: 10,
+                        paddingHorizontal: 16,
+                        borderRadius: 4,
+                      }
+                    }}>
+                      <Ionicons name="trash-outline" size={18} color="#dc3545" />
+                      <Text style={{ marginLeft: 10, fontSize: 14, fontWeight: '600', color: '#dc3545' }}>
+                        Delete
+                      </Text>
+                    </MenuOption>
+                  </MenuOptions>
+                </Menu>
               )}
             </View>
-          </TouchableWithoutFeedback>
+            
+            {task.description && (
+              <View className="pt-4 border-t border-gray-100">
+                <Text className="text-sm font-medium text-gray-600 mb-2">DESCRIPTION</Text>
+                <Text className="text-base text-gray-700 leading-relaxed">
+                  {task.description}
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Task Details Grid */}
-        <TouchableWithoutFeedback onPress={handleCloseMenu}>
           <View style={{ marginHorizontal: 24, marginBottom: cardSpacing }}>
             <View style={{ 
               backgroundColor: 'white', 
@@ -340,7 +355,6 @@ function TaskDetailsScreen({ navigation, route }) {
               </View>
             </View>
           </View>
-        </TouchableWithoutFeedback>
 
         {/* Bottom Spacing */}
         <View style={{ height: bottomSpacing }} />
@@ -388,7 +402,7 @@ function TaskDetailsScreen({ navigation, route }) {
       
       {/* Bottom Navigation */}
       <CustomBottomNav navigation={navigation} />
-    </SafeAreaView>
+    </View>
   );
 }
 
