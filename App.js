@@ -79,15 +79,15 @@ export default function App() {
         if (state !== undefined) {
           setInitialState(state);
         }
+      } catch (error) {
+        console.log('Error restoring navigation state:', error);
       } finally {
         setIsReady(true);
       }
     };
 
-    if (!isReady) {
-      restoreState();
-    }
-  }, [isReady]);
+    restoreState();
+  }, []); // Remove isReady dependency to prevent infinite loop
 
   const onStateChange = (state) => {
     return AsyncStorage.setItem(PERSISTENCE_KEY, JSON.stringify(state));
