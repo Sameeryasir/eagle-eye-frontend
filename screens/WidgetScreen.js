@@ -446,7 +446,7 @@ function WidgetScreen({ navigation, route }) {
       <CustomBottomNav
         onAddPress={() => {
           if (userRole === "Employee") {
-            Alert.alert("Access Denied", "Employees cannot create tasks.");
+            // Do nothing - no alert, no action
             return;
           }
 
