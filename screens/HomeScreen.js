@@ -25,6 +25,7 @@ import Header from "../components/Header";
 import { getMyProjects } from "../services/projects/getProjectsByLoginUserId";
 import { deleteProjectById } from "../services/projects/deleteProjectById";
 import Loader from "../services/utils/loader";
+import { getUserRole } from "../services/utils/userRole";
 
 const searchBarClasses = `flex-row items-center rounded-2xl px-4 py-3 bg-[#F8FAFC] border border-[#EAECF0]`;
 
@@ -76,6 +77,7 @@ function HomeScreen({ navigation }) {
     useState(false);
   const [updateProjectModalVisible, setUpdateProjectModalVisible] =
     useState(false);
+  const [userRole, setUserRole] = useState(null);
   const { width: screenWidth } = useWindowDimensions();
 
   const numColumns = screenWidth >= 1024 ? 3 : screenWidth >= 768 ? 2 : 1;
@@ -94,6 +96,27 @@ function HomeScreen({ navigation }) {
       }
     }, [projects.length])
   );
+
+  // Get user role and disable swipe back for admin/owner
+  useEffect(() => {
+    const loadUserRole = async () => {
+      const role = await getUserRole();
+      setUserRole(role);
+      
+      // Disable swipe back gesture for admin or owner
+      if (role === 'Admin' || role === 'Owner') {
+        navigation.setOptions({
+          gestureEnabled: false,
+        });
+      } else {
+        navigation.setOptions({
+          gestureEnabled: true,
+        });
+      }
+    };
+    
+    loadUserRole();
+  }, [navigation]);
 
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
@@ -236,7 +259,11 @@ function HomeScreen({ navigation }) {
         >
           {project.name}
         </Text>
-        <Menu rendererProps={{ placement: 'bottom-end', anchorStyle: { marginRight: 0 } }}>
+        <Menu rendererProps={{ 
+          placement: 'bottom-end', 
+          anchorStyle: { marginRight: 0 },
+          triggerStyle: { marginRight: 0 }
+        }}>
           <MenuTrigger>
             <View style={{ activeOpacity: 1 }}>
               <Ionicons name="ellipsis-vertical" size={20} color="white" />
@@ -248,7 +275,8 @@ function HomeScreen({ navigation }) {
               borderRadius: 8,
               padding: 8,
               width: 120,
-              marginRight: -20,
+              marginRight: -40,
+              marginTop: 15,
               shadowColor: "#000",
               shadowOpacity: 0.15,
               shadowRadius: 6,

@@ -181,7 +181,11 @@ function TaskDetailsScreen({ navigation, route }) {
                 </Text>
               </View>
               {userRole !== 'Employee' && (
-                <Menu rendererProps={{ placement: 'bottom-end', anchorStyle: { marginRight: 0 } }}>
+                <Menu rendererProps={{ 
+                  placement: 'bottom-end', 
+                  anchorStyle: { marginRight: 0 },
+                  triggerStyle: { marginRight: 0 }
+                }}>
                   <MenuTrigger>
                     <View style={{ activeOpacity: 1 }}>
                       <Ionicons name="ellipsis-vertical" size={16} color="#374151" />
@@ -193,7 +197,8 @@ function TaskDetailsScreen({ navigation, route }) {
                       borderRadius: 8,
                       padding: 8,
                       width: 120,
-                      marginRight: -20,
+                      marginRight: -40,
+                      marginTop: 15,
                       shadowColor: "#000",
                       shadowOpacity: 0.15,
                       shadowRadius: 6,

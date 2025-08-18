@@ -10,9 +10,11 @@ import {
   Keyboard,
   Modal,
   TouchableWithoutFeedback,
+  FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import DropDownPicker from "react-native-dropdown-picker";
 import { updateTask } from '../../services/tasks/updateTaskById';
 import { getEmployeesToAssignTask } from '../../services/employees/getEmployeesOfTheCompany';
 
@@ -38,10 +40,10 @@ export default function UpdateTaskModal({
   const [isLoading, setIsLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [employees, setEmployees] = useState([]);
-  const [showAssignedDropdown, setShowAssignedDropdown] = useState(false);
-  const [employeeSearchTerm, setEmployeeSearchTerm] = useState("");
   const [filteredEmployees, setFilteredEmployees] = useState([]);
-  const [showPriorityDropdown, setShowPriorityDropdown] = useState(false);
+  const [priorityOpen, setPriorityOpen] = useState(false);
+  const [showAssignedDropdown, setShowAssignedDropdown] = useState(false);
+  const [isDropdownInteracting, setIsDropdownInteracting] = useState(false);
   const [priorityOptions] = useState([
     { id: 'low', label: 'Low', color: '#10B981' },
     { id: 'medium', label: 'Medium', color: '#F59E0B' },
@@ -108,8 +110,6 @@ export default function UpdateTaskModal({
   };
 
   const handleEmployeeSearch = (text) => {
-    setEmployeeSearchTerm(text);
-
     if (text.trim() === "") {
       setFilteredEmployees(employees);
     } else {
@@ -131,6 +131,30 @@ export default function UpdateTaskModal({
 
       setFilteredEmployees(filtered);
     }
+  };
+
+  // Function to handle dropdown opening
+  const openDropdown = (dropdownType) => {
+    // Close keyboard when opening any dropdown
+    Keyboard.dismiss();
+    
+    // Close all other dropdowns
+    setShowAssignedDropdown(false);
+    setPriorityOpen(false);
+    
+    // Open the selected dropdown
+    if (dropdownType === 'priority') {
+      setPriorityOpen(true);
+    } else if (dropdownType === 'assigned') {
+      setShowAssignedDropdown(true);
+    }
+  };
+
+  // Function to close all dropdowns
+  const closeAllDropdowns = () => {
+    setShowAssignedDropdown(false);
+    setPriorityOpen(false);
+    setIsDropdownInteracting(false);
   };
 
   const handleInputChange = (field, value) => {
@@ -331,6 +355,7 @@ export default function UpdateTaskModal({
 
   const dismissKeyboard = () => {
     Keyboard.dismiss();
+    closeAllDropdowns();
   };
 
   return (
@@ -349,294 +374,318 @@ export default function UpdateTaskModal({
           </TouchableOpacity>
         </View>
         
-        <View className="flex-1 p-5 items-center">
-          <ScrollView
-            className="flex-1 w-full max-w-md"
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 20 }}
-            keyboardShouldPersistTaps="handled"
-          >
-            <View className="mb-8 items-center">
-              <Text className="text-[28px] font-bold text-[#333]">Update Task</Text>
-              <Text className="text-[16px] text-[#666] text-center">Modify the task details below</Text>
-            </View>
+        <TouchableWithoutFeedback onPress={dismissKeyboard}>
+          <View className="flex-1 p-5 items-center">
+            <FlatList
+              className="flex-1 w-full max-w-md"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 20 }}
+              keyboardShouldPersistTaps="handled"
+              scrollEnabled={!isDropdownInteracting}
+              data={[{ key: 'form' }]}
+              renderItem={() => (
+              <View>
+                <View className="mb-8 items-center">
+                  <Text className="text-[28px] font-bold text-[#333]">Update Task</Text>
+                  <Text className="text-[16px] text-[#666] text-center">Modify the task details below</Text>
+                </View>
 
-            <View className="mb-5">
-              {/* Task Title */}
-              <View className="mb-5">
-                <View className="flex-row items-center mb-2">
-                  <Ionicons name="document-text" size={16} color="#374151" style={{ marginRight: 6 }} />
-                  <Text className="text-[16px] font-semibold text-[#333]">Task Title *</Text>
-                </View>
-                <TextInput
-                  className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333]"
-                  placeholder="Enter task title"
-                  value={taskData.title}
-                  onChangeText={(value) => handleInputChange('title', value)}
-                  placeholderTextColor="#999"
-                  returnKeyType="next"
-                />
-              </View>
-
-              {/* Task Description */}
-              <View className="mb-5">
-                <View className="flex-row items-center mb-2">
-                  <Ionicons name="chatbubble-ellipses" size={16} color="#374151" style={{ marginRight: 6 }} />
-                  <Text className="text-[16px] font-semibold text-[#333]">Description *</Text>
-                </View>
-                <TextInput
-                  className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333] h-24"
-                  placeholder="Describe your task"
-                  value={taskData.description}
-                  onChangeText={(value) => handleInputChange('description', value)}
-                  multiline
-                  numberOfLines={4}
-                  placeholderTextColor="#999"
-                  returnKeyType="next"
-                  style={{ textAlignVertical: 'top' }}
-                />
-              </View>
-
-              {/* Priority Dropdown */}
-              <View className="mb-5">
-                <View className="flex-row items-center mb-2">
-                  <Ionicons name="flag" size={16} color="#374151" style={{ marginRight: 6 }} />
-                  <Text className="text-[16px] font-semibold text-[#333]">Priority</Text>
-                </View>
-                <TouchableOpacity
-                  className="flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                  onPress={() => {
-                    setShowPriorityDropdown(!showPriorityDropdown);
-                    setShowAssignedDropdown(false); // Close assigned dropdown
-                  }}
-                >
-                  <Text className={`text-[16px] ${taskData.priority ? "text-[#333]" : "text-[#9ca3af]"}`}>
-                    {taskData.priority ? priorityOptions.find(p => p.id === taskData.priority)?.label : "Select Priority"}
-                  </Text>
-                  <Ionicons 
-                    name={showPriorityDropdown ? "chevron-up" : "chevron-down"} 
-                    size={16} 
-                    color="#6b7280" 
-                  />
-                </TouchableOpacity>
-              </View>
-
-              {/* Assigned Employee Dropdown */}
-              <View className="mb-5">
-                <View className="flex-row items-center mb-2">
-                  <Ionicons name="person" size={16} color="#374151" style={{ marginRight: 6 }} />
-                  <Text className="text-[16px] font-semibold text-[#333]">Assigned To</Text>
-                </View>
-                <TouchableOpacity
-                  className="flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                  onPress={() => {
-                    setShowAssignedDropdown(!showAssignedDropdown);
-                    setShowPriorityDropdown(false); // Close priority dropdown
-                  }}
-                >
-                  <Text className={`text-[16px] ${taskData.assignedTo ? "text-[#333]" : "text-[#9ca3af]"}`}>
-                    {taskData.assignedTo
-                      ? `${taskData.assignedTo.first_name || ""} ${taskData.assignedTo.last_name || ""}`.trim() ||
-                        taskData.assignedTo.email
-                      : "Select Employee"}
-                  </Text>
-                  <Ionicons 
-                    name={showAssignedDropdown ? "chevron-up" : "chevron-down"} 
-                    size={16} 
-                    color="#6b7280" 
-                  />
-                </TouchableOpacity>
-              </View>
-
-              {/* Start Date & Time */}
-              <View className="mb-5">
-                <View className="flex-row items-center mb-2">
-                  <Ionicons name="time" size={16} color="#374151" style={{ marginRight: 6 }} />
-                  <Text className="text-[16px] font-semibold text-[#333]">Start Date & Time *</Text>
-                </View>
-                <View className="flex-row gap-2">
-                  <TouchableOpacity
-                    className="flex-[2] flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                    onPress={() => setShowStartDatePicker(true)}
-                  >
-                    <Text className="text-[16px] text-[#333] font-medium">
-                      {startDateTime.toLocaleDateString()}
-                    </Text>
-                    <Ionicons name="calendar-outline" size={16} color="#666" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    className="flex-1 flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                    onPress={() => setShowStartTimePicker(true)}
-                  >
-                    <Text className="text-[16px] text-[#333] font-medium">
-                      {startDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
-                    <Ionicons name="time-outline" size={16} color="#666" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* End Date & Time */}
-              <View className="mb-5">
-                <View className="flex-row items-center mb-2">
-                  <Ionicons name="calendar" size={16} color="#374151" style={{ marginRight: 6 }} />
-                  <Text className="text-[16px] font-semibold text-[#333]">End Date & Time *</Text>
-                </View>
-                <View className="flex-row gap-2">
-                  <TouchableOpacity
-                    className="flex-[2] flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                    onPress={() => setShowEndDatePicker(true)}
-                  >
-                    <Text className="text-[16px] text-[#333] font-medium">
-                      {endDateTime.toLocaleDateString()}
-                    </Text>
-                    <Ionicons name="calendar-outline" size={16} color="#666" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    className="flex-1 flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                    onPress={() => setShowEndTimePicker(true)}
-                  >
-                    <Text className="text-[16px] text-[#333] font-medium">
-                      {endDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
-                    <Ionicons name="time-outline" size={16} color="#666" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          </ScrollView>
-        </View>
-
-        {/* Dropdowns */}
-        {showAssignedDropdown && (
-          <View 
-            className="absolute bg-white border border-gray-300 rounded-lg shadow-lg"
-            style={{
-              top: 545,
-              left: 20,
-              right: 20,
-              maxHeight: 180,
-              elevation: 999999,
-              zIndex: 999999,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.25,
-              shadowRadius: 3.84,
-            }}
-          >
-            {/* Search Bar */}
-            <View className="p-2 border-b border-gray-200">
-              <View className="flex-row items-center rounded-lg px-3 py-1.5 bg-gray-50 border border-gray-200">
-                <Ionicons
-                  name="search"
-                  size={14}
-                  color="#6B7280"
-                  style={{ marginRight: 6 }}
-                />
-                <TextInput
-                  className="flex-1 text-[13px] text-[#111827]"
-                  placeholder="Search employees..."
-                  placeholderTextColor="#9CA3AF"
-                  value={employeeSearchTerm}
-                  onChangeText={handleEmployeeSearch}
-                  returnKeyType="search"
-                  blurOnSubmit={false}
-                />
-                {employeeSearchTerm.length > 0 && (
-                  <TouchableOpacity onPress={() => handleEmployeeSearch("")} className="ml-2">
-                    <Ionicons name="close-circle" size={14} color="#9CA3AF" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-      
-            <ScrollView 
-              showsVerticalScrollIndicator={true}
-              nestedScrollEnabled={true}
-              style={{ maxHeight: 110 }}
-              contentContainerStyle={{ paddingVertical: 2 }}
-            >
-              {filteredEmployees.length > 0 ? (
-                filteredEmployees.map((employee) => (
-                  <TouchableOpacity
-                    key={employee.id}
-                    className="px-3 py-3 border-b border-gray-100 active:bg-gray-50"
-                                      onPress={() => {
-                    handleInputChange('assignedTo', employee);
-                    setShowAssignedDropdown(false);
-                    setShowPriorityDropdown(false); // Close priority dropdown
-                    setEmployeeSearchTerm("");
-                    setFilteredEmployees(employees);
-                  }}
-                  >
-                    <Text className="text-[15px] text-[#333] font-medium">
-                      {`${employee.first_name || ""} ${employee.last_name || ""}`.trim() ||
-                        employee.email}
-                    </Text>
-                    {employee.email && (
-                      <Text className="text-[12px] text-[#666] mt-1">
-                        {employee.email}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                ))
-              ) : (
-                <View className="px-3 py-4">
-                  <Text className="text-[14px] text-[#666] text-center">
-                    {employeeSearchTerm.trim() !== "" ? "No employees match your search" : "No employees available"}
-                  </Text>
-                </View>
-              )}
-            </ScrollView>
-          </View>
-        )}
-
-        {showPriorityDropdown && (
-          <View 
-            className="absolute bg-white border border-gray-300 rounded-lg shadow-lg"
-            style={{
-              top: 454,
-              left: 20,
-              right: 20,
-              maxHeight: 200,
-              elevation: 999999,
-              zIndex: 999999,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.25,
-              shadowRadius: 3.84,
-            }}
-          >
-            <ScrollView 
-              showsVerticalScrollIndicator={true}
-              nestedScrollEnabled={true}
-              style={{ maxHeight: 160 }}
-              contentContainerStyle={{ paddingVertical: 2 }}
-            >
-              {priorityOptions.map((priority) => (
-                <TouchableOpacity
-                  key={priority.id}
-                  className="px-3 py-3 border-b border-gray-100 active:bg-gray-50"
-                  onPress={() => {
-                    handleInputChange('priority', priority.id);
-                    setShowPriorityDropdown(false);
-                    setShowAssignedDropdown(false); // Close assigned dropdown
-                  }}
-                >
-                  <View className="flex-row items-center">
-                    <View 
-                      className="w-3 h-3 rounded-full mr-3"
-                      style={{ backgroundColor: priority.color }}
+                <View className="mb-5">
+                  {/* Task Title */}
+                  <View className="mb-5">
+                    <View className="flex-row items-center mb-2">
+                      <Ionicons name="document-text" size={16} color="#374151" style={{ marginRight: 6 }} />
+                      <Text className="text-[16px] font-semibold text-[#333]">Task Title *</Text>
+                    </View>
+                    <TextInput
+                      className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333]"
+                      placeholder="Enter task title"
+                      value={taskData.title}
+                      onChangeText={(value) => handleInputChange('title', value)}
+                      placeholderTextColor="#999"
+                      returnKeyType="next"
                     />
-                    <Text className="text-[15px] text-[#333] font-medium">
-                      {priority.label}
-                    </Text>
                   </View>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
+
+                  {/* Task Description */}
+                  <View className="mb-5">
+                    <View className="flex-row items-center mb-2">
+                      <Ionicons name="chatbubble-ellipses" size={16} color="#374151" style={{ marginRight: 6 }} />
+                      <Text className="text-[16px] font-semibold text-[#333]">Description *</Text>
+                    </View>
+                    <TextInput
+                      className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333] h-24"
+                      placeholder="Describe your task"
+                      value={taskData.description}
+                      onChangeText={(value) => handleInputChange('description', value)}
+                      multiline
+                      numberOfLines={4}
+                      placeholderTextColor="#999"
+                      returnKeyType="next"
+                      style={{ textAlignVertical: 'top' }}
+                    />
+                  </View>
+
+                  {/* Priority Dropdown */}
+                  <View className="mb-5">
+                    <View className="flex-row items-center mb-2">
+                      <Ionicons name="flag" size={16} color="#374151" style={{ marginRight: 6 }} />
+                      <Text className="text-[16px] font-semibold text-[#333]">Priority</Text>
+                    </View>
+                    <View style={{ zIndex: 9999 }}>
+                      <DropDownPicker
+                        open={priorityOpen}
+                        value={taskData.priority || null}
+                        items={priorityOptions.map((priority) => ({
+                          label: priority.label,
+                          value: priority.id,
+                          icon: () => (
+                            <View
+                              className="w-3 h-3 rounded-full ml-1"
+                              style={{ backgroundColor: priority.color }}
+                            />
+                          ),
+                        }))}
+                        setOpen={(open) => {
+                          if (open) {
+                            openDropdown('priority');
+                          } else {
+                            setPriorityOpen(false);
+                            setIsDropdownInteracting(false);
+                          }
+                        }}
+                        setValue={(callback) => {
+                          const newValue = callback(taskData.priority || null);
+                          handleInputChange('priority', newValue);
+                        }}
+                        placeholder="Select Priority"
+                        placeholderStyle={{
+                          color: "#9ca3af",
+                          fontSize: 16,
+                          fontWeight: "400",
+                        }}
+                        style={{
+                          backgroundColor: "#f8f9fa",
+                          borderColor: "#e1e8ed",
+                          borderRadius: 8,
+                          minHeight: 0,
+                          paddingVertical: 12,
+                          paddingHorizontal: 12,
+                        }}
+                        textStyle={{
+                          fontSize: 16,
+                          color: taskData.priority ? "#333" : "#9ca3af",
+                          fontWeight: "400",
+                        }}
+                        dropDownContainerStyle={{
+                          backgroundColor: "white",
+                          borderColor: "#e5e7eb",
+                          borderRadius: 8,
+                          shadowColor: "#000",
+                          shadowOpacity: 0.15,
+                          shadowRadius: 6,
+                          shadowOffset: { width: 0, height: 3 },
+                          elevation: 999999,
+                          maxHeight: 160,
+                          zIndex: 999999,
+                        }}
+                        listItemContainerStyle={{
+                          height: 40,
+                          paddingHorizontal: 12,
+                        }}
+                        listItemLabelStyle={{
+                          fontSize: 14,
+                          fontWeight: "500",
+                          color: "#333",
+                        }}
+                        arrowIconStyle={{
+                          width: 16,
+                          height: 16,
+                          tintColor: "#6b7280",
+                        }}
+                        showArrowIcon={true}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Assigned Employee Dropdown */}
+                  <View className="mb-5">
+                    <View className="flex-row items-center mb-2">
+                      <Ionicons name="person" size={16} color="#374151" style={{ marginRight: 6 }} />
+                      <Text className="text-[16px] font-semibold text-[#333]">Assigned To</Text>
+                    </View>
+                    <DropDownPicker
+                      open={showAssignedDropdown}
+                      value={taskData.assignedTo?.id || null}
+                      items={filteredEmployees.map((employee) => ({
+                        label: `${employee.first_name || ""} ${employee.last_name || ""}`.trim() || employee.email,
+                        value: employee.id,
+                      }))}
+                      setOpen={(open) => {
+                        if (open) {
+                          // Close priority dropdown if open
+                          setPriorityOpen(false);
+                          setIsDropdownInteracting(true);
+                          // Dismiss keyboard when dropdown opens
+                          Keyboard.dismiss();
+                        } else {
+                          setIsDropdownInteracting(false);
+                        }
+                        setShowAssignedDropdown(open);
+                      }}
+                      setValue={(callback) => {
+                        const newValue = callback(taskData.assignedTo?.id || null);
+                        const selectedEmployee = employees.find(emp => emp.id === newValue);
+                        handleInputChange('assignedTo', selectedEmployee || null);
+                      }}
+                      placeholder="Select Employee"
+                      placeholderStyle={{
+                        color: "#9ca3af",
+                        fontSize: 16,
+                        fontWeight: "400",
+                      }}
+                      style={{
+                        backgroundColor: "#f8f9fa",
+                        borderColor: "#e1e8ed",
+                        borderRadius: 8,
+                        minHeight: 0,
+                        paddingVertical: 12,
+                        paddingHorizontal: 12,
+                      }}
+                      textStyle={{
+                        fontSize: 16,
+                        color: taskData.assignedTo ? "#333" : "#9ca3af",
+                        fontWeight: "400",
+                      }}
+                      dropDownContainerStyle={{
+                        backgroundColor: "white",
+                        borderColor: "#e5e7eb",
+                        borderRadius: 8,
+                        shadowColor: "#000",
+                        shadowOpacity: 0.15,
+                        shadowRadius: 6,
+                        shadowOffset: { width: 0, height: 3 },
+                        elevation: 999999,
+                        maxHeight: 200,
+                        zIndex: 999999,
+                      }}
+                      listMode="SCROLLVIEW"
+                      scrollViewProps={{
+                        nestedScrollEnabled: true,
+                        showsVerticalScrollIndicator: true,
+                        onScrollBeginDrag: () => {
+                          setIsDropdownInteracting(true);
+                        },
+                        onScrollEndDrag: () => {
+                          if (showAssignedDropdown) {
+                            setIsDropdownInteracting(true);
+                          }
+                        },
+                        scrollEventThrottle: 16,
+                        onTouchStart: () => {
+                          setIsDropdownInteracting(true);
+                        },
+                        onTouchEnd: () => {
+                          if (!showAssignedDropdown) {
+                            setIsDropdownInteracting(false);
+                          }
+                        },
+                      }}
+                      listItemContainerStyle={{
+                        height: 40,
+                        paddingHorizontal: 12,
+                      }}
+                      listItemLabelStyle={{
+                        fontSize: 14,
+                        fontWeight: "500",
+                        color: "#333",
+                      }}
+                      arrowIconStyle={{
+                        width: 16,
+                        height: 16,
+                        tintColor: "#6b7280",
+                      }}
+                      showArrowIcon={true}
+                      searchable={true}
+                      searchPlaceholder="Search employees..."
+                      searchTextInputStyle={{
+                        borderColor: "#e5e7eb",
+                        borderRadius: 6,
+                        fontSize: 14,
+                      }}
+                      searchTextInputProps={{
+                        placeholderTextColor: "#9ca3af",
+                      }}
+                      onSearch={(text) => {
+                        handleEmployeeSearch(text);
+                      }}
+                    />
+                  </View>
+
+                  {/* Start Date & Time */}
+                  <View className="mb-5">
+                    <View className="flex-row items-center mb-2">
+                      <Ionicons name="time" size={16} color="#374151" style={{ marginRight: 6 }} />
+                      <Text className="text-[16px] font-semibold text-[#333]">Start Date & Time *</Text>
+                    </View>
+                    <View className="flex-row gap-2">
+                      <TouchableOpacity
+                        className="flex-[2] flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                        onPress={() => setShowStartDatePicker(true)}
+                      >
+                        <Text className="text-[16px] text-[#333] font-medium">
+                          {startDateTime.toLocaleDateString()}
+                        </Text>
+                        <Ionicons name="calendar-outline" size={16} color="#666" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        className="flex-1 flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                        onPress={() => setShowStartTimePicker(true)}
+                      >
+                        <Text className="text-[16px] text-[#333] font-medium">
+                          {startDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                        <Ionicons name="time-outline" size={16} color="#666" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* End Date & Time */}
+                  <View className="mb-5">
+                    <View className="flex-row items-center mb-2">
+                      <Ionicons name="calendar" size={16} color="#374151" style={{ marginRight: 6 }} />
+                      <Text className="text-[16px] font-semibold text-[#333]">End Date & Time *</Text>
+                    </View>
+                    <View className="flex-row gap-2">
+                      <TouchableOpacity
+                        className="flex-[2] flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                        onPress={() => setShowEndDatePicker(true)}
+                      >
+                        <Text className="text-[16px] text-[#333] font-medium">
+                          {endDateTime.toLocaleDateString()}
+                        </Text>
+                        <Ionicons name="calendar-outline" size={16} color="#666" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        className="flex-1 flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                        onPress={() => setShowEndTimePicker(true)}
+                      >
+                        <Text className="text-[16px] text-[#333] font-medium">
+                          {endDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                        <Ionicons name="time-outline" size={16} color="#666" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            )}
+            keyExtractor={(item) => item.key}
+          />
+            </View>
+          </TouchableWithoutFeedback>
+
+
 
         {/* Fixed Action Button - Always positioned at bottom */}
         <View className="absolute bottom-0 left-0 right-0 px-5 pt-5 pb-5 bg-transparent items-center">

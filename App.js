@@ -12,7 +12,7 @@ import LogIn from "./screens/LogInScreen";
 import Code from "./screens/OtpScreen";
 import Header from "./components/Header";
 import Sidebar from "./screens/components/Sidebar";
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 
 import HomeScreen from "./screens/HomeScreen";
 import WidgetScreen from "./screens/WidgetScreen";
@@ -62,37 +62,9 @@ const CustomHeaderForScreens = ({ onMenuPress, title = "Screen" }) => {
   );
 };
 
-// Navigation state persistence
-const PERSISTENCE_KEY = 'NAVIGATION_STATE';
-
 export default function App() {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [navigationRef, setNavigationRef] = useState(null);
-  const [isReady, setIsReady] = useState(false);
-  const [initialState, setInitialState] = useState();
-
-  useEffect(() => {
-    const restoreState = async () => {
-      try {
-        const savedStateString = await AsyncStorage.getItem(PERSISTENCE_KEY);
-        const state = savedStateString ? JSON.parse(savedStateString) : undefined;
-        
-        if (state !== undefined) {
-          setInitialState(state);
-        }
-      } finally {
-        setIsReady(true);
-      }
-    };
-
-    if (!isReady) {
-      restoreState();
-    }
-  }, [isReady]);
-
-  const onStateChange = (state) => {
-    return AsyncStorage.setItem(PERSISTENCE_KEY, JSON.stringify(state));
-  };
 
   const handleMenuPress = () => {
     setSidebarVisible(true);
@@ -127,19 +99,15 @@ export default function App() {
     setSidebarVisible(false);
   };
 
-  if (!isReady) {
-    return null; // Or a loading screen
-  }
+
 
   return (
     <AuthProvider>
       <MenuProvider>
         <SafeAreaProvider>
-          <NavigationContainer 
-            ref={setNavigationRef}
-            initialState={initialState}
-            onStateChange={onStateChange}
-          >
+                  <NavigationContainer 
+          ref={setNavigationRef}
+        >
         <Stack.Navigator>
           <Stack.Screen
             name="SignIn"
