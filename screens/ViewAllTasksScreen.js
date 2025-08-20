@@ -88,9 +88,11 @@ function ViewAllTasksScreen({ navigation, route }) {
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
-  const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const [creatingTaskId, setCreatingTaskId] = useState(null);
   const [pendingTimePicker, setPendingTimePicker] = useState(null); // 'start' or 'end'
   const [updateTaskModalVisible, setUpdateTaskModalVisible] = useState(false);
+  const [datePickerValue, setDatePickerValue] = useState(new Date());
+  const [isDateConfirmed, setIsDateConfirmed] = useState(false);
 
   const [employees, setEmployees] = useState([]);
   const [filteredEmployees, setFilteredEmployees] = useState([]);
@@ -174,7 +176,7 @@ function ViewAllTasksScreen({ navigation, route }) {
       title: "",
       description: "",
       startTime: now,
-      endTime: new Date(now.getTime() + 60 * 60 * 1000), // 1 hour later
+      endTime: null, // Let user manually select end time
       assignedTo: null,
       priority: "low",
       isDraft: true,
@@ -210,13 +212,13 @@ function ViewAllTasksScreen({ navigation, route }) {
   const [activeDraftId, setActiveDraftId] = useState(null);
 
   const handleStartDateChange = (event, selectedDate) => {
-    setShowStartDatePicker(false);
-    if (selectedDate && activeDraftId) {
-      const newDate = new Date(selectedDate);
-      const currentDraft = draftTasks.find(
-        (draft) => draft.id === activeDraftId
-      );
+    // Only proceed if user clicked OK (not cancel)
+    if (event.type === 'set' && selectedDate) {
+      setShowStartDatePicker(false);
+      
+      const currentDraft = draftTasks.find((draft) => draft.id === activeDraftId);
       if (currentDraft) {
+        const newDate = new Date(selectedDate);
         // Preserve the current time
         newDate.setHours(currentDraft.startTime.getHours());
         newDate.setMinutes(currentDraft.startTime.getMinutes());
@@ -226,65 +228,101 @@ function ViewAllTasksScreen({ navigation, route }) {
         if (newDate > currentDraft.endTime) {
           updateDraftTask(activeDraftId, "endTime", newDate);
         }
+        
+        // Open time picker after date selection
+        setPendingTimePicker("start");
+        setTimeout(() => setShowStartTimePicker(true), 100);
       }
-      // Automatically open time picker after date selection
-      setPendingTimePicker("start");
-      setTimeout(() => setShowStartTimePicker(true), 100);
+    } else {
+      // User cancelled
+      setShowStartDatePicker(false);
+      setPendingTimePicker(null);
     }
   };
 
   const handleStartTimeChange = (event, selectedDate) => {
-    setShowStartTimePicker(false);
-    setPendingTimePicker(null);
-    if (selectedDate && activeDraftId) {
-      const currentDraft = draftTasks.find(
-        (draft) => draft.id === activeDraftId
-      );
-      if (currentDraft) {
-        const newDate = new Date(currentDraft.startTime);
-        newDate.setHours(selectedDate.getHours());
-        newDate.setMinutes(selectedDate.getMinutes());
-        updateDraftTask(activeDraftId, "startTime", newDate);
+    // Only proceed if user clicked OK (not cancel)
+    if (event.type === 'set' && selectedDate) {
+      setShowStartTimePicker(false);
+      setPendingTimePicker(null);
+      
+      if (activeDraftId) {
+        const currentDraft = draftTasks.find(
+          (draft) => draft.id === activeDraftId
+        );
+        if (currentDraft) {
+          const newDate = new Date(currentDraft.startTime);
+          newDate.setHours(selectedDate.getHours());
+          newDate.setMinutes(selectedDate.getMinutes());
+          updateDraftTask(activeDraftId, "startTime", newDate);
 
-        // Ensure end date is not before start date
-        if (newDate > currentDraft.endTime) {
-          updateDraftTask(activeDraftId, "endTime", newDate);
+          // Ensure end date is not before start date
+          if (newDate > currentDraft.endTime) {
+            updateDraftTask(activeDraftId, "endTime", newDate);
+          }
         }
       }
+    } else {
+      // User cancelled - keep the time picker open
+      // Don't close the picker, let user try again
     }
   };
 
   const handleEndDateChange = (event, selectedDate) => {
-    setShowEndDatePicker(false);
-    if (selectedDate && activeDraftId) {
-      const currentDraft = draftTasks.find(
-        (draft) => draft.id === activeDraftId
-      );
+    // Only proceed if user clicked OK (not cancel)
+    if (event.type === 'set' && selectedDate) {
+      setShowEndDatePicker(false);
+      
+      const currentDraft = draftTasks.find((draft) => draft.id === activeDraftId);
       if (currentDraft) {
         const newDate = new Date(selectedDate);
-        newDate.setHours(currentDraft.endTime.getHours());
-        newDate.setMinutes(currentDraft.endTime.getMinutes());
+        // Set default time to 12:00 PM if endTime is null
+        if (currentDraft.endTime) {
+          newDate.setHours(currentDraft.endTime.getHours());
+          newDate.setMinutes(currentDraft.endTime.getMinutes());
+        } else {
+          newDate.setHours(12, 0, 0, 0); // Default to 12:00 PM
+        }
         updateDraftTask(activeDraftId, "endTime", newDate);
+        
+        // Open time picker after date selection
+        setPendingTimePicker("end");
+        setTimeout(() => setShowEndTimePicker(true), 100);
       }
-      // Automatically open time picker after date selection
-      setPendingTimePicker("end");
-      setTimeout(() => setShowEndTimePicker(true), 100);
+    } else {
+      // User cancelled
+      setShowEndDatePicker(false);
+      setPendingTimePicker(null);
     }
   };
 
   const handleEndTimeChange = (event, selectedDate) => {
-    setShowEndTimePicker(false);
-    setPendingTimePicker(null);
-    if (selectedDate && activeDraftId) {
-      const currentDraft = draftTasks.find(
-        (draft) => draft.id === activeDraftId
-      );
-      if (currentDraft) {
-        const newDate = new Date(currentDraft.endTime);
-        newDate.setHours(selectedDate.getHours());
-        newDate.setMinutes(selectedDate.getMinutes());
-        updateDraftTask(activeDraftId, "endTime", newDate);
+    // Only proceed if user clicked OK (not cancel)
+    if (event.type === 'set' && selectedDate) {
+      setShowEndTimePicker(false);
+      setPendingTimePicker(null);
+      
+      if (activeDraftId) {
+        const currentDraft = draftTasks.find(
+          (draft) => draft.id === activeDraftId
+        );
+        if (currentDraft) {
+          let newDate;
+          if (currentDraft.endTime) {
+            newDate = new Date(currentDraft.endTime);
+          } else {
+            // If no end time set yet, use start time as base
+            newDate = new Date(currentDraft.startTime);
+          }
+          newDate.setHours(selectedDate.getHours());
+          newDate.setMinutes(selectedDate.getMinutes());
+          updateDraftTask(activeDraftId, "endTime", newDate);
+        }
       }
+    } else {
+      // User cancelled
+      setShowEndTimePicker(false);
+      setPendingTimePicker(null);
     }
   };
 
@@ -340,7 +378,7 @@ function ViewAllTasksScreen({ navigation, route }) {
       return;
     }
 
-    setIsCreatingTask(true);
+    setCreatingTaskId(draftTask.id);
 
     try {
       // Prepare the data for API call
@@ -382,7 +420,7 @@ function ViewAllTasksScreen({ navigation, route }) {
 
       Alert.alert("Error", errorMessage);
     } finally {
-      setIsCreatingTask(false);
+      setCreatingTaskId(null);
     }
   };
 
@@ -592,20 +630,20 @@ function ViewAllTasksScreen({ navigation, route }) {
     setSelectedTask(null);
   };
 
-  const renderTaskCard = (task) => {
+  const renderTaskCard = React.useCallback((task) => {
     if (task.isDraft) {
+      const isActiveDropdown = task.id === activeEmployeeDraftId || task.id === activePriorityDraftId;
       return (
         <View
           className="bg-[#f8f9fa] rounded-[8px] p-4 mb-4 border border-[#e9ecef] shadow-sm"
           style={{ 
             overflow: "visible", 
-            zIndex: task.id === activeEmployeeDraftId || task.id === activePriorityDraftId ? 9999 : 1,
+            zIndex: isActiveDropdown ? 9999 : 1,
             position: 'relative'
           }}
         >
           <View style={{ 
             overflow: "visible", 
-            zIndex: task.id === activeEmployeeDraftId || task.id === activePriorityDraftId ? 9999 : 1,
             position: 'relative'
           }}>
             <View className="flex-row justify-between items-center mb-4">
@@ -884,7 +922,7 @@ function ViewAllTasksScreen({ navigation, route }) {
                       }}
                       showArrowIcon={true}
                       arrowIconContainerStyle={{
-                        marginRight: 24,
+                        marginRight: 40,
                       }}
                       searchable={true}
                       searchPlaceholder="Search employees..."
@@ -907,7 +945,10 @@ function ViewAllTasksScreen({ navigation, route }) {
               <TouchableOpacity
                 className="mb-3"
                 onPress={() => {
+                  Keyboard.dismiss();
                   setActiveDraftId(task.id);
+                  setDatePickerValue(task.startTime);
+                  setIsDateConfirmed(false);
                   setShowStartDatePicker(true);
                 }}
               >
@@ -936,7 +977,10 @@ function ViewAllTasksScreen({ navigation, route }) {
               <TouchableOpacity
                 className="mb-3"
                 onPress={() => {
+                  Keyboard.dismiss();
                   setActiveDraftId(task.id);
+                  setDatePickerValue(task.endTime || task.startTime);
+                  setIsDateConfirmed(false);
                   setShowEndDatePicker(true);
                 }}
               >
@@ -966,16 +1010,16 @@ function ViewAllTasksScreen({ navigation, route }) {
             <View className="mt-3">
               <View className="items-center">
                 <TouchableOpacity
-                  className={`bg-black py-2 px-6 rounded-lg shadow-sm ${isCreatingTask ? "opacity-60" : "active:opacity-80"}`}
+                  className={`bg-black py-2 px-6 rounded-lg shadow-sm ${creatingTaskId === task.id ? "opacity-60" : "active:opacity-80"}`}
                   style={{
                     minWidth: 120,
                     alignItems: "center",
                     justifyContent: "center",
                   }}
                   onPress={() => handleCreateTaskFromDraft(task)}
-                  disabled={isCreatingTask}
+                  disabled={creatingTaskId === task.id}
                 >
-                  {isCreatingTask ? (
+                  {creatingTaskId === task.id ? (
                     <ActivityIndicator color="white" size="small" />
                   ) : (
                     <Text className="text-white text-[15px] font-semibold tracking-[0.3px] ">
@@ -1122,68 +1166,11 @@ function ViewAllTasksScreen({ navigation, route }) {
                 </View>
               </View>
             )}
-
-            <View className="mb-3">
-              <View className="flex-row items-start">
-                <View className="flex-row items-center mr-3 min-w-[70px]">
-                  <Ionicons
-                    name="flag"
-                    size={14}
-                    color="#374151"
-                    style={{ marginRight: 4 }}
-                  />
-                  <Text className="text-[15px] text-black font-semibold tracking-[0.3px]">
-                    Priority:
-                  </Text>
-                </View>
-                <View className="flex-1 flex-row items-center">
-                  {task.priority ? (
-                    <>
-                      <View
-                        className="w-3 h-3 rounded-full mr-2"
-                        style={{
-                          backgroundColor:
-                            priorityOptions.find((p) => p.id === task.priority)
-                              ?.color || "#6b7280",
-                        }}
-                      />
-                      <Text className="text-[15px] text-[#333] leading-6">
-                        {priorityOptions.find((p) => p.id === task.priority)
-                          ?.label || task.priority}
-                      </Text>
-                    </>
-                  ) : (
-                    <Text className="text-[15px] text-[#666] leading-6">
-                      Not set
-                    </Text>
-                  )}
-                </View>
-              </View>
-            </View>
-
-            <View className="mb-3">
-              <View className="flex-row items-start">
-                <View className="flex-row items-center mr-3 min-w-[85px]">
-                  <Ionicons
-                    name="time"
-                    size={14}
-                    color="#374151"
-                    style={{ marginRight: 4 }}
-                  />
-                  <Text className="text-[15px] text-black font-semibold tracking-[0.3px]">
-                    Start Date:
-                  </Text>
-                </View>
-                <Text className="flex-1 text-[15px] text-[#333] leading-6">
-                  {formatDateTime(task.startTime)}
-                </Text>
-              </View>
-            </View>
           </View>
         </View>
       </TouchableOpacity>
     );
-  };
+  }, [activeEmployeeDraftId, activePriorityDraftId, creatingTaskId, draftTasks, employees, filteredEmployees, priorityOpen, employeeOpen, isDropdownInteracting, userRole, updateDraftTask, removeDraftTask, handleCreateTaskFromDraft, handleEmployeeSearch, navigation]);
 
   const renderContent = () => (
     <FlatList
@@ -1192,7 +1179,11 @@ function ViewAllTasksScreen({ navigation, route }) {
       contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
-      scrollEnabled={!isDropdownInteracting}
+      scrollEnabled={true}
+      removeClippedSubviews={true}
+      maxToRenderPerBatch={10}
+      windowSize={10}
+      initialNumToRender={5}
       ListHeaderComponent={
         <SearchBarHeader searchTerm={searchTerm} onChange={handleSearch} />
       }
@@ -1268,12 +1259,7 @@ function ViewAllTasksScreen({ navigation, route }) {
       {/* Date and Time Pickers */}
       {showStartDatePicker && (
         <DateTimePicker
-          value={
-            activeDraftId
-              ? draftTasks.find((draft) => draft.id === activeDraftId)
-                  ?.startTime || new Date()
-              : new Date()
-          }
+          value={datePickerValue}
           mode="date"
           onChange={handleStartDateChange}
           minimumDate={new Date()}
@@ -1295,12 +1281,7 @@ function ViewAllTasksScreen({ navigation, route }) {
 
       {showEndDatePicker && (
         <DateTimePicker
-          value={
-            activeDraftId
-              ? draftTasks.find((draft) => draft.id === activeDraftId)
-                  ?.endTime || new Date()
-              : new Date()
-          }
+          value={datePickerValue}
           mode="date"
           onChange={handleEndDateChange}
           minimumDate={

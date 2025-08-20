@@ -6,10 +6,14 @@ import {
   ScrollView,
   StatusBar,
   Alert,
+  Image,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
 import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
@@ -20,7 +24,12 @@ import { deleteTaskById } from "../services/tasks/deleteTaskById";
 import { getMyProjects } from "../services/projects/getProjectsByLoginUserId";
 import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
-import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
+import {
+  Menu,
+  MenuOptions,
+  MenuOption,
+  MenuTrigger,
+} from "react-native-popup-menu";
 
 function WidgetScreen({ navigation, route }) {
   const [sidebarVisible, setSidebarVisible] = useState(false);
@@ -36,24 +45,45 @@ function WidgetScreen({ navigation, route }) {
   const mockLogs = [
     {
       id: 1,
-      action: "User Login",
-      user: "admin@example.com",
-      timestamp: "2024-01-12T10:30:00Z",
-      details: "Successful login from IP 192.168.1.100",
+      createdBy: "John Smith",
+      date: "2025-08-13",
+      description: "User logged in successfully from office network",
+      image: require("../assets/robot.png"), // Local image from assets
     },
     {
       id: 2,
-      action: "Project Created",
-      user: "john.doe@example.com",
-      timestamp: "2024-01-12T09:15:00Z",
-      details: "New project 'Eagle Eye Dashboard' created",
+      createdBy: "Sarah Johnson",
+      date: "2025-08-19",
+      description: "New dashboard project created for monitoring",
+      image: require("../assets/robot.png"), // Local image from assets
     },
     {
       id: 3,
-      action: "Task Updated",
-      user: "mike.johnson@example.com",
-      timestamp: "2024-01-12T08:15:00Z",
-      details: "Updated task 'Bug Fix in Login Module' status to In Progress",
+      createdBy: "David Wilson",
+      date: "2025-08-18",
+      description: "Bug fix task status updated to in progress",
+      image: require("../assets/robot.png"), // Local image from assets
+    },
+    {
+      id: 4,
+      createdBy: "Emma Davis",
+      date: "2025-08-18",
+      description: "Project documentation uploaded successfully",
+      image: require("../assets/robot.png"), // Local image from assets
+    },
+    {
+      id: 5,
+      createdBy: "Alex Brown",
+      date: "2025-08-19",
+      description: "Comment added to design review task",
+      image: require("../assets/robot.png"), // Local image from assets
+    },
+    {
+      id: 6,
+      createdBy: "Maria Garcia",
+      date: "2024-08-18",
+      description: "Team meeting scheduled for next week",
+      image: require("../assets/robot.png"), // Local image from assets
     },
   ];
 
@@ -155,18 +185,18 @@ function WidgetScreen({ navigation, route }) {
 
   const handleUpdate = (task) => {
     // Only allow updating tasks if user is not an Employee
-    if (userRole === 'Employee') {
+    if (userRole === "Employee") {
       Alert.alert("Access Denied", "Employees cannot update tasks.");
       return;
     }
 
     // Navigate to task details or update screen
-    navigation.navigate('TaskDetails', { task });
+    navigation.navigate("TaskDetails", { task });
   };
 
   const handleDelete = (task) => {
     // Only allow deleting tasks if user is not an Employee
-    if (userRole === 'Employee') {
+    if (userRole === "Employee") {
       Alert.alert("Access Denied", "Employees cannot delete tasks.");
       return;
     }
@@ -189,7 +219,9 @@ function WidgetScreen({ navigation, route }) {
           onPress: async () => {
             try {
               // Import and use deleteTaskById here
-              const { deleteTaskById } = require("../services/tasks/deleteTaskById");
+              const {
+                deleteTaskById,
+              } = require("../services/tasks/deleteTaskById");
               await deleteTaskById(taskId);
 
               // Refresh the data
@@ -216,8 +248,12 @@ function WidgetScreen({ navigation, route }) {
 
   const TaskWidget = () => (
     <View
-      className="bg-white rounded-[20px] p-[25px] mb-4 mt-2"
       style={{
+        backgroundColor: "white",
+        borderRadius: Math.min(20, screenWidth * 0.05),
+        padding: Math.min(25, screenWidth * 0.06),
+        marginBottom: 16,
+        marginTop: 8,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.12,
@@ -225,15 +261,25 @@ function WidgetScreen({ navigation, route }) {
         elevation: 8,
       }}
     >
-      <View className="flex-row justify-between items-center mb-4">
-        <View className="flex-row items-center">
-          <Ionicons name="list" size={24} color="black" />
-          <Text className="text-[20px] font-extrabold text-[#1a1a1a] ml-2.5 tracking-[0.5px]">
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Ionicons name="list" size={Math.min(24, screenWidth * 0.06)} color="black" />
+          <Text style={{
+            fontSize: Math.min(20, screenWidth * 0.05),
+            fontWeight: "800",
+            color: "#1a1a1a",
+            marginLeft: Math.min(10, screenWidth * 0.025),
+            letterSpacing: 0.5,
+          }}>
             Tasks ({tasks.length})
           </Text>
         </View>
         <TouchableOpacity
-          className={`flex-row items-center ${tasks.length === 0 ? "opacity-70" : ""}`}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            opacity: tasks.length === 0 ? 0.7 : 1,
+          }}
           onPress={() => {
             const navigationParams =
               userRole === "Employee"
@@ -247,19 +293,24 @@ function WidgetScreen({ navigation, route }) {
           disabled={tasks.length === 0}
         >
           <Text
-            className={`text-[14px] font-bold mr-1 ${tasks.length === 0 ? "text-[#ccc]" : "text-black"}`}
+            style={{
+              fontSize: Math.min(14, screenWidth * 0.035),
+              fontWeight: "bold",
+              marginRight: 4,
+              color: tasks.length === 0 ? "#ccc" : "black",
+            }}
           >
             View All
           </Text>
           <Ionicons
             name="chevron-forward"
-            size={16}
+            size={Math.min(16, screenWidth * 0.04)}
             color={tasks.length === 0 ? "#ccc" : "black"}
           />
         </TouchableOpacity>
       </View>
 
-      <View className="h-[160px]">
+      <View style={{ height: Math.min(160, screenHeight * 0.2) }}>
         {tasks && tasks.length > 0 ? (
           <ScrollView
             showsVerticalScrollIndicator={false}
@@ -268,28 +319,55 @@ function WidgetScreen({ navigation, route }) {
             {tasks.slice(0, 4).map((task) => (
               <View
                 key={task.id}
-                className="bg-[#f8f9fa] rounded-[12px] p-3 mb-2 border border-[#e9ecef]"
+                style={{
+                  backgroundColor: "#f8f9fa",
+                  borderRadius: Math.min(12, screenWidth * 0.03),
+                  padding: Math.min(12, screenWidth * 0.03),
+                  marginBottom: 8,
+                  borderWidth: 1,
+                  borderColor: "#e9ecef",
+                }}
               >
-                <View className="flex-row justify-between items-center mb-1.5">
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                   <Text
-                    className="text-[16px] font-bold text-[#333] flex-1 mr-2"
+                    style={{
+                      fontSize: Math.min(16, screenWidth * 0.04),
+                      fontWeight: "bold",
+                      color: "#333",
+                      flex: 1,
+                      marginRight: 8,
+                    }}
                     numberOfLines={1}
                   >
                     {task.title}
                   </Text>
-                  <View className="flex-row items-center">
-                    <Text className="text-[12px] text-[#666] font-medium">
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <Text style={{
+                      fontSize: Math.min(12, screenWidth * 0.03),
+                      color: "#666",
+                      fontWeight: "500",
+                    }}>
                       {formatDate(task.endTime)}
                     </Text>
                   </View>
                 </View>
                 {userRole !== "Employee" && (
-                  <View className="flex-row items-center">
-                    <Ionicons name="person" size={14} color="#666" />
-                    <Text className="text-[13px] text-[#666] font-medium ml-1">
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <Ionicons name="person" size={Math.min(14, screenWidth * 0.035)} color="#666" />
+                    <Text style={{
+                      fontSize: Math.min(13, screenWidth * 0.032),
+                      color: "#666",
+                      fontWeight: "500",
+                      marginLeft: 4,
+                    }}>
                       Assigned:
                     </Text>
-                    <Text className="text-[13px] text-[#666] font-medium ml-1">
+                    <Text style={{
+                      fontSize: Math.min(13, screenWidth * 0.032),
+                      color: "#666",
+                      fontWeight: "500",
+                      marginLeft: 4,
+                    }}>
                       {getAssignedToName(task.assignedTo)}
                     </Text>
                   </View>
@@ -298,12 +376,23 @@ function WidgetScreen({ navigation, route }) {
             ))}
           </ScrollView>
         ) : (
-          <View className="flex-1 justify-center items-center py-10 min-h-[120px]">
-            <Ionicons name="list-outline" size={48} color="#ccc" />
-            <Text className="text-[16px] text-[#666] font-semibold mt-3 mb-1">
+          <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingVertical: Math.min(40, screenHeight * 0.05), minHeight: Math.min(120, screenHeight * 0.15) }}>
+            <Ionicons name="list-outline" size={Math.min(48, screenWidth * 0.12)} color="#ccc" />
+            <Text style={{
+              fontSize: Math.min(16, screenWidth * 0.04),
+              color: "#666",
+              fontWeight: "600",
+              marginTop: 12,
+              marginBottom: 4,
+            }}>
               No tasks found
             </Text>
-            <Text className="text-[14px] text-[#999] font-normal text-center">
+            <Text style={{
+              fontSize: Math.min(14, screenWidth * 0.035),
+              color: "#999",
+              fontWeight: "400",
+              textAlign: "center",
+            }}>
               Tasks will appear here once created
             </Text>
           </View>
@@ -314,8 +403,11 @@ function WidgetScreen({ navigation, route }) {
 
   const LogsWidget = () => (
     <View
-      className="bg-white rounded-[20px] p-5 mb-4"
       style={{
+        backgroundColor: "white",
+        borderRadius: Math.min(20, screenWidth * 0.05),
+        padding: Math.min(20, screenWidth * 0.05),
+        marginBottom: 16,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.12,
@@ -323,22 +415,38 @@ function WidgetScreen({ navigation, route }) {
         elevation: 8,
       }}
     >
-      <View className="flex-row justify-between items-center mb-4">
-        <View className="flex-row items-center">
-          <Ionicons name="document-text" size={24} color="black" />
-          <Text className="text-[20px] font-extrabold text-[#1a1a1a] ml-2.5 tracking-[0.5px]">
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Ionicons name="document-text" size={Math.min(24, screenWidth * 0.06)} color="black" />
+          <Text style={{
+            fontSize: Math.min(20, screenWidth * 0.05),
+            fontWeight: "800",
+            color: "#1a1a1a",
+            marginLeft: Math.min(10, screenWidth * 0.025),
+            letterSpacing: 0.5,
+          }}>
             Activity Logs ({mockLogs.length})
           </Text>
         </View>
-        <TouchableOpacity className="flex-row items-center">
-          <Text className="text-[14px] font-bold text-black mr-1">
+        <TouchableOpacity
+          style={{ flexDirection: "row", alignItems: "center" }}
+          onPress={() =>
+            navigation.navigate("ViewAllLogScreen", { logs: mockLogs })
+          }
+        >
+          <Text style={{
+            fontSize: Math.min(14, screenWidth * 0.035),
+            fontWeight: "bold",
+            color: "black",
+            marginRight: 4,
+          }}>
             View All
           </Text>
-          <Ionicons name="chevron-forward" size={16} color="black" />
+          <Ionicons name="chevron-forward" size={Math.min(16, screenWidth * 0.04)} color="black" />
         </TouchableOpacity>
       </View>
 
-      <View className="h-[200px]">
+      <View style={{ height: Math.min(200, screenHeight * 0.25) }}>
         <ScrollView
           showsVerticalScrollIndicator={false}
           nestedScrollEnabled={true}
@@ -346,35 +454,61 @@ function WidgetScreen({ navigation, route }) {
           {mockLogs.slice(0, 4).map((log) => (
             <View
               key={log.id}
-              className="bg-[#f8f9fa] rounded-2xl p-4 mb-3 border border-[#e9ecef]"
+              style={{
+                backgroundColor: "#f8f9fa",
+                borderRadius: Math.min(12, screenWidth * 0.03),
+                padding: Math.min(12, screenWidth * 0.03),
+                marginBottom: 8,
+                borderWidth: 1,
+                borderColor: "#e9ecef",
+              }}
             >
-              <View className="flex-row justify-between items-center mb-3">
-                <Text className="text-[16px] font-semibold text-[#333]">
-                  {log.action}
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <Text
+                  style={{
+                    fontSize: Math.min(16, screenWidth * 0.04),
+                    fontWeight: "bold",
+                    color: "#333",
+                    flex: 1,
+                    marginRight: 8,
+                  }}
+                  numberOfLines={1}
+                >
+                  {log.description && log.description.length > 20
+                    ? log.description.substring(0, 20) + "..."
+                    : log.description}
                 </Text>
-                <Text className="text-[12px] text-[#666] font-medium">
-                  {formatDateTime(log.timestamp)}
-                </Text>
-              </View>
-
-              <View className="gap-2">
-                <View className="flex-row justify-between items-start">
-                  <Text className="text-[14px] text-[#666] font-medium min-w-[60px]">
-                    User:
-                  </Text>
-                  <Text className="text-[14px] font-semibold text-[#333] flex-1 text-right">
-                    {log.user}
-                  </Text>
-                </View>
-                <View className="flex-row justify-between items-start">
-                  <Text className="text-[14px] text-[#666] font-medium min-w-[60px]">
-                    Details:
-                  </Text>
-                  <Text className="text-[14px] font-semibold text-[#333] flex-1 text-right">
-                    {log.details}
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Text style={{
+                    fontSize: Math.min(12, screenWidth * 0.03),
+                    color: "#666",
+                    fontWeight: "500",
+                  }}>
+                    {log.date}
                   </Text>
                 </View>
               </View>
+              {userRole !== "Employee" && (
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Ionicons name="person" size={Math.min(14, screenWidth * 0.035)} color="#666" />
+                  <Text style={{
+                    fontSize: Math.min(13, screenWidth * 0.032),
+                    color: "#666",
+                    fontWeight: "500",
+                    marginLeft: 4,
+                  }}>
+                    Created by:
+                  </Text>
+                  <Text style={{
+                    fontSize: Math.min(13, screenWidth * 0.032),
+                    color: "#666",
+                    fontWeight: "500",
+                    marginLeft: 4,
+                  }}>
+                    {log.createdBy}
+                  </Text>
+                </View>
+              )}
             </View>
           ))}
         </ScrollView>
@@ -433,7 +567,15 @@ function WidgetScreen({ navigation, route }) {
   return (
     <View className="flex-1 bg-white">
       <StatusBar backgroundColor="#3155A1" barStyle="light-content" />
-      <ScrollView className="flex-1 px-5 py-5 pb-[100px]" style={{ paddingTop: 20 }}>
+      <ScrollView
+        style={{
+          flex: 1,
+          paddingHorizontal: Math.min(20, screenWidth * 0.05),
+          paddingVertical: Math.min(20, screenHeight * 0.025),
+          paddingBottom: 100,
+          paddingTop: 20,
+        }}
+      >
         {renderContent()}
       </ScrollView>
 

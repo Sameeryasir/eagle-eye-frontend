@@ -1,7 +1,7 @@
 import "./global.css"
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { TouchableOpacity, View, TextInput, StatusBar } from "react-native";
+import { TouchableOpacity, View, TextInput, StatusBar, Image } from "react-native";
 import { SafeAreaView, SafeAreaProvider } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState, useEffect } from "react";
@@ -18,6 +18,7 @@ import HomeScreen from "./screens/HomeScreen";
 import WidgetScreen from "./screens/WidgetScreen";
 import CalenderScreen from "./screens/CalenderScreen";
 import ViewAllTasksScreen from "./screens/ViewAllTasksScreen";
+import ViewAllLogScreen from "./screens/ViewAllLogScreen";
 import CreateProjectScreen from "./screens/CreateProjectScreen";
 import CreateTaskScreen from "./screens/CreateTaskScreen";
 import UpdateTaskScreen from "./screens/UpdateTaskScreen";
@@ -177,6 +178,19 @@ export default function App() {
             options={{
               headerShown: true,
               header: () => <CustomHeaderForScreens onMenuPress={handleMenuPress} title="All Tasks" />,
+              headerBackTitleVisible: false,
+              headerStyle: {
+                backgroundColor: 'white',
+              },
+              headerShadowVisible: false,
+            }}
+          />
+          <Stack.Screen
+            name="ViewAllLogScreen"
+            component={ViewAllLogScreen}
+            options={{
+              headerShown: true,
+              header: () => <CustomHeaderForScreens onMenuPress={handleMenuPress} title="All Logs" />,
               headerBackTitleVisible: false,
               headerStyle: {
                 backgroundColor: 'white',

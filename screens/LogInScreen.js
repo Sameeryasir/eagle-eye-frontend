@@ -100,22 +100,55 @@ const LogIn = () => {
             flex: 1,
             justifyContent: "center",
             alignItems: "center",
-            paddingHorizontal: 24,
+            paddingHorizontal: Math.min(24, screenWidth * 0.06),
             paddingTop: Platform.OS === "android" ? -110 : -160,
             backgroundColor: "#FFFFFF",
+            width: "100%",
+            maxWidth: 400,
           }}
         >
-          <Logo width={90} height={90} />
+          <Logo 
+            width={Math.min(90, screenWidth * 0.22)} 
+            height={Math.min(90, screenWidth * 0.22)} 
+          />
 
-          <Text className="text-[28px] font-bold text-center mb-3 text-[#222]">
+          <Text 
+            style={{
+              fontSize: Math.min(28, screenWidth * 0.07),
+              fontWeight: "bold",
+              textAlign: "center",
+              marginBottom: 12,
+              color: "#222",
+              marginTop: 20,
+            }}
+          >
             Login
           </Text>
-          <Text className="text-sm text-[#888] text-center mb-8 leading-5">
+          <Text 
+            style={{
+              fontSize: Math.min(14, screenWidth * 0.035),
+              color: "#888",
+              textAlign: "center",
+              marginBottom: Math.min(32, screenHeight * 0.04),
+              lineHeight: 20,
+              paddingHorizontal: 20,
+            }}
+          >
             Enter your email or phone number to continue.
           </Text>
           <TextInput
             ref={textInputRef}
-            className="w-full h-12 border border-[#E5E5E5] rounded-xl px-4 text-base mb-6 bg-[#F9F9F9]"
+            style={{
+              width: "100%",
+              height: Math.min(48, screenHeight * 0.06),
+              borderWidth: 1,
+              borderColor: "#E5E5E5",
+              borderRadius: 12,
+              paddingHorizontal: 16,
+              fontSize: Math.min(16, screenWidth * 0.04),
+              marginBottom: 24,
+              backgroundColor: "#F9F9F9",
+            }}
             placeholder="Email or Phone Number"
             value={input}
             onChangeText={setInput}
@@ -126,14 +159,28 @@ const LogIn = () => {
             blurOnSubmit={false}
           />
           <TouchableOpacity
-            className={`w-full ${isDisabled ? "bg-[#ccc]" : "bg-[#222]"} py-4 rounded-xl items-center`}
+            style={{
+              width: "100%",
+              backgroundColor: isDisabled ? "#ccc" : "#222",
+              paddingVertical: Math.min(16, screenHeight * 0.02),
+              borderRadius: 12,
+              alignItems: "center",
+            }}
             onPress={handleContinue}
             disabled={isDisabled}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text className="text-white text-lg font-semibold">Continue</Text>
+              <Text 
+                style={{
+                  color: "white",
+                  fontSize: Math.min(18, screenWidth * 0.045),
+                  fontWeight: "600",
+                }}
+              >
+                Continue
+              </Text>
             )}
           </TouchableOpacity>
         </View>
