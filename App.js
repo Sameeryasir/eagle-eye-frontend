@@ -24,6 +24,8 @@ import CreateTaskScreen from "./screens/CreateTaskScreen";
 import UpdateTaskScreen from "./screens/UpdateTaskScreen";
 import UpdateProjectScreen from "./screens/UpdateProjectScreen";
 import TaskDetailsScreen from "./screens/TaskDetailsScreen";
+import LogsDetailScreen from "./screens/LogsDetailScreen";
+import CreatLogScreen from "./screens/CreatLogScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -256,6 +258,32 @@ export default function App() {
             options={{
               headerShown: true,
               header: () => <CustomHeaderForScreens onMenuPress={handleMenuPress} title="Task Details" />,
+              headerBackTitleVisible: false,
+              headerStyle: {
+                backgroundColor: 'white',
+              },
+              headerShadowVisible: false,
+            }}
+          />
+          <Stack.Screen
+            name="LogsDetail"
+            component={LogsDetailScreen}
+            options={{
+              headerShown: true,
+              header: () => <CustomHeaderForScreens onMenuPress={handleMenuPress} title="Log Details" />,
+              headerBackTitleVisible: false,
+              headerStyle: {
+                backgroundColor: 'white',
+              },
+              headerShadowVisible: false,
+            }}
+          />
+          <Stack.Screen
+            name="CreatLog"
+            component={CreatLogScreen}
+            options={{
+              headerShown: true,
+              header: () => <CustomHeaderForScreens onMenuPress={handleMenuPress} title="Create Logs" />,
               headerBackTitleVisible: false,
               headerStyle: {
                 backgroundColor: 'white',

@@ -94,23 +94,70 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   };
 
   const [selectedTimeFilter, setSelectedTimeFilter] = useState("All Time");
+  const [selectedProjectFilter, setSelectedProjectFilter] = useState("All Projects");
   const [filteredLogs, setFilteredLogs] = useState(logs || []);
   const [showTimeDropdown, setShowTimeDropdown] = useState(false);
+  const [showProjectDropdown, setShowProjectDropdown] = useState(false);
 
   const timeFilterOptions = generateDateOptions();
 
+  // Generate unique projects from logs
+  const generateProjectOptions = () => {
+    // Add dummy projects if no logs exist
+    const dummyProjects = [
+      "Project 1",
+      "Project 2", 
+      "Project 3",
+      "Project 4",
+      "Project 5",
+      "Project 6"
+    ];
+
+    if (!logs || logs.length === 0) {
+      return [{ label: "All Projects", value: "All Projects" }, ...dummyProjects.map(project => ({
+        label: project,
+        value: project,
+      }))];
+    }
+
+    const uniqueProjects = [...new Set(logs.map((log) => log.projectName || log.project).filter(Boolean))];
+    
+    // Add dummy projects if no real projects exist
+    if (uniqueProjects.length === 0) {
+      return [{ label: "All Projects", value: "All Projects" }, ...dummyProjects.map(project => ({
+        label: project,
+        value: project,
+      }))];
+    }
+
+    const projectOptions = uniqueProjects.map((projectName) => ({
+      label: projectName,
+      value: projectName,
+    }));
+
+    return [{ label: "All Projects", value: "All Projects" }, ...projectOptions];
+  };
+
+  const projectFilterOptions = generateProjectOptions();
+
   const handleSearch = (query) => {
     setSearchQuery(query);
-    applyFilters(query, selectedTimeFilter);
+    applyFilters(query, selectedTimeFilter, selectedProjectFilter);
   };
 
   const handleTimeFilterChange = (filter) => {
     setSelectedTimeFilter(filter);
     setShowTimeDropdown(false);
-    applyFilters(searchQuery, filter);
+    applyFilters(searchQuery, filter, selectedProjectFilter);
   };
 
-  const applyFilters = (query, timeFilter) => {
+  const handleProjectFilterChange = (filter) => {
+    setSelectedProjectFilter(filter);
+    setShowProjectDropdown(false);
+    applyFilters(searchQuery, selectedTimeFilter, filter);
+  };
+
+  const applyFilters = (query, timeFilter, projectFilter) => {
     let filtered = logs || [];
 
     // Apply time filter
@@ -120,13 +167,22 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       });
     }
 
+    // Apply project filter
+    if (projectFilter && projectFilter !== "All Projects") {
+      filtered = filtered.filter((log) => {
+        const logProject = log.projectName || log.project;
+        return logProject === projectFilter;
+      });
+    }
+
     // Apply search filter
     if (query && query.trim() !== "") {
       filtered = filtered.filter(
         (log) =>
           log.createdBy.toLowerCase().includes(query.toLowerCase()) ||
           log.description.toLowerCase().includes(query.toLowerCase()) ||
-          log.date.includes(query)
+          log.date.includes(query) ||
+          (log.projectName || log.project || "").toLowerCase().includes(query.toLowerCase())
       );
     }
 
@@ -179,19 +235,23 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   };
 
   const LogCard = ({ log }) => (
-    <View style={{
-      backgroundColor: "#f8f9fa",
-      borderRadius: Math.min(8, screenWidth * 0.02),
-      padding: Math.min(16, screenWidth * 0.04),
-      marginBottom: 16,
-      borderWidth: 1,
-      borderColor: "#e9ecef",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.1,
-      shadowRadius: 2,
-      elevation: 2,
-    }}>
+    <TouchableOpacity
+      onPress={() => navigation.navigate('LogsDetail', { log })}
+      style={{
+        backgroundColor: "#f8f9fa",
+        borderRadius: Math.min(8, screenWidth * 0.02),
+        padding: Math.min(16, screenWidth * 0.04),
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: "#e9ecef",
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
+      }}
+      activeOpacity={0.7}
+    >
       <View>
         {userRole !== "Employee" && (
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -227,35 +287,33 @@ const ViewAllLogScreen = ({ route, navigation }) => {
 
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
           <View style={{ flex: 1, marginRight: 12 }}>
-            <View style={{ marginBottom: 12 }}>
-              <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-                <View style={{ flexDirection: "row", alignItems: "center", marginRight: 12, minWidth: Math.min(30, screenWidth * 0.075) }}>
-                  <Text style={{
-                    fontSize: Math.min(15, screenWidth * 0.038),
-                    color: "black",
-                    fontWeight: "600",
-                    letterSpacing: 0.3,
-                  }}>
-                    Note:
-                  </Text>
-                </View>
-                <Text style={{
-                  flex: 1,
-                  fontSize: Math.min(15, screenWidth * 0.038),
-                  color: "#333",
-                  lineHeight: 24,
-                }}>
-                  {userRole === "Employee" 
-                    ? (log.description && log.description.length > 33
-                        ? log.description.substring(0, 33) + "..."
-                        : log.description)
-                    : (log.description && log.description.length > 14
-                        ? log.description.substring(0, 14) + "..."
-                        : log.description)
-                  }
-                </Text>
-              </View>
-            </View>
+            <Text style={{
+              fontSize: Math.min(15, screenWidth * 0.038),
+              color: "#333",
+              lineHeight: 24,
+              marginBottom: 12,
+              flex: 1,
+              flexWrap: 'wrap',
+              wordBreak: 'break-all',
+              overflow: 'hidden',
+            }}>
+              <Text style={{
+                fontSize: Math.min(15, screenWidth * 0.038),
+                color: "black",
+                fontWeight: "600",
+                letterSpacing: 0.3,
+              }}>
+                Note:{" "}
+              </Text>
+              {userRole === "Employee" 
+                ? (log.description && log.description.length > 33
+                    ? log.description.substring(0, 33) + "..."
+                    : log.description)
+                : (log.description && log.description.length > 14
+                    ? log.description.substring(0, 14) + "..."
+                    : log.description)
+              }
+            </Text>
           </View>
 
           <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
@@ -388,7 +446,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
           </View>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   const renderContent = () => (
@@ -405,116 +463,237 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         scrollEnabled={!showTimeDropdown}
       >
       {/* Header Section */}
-      <View style={{ paddingVertical: Math.min(20, screenHeight * 0.025), paddingHorizontal: Math.min(20, screenWidth * 0.05) }}>
-        {/* Time Filter Dropdown */}
-        <View style={{ marginBottom: 16, position: "relative" }}>
-          <TouchableOpacity
-            onPress={() => setShowTimeDropdown(!showTimeDropdown)}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              backgroundColor: "#F8FAFC",
-              borderWidth: 1,
-              borderColor: "#EAECF0",
-              borderRadius: Math.min(16, screenWidth * 0.04),
-              paddingHorizontal: Math.min(16, screenWidth * 0.04),
-              paddingVertical: Math.min(12, screenHeight * 0.015),
-              alignSelf: "center",
-              minWidth: "50%",
-              maxWidth: "95%",
-            }}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Ionicons
-                name="time"
-                size={Math.min(18, screenWidth * 0.045)}
-                color="#6B7280"
-                style={{ marginRight: 8, flexShrink: 0 }}
-              />
-              <Text
-                style={{
-                  fontSize: Math.min(15, screenWidth * 0.038),
-                  color: "#111827",
-                  fontWeight: "500",
-                  flexShrink: 0,
-                }}
-              >
-                {timeFilterOptions.find(
-                  (option) => option.value === selectedTimeFilter
-                )?.label || "All Time"}
-              </Text>
-            </View>
-            <Ionicons
-              name={showTimeDropdown ? "chevron-up" : "chevron-down"}
-              size={Math.min(16, screenWidth * 0.04)}
-              color="#6B7280"
-              style={{ marginLeft: 12, flexShrink: 0 }}
-            />
-          </TouchableOpacity>
-
-          {showTimeDropdown && (
-            <TouchableWithoutFeedback onPress={() => {}}>
-              <View
-                style={{
-                  backgroundColor: "white",
-                  borderWidth: 1,
-                  borderColor: "#EAECF0",
-                  borderRadius: Math.min(16, screenWidth * 0.04),
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.15,
-                  shadowRadius: 8,
-                  elevation: 10,
-                  maxWidth: Math.min(400, screenWidth * 0.9),
-                  position: "absolute",
-                  top: 60,
-                  left: 20,
-                  right: 20,
-                  zIndex: 1000,
-                }}
-              >
-                <ScrollView
-                  style={{ maxHeight: Math.min(192, screenHeight * 0.24) }}
-                  showsVerticalScrollIndicator={true}
-                  indicatorStyle="black"
-                  bounces={false}
-                  nestedScrollEnabled={true}
-                  scrollEventThrottle={16}
-                  onScrollBeginDrag={() => {
-                    // Prevent main scroll when dropdown is being scrolled
-                  }}
-                  onTouchStart={() => {
-                    // Prevent main scroll when touching dropdown
+      <View style={{ paddingVertical: Math.min(20, screenHeight * 0.025) }}>
+        {/* Filter Dropdowns Row */}
+        <View style={{ flexDirection: "row", marginBottom: 16, gap: 12 }}>
+          {/* Time Filter Dropdown */}
+          <View style={{ flex: 1, position: "relative" }}>
+            <TouchableOpacity
+              onPress={() => {
+                setShowTimeDropdown(!showTimeDropdown);
+                setShowProjectDropdown(false);
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                backgroundColor: "#F8FAFC",
+                borderWidth: 1,
+                borderColor: "#EAECF0",
+                borderRadius: Math.min(16, screenWidth * 0.04),
+                paddingHorizontal: Math.min(16, screenWidth * 0.04),
+                paddingVertical: Math.min(12, screenHeight * 0.015),
+                width: "100%",
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Ionicons
+                  name="time"
+                  size={Math.min(18, screenWidth * 0.045)}
+                  color="#6B7280"
+                  style={{ marginRight: 8, flexShrink: 0 }}
+                />
+                <Text
+                  style={{
+                    fontSize: Math.min(15, screenWidth * 0.038),
+                    color: "#111827",
+                    fontWeight: "500",
+                    flexShrink: 0,
                   }}
                 >
-                  {timeFilterOptions.map((option) => (
-                    <TouchableOpacity
-                      key={option.value}
-                      onPress={() => handleTimeFilterChange(option.value)}
-                      style={{
-                        paddingHorizontal: Math.min(16, screenWidth * 0.04),
-                        paddingVertical: Math.min(12, screenHeight * 0.015),
-                        borderBottomWidth: 1,
-                        borderBottomColor: "#F1F5F9",
-                        backgroundColor: selectedTimeFilter === option.value ? "#F0F9FF" : "transparent",
-                      }}
-                    >
-                      <Text
+                  {timeFilterOptions.find(
+                    (option) => option.value === selectedTimeFilter
+                  )?.label || "All Time"}
+                </Text>
+              </View>
+              <Ionicons
+                name={showTimeDropdown ? "chevron-up" : "chevron-down"}
+                size={Math.min(16, screenWidth * 0.04)}
+                color="#6B7280"
+                style={{ marginLeft: 12, flexShrink: 0 }}
+              />
+            </TouchableOpacity>
+
+            {showTimeDropdown && (
+              <TouchableWithoutFeedback onPress={() => {}}>
+                <View
+                  style={{
+                    backgroundColor: "white",
+                    borderWidth: 1,
+                    borderColor: "#EAECF0",
+                    borderRadius: Math.min(12, screenWidth * 0.03),
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 5,
+                    position: "absolute",
+                    top: 50,
+                    left: -10,
+                    right: -10,
+                    zIndex: 1000,
+                    minWidth: Math.min(250, screenWidth * 0.7),
+                  }}
+                >
+                  <ScrollView
+                    style={{ maxHeight: Math.min(150, screenHeight * 0.2) }}
+                    showsVerticalScrollIndicator={true}
+                    indicatorStyle="black"
+                    bounces={false}
+                    nestedScrollEnabled={true}
+                    scrollEventThrottle={16}
+                    onScrollBeginDrag={() => {
+                      // Prevent main scroll when dropdown is being scrolled
+                    }}
+                    onTouchStart={() => {
+                      // Prevent main scroll when touching dropdown
+                    }}
+                  >
+                    {timeFilterOptions.map((option) => (
+                      <TouchableOpacity
+                        key={option.value}
+                        onPress={() => handleTimeFilterChange(option.value)}
                         style={{
-                          fontSize: Math.min(15, screenWidth * 0.038),
-                          color: selectedTimeFilter === option.value ? "#3155A1" : "#111827",
-                          fontWeight: selectedTimeFilter === option.value ? "600" : "400",
+                          paddingHorizontal: Math.min(12, screenWidth * 0.03),
+                          paddingVertical: Math.min(8, screenHeight * 0.01),
+                          borderBottomWidth: 1,
+                          borderBottomColor: "#F1F5F9",
+                          backgroundColor: selectedTimeFilter === option.value ? "#F0F9FF" : "transparent",
                         }}
                       >
-                        {option.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                        <Text
+                          style={{
+                            fontSize: Math.min(13, screenWidth * 0.033),
+                            color: selectedTimeFilter === option.value ? "#3155A1" : "#111827",
+                            fontWeight: selectedTimeFilter === option.value ? "600" : "400",
+                          }}
+                        >
+                          {option.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              </TouchableWithoutFeedback>
+            )}
+          </View>
+
+          {/* Project Filter Dropdown */}
+          <View style={{ flex: 1, position: "relative" }}>
+            <TouchableOpacity
+              onPress={() => {
+                setShowProjectDropdown(!showProjectDropdown);
+                setShowTimeDropdown(false);
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                backgroundColor: "#F8FAFC",
+                borderWidth: 1,
+                borderColor: "#EAECF0",
+                borderRadius: Math.min(16, screenWidth * 0.04),
+                paddingHorizontal: Math.min(16, screenWidth * 0.04),
+                paddingVertical: Math.min(12, screenHeight * 0.015),
+                width: "100%",
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Ionicons
+                  name="folder"
+                  size={Math.min(18, screenWidth * 0.045)}
+                  color="#6B7280"
+                  style={{ marginRight: 8, flexShrink: 0 }}
+                />
+                <Text
+                  style={{
+                    fontSize: Math.min(15, screenWidth * 0.038),
+                    color: "#111827",
+                    fontWeight: "500",
+                    flexShrink: 1,
+                    numberOfLines: 1,
+                    ellipsizeMode: 'tail',
+                  }}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {projectFilterOptions.find(
+                    (option) => option.value === selectedProjectFilter
+                  )?.label || "All Projects"}
+                </Text>
               </View>
-            </TouchableWithoutFeedback>
-          )}
+              <Ionicons
+                name={showProjectDropdown ? "chevron-up" : "chevron-down"}
+                size={Math.min(16, screenWidth * 0.04)}
+                color="#6B7280"
+                style={{ marginLeft: 1, flexShrink: 0 }}
+              />
+            </TouchableOpacity>
+
+            {showProjectDropdown && (
+              <TouchableWithoutFeedback onPress={() => {}}>
+                <View
+                  style={{
+                    backgroundColor: "white",
+                    borderWidth: 1,
+                    borderColor: "#EAECF0",
+                    borderRadius: Math.min(16, screenWidth * 0.04),
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 8,
+                    elevation: 10,
+                    position: "absolute",
+                    top: 60,
+                    left: 0,
+                    right: 0,
+                    zIndex: 1000,
+                  }}
+                >
+                  <ScrollView
+                    style={{ maxHeight: Math.min(192, screenHeight * 0.24) }}
+                    showsVerticalScrollIndicator={true}
+                    indicatorStyle="black"
+                    bounces={false}
+                    nestedScrollEnabled={true}
+                    scrollEventThrottle={16}
+                    onScrollBeginDrag={() => {
+                      // Prevent main scroll when dropdown is being scrolled
+                    }}
+                    onTouchStart={() => {
+                      // Prevent main scroll when touching dropdown
+                    }}
+                  >
+                                         {projectFilterOptions.map((option) => (
+                       <TouchableOpacity
+                         key={option.value}
+                         onPress={() => handleProjectFilterChange(option.value)}
+                         style={{
+                           paddingHorizontal: Math.min(16, screenWidth * 0.04),
+                           paddingVertical: Math.min(14, screenHeight * 0.017),
+                           borderBottomWidth: 1,
+                           borderBottomColor: "#F1F5F9",
+                           backgroundColor: selectedProjectFilter === option.value ? "#F0F9FF" : "transparent",
+                         }}
+                       >
+                         <Text
+                           style={{
+                             fontSize: Math.min(14, screenWidth * 0.035),
+                             color: selectedProjectFilter === option.value ? "#3155A1" : "#111827",
+                             fontWeight: selectedProjectFilter === option.value ? "600" : "400",
+                             numberOfLines: 2,
+                             lineHeight: Math.min(20, screenHeight * 0.025),
+                           }}
+                         >
+                           {option.label}
+                         </Text>
+                       </TouchableOpacity>
+                     ))}
+                  </ScrollView>
+                </View>
+              </TouchableWithoutFeedback>
+            )}
+          </View>
         </View>
 
         {/* Search Bar */}
@@ -529,7 +708,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
             borderWidth: 1,
             borderColor: "#EAECF0",
             width: "100%",
-            maxWidth: Math.min(600, screenWidth * 0.9),
           }}
         >
           <Ionicons

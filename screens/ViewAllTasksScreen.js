@@ -967,7 +967,7 @@ function ViewAllTasksScreen({ navigation, route }) {
                   <View className="flex-1">
                     <Text className="text-[15px] text-[#333] leading-6">
                       {task.startTime
-                        ? `${task.startTime.toLocaleDateString()} ${task.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                        ? `${task.startTime.toLocaleDateString()} ${task.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true })}`
                         : "Not set"}
                     </Text>
                   </View>
@@ -997,10 +997,10 @@ function ViewAllTasksScreen({ navigation, route }) {
                     </Text>
                   </View>
                   <View className="flex-1">
-                    <Text className="text-[15px] text-[#333] leading-6">
+                    <Text className="text-[15px] leading-6" style={{ color: task.endTime ? "#333" : "#9ca3af" }}>
                       {task.endTime
-                        ? `${task.endTime.toLocaleDateString()} ${task.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-                        : "Not set"}
+                        ? `${task.endTime.toLocaleDateString()} ${task.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true })}`
+                        : "No end date selected"}
                     </Text>
                   </View>
                 </View>

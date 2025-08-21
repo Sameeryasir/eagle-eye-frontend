@@ -1,10 +1,11 @@
 import React from "react";
-import { View, TouchableOpacity, Dimensions, Animated } from "react-native";
+import { View, TouchableOpacity, Dimensions, Animated, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { getUserRole } from "../../services/utils/userRole";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
 
 export default function CustomBottomNav({
   keyboardVisible = false,
@@ -32,6 +33,16 @@ export default function CustomBottomNav({
       navigation.navigate("CreateProject");
     } else if (handleFabPress) {
       handleFabPress();
+    } else {
+      // Default behavior - check user role and navigate accordingly
+      const userRole = await getUserRole();
+      if (userRole === "Employee") {
+        navigation.navigate("CreatLog");
+      } else if (userRole === "Manager" || userRole === "Owner" || userRole === "Admin") {
+        // For other roles, you can add default behavior here
+        // For now, we'll just do nothing or you can navigate to a default screen
+        console.log("FAB pressed for role:", userRole);
+      }
     }
   };
 
@@ -63,11 +74,30 @@ export default function CustomBottomNav({
   }
 
   return (
-    <View className="absolute bottom-0 w-full items-center z-[1000]">
+    <View 
+      style={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        zIndex: 1000,
+        backgroundColor: 'transparent',
+      }}
+    >
       {/* Bottom Nav Bar */}
       <View
-        className="flex-row items-center justify-between w-[90%] h-[70px] bg-black rounded-[35px] px-[15px] pb-[5px] mb-5"
         style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: '90%',
+          height: 70,
+          backgroundColor: 'black',
+          borderRadius: 35,
+          paddingHorizontal: 15,
+          paddingBottom: 5,
+          marginBottom: 20,
           shadowColor: "#000",
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: 0.15,
@@ -124,10 +154,23 @@ export default function CustomBottomNav({
       </View>
 
       {/* Floating Action Button */}
-      <View className="absolute bottom-[45px] z-[1001]">
+      <View 
+        style={{
+          position: 'absolute',
+          bottom: 45,
+          zIndex: 1001,
+        }}
+      >
         <TouchableOpacity
-          className="w-[65px] h-[65px] rounded-[32.5px] bg-black justify-center items-center border-[3px] border-white"
           style={{
+            width: 65,
+            height: 65,
+            borderRadius: 32.5,
+            backgroundColor: 'black',
+            justifyContent: 'center',
+            alignItems: 'center',
+            borderWidth: 3,
+            borderColor: 'white',
             shadowColor: "#000",
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.2,
