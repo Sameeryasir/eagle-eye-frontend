@@ -12,6 +12,7 @@ import {
   Platform,
   TouchableWithoutFeedback,
   Modal,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -78,6 +79,7 @@ function HomeScreen({ navigation }) {
   const [updateProjectModalVisible, setUpdateProjectModalVisible] =
     useState(false);
   const [userRole, setUserRole] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   const { width: screenWidth } = useWindowDimensions();
 
   const numColumns = screenWidth >= 1024 ? 3 : screenWidth >= 768 ? 2 : 1;
@@ -87,15 +89,10 @@ function HomeScreen({ navigation }) {
     (screenWidth - horizontalPadding - (numColumns - 1) * interItemSpacing) /
     numColumns;
 
-  useFocusEffect(
-    React.useCallback(() => {
-      if (projects.length === 0) {
-        fetchProjects({ silent: false });
-      } else {
-        fetchProjects({ silent: true });
-      }
-    }, [projects.length])
-  );
+  // Load data on component mount
+  useEffect(() => {
+    fetchProjects({ silent: false });
+  }, []);
 
   // Get user role and disable swipe back for admin/owner
   useEffect(() => {
@@ -134,10 +131,12 @@ function HomeScreen({ navigation }) {
     };
   }, []);
 
-  const fetchProjects = async (options = { silent: false }) => {
-    const { silent } = options;
+  const fetchProjects = async (options = { silent: false, isRefresh: false }) => {
+    const { silent, isRefresh } = options;
     try {
-      if (!silent) {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else if (!silent) {
         setInitialLoading(true);
       }
       setError(null);
@@ -151,11 +150,17 @@ function HomeScreen({ navigation }) {
         setError("Failed to load projects");
       }
     } finally {
-      if (!silent) {
+      if (isRefresh) {
+        setRefreshing(false);
+      } else if (!silent) {
         setInitialLoading(false);
       }
     }
   };
+
+  const onRefresh = React.useCallback(() => {
+    fetchProjects({ silent: true, isRefresh: true });
+  }, []);
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
@@ -339,6 +344,14 @@ function HomeScreen({ navigation }) {
       contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={["#3155A1"]}
+          tintColor="#3155A1"
+        />
+      }
       ListHeaderComponent={
         <SearchBarHeader searchTerm={searchTerm} onChange={handleSearch} />
       }

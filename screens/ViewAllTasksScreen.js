@@ -12,10 +12,10 @@ import {
   TouchableWithoutFeedback,
   ActivityIndicator,
   ScrollView,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
@@ -109,30 +109,19 @@ function ViewAllTasksScreen({ navigation, route }) {
     { id: "critical", label: "Critical", color: "#DC2626" },
   ]);
   const [userRole, setUserRole] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const { projectId, createDraft } = route.params || {};
 
-  useFocusEffect(
-    React.useCallback(() => {
-      console.log("ViewAllTasksScreen - useFocusEffect triggered");
-      console.log(
-        "ViewAllTasksScreen - projectId:",
-        projectId,
-        "createDraft:",
-        createDraft,
-        "userRole:",
-        userRole
-      );
-
-      // Load data regardless of projectId for employees
-      loadProjectData();
-
-      // Only create draft if user is not an Employee and createDraft is true
-      if (userRole && userRole !== "Employee" && createDraft) {
-        handleFabPress();
-      }
-    }, [projectId, createDraft, userRole])
-  );
+  useEffect(() => {
+    // Load data on initial mount
+    loadProjectData();
+    
+    // Only create draft if user is not an Employee and createDraft is true
+    if (createDraft && userRole && userRole !== "Employee") {
+      handleFabPress();
+    }
+  }, [projectId, createDraft, userRole]);
 
   useEffect(() => {
     if (tasks.length > 0) {
@@ -424,9 +413,11 @@ function ViewAllTasksScreen({ navigation, route }) {
     }
   };
 
-  const loadProjectData = async () => {
+  const loadProjectData = async (isRefresh = false) => {
     try {
-      setInitialLoading(true);
+      if (!isRefresh) {
+        setInitialLoading(true);
+      }
       setError(null);
 
       // Get user role first
@@ -479,8 +470,16 @@ function ViewAllTasksScreen({ navigation, route }) {
       console.error("ViewAllTasksScreen - Error loading project data:", err);
       setError("Failed to load project data");
     } finally {
-      setInitialLoading(false);
+      if (!isRefresh) {
+        setInitialLoading(false);
+      }
     }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadProjectData(true);
+    setRefreshing(false);
   };
 
   const formatDateTime = (dateString) => {
@@ -1184,6 +1183,14 @@ function ViewAllTasksScreen({ navigation, route }) {
       maxToRenderPerBatch={10}
       windowSize={10}
       initialNumToRender={5}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={["#3155A1"]}
+          tintColor="#3155A1"
+        />
+      }
       ListHeaderComponent={
         <SearchBarHeader searchTerm={searchTerm} onChange={handleSearch} />
       }
@@ -1197,7 +1204,7 @@ function ViewAllTasksScreen({ navigation, route }) {
               </Text>
               <TouchableOpacity
                 className="bg-[#007AFF] py-3 px-6 rounded-lg"
-                onPress={loadProjectData}
+                onPress={() => loadProjectData()}
               >
                 <Text className="text-white text-[16px] font-semibold">
                   Retry

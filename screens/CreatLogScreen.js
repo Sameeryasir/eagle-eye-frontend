@@ -13,7 +13,10 @@ import {
   ActivityIndicator,
   ScrollView,
   Modal,
+  Dimensions,
 } from "react-native";
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
@@ -240,23 +243,40 @@ function CreatLogScreen({ navigation, route }) {
       <View className="mb-4">
         {/* Task Card */}
         <View
-          className="bg-[#f8f9fa] rounded-[8px] p-4 border border-[#e9ecef] shadow-sm"
+          className="rounded-[8px] border shadow-sm"
+          style={{
+            backgroundColor: isChecked ? '#e5e7eb' : '#f8f9fa',
+            borderColor: '#e9ecef',
+            borderWidth: 1,
+            padding: Math.min(16, screenWidth * 0.04),
+            borderRadius: Math.min(8, screenWidth * 0.02),
+          }}
         >
           <View>
             <View className="flex-row justify-between items-center">
               <View className="flex-row items-center flex-1">
-                <View className="flex-row items-center mr-2 min-w-[70px]">
+                <View className="flex-row items-center mr-2" style={{ minWidth: Math.max(70, screenWidth * 0.17) }}>
                   <Ionicons
                     name="document-text"
-                    size={14}
+                    size={Math.min(14, screenWidth * 0.035)}
                     color="#374151"
                     style={{ marginRight: 4 }}
                   />
-                  <Text className="text-[15px] text-black font-semibold tracking-[0.3px]">
+                  <Text style={{
+                    fontSize: Math.min(15, screenWidth * 0.038),
+                    color: "black",
+                    fontWeight: "600",
+                    letterSpacing: 0.3,
+                  }}>
                     Title:
                   </Text>
                 </View>
-                <Text className="flex-1 text-[15px] text-[#333] leading-6">
+                <Text style={{
+                  flex: 1,
+                  fontSize: Math.min(15, screenWidth * 0.038),
+                  color: "#333",
+                  lineHeight: Math.min(24, screenHeight * 0.03),
+                }}>
                   {log.title}
                 </Text>
               </View>
@@ -264,109 +284,26 @@ function CreatLogScreen({ navigation, route }) {
               {/* Checkbox at the end */}
               <TouchableOpacity
                 onPress={() => handleCheckboxToggle(log.id)}
-                className="ml-3 w-5 h-5 border-2 rounded-lg items-center justify-center"
+                className="ml-3 border-2 rounded-lg items-center justify-center"
                 style={{
                   backgroundColor: isChecked ? '#000000' : 'white',
                   borderColor: isChecked ? '#000000' : '#6B7280',
                   borderWidth: 2,
-                  minWidth: 20,
-                  minHeight: 20
+                  minWidth: Math.max(20, screenWidth * 0.05),
+                  minHeight: Math.max(20, screenWidth * 0.05),
+                  width: Math.max(20, screenWidth * 0.05),
+                  height: Math.max(20, screenWidth * 0.05),
                 }}
               >
                 {isChecked && (
                   <Ionicons
                     name="checkmark"
-                    size={16}
+                    size={Math.min(16, screenWidth * 0.04)}
                     color="white"
                     style={{ fontWeight: 'bold' }}
                   />
                 )}
               </TouchableOpacity>
-              {userRole !== "Employee" && (
-                <Menu
-                  rendererProps={{
-                    placement: "bottom-end",
-                    anchorStyle: { marginRight: 0 },
-                    triggerStyle: { marginRight: 0 },
-                  }}
-                >
-                  <MenuTrigger>
-                    <View style={{ activeOpacity: 1 }}>
-                      <Ionicons
-                        name="ellipsis-vertical"
-                        size={16}
-                        color="#6b7280"
-                      />
-                    </View>
-                  </MenuTrigger>
-                  <MenuOptions
-                    customStyles={{
-                      optionsContainer: {
-                        backgroundColor: "white",
-                        borderRadius: 8,
-                        padding: 8,
-                        width: 120,
-                        marginRight: -40,
-                        marginTop: 15,
-                        shadowColor: "#000",
-                        shadowOpacity: 0.15,
-                        shadowRadius: 6,
-                        shadowOffset: { width: 0, height: 3 },
-                        elevation: 3,
-                      },
-                    }}
-                  >
-                    <MenuOption
-                      onSelect={() => handleUpdate(log)}
-                      customStyles={{
-                        optionWrapper: {
-                          flexDirection: "row",
-                          alignItems: "center",
-                          paddingVertical: 10,
-                          paddingHorizontal: 16,
-                          borderRadius: 4,
-                        },
-                      }}
-                    >
-                      <Ionicons name="create-outline" size={18} color="#000" />
-                      <Text
-                        style={{
-                          marginLeft: 10,
-                          fontSize: 14,
-                          fontWeight: "600",
-                          color: "black",
-                        }}
-                      >
-                        Update
-                      </Text>
-                    </MenuOption>
-                    <MenuOption
-                      onSelect={() => handleDelete(log)}
-                      customStyles={{
-                        optionWrapper: {
-                          flexDirection: "row",
-                          alignItems: "center",
-                          paddingVertical: 10,
-                          paddingHorizontal: 16,
-                          borderRadius: 4,
-                        },
-                      }}
-                    >
-                      <Ionicons name="trash-outline" size={18} color="#dc3545" />
-                      <Text
-                        style={{
-                          marginLeft: 10,
-                          fontSize: 14,
-                          fontWeight: "600",
-                          color: "#dc3545",
-                        }}
-                      >
-                        Delete
-                      </Text>
-                    </MenuOption>
-                  </MenuOptions>
-                </Menu>
-              )}
             </View>
           </View>
         </View>
@@ -380,7 +317,11 @@ function CreatLogScreen({ navigation, route }) {
     <FlatList
       data={filteredLogs}
       keyExtractor={(item) => String(item.id)}
-      contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
+      contentContainerStyle={{ 
+        paddingHorizontal: Math.min(20, screenWidth * 0.05), 
+        paddingTop: Math.min(20, screenHeight * 0.025), 
+        paddingBottom: Math.min(100, screenHeight * 0.125) 
+      }}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
       scrollEnabled={true}
@@ -388,28 +329,25 @@ function CreatLogScreen({ navigation, route }) {
       maxToRenderPerBatch={10}
       windowSize={10}
       initialNumToRender={5}
-      ListHeaderComponent={
-        <View className="px-5 pb-3 pt-5">
-          <TouchableOpacity
-            onPress={() => {
-              if (filteredLogs.length > 0) {
-                const firstLogId = filteredLogs[0].id;
-                handleCheckboxToggle(firstLogId);
-                console.log('Toggling first log:', firstLogId);
-              }
-            }}
-            className="bg-blue-500 py-2 px-4 rounded-lg self-start"
-          >
-            <Text className="text-white font-semibold">Test Checkbox</Text>
-          </TouchableOpacity>
-        </View>
-      }
-      ListHeaderComponentStyle={{ marginHorizontal: -20 }}
+ 
+
       ListFooterComponent={() => (
         checkedTasks.size > 0 ? (
-          <View className="px-5 py-4">
+          <View style={{ 
+            paddingHorizontal: Math.min(20, screenWidth * 0.05), 
+            paddingVertical: Math.min(16, screenHeight * 0.02) 
+          }}>
             <TouchableOpacity
-              className="w-[300px] bg-black rounded-lg py-3 px-6 items-center justify-center self-center"
+              style={{
+                minWidth: Math.max(200, screenWidth * 0.5),
+                backgroundColor: 'black',
+                borderRadius: Math.min(12, screenWidth * 0.03),
+                paddingVertical: Math.min(12, screenHeight * 0.015),
+                paddingHorizontal: Math.min(24, screenWidth * 0.06),
+                alignItems: 'center',
+                justifyContent: 'center',
+                alignSelf: 'center',
+              }}
               onPress={() => {
                 // Get the first selected task to open the modal
                 const selectedTaskId = Array.from(checkedTasks)[0];
@@ -420,7 +358,11 @@ function CreatLogScreen({ navigation, route }) {
               }}
               activeOpacity={0.8}
             >
-              <Text className="text-white text-[16px] font-semibold">
+              <Text style={{
+                color: 'white',
+                fontSize: Math.min(16, screenWidth * 0.04),
+                fontWeight: '600',
+              }}>
                 Create Log {checkedTasks.size > 1 ? `(${checkedTasks.size} selected)` : ''}
               </Text>
             </TouchableOpacity>
@@ -428,23 +370,49 @@ function CreatLogScreen({ navigation, route }) {
         ) : null
       )}
       ListEmptyComponent={() => (
-        <View className="flex-1 justify-center items-center p-5 min-h-[300px]">
+        <View style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          padding: Math.min(20, screenWidth * 0.05),
+          minHeight: Math.min(300, screenHeight * 0.375),
+        }}>
           {error ? (
             <>
-              <Text className="text-[16px] text-[#dc3545] text-center mb-4 font-medium">
+              <Text style={{
+                fontSize: Math.min(16, screenWidth * 0.04),
+                color: "#dc3545",
+                textAlign: "center",
+                marginBottom: Math.min(16, screenHeight * 0.02),
+                fontWeight: "500",
+              }}>
                 {error}
               </Text>
               <TouchableOpacity
-                className="bg-[#007AFF] py-3 px-6 rounded-lg"
+                style={{
+                  backgroundColor: "#007AFF",
+                  paddingVertical: Math.min(12, screenHeight * 0.015),
+                  paddingHorizontal: Math.min(24, screenWidth * 0.06),
+                  borderRadius: Math.min(12, screenWidth * 0.03),
+                }}
                 onPress={loadLogData}
               >
-                <Text className="text-white text-[16px] font-semibold">
+                <Text style={{
+                  color: "white",
+                  fontSize: Math.min(16, screenWidth * 0.04),
+                  fontWeight: "600",
+                }}>
                   Retry
                 </Text>
               </TouchableOpacity>
             </>
           ) : (
-            <Text className="text-[16px] text-[#666] text-center font-medium">
+            <Text style={{
+              fontSize: Math.min(16, screenWidth * 0.04),
+              color: "#666",
+              textAlign: "center",
+              fontWeight: "500",
+            }}>
               No logs found
             </Text>
           )}
@@ -460,7 +428,13 @@ function CreatLogScreen({ navigation, route }) {
 
       {/* Content */}
       {initialLoading ? (
-        <View className="flex-1 justify-center items-center p-5 min-h-[300px]">
+        <View style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          padding: Math.min(20, screenWidth * 0.05),
+          minHeight: Math.min(300, screenHeight * 0.375),
+        }}>
           <Loader size="large" color="#000000" text="Loading logs..." />
         </View>
       ) : (
@@ -509,7 +483,7 @@ function CreatLogScreen({ navigation, route }) {
               <Text className="text-[16px] font-semibold text-[#333] mb-2">Note *</Text>
               <TextInput
                 className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333] h-24"
-                placeholder="Enter your log note..."
+                placeholder="Enter note..."
                 value={logNote}
                 onChangeText={setLogNote}
                 multiline

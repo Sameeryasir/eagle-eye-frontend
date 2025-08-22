@@ -177,7 +177,7 @@ function LogsDetailScreen({ navigation, route }) {
                 <Ionicons name="document-text" size={24} color="#10B981" />
               </View>
               <View className="flex-1">
-                <Text className="text-sm font-medium text-green-600 mb-1">ACTIVITY LOG</Text>
+                <Text className="text-sm font-medium text-green-600 mb-1">DAILY LOG</Text>
               </View>
               
               <Menu rendererProps={{ 

@@ -16,6 +16,7 @@ export const AuthProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [userRole, setUserRole] = useState(null);
   const [userInfo, setUserInfo] = useState(null);
+  const [initialRoute, setInitialRoute] = useState('SignIn');
 
   useEffect(() => {
     checkAuthStatus();
@@ -41,11 +42,19 @@ export const AuthProvider = ({ children }) => {
           lastName,
           role: storedUserRole
         });
+        
+        // Set initial route based on user role
+        if (storedUserRole === 'Manager' || storedUserRole === 'Employee') {
+          setInitialRoute('WidgetScreen');
+        } else {
+          setInitialRoute('HomeScreen');
+        }
       } else {
         // No tokens found, user needs to sign in
         setIsAuthenticated(false);
         setUserRole(null);
         setUserInfo(null);
+        setInitialRoute('SignIn');
       }
     } catch (error) {
       console.error('Error checking auth status:', error);
@@ -84,6 +93,13 @@ export const AuthProvider = ({ children }) => {
         lastName: userData.user?.last_name,
         role: userData.user?.role?.name
       });
+      
+      // Set initial route based on user role
+      if (userData.user?.role?.name === 'Manager' || userData.user?.role?.name === 'Employee') {
+        setInitialRoute('WidgetScreen');
+      } else {
+        setInitialRoute('HomeScreen');
+      }
     } catch (error) {
       console.error('Error during login:', error);
       throw error;
@@ -110,6 +126,7 @@ export const AuthProvider = ({ children }) => {
       setIsAuthenticated(false);
       setUserRole(null);
       setUserInfo(null);
+      setInitialRoute('SignIn');
       console.log('Auth state updated');
     } catch (error) {
       console.error('Error during logout:', error);
@@ -124,6 +141,7 @@ export const AuthProvider = ({ children }) => {
     isLoading,
     userRole,
     userInfo,
+    initialRoute,
     login,
     logout,
     checkAuthStatus

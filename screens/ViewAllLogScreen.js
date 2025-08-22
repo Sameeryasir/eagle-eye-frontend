@@ -99,7 +99,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   const [showTimeDropdown, setShowTimeDropdown] = useState(false);
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
 
-  const timeFilterOptions = generateDateOptions();
+  const timeFilterOptions = React.useMemo(() => generateDateOptions(), [logs]);
 
   // Generate unique projects from logs
   const generateProjectOptions = () => {
@@ -138,7 +138,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     return [{ label: "All Projects", value: "All Projects" }, ...projectOptions];
   };
 
-  const projectFilterOptions = generateProjectOptions();
+  const projectFilterOptions = React.useMemo(() => generateProjectOptions(), [logs]);
 
   const handleSearch = (query) => {
     setSearchQuery(query);
@@ -162,8 +162,12 @@ const ViewAllLogScreen = ({ route, navigation }) => {
 
     // Apply time filter
     if (timeFilter && timeFilter !== "All Time") {
+      console.log("Filtering by time:", timeFilter);
+      console.log("Available dates in logs:", logs.map(log => log.date));
       filtered = filtered.filter((log) => {
-        return log.date === timeFilter;
+        const matches = log.date === timeFilter;
+        console.log(`Log date: ${log.date}, Filter: ${timeFilter}, Matches: ${matches}`);
+        return matches;
       });
     }
 
@@ -450,18 +454,19 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   );
 
   const renderContent = () => (
-          <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingHorizontal: Math.min(20, screenWidth * 0.05),
-          paddingBottom: 120,
-        }}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        showsVerticalScrollIndicator={true}
-        bounces={false}
-        scrollEnabled={!showTimeDropdown}
-      >
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={{
+        paddingHorizontal: Math.min(20, screenWidth * 0.05),
+        paddingBottom: 120,
+      }}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+      showsVerticalScrollIndicator={true}
+      bounces={false}
+      scrollEnabled={!(showTimeDropdown || showProjectDropdown)}
+      nestedScrollEnabled={true}
+    >
       {/* Header Section */}
       <View style={{ paddingVertical: Math.min(20, screenHeight * 0.025) }}>
         {/* Filter Dropdowns Row */}
@@ -486,7 +491,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                 width: "100%",
               }}
             >
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
                 <Ionicons
                   name="time"
                   size={Math.min(18, screenWidth * 0.045)}
@@ -498,8 +503,10 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                     fontSize: Math.min(15, screenWidth * 0.038),
                     color: "#111827",
                     fontWeight: "500",
-                    flexShrink: 0,
+                    flex: 1,
                   }}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
                 >
                   {timeFilterOptions.find(
                     (option) => option.value === selectedTimeFilter
@@ -521,18 +528,17 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                     backgroundColor: "white",
                     borderWidth: 1,
                     borderColor: "#EAECF0",
-                    borderRadius: Math.min(12, screenWidth * 0.03),
+                    borderRadius: Math.min(16, screenWidth * 0.04),
                     shadowColor: "#000",
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 4,
-                    elevation: 5,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.15,
+                    shadowRadius: 8,
+                    elevation: 10,
                     position: "absolute",
-                    top: 50,
-                    left: -10,
-                    right: -10,
+                    top: 60,
+                    left: 0,
+                    right: 0,
                     zIndex: 1000,
-                    minWidth: Math.min(250, screenWidth * 0.7),
                   }}
                 >
                   <ScrollView
@@ -554,8 +560,8 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                         key={option.value}
                         onPress={() => handleTimeFilterChange(option.value)}
                         style={{
-                          paddingHorizontal: Math.min(12, screenWidth * 0.03),
-                          paddingVertical: Math.min(8, screenHeight * 0.01),
+                          paddingHorizontal: Math.min(16, screenWidth * 0.04),
+                          paddingVertical: Math.min(14, screenHeight * 0.017),
                           borderBottomWidth: 1,
                           borderBottomColor: "#F1F5F9",
                           backgroundColor: selectedTimeFilter === option.value ? "#F0F9FF" : "transparent",
@@ -563,9 +569,11 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                       >
                         <Text
                           style={{
-                            fontSize: Math.min(13, screenWidth * 0.033),
+                            fontSize: Math.min(14, screenWidth * 0.035),
                             color: selectedTimeFilter === option.value ? "#3155A1" : "#111827",
                             fontWeight: selectedTimeFilter === option.value ? "600" : "400",
+                            numberOfLines: 2,
+                            lineHeight: Math.min(20, screenHeight * 0.025),
                           }}
                         >
                           {option.label}
@@ -611,8 +619,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                     color: "#111827",
                     fontWeight: "500",
                     flexShrink: 1,
-                    numberOfLines: 1,
-                    ellipsizeMode: 'tail',
                   }}
                   numberOfLines={1}
                   ellipsizeMode="tail"
@@ -651,7 +657,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                   }}
                 >
                   <ScrollView
-                    style={{ maxHeight: Math.min(192, screenHeight * 0.24) }}
+                    style={{ maxHeight: Math.min(150, screenHeight * 0.2) }}
                     showsVerticalScrollIndicator={true}
                     indicatorStyle="black"
                     bounces={false}
@@ -708,6 +714,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
             borderWidth: 1,
             borderColor: "#EAECF0",
             width: "100%",
+            opacity: (showTimeDropdown || showProjectDropdown) ? 0.5 : 1,
           }}
         >
           <Ionicons
@@ -728,8 +735,9 @@ const ViewAllLogScreen = ({ route, navigation }) => {
             onChangeText={handleSearch}
             returnKeyType="search"
             blurOnSubmit={false}
+            editable={!(showTimeDropdown || showProjectDropdown)}
           />
-          {searchQuery.length > 0 && (
+          {searchQuery.length > 0 && !(showTimeDropdown || showProjectDropdown) && (
             <TouchableOpacity onPress={() => handleSearch("")} style={{ marginLeft: 8 }}>
               <Ionicons name="close-circle" size={Math.min(18, screenWidth * 0.045)} color="#9CA3AF" />
             </TouchableOpacity>

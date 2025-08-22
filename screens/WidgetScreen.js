@@ -8,6 +8,7 @@ import {
   Alert,
   Image,
   Dimensions,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -36,6 +37,7 @@ function WidgetScreen({ navigation, route }) {
   const [tasks, setTasks] = useState([]);
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const [managerProjectId, setManagerProjectId] = useState(null);
@@ -87,15 +89,18 @@ function WidgetScreen({ navigation, route }) {
     },
   ];
 
-  useFocusEffect(
-    React.useCallback(() => {
-      loadData();
-    }, [projectId])
-  );
+  // Load data on component mount
+  React.useEffect(() => {
+    loadData();
+  }, [projectId]);
 
-  const loadData = async () => {
+  const loadData = async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
 
       const role = await getUserRole();
@@ -162,8 +167,13 @@ function WidgetScreen({ navigation, route }) {
       Alert.alert("Error", "Failed to load project data. Please try again.");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
+
+  const onRefresh = React.useCallback(() => {
+    loadData(true);
+  }, []);
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
@@ -225,7 +235,7 @@ function WidgetScreen({ navigation, route }) {
               await deleteTaskById(taskId);
 
               // Refresh the data
-              await loadData();
+              await loadData(true);
 
               Alert.alert("Success", "Task deleted successfully!", [
                 { text: "OK" },
@@ -575,6 +585,14 @@ function WidgetScreen({ navigation, route }) {
           paddingBottom: 100,
           paddingTop: 20,
         }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#3155A1"]}
+            tintColor="#3155A1"
+          />
+        }
       >
         {renderContent()}
       </ScrollView>
