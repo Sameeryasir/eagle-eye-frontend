@@ -180,16 +180,17 @@ function LogsDetailScreen({ navigation, route }) {
                 <Text className="text-sm font-medium text-green-600 mb-1">DAILY LOG</Text>
               </View>
               
-              <Menu rendererProps={{ 
-                placement: 'bottom-end', 
-                anchorStyle: { marginRight: 0 },
-                triggerStyle: { marginRight: 0 }
-              }}>
-                <MenuTrigger>
-                  <View style={{ activeOpacity: 1 }}>
-                    <Ionicons name="ellipsis-vertical" size={16} color="#374151" />
-                  </View>
-                </MenuTrigger>
+              {userRole !== "Admin" && userRole !== "Owner" && (
+                <Menu rendererProps={{ 
+                  placement: 'bottom-end', 
+                  anchorStyle: { marginRight: 0 },
+                  triggerStyle: { marginRight: 0 }
+                }}>
+                  <MenuTrigger>
+                    <View style={{ activeOpacity: 1 }}>
+                      <Ionicons name="ellipsis-vertical" size={16} color="#374151" />
+                    </View>
+                  </MenuTrigger>
                 <MenuOptions customStyles={{
                   optionsContainer: {
                     backgroundColor: 'white',
@@ -235,6 +236,7 @@ function LogsDetailScreen({ navigation, route }) {
                   </MenuOption>
                 </MenuOptions>
               </Menu>
+              )}
             </View>
             
             {log.description && (

@@ -187,11 +187,7 @@ function CreateProjectScreen({ navigation }) {
           keyboardShouldPersistTaps="handled"
           onScrollBeginDrag={dismissKeyboard}
         >
-          <View className="mb-8 items-center">
-            <Text className="text-[28px] font-bold text-[#333]">Create New Project</Text>
-            <Text className="text-[16px] text-[#666] text-center">Fill in the details below to create your project</Text>
-          </View>
-
+   
           <View className="mb-5">
             {/* Project Name */}
             <View className="mb-5">

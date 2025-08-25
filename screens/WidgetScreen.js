@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef,useEffect } from "react";
 import {
   View,
   Text,
@@ -41,6 +41,7 @@ function WidgetScreen({ navigation, route }) {
   const [error, setError] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const [managerProjectId, setManagerProjectId] = useState(null);
+  const isFirstMount = useRef(true);
 
   const { projectId } = route.params || {};
 
@@ -90,7 +91,7 @@ function WidgetScreen({ navigation, route }) {
   ];
 
   // Load data on component mount
-  React.useEffect(() => {
+  useEffect(() => {
     loadData();
   }, [projectId]);
 

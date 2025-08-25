@@ -146,7 +146,7 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
     <View className="flex-1 bg-white">
       {/* Black Navbar */}
       <View className="bg-black px-4 py-3 flex-row items-center justify-between">
-        <Text className="text-white text-[18px] font-semibold">Create Project</Text>
+        <Text className="text-black text-[18px] font-semibold">Create Project</Text>
         <TouchableOpacity onPress={() => {
           if (onCancel) {
             onCancel();
