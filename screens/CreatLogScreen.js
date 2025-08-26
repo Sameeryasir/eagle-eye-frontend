@@ -14,23 +14,31 @@ import {
   ScrollView,
   Modal,
   Dimensions,
-} from "react-native";
+  Image,
+} from "react-native";76
+
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
+
 import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
 import { getTasksAssignedToEmployees } from "../services/tasks/getTasksAssignedToEmployees";
+import { createLog } from "../services/log/createLog";
 import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
+
 import {
   Menu,
   MenuOptions,
   MenuOption,
   MenuTrigger,
 } from "react-native-popup-menu";
+
+import { uploadImage } from "../services/images/uploadImage";
+import * as ImagePicker from "expo-image-picker";
 
 function CreatLogScreen({ navigation, route }) {
   const [sidebarVisible, setSidebarVisible] = useState(false);
@@ -44,6 +52,11 @@ function CreatLogScreen({ navigation, route }) {
   const [createLogModalVisible, setCreateLogModalVisible] = useState(false);
   const [selectedTaskForLog, setSelectedTaskForLog] = useState(null);
   const [logNote, setLogNote] = useState("");
+  const [isSubmittingLog, setIsSubmittingLog] = useState(false);
+  // --- Image Upload State ---
+  const [selectedImages, setSelectedImages] = useState([]);
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
+
 
   useFocusEffect(
     React.useCallback(() => {
@@ -126,25 +139,138 @@ function CreatLogScreen({ navigation, route }) {
     });
   };
 
+  // --- Image Picker Function ---
+  const pickImages = async () => {
+    try {
+      // Request permissions
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please grant camera roll permissions to select images.');
+        return;
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        quality: 0.8,
+        aspect: [4, 3],
+      });
+
+      if (!result.canceled && result.assets) {
+        // Add new images to existing ones
+        const newImages = result.assets.map(asset => ({
+          uri: asset.uri,
+          id: Date.now() + Math.random(), // Unique ID for each image
+          name: asset.fileName || `image_${Date.now()}.jpg`,
+        }));
+        setSelectedImages(prev => [...prev, ...newImages]);
+      }
+    } catch (error) {
+      console.error('Error picking images:', error);
+      Alert.alert('Error', 'Failed to pick images. Please try again.');
+    }
+  };
+
+  // --- Remove Image Function ---
+  const removeImage = (imageId) => {
+    setSelectedImages(prev => prev.filter(img => img.id !== imageId));
+  };
+
   const handleCreateLog = (task) => {
     setSelectedTaskForLog(task);
     setLogNote("");
+    setSelectedImages([]); // Reset images when opening modal
     setCreateLogModalVisible(true);
   };
 
-  const handleSubmitLog = () => {
+
+
+
+
+    const handleSubmitLog = async () => {
+    // --- Validation ---
     if (!logNote.trim()) {
       Alert.alert("Error", "Please enter a note for the log");
       return;
     }
     
-    // TODO: Implement log creation API call
-    console.log('Creating log for task:', selectedTaskForLog.id, 'Note:', logNote);
-    Alert.alert('Success', 'Log created successfully!');
+    if (checkedTasks.size === 0) {
+      Alert.alert("Error", "Please select at least one task to create a log.");
+      return;
+    }
+
+    try {
+      setIsSubmittingLog(true);
+      
+      // --- Step 1: Create Log ---
+      const response = await createLog({
+        task_id: Array.from(checkedTasks),
+        note: logNote,
+      });
+      
+      // --- Step 2: Upload Images (if any) ---
+      if (selectedImages.length > 0 && response?.log?.id) {
+        await uploadImages(response.log.id);
+      }
+      
+      Alert.alert('Success', 'Log created successfully!');
+      loadLogData();
+
+    } catch (err) {
+      console.error("CreatLogScreen - Error creating log:", err);
+      const errorMessage = err.response?.data?.message || err.message || "Failed to create log. Please try again.";
+      Alert.alert("Error", errorMessage);
+    } finally {
+      setIsSubmittingLog(false);
+      setCreateLogModalVisible(false);
+      setSelectedTaskForLog(null);
+      setLogNote("");
+      setSelectedImages([]);
+      setCheckedTasks(new Set());
+    }
+  };
+
+  // --- Helper Function for Image Upload ---
+  const uploadImages = async (logId) => {
+    setIsUploadingImages(true);
     
-    setCreateLogModalVisible(false);
-    setSelectedTaskForLog(null);
-    setLogNote("");
+    try {
+      const formData = new FormData();
+      
+      // Add all images at once to the 'images' field
+      selectedImages.forEach(image => {
+        formData.append('images', {
+          uri: image.uri,
+          type: 'image/jpeg',
+          name: image.name,
+        });
+      });
+      
+      formData.append('logId', logId);
+      
+      console.log(`CreatLogScreen - Uploading ${selectedImages.length} images at once`);
+      
+      const uploadResponse = await uploadImage(formData);
+      
+      // Handle response from backend
+      if (uploadResponse.images?.length > 0) {
+        const successful = uploadResponse.images.filter(img => !img.error);
+        const failed = uploadResponse.images.filter(img => img.error);
+        
+        console.log(`CreatLogScreen - Upload result: ${successful.length} successful, ${failed.length} failed`);
+        
+        if (failed.length > 0) {
+          Alert.alert("Partial Success", `Uploaded ${successful.length} image(s), ${failed.length} failed.`);
+        }
+      }
+      
+    } catch (error) {
+      console.error("CreatLogScreen - Image upload error:", error);
+      Alert.alert("Warning", "Log created but image upload failed.");
+    } finally {
+      setIsUploadingImages(false);
+    }
   };
 
   const formatDateTime = (dateString) => {
@@ -307,8 +433,6 @@ function CreatLogScreen({ navigation, route }) {
             </View>
           </View>
         </View>
-        
-
       </View>
     );
   }, [userRole, navigation, checkedTasks]);
@@ -478,12 +602,13 @@ function CreatLogScreen({ navigation, route }) {
             </TouchableOpacity>
           </View>
 
-          <View className="p-6">
+                    <View className="p-6">
+            {/* --- Note Section (First) --- */}
             <View className="mb-6">
-              <Text className="text-[16px] font-semibold text-[#333] mb-2">Note *</Text>
+              <Text className="text-[16px] font-semibold text-[#333] mb-2">Note</Text>
               <TextInput
                 className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333] h-24"
-                placeholder="Enter note..."
+                placeholder="Enter note for the selected tasks..."
                 value={logNote}
                 onChangeText={setLogNote}
                 multiline
@@ -493,19 +618,65 @@ function CreatLogScreen({ navigation, route }) {
               />
             </View>
 
-            <View className="mb-8">
-              <Text className="text-[16px] font-semibold text-[#333] mb-2">Image</Text>
+            {/* --- Image Selection Section (Second) --- */}
+            <View className="mb-6">
+              <Text className="text-[16px] font-semibold text-[#333] mb-2">Images *</Text>
+              
+              {/* Image Picker Button */}
               <TouchableOpacity
-                className="border-2 border-dashed border-[#e1e8ed] rounded-lg p-6 items-center justify-center bg-[#f8f9fa]"
-                onPress={() => {
-                  // TODO: Implement image picker
-                  Alert.alert('Image Picker', 'Image picker functionality will be implemented soon.');
-                }}
+                className="border-2 border-dashed border-[#e1e8ed] rounded-lg p-4 items-center justify-center mb-3"
+                onPress={pickImages}
+                style={{ backgroundColor: '#f8f9fa' }}
               >
-                <Ionicons name="camera" size={32} color="#666" />
-                <Text className="text-[14px] text-[#666] mt-2">Tap to add image</Text>
+                <Ionicons name="camera-outline" size={24} color="#666" style={{ marginBottom: 8 }} />
+                <Text className="text-[14px] text-[#666] text-center">
+                  {selectedImages.length > 0 
+                    ? `Add More Images (${selectedImages.length} selected)`
+                    : 'Select Images'
+                  }
+                </Text>
               </TouchableOpacity>
+
+              {/* Selected Images Preview */}
+              {selectedImages.length > 0 && (
+                <View className="mb-3 mt-6">
+                  <View className="flex-row justify-between items-center mb-2">
+                    <Text className="text-[14px] text-[#666]">Selected Images:</Text>
+                    <TouchableOpacity
+                      onPress={() => setSelectedImages([])}
+                      className="bg-red-500 px-3 py-1 rounded-lg"
+                    >
+                      <Text className="text-white text-[12px] font-medium">Clear All</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false}
+                    className="flex-row"
+                  >
+                    {selectedImages.map((image, index) => (
+                      <View key={image.id} className="mr-3 relative">
+                        <View className="w-20 h-20 rounded-lg bg-gray-200 items-center justify-center overflow-hidden">
+                          <Image
+                            source={{ uri: image.uri }}
+                            className="w-full h-full"
+                            style={{ resizeMode: 'cover' }}
+                            onError={() => console.log(`Failed to load image: ${image.name}`)}
+                          />
+                        </View>
+                        <Text className="text-[10px] text-[#666] text-center mt-1">
+                          Image {index + 1}
+                        </Text>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
             </View>
+
+
+
+
           </View>
 
           {/* Fixed Action Button - Always positioned at bottom */}
@@ -513,8 +684,17 @@ function CreatLogScreen({ navigation, route }) {
             <TouchableOpacity
               className="w-[280px] bg-black rounded-xl py-4 items-center justify-center"
               onPress={handleSubmitLog}
+              disabled={isSubmittingLog || isUploadingImages}
+              style={{ opacity: (isSubmittingLog || isUploadingImages) ? 0.6 : 1 }}
             >
-              <Text className="text-white text-[16px] font-semibold">Save Log</Text>
+              {(isSubmittingLog || isUploadingImages) ? (
+                <View className="flex-row items-center">
+                  <ActivityIndicator size="small" color="white" style={{ marginRight: 8 }} />
+                  <Text className="text-white text-[16px] font-semibold">Saving Log...</Text>
+                </View>
+              ) : (
+                <Text className="text-white text-[16px] font-semibold">Save Log</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>

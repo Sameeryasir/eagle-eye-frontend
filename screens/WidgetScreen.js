@@ -23,6 +23,7 @@ import { getTasksAssignedToEmployees } from "../services/tasks/getTasksAssignedT
 import getTasksByloginId from "../services/tasks/getTasksByloginId";
 import { deleteTaskById } from "../services/tasks/deleteTaskById";
 import { getMyProjects } from "../services/projects/getProjectsByLoginUserId";
+import { getLogs } from "../services/log/getLogs";
 import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
 import {
@@ -41,54 +42,54 @@ function WidgetScreen({ navigation, route }) {
   const [error, setError] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const [managerProjectId, setManagerProjectId] = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(true);
   const isFirstMount = useRef(true);
 
   const { projectId } = route.params || {};
 
-  const mockLogs = [
-    {
-      id: 1,
-      createdBy: "John Smith",
-      date: "2025-08-13",
-      description: "User logged in successfully from office network",
-      image: require("../assets/robot.png"), // Local image from assets
-    },
-    {
-      id: 2,
-      createdBy: "Sarah Johnson",
-      date: "2025-08-19",
-      description: "New dashboard project created for monitoring",
-      image: require("../assets/robot.png"), // Local image from assets
-    },
-    {
-      id: 3,
-      createdBy: "David Wilson",
-      date: "2025-08-18",
-      description: "Bug fix task status updated to in progress",
-      image: require("../assets/robot.png"), // Local image from assets
-    },
-    {
-      id: 4,
-      createdBy: "Emma Davis",
-      date: "2025-08-18",
-      description: "Project documentation uploaded successfully",
-      image: require("../assets/robot.png"), // Local image from assets
-    },
-    {
-      id: 5,
-      createdBy: "Alex Brown",
-      date: "2025-08-19",
-      description: "Comment added to design review task",
-      image: require("../assets/robot.png"), // Local image from assets
-    },
-    {
-      id: 6,
-      createdBy: "Maria Garcia",
-      date: "2024-08-18",
-      description: "Team meeting scheduled for next week",
-      image: require("../assets/robot.png"), // Local image from assets
-    },
-  ];
+  // Load logs function
+  const loadLogs = async () => {
+    try {
+      setLogsLoading(true);
+      console.log("WidgetScreen - Starting to load logs...");
+      
+      const logsResponse = await getLogs();
+      console.log("WidgetScreen - Logs response:", logsResponse);
+      
+      // Check if response has logs array or if it's directly an array
+      let logsArray = [];
+      if (logsResponse?.logs && Array.isArray(logsResponse.logs)) {
+        logsArray = logsResponse.logs;
+      } else if (Array.isArray(logsResponse)) {
+        logsArray = logsResponse;
+      } else {
+        console.log("WidgetScreen - No logs found in response:", logsResponse);
+        setLogs([]);
+        return;
+      }
+      
+      console.log("WidgetScreen - Processing logs array:", logsArray);
+      
+      // Transform logs data to match the expected format
+      const transformedLogs = logsArray.map(log => ({
+        id: log.id,
+        createdBy: log.user ? `${log.user.first_name || ''} ${log.user.last_name || ''}`.trim() : 'Unknown User',
+        date: log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'N/A',
+        description: log.note || 'No description',
+        images: log.images || [], // Keep all images for the log
+        image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : require("../assets/robot.png"),
+      }));
+      
+      console.log("WidgetScreen - Transformed logs:", transformedLogs);
+      setLogs(transformedLogs);
+    } catch (error) {
+      console.error("WidgetScreen - Error loading logs:", error);
+      setLogs([]);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
 
   // Load data on component mount
   useEffect(() => {
@@ -106,6 +107,9 @@ function WidgetScreen({ navigation, route }) {
 
       const role = await getUserRole();
       setUserRole(role);
+
+      // Load logs in parallel with other data
+      loadLogs();
 
       let response;
 
@@ -436,13 +440,13 @@ function WidgetScreen({ navigation, route }) {
             marginLeft: Math.min(10, screenWidth * 0.025),
             letterSpacing: 0.5,
           }}>
-            Activity Logs ({mockLogs.length})
+                            Activity Logs ({logs.length})
           </Text>
         </View>
         <TouchableOpacity
           style={{ flexDirection: "row", alignItems: "center" }}
           onPress={() =>
-            navigation.navigate("ViewAllLogScreen", { logs: mockLogs })
+                          navigation.navigate("ViewAllLogScreen", { logs: logs })
           }
         >
           <Text style={{
@@ -458,11 +462,19 @@ function WidgetScreen({ navigation, route }) {
       </View>
 
       <View style={{ height: Math.min(200, screenHeight * 0.25) }}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          nestedScrollEnabled={true}
-        >
-          {mockLogs.slice(0, 4).map((log) => (
+        {logs.length === 0 ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <Text style={{ fontSize: 14, color: '#666', textAlign: 'center' }}>
+              No logs found
+            </Text>
+          </View>
+        ) : (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled={true}
+          >
+            {console.log("WidgetScreen - Rendering logs:", logs.slice(0, 4))}
+            {logs.slice(0, 4).map((log) => (
             <View
               key={log.id}
               style={{
@@ -522,7 +534,8 @@ function WidgetScreen({ navigation, route }) {
               )}
             </View>
           ))}
-        </ScrollView>
+          </ScrollView>
+        )}
       </View>
     </View>
   );

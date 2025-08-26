@@ -12,6 +12,7 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
   Alert,
+  Modal,
 } from "react-native";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
@@ -19,6 +20,8 @@ import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import CustomBottomNav from "./components/CustomBottomNav";
 import { getUserRole } from "../services/utils/userRole";
+import { deleteLogById } from "../services/log/deleteLogById";
+import UpdateLogModal from "./components/UpdateLogModal";
 import {
   Menu,
   MenuOptions,
@@ -33,6 +36,10 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [userRole, setUserRole] = useState(null);
+
+  // --- Update Modal State ---
+  const [updateModalVisible, setUpdateModalVisible] = useState(false);
+  const [selectedLogForUpdate, setSelectedLogForUpdate] = useState(null);
 
   // Get user role on component mount
   React.useEffect(() => {
@@ -98,6 +105,8 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   const [filteredLogs, setFilteredLogs] = useState(logs || []);
   const [showTimeDropdown, setShowTimeDropdown] = useState(false);
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
+  const [imageModalVisible, setImageModalVisible] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
 
   const timeFilterOptions = React.useMemo(() => generateDateOptions(), [logs]);
 
@@ -157,6 +166,16 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     applyFilters(searchQuery, selectedTimeFilter, filter);
   };
 
+  const handleImageTap = (image) => {
+    setSelectedImage(image);
+    setImageModalVisible(true);
+  };
+
+  const closeImageModal = () => {
+    setImageModalVisible(false);
+    setSelectedImage(null);
+  };
+
   const applyFilters = (query, timeFilter, projectFilter) => {
     let filtered = logs || [];
 
@@ -194,48 +213,95 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   };
 
   const handleUpdate = (log) => {
-    // Only allow updating logs if user is not an Employee
-    if (userRole === "Employee") {
-      // Show no response for Employee role
-      return;
-    }
+    console.log("handleUpdate called with log:", log);
+    console.log("Current userRole:", userRole);
+    
+  
 
-    // TODO: Implement log update functionality
-    // Update functionality will be implemented here
+    console.log("Opening update modal...");
+    // Open update modal with selected log
+    setSelectedLogForUpdate(log);
+    setUpdateModalVisible(true);
+    console.log("Modal state set - updateModalVisible:", true);
+    console.log("Selected log:", log);
+  };
+
+  // --- Handle Log Update ---
+  const handleUpdateLog = async (updateData) => {
+    try {
+      // TODO: Implement actual log update API call
+      // For now, we'll just show a success message
+      console.log("Update log data:", updateData);
+      
+      // Here you would call your update log API
+      // const response = await updateLogById(updateData);
+      
+      // Update the local logs state if needed
+      // Refresh the logs data
+      
+      Alert.alert("Success", "Log update functionality will be implemented soon!");
+      
+    } catch (error) {
+      console.error("Error updating log:", error);
+      throw error; // Re-throw to let the modal handle the error
+    }
   };
 
   const handleDelete = (log) => {
-    // Only allow deleting logs if user is not an Employee
-    if (userRole === "Employee") {
-      // Show no response for Employee role
+    // Allow deleting logs if user is Manager or Employee
+    if (userRole !== "Manager" && userRole !== "Employee") {
+      Alert.alert("Access Denied", "Only Managers and Employees can delete logs.");
       return;
     }
 
     const logId = log?.id;
+    const logTitle = log?.description || "this log";
 
     if (!logId) {
       return;
     }
 
-    try {
-      // TODO: Implement log deletion API call
-      // await deleteLogById(logId);
+    Alert.alert(
+      "Delete Log",
+      `Are you sure you want to delete "${logTitle}" permanently? This action is not reversible.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteLogById(logId);
 
-      const updatedLogs = logs.filter((log) => log.id !== logId);
-      const updatedFilteredLogs = filteredLogs.filter(
-        (log) => log.id !== logId
-      );
+              const updatedLogs = logs.filter((log) => log.id !== logId);
+              const updatedFilteredLogs = filteredLogs.filter(
+                (log) => log.id !== logId
+              );
 
-      // Update the logs in route params if possible
-      if (route.params) {
-        route.params.logs = updatedLogs;
-      }
+              // Update the logs in route params if possible
+              if (route.params) {
+                route.params.logs = updatedLogs;
+              }
 
-      setFilteredLogs(updatedFilteredLogs);
-    } catch (error) {
-      // Handle error silently or log it
-      console.error("Error deleting log:", error);
-    }
+              setFilteredLogs(updatedFilteredLogs);
+
+              Alert.alert("Success", "Log deleted successfully!", [
+                { text: "OK" },
+              ]);
+            } catch (error) {
+              let errorMessage = "Failed to delete log. Please try again.";
+              if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+              } else if (error.message) {
+                errorMessage = error.message;
+              }
+
+              Alert.alert("Error", errorMessage, [{ text: "OK" }]);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const LogCard = ({ log }) => (
@@ -321,7 +387,48 @@ const ViewAllLogScreen = ({ route, navigation }) => {
           </View>
 
           <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-            {(log.thumbnail || log.image) && (
+            {/* Show uploaded images if available */}
+            {log.images && log.images.length > 0 ? (
+              <View style={{ marginRight: 12, marginTop: userRole === "Employee" ? 0 : -30 }}>
+                <TouchableOpacity
+                  onPress={() => handleImageTap(log.images[0])}
+                  style={{ position: 'relative' }}
+                  activeOpacity={0.8}
+                >
+                  <Image
+                    source={{ uri: log.images[0].imageUrl }}
+                    style={{
+                      width: Math.min(60, screenWidth * 0.15),
+                      height: Math.min(60, screenWidth * 0.15),
+                      borderRadius: Math.min(8, screenWidth * 0.02),
+                    }}
+                    contentFit="cover"
+                    transition={100}
+                  />
+                  {log.images.length > 1 && (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        top: -5,
+                        right: -5,
+                        backgroundColor: '#3155A1',
+                        borderRadius: 12,
+                        minWidth: 24,
+                        height: 24,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        borderWidth: 2,
+                        borderColor: 'white',
+                      }}
+                    >
+                      <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>
+                        {log.images.length}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+            ) : (log.thumbnail || log.image) ? (
               <View style={{ marginRight: 12, marginTop: userRole === "Employee" ? 0 : -30 }}>
                 {log.thumbnail ? (
                   <Image
@@ -345,24 +452,11 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                     contentFit="cover"
                     transition={100}
                   />
-                ) : (
-                  <View
-                    style={{
-                      width: Math.min(60, screenWidth * 0.15),
-                      height: Math.min(60, screenWidth * 0.15),
-                      borderRadius: Math.min(8, screenWidth * 0.02),
-                      backgroundColor: "#3155A1",
-                      justifyContent: "center",
-                      alignItems: "center",
-                    }}
-                  >
-                    <Ionicons name="image" size={Math.min(24, screenWidth * 0.06)} color="white" />
-                  </View>
-                )}
+                ) : null}
               </View>
-            )}
+            ) : null}
             
-            {userRole === "Employee" && (
+            {(userRole === "Manager" || userRole === "Employee") && (
               <Menu
                 rendererProps={{
                   placement: "bottom-end",
@@ -470,9 +564,18 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       {/* Header Section */}
       <View style={{ paddingVertical: Math.min(20, screenHeight * 0.025) }}>
         {/* Filter Dropdowns Row */}
-        <View style={{ flexDirection: "row", marginBottom: 16, gap: 12 }}>
+        <View style={{ 
+          flexDirection: "row", 
+          marginBottom: 16, 
+          gap: 12,
+          justifyContent: userRole === "Employee" ? "center" : "space-between"
+        }}>
           {/* Time Filter Dropdown */}
-          <View style={{ flex: 1, position: "relative" }}>
+          <View style={{ 
+            flex: userRole === "Employee" ? 0 : 1, 
+            position: "relative",
+            width: userRole === "Employee" ? "50%" : "auto"
+          }}>
             <TouchableOpacity
               onPress={() => {
                 setShowTimeDropdown(!showTimeDropdown);
@@ -586,120 +689,122 @@ const ViewAllLogScreen = ({ route, navigation }) => {
             )}
           </View>
 
-          {/* Project Filter Dropdown */}
-          <View style={{ flex: 1, position: "relative" }}>
-            <TouchableOpacity
-              onPress={() => {
-                setShowProjectDropdown(!showProjectDropdown);
-                setShowTimeDropdown(false);
-              }}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                backgroundColor: "#F8FAFC",
-                borderWidth: 1,
-                borderColor: "#EAECF0",
-                borderRadius: Math.min(16, screenWidth * 0.04),
-                paddingHorizontal: Math.min(16, screenWidth * 0.04),
-                paddingVertical: Math.min(12, screenHeight * 0.015),
-                width: "100%",
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Ionicons
-                  name="folder"
-                  size={Math.min(18, screenWidth * 0.045)}
-                  color="#6B7280"
-                  style={{ marginRight: 8, flexShrink: 0 }}
-                />
-                <Text
-                  style={{
-                    fontSize: Math.min(15, screenWidth * 0.038),
-                    color: "#111827",
-                    fontWeight: "500",
-                    flexShrink: 1,
-                  }}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                >
-                  {projectFilterOptions.find(
-                    (option) => option.value === selectedProjectFilter
-                  )?.label || "All Projects"}
-                </Text>
-              </View>
-              <Ionicons
-                name={showProjectDropdown ? "chevron-up" : "chevron-down"}
-                size={Math.min(16, screenWidth * 0.04)}
-                color="#6B7280"
-                style={{ marginLeft: 1, flexShrink: 0 }}
-              />
-            </TouchableOpacity>
-
-            {showProjectDropdown && (
-              <TouchableWithoutFeedback onPress={() => {}}>
-                <View
-                  style={{
-                    backgroundColor: "white",
-                    borderWidth: 1,
-                    borderColor: "#EAECF0",
-                    borderRadius: Math.min(16, screenWidth * 0.04),
-                    shadowColor: "#000",
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.15,
-                    shadowRadius: 8,
-                    elevation: 10,
-                    position: "absolute",
-                    top: 60,
-                    left: 0,
-                    right: 0,
-                    zIndex: 1000,
-                  }}
-                >
-                  <ScrollView
-                    style={{ maxHeight: Math.min(150, screenHeight * 0.2) }}
-                    showsVerticalScrollIndicator={true}
-                    indicatorStyle="black"
-                    bounces={false}
-                    nestedScrollEnabled={true}
-                    scrollEventThrottle={16}
-                    onScrollBeginDrag={() => {
-                      // Prevent main scroll when dropdown is being scrolled
+          {/* Project Filter Dropdown - Hidden for Employees */}
+          {userRole !== "Employee" && (
+            <View style={{ flex: 1, position: "relative" }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowProjectDropdown(!showProjectDropdown);
+                  setShowTimeDropdown(false);
+                }}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  backgroundColor: "#F8FAFC",
+                  borderWidth: 1,
+                  borderColor: "#EAECF0",
+                  borderRadius: Math.min(16, screenWidth * 0.04),
+                  paddingHorizontal: Math.min(16, screenWidth * 0.04),
+                  paddingVertical: Math.min(12, screenHeight * 0.015),
+                  width: "100%",
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Ionicons
+                    name="folder"
+                    size={Math.min(18, screenWidth * 0.045)}
+                    color="#6B7280"
+                    style={{ marginRight: 8, flexShrink: 0 }}
+                  />
+                  <Text
+                    style={{
+                      fontSize: Math.min(15, screenWidth * 0.038),
+                      color: "#111827",
+                      fontWeight: "500",
+                      flexShrink: 1,
                     }}
-                    onTouchStart={() => {
-                      // Prevent main scroll when touching dropdown
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {projectFilterOptions.find(
+                      (option) => option.value === selectedProjectFilter
+                    )?.label || "All Projects"}
+                  </Text>
+                </View>
+                <Ionicons
+                  name={showProjectDropdown ? "chevron-up" : "chevron-down"}
+                  size={Math.min(16, screenWidth * 0.04)}
+                  color="#6B7280"
+                  style={{ marginLeft: 1, flexShrink: 0 }}
+                />
+              </TouchableOpacity>
+
+              {showProjectDropdown && (
+                <TouchableWithoutFeedback onPress={() => {}}>
+                  <View
+                    style={{
+                      backgroundColor: "white",
+                      borderWidth: 1,
+                      borderColor: "#EAECF0",
+                      borderRadius: Math.min(16, screenWidth * 0.04),
+                      shadowColor: "#000",
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.15,
+                      shadowRadius: 8,
+                      elevation: 10,
+                      position: "absolute",
+                      top: 60,
+                      left: 0,
+                      right: 0,
+                      zIndex: 1000,
                     }}
                   >
-                                         {projectFilterOptions.map((option) => (
-                       <TouchableOpacity
-                         key={option.value}
-                         onPress={() => handleProjectFilterChange(option.value)}
-                         style={{
-                           paddingHorizontal: Math.min(16, screenWidth * 0.04),
-                           paddingVertical: Math.min(14, screenHeight * 0.017),
-                           borderBottomWidth: 1,
-                           borderBottomColor: "#F1F5F9",
-                           backgroundColor: selectedProjectFilter === option.value ? "#F0F9FF" : "transparent",
-                         }}
-                       >
-                         <Text
+                    <ScrollView
+                      style={{ maxHeight: Math.min(150, screenHeight * 0.2) }}
+                      showsVerticalScrollIndicator={true}
+                      indicatorStyle="black"
+                      bounces={false}
+                      nestedScrollEnabled={true}
+                      scrollEventThrottle={16}
+                      onScrollBeginDrag={() => {
+                        // Prevent main scroll when dropdown is being scrolled
+                      }}
+                      onTouchStart={() => {
+                        // Prevent main scroll when touching dropdown
+                      }}
+                    >
+                       {projectFilterOptions.map((option) => (
+                         <TouchableOpacity
+                           key={option.value}
+                           onPress={() => handleProjectFilterChange(option.value)}
                            style={{
-                             fontSize: Math.min(14, screenWidth * 0.035),
-                             color: selectedProjectFilter === option.value ? "#3155A1" : "#111827",
-                             fontWeight: selectedProjectFilter === option.value ? "600" : "400",
-                             numberOfLines: 2,
-                             lineHeight: Math.min(20, screenHeight * 0.025),
+                             paddingHorizontal: Math.min(16, screenWidth * 0.04),
+                             paddingVertical: Math.min(14, screenHeight * 0.017),
+                             borderBottomWidth: 1,
+                             borderBottomColor: "#F1F5F9",
+                             backgroundColor: selectedProjectFilter === option.value ? "#F0F9FF" : "transparent",
                            }}
                          >
-                           {option.label}
-                         </Text>
-                       </TouchableOpacity>
-                     ))}
-                  </ScrollView>
-                </View>
-              </TouchableWithoutFeedback>
-            )}
-          </View>
+                           <Text
+                             style={{
+                               fontSize: Math.min(14, screenWidth * 0.035),
+                               color: selectedProjectFilter === option.value ? "#3155A1" : "#111827",
+                               fontWeight: selectedProjectFilter === option.value ? "600" : "400",
+                               numberOfLines: 2,
+                               lineHeight: Math.min(20, screenHeight * 0.025),
+                             }}
+                           >
+                             {option.label}
+                           </Text>
+                         </TouchableOpacity>
+                       ))}
+                    </ScrollView>
+                  </View>
+                </TouchableWithoutFeedback>
+              )}
+            </View>
+          )}
         </View>
 
         {/* Search Bar */}
@@ -789,6 +894,64 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     <View className="flex-1 bg-white">
       {renderContent()}
       <CustomBottomNav keyboardVisible={keyboardVisible} />
+      
+      {/* Full Screen Image Modal */}
+      <Modal
+        visible={imageModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeImageModal}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.9)',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}>
+          <TouchableOpacity
+            onPress={closeImageModal}
+            style={{
+              position: 'absolute',
+              top: 50,
+              right: 20,
+              zIndex: 1,
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <Ionicons name="close" size={24} color="white" />
+          </TouchableOpacity>
+          
+          {selectedImage && (
+            <Image
+              source={{ uri: selectedImage.imageUrl }}
+              style={{
+                width: screenWidth * 0.9,
+                height: screenHeight * 0.7,
+                borderRadius: 12,
+              }}
+              contentFit="contain"
+              transition={200}
+            />
+          )}
+        </View>
+      </Modal>
+
+      {/* Update Log Modal */}
+      <UpdateLogModal
+        visible={updateModalVisible}
+        onClose={() => {
+          setUpdateModalVisible(false);
+          setSelectedLogForUpdate(null);
+        }}
+        log={selectedLogForUpdate}
+        onUpdate={handleUpdateLog}
+        userRole={userRole}
+      />
     </View>
   );
 };

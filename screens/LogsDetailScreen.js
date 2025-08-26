@@ -113,13 +113,10 @@ function LogsDetailScreen({ navigation, route }) {
     );
   };
 
-  // Sample images for carousel
-  const logImages = [
-    require('../assets/robot.png'),
-    require('../assets/aimaker.png'),
-    require('../assets/person.jpg'),
-    require('../assets/tick.png')
-  ];
+  // Get actual uploaded images from log
+  const logImages = log.images && log.images.length > 0 
+    ? log.images.map(img => ({ uri: img.imageUrl }))
+    : [require('../assets/robot.png')]; // Fallback to default image
 
   const nextImage = () => {
     setCurrentImageIndex((prevIndex) => 
@@ -462,7 +459,6 @@ function LogsDetailScreen({ navigation, route }) {
                     style={{
                       width: '100%',
                       height: imageHeight,
-                      resizeMode: 'cover'
                     }}
                     contentFit="cover"
                   />
