@@ -26,10 +26,11 @@ import { useFocusEffect } from "@react-navigation/native";
 import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
 import { getTasksAssignedToEmployees } from "../services/tasks/getTasksAssignedToEmployees";
+import { getMyProjects } from "../services/projects/getProjectsByLoginUserId";
+import { getTaskByProjectId } from "../services/tasks/getTaskByProjectId";
 import { createLog } from "../services/log/createLog";
 import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
-
 import {
   Menu,
   MenuOptions,
@@ -97,25 +98,88 @@ function CreatLogScreen({ navigation, route }) {
       console.log("CreatLogScreen - User Role:", role);
       setUserRole(role);
 
-      // For employees, get tasks assigned to them (using the same API as ViewAllTasksScreen)
-      console.log("CreatLogScreen - Calling getTasksAssignedToEmployees for Employee");
-      const response = await getTasksAssignedToEmployees();
-      console.log("CreatLogScreen - Employee tasks response:", response);
+      // Get data based on user role
+      let response;
+      if (role === "Manager") {
+        // First get projects to get projectId (same logic as WidgetScreen)
+        console.log("CreatLogScreen - Calling getMyProjects for Manager");
+        const projectsResponse = await getMyProjects();
+        console.log("CreatLogScreen - Manager projects response:", projectsResponse);
+        
+        // Get the first project's ID (same as WidgetScreen logic)
+        const managerProjectId = projectsResponse && projectsResponse.length > 0 ? projectsResponse[0].id : null;
+        console.log("CreatLogScreen - Manager project ID:", managerProjectId);
+        
+        if (managerProjectId) {
+          // Now call getTaskByProjectId with the project ID
+          console.log("CreatLogScreen - Calling getTaskByProjectId with projectId:", managerProjectId);
+          response = await getTaskByProjectId(managerProjectId);
+          console.log("CreatLogScreen - Manager project tasks response:", response);
+        } else {
+          console.log("CreatLogScreen - No project ID found, using empty response");
+          response = null;
+        }
+      } else {
+        // For employees, get tasks assigned to them (using the same API as ViewAllTasksScreen)
+        console.log("CreatLogScreen - Calling getTasksAssignedToEmployees for Employee");
+        response = await getTasksAssignedToEmployees();
+        console.log("CreatLogScreen - Employee tasks response:", response);
+      }
       
-      // Convert tasks to logs format for display
-      const logsData = response ? response.map(task => ({
-        id: task.id,
-        title: task.title,
-        description: task.description,
-        startTime: task.startTime,
-        endTime: task.endTime,
-        assignedTo: task.assignedTo,
-        priority: task.priority,
-        status: task.status,
-        projectName: task.project?.name || "My Tasks",
-        createdBy: task.assignedTo ? `${task.assignedTo.first_name || ""} ${task.assignedTo.last_name || ""}`.trim() : "Unassigned",
-        date: task.startTime ? new Date(task.startTime).toLocaleDateString() : "N/A"
-      })) : [];
+      // Convert data to logs format for display
+      let logsData = [];
+      
+      if (response) {
+        if (role === "Manager") {
+          // Handle getTaskByProjectId response structure
+          console.log("CreatLogScreen - Processing Manager project tasks response");
+          console.log("CreatLogScreen - Response structure:", response);
+          
+          let tasks = [];
+          if (response && response.tasks) {
+            tasks = response.tasks;
+            console.log("CreatLogScreen - Found tasks in response.tasks:", tasks.length);
+          } else if (response && Array.isArray(response)) {
+            tasks = response;
+            console.log("CreatLogScreen - Found tasks in response array:", tasks.length);
+          } else {
+            console.log("CreatLogScreen - No tasks found in response");
+            tasks = [];
+          }
+          
+          logsData = tasks.map(task => ({
+            id: task.id,
+            title: task.title,
+            description: task.description,
+            startTime: task.startTime,
+            endTime: task.endTime,
+            assignedTo: task.assignedTo,
+            priority: task.priority,
+            status: task.status,
+            projectName: response.project?.name || "Project Tasks",
+            createdBy: task.assignedTo ? `${task.assignedTo.first_name || ""} ${task.assignedTo.last_name || ""}`.trim() : "Unassigned",
+            date: task.startTime ? new Date(task.startTime).toLocaleDateString() : "N/A"
+          }));
+          
+          console.log("CreatLogScreen - Processed logsData for Manager:", logsData.length);
+        } else {
+          // Handle getTasksAssignedToEmployees response structure (direct tasks array)
+          console.log("CreatLogScreen - Processing Employee tasks response");
+          logsData = response.map(task => ({
+            id: task.id,
+            title: task.title,
+            description: task.description,
+            startTime: task.startTime,
+            endTime: task.endTime,
+            assignedTo: task.assignedTo,
+            priority: task.priority,
+            status: task.status,
+            projectName: task.project?.name || "My Tasks",
+            createdBy: task.assignedTo ? `${task.assignedTo.first_name || ""} ${task.assignedTo.last_name || ""}`.trim() : "Unassigned",
+            date: task.startTime ? new Date(task.startTime).toLocaleDateString() : "N/A"
+          }));
+        }
+      }
 
       setLogs(logsData);
       setFilteredLogs(logsData);
@@ -640,15 +704,7 @@ function CreatLogScreen({ navigation, route }) {
               {/* Selected Images Preview */}
               {selectedImages.length > 0 && (
                 <View className="mb-3 mt-6">
-                  <View className="flex-row justify-between items-center mb-2">
-                    <Text className="text-[14px] text-[#666]">Selected Images:</Text>
-                    <TouchableOpacity
-                      onPress={() => setSelectedImages([])}
-                      className="bg-red-500 px-3 py-1 rounded-lg"
-                    >
-                      <Text className="text-white text-[12px] font-medium">Clear All</Text>
-                    </TouchableOpacity>
-                  </View>
+                  <Text className="text-[14px] text-[#666] mb-2">Selected Images:</Text>
                   <ScrollView 
                     horizontal 
                     showsHorizontalScrollIndicator={false}
@@ -663,6 +719,20 @@ function CreatLogScreen({ navigation, route }) {
                             style={{ resizeMode: 'cover' }}
                             onError={() => console.log(`Failed to load image: ${image.name}`)}
                           />
+                          {/* Individual Cross Button */}
+                          <TouchableOpacity
+                            onPress={() => removeImage(image.id)}
+                            className="absolute top-1 right-1 bg-red-500 rounded-full w-6 h-6 items-center justify-center"
+                            style={{ 
+                              shadowColor: '#000',
+                              shadowOffset: { width: 0, height: 2 },
+                              shadowOpacity: 0.25,
+                              shadowRadius: 3.84,
+                              elevation: 5,
+                            }}
+                          >
+                            <Ionicons name="close" size={12} color="white" />
+                          </TouchableOpacity>
                         </View>
                         <Text className="text-[10px] text-[#666] text-center mt-1">
                           Image {index + 1}

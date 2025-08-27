@@ -76,13 +76,21 @@ function WidgetScreen({ navigation, route }) {
         id: log.id,
         createdBy: log.user ? `${log.user.first_name || ''} ${log.user.last_name || ''}`.trim() : 'Unknown User',
         date: log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'N/A',
+        createdAt: log.createdAt, // Preserve original createdAt for filtering
         description: log.note || 'No description',
         images: log.images || [], // Keep all images for the log
         image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : require("../assets/robot.png"),
       }));
       
-      console.log("WidgetScreen - Transformed logs:", transformedLogs);
-      setLogs(transformedLogs);
+      // Sort logs by date (newest first)
+      const sortedLogs = transformedLogs.sort((a, b) => {
+        const dateA = new Date(a.date);
+        const dateB = new Date(b.date);
+        return dateB - dateA;
+      });
+      
+      console.log("WidgetScreen - Transformed and sorted logs:", sortedLogs);
+      setLogs(sortedLogs);
     } catch (error) {
       console.error("WidgetScreen - Error loading logs:", error);
       setLogs([]);
@@ -108,15 +116,30 @@ function WidgetScreen({ navigation, route }) {
       const role = await getUserRole();
       setUserRole(role);
 
-      // Load logs in parallel with other data
-      loadLogs();
+      // Load logs after role is determined
+      await loadLogs();
 
       let response;
 
       if (role === "Employee") {
-        response = await getTasksAssignedToEmployees();
-        setProject({ name: "My Tasks" });
-        setTasks(response || []);
+        // Get employee's projects and extract tasks from them
+        const projectsResponse = await getMyProjects();
+        
+        if (projectsResponse && projectsResponse.length > 0) {
+          // Extract all tasks from all projects
+          const allTasks = [];
+          projectsResponse.forEach(project => {
+            if (project.tasks && Array.isArray(project.tasks)) {
+              allTasks.push(...project.tasks);
+            }
+          });
+          
+          setProject({ name: "My Projects" });
+          setTasks(allTasks);
+        } else {
+          setProject({ name: "No Projects" });
+          setTasks([]);
+        }
       } else if (role === "Manager") {
         // First get the manager's projects
         const projectsResponse = await getMyProjects();
@@ -178,7 +201,7 @@ function WidgetScreen({ navigation, route }) {
 
   const onRefresh = React.useCallback(() => {
     loadData(true);
-  }, []);
+  }, [userRole]); // Add userRole dependency to ensure logs reload when role changes
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
@@ -444,31 +467,37 @@ function WidgetScreen({ navigation, route }) {
           </Text>
         </View>
         <TouchableOpacity
-          style={{ flexDirection: "row", alignItems: "center" }}
-          onPress={() =>
-                          navigation.navigate("ViewAllLogScreen", { logs: logs })
-          }
+          style={{ 
+            flexDirection: "row", 
+            alignItems: "center",
+            opacity: logs.length === 0 ? 0.5 : 1,
+          }}
+          onPress={() => {
+            if (logs.length > 0) {
+              console.log("WidgetScreen - Navigating to ViewAllLogScreen with logs:", logs);
+              navigation.navigate("ViewAllLogScreen", { logs: logs });
+            }
+          }}
+          disabled={logs.length === 0}
         >
           <Text style={{
             fontSize: Math.min(14, screenWidth * 0.035),
             fontWeight: "bold",
-            color: "black",
+            color: logs.length === 0 ? "#999" : "black",
             marginRight: 4,
           }}>
             View All
           </Text>
-          <Ionicons name="chevron-forward" size={Math.min(16, screenWidth * 0.04)} color="black" />
+          <Ionicons 
+            name="chevron-forward" 
+            size={Math.min(16, screenWidth * 0.04)} 
+            color={logs.length === 0 ? "#999" : "black"} 
+          />
         </TouchableOpacity>
       </View>
 
       <View style={{ height: Math.min(200, screenHeight * 0.25) }}>
-        {logs.length === 0 ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-            <Text style={{ fontSize: 14, color: '#666', textAlign: 'center' }}>
-              No logs found
-            </Text>
-          </View>
-        ) : (
+        {logs && logs.length > 0 ? (
           <ScrollView
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled={true}
@@ -535,6 +564,27 @@ function WidgetScreen({ navigation, route }) {
             </View>
           ))}
           </ScrollView>
+        ) : (
+          <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingVertical: Math.min(40, screenHeight * 0.05), minHeight: Math.min(120, screenHeight * 0.15) }}>
+            <Ionicons name="document-text-outline" size={Math.min(48, screenWidth * 0.12)} color="#ccc" />
+            <Text style={{
+              fontSize: Math.min(16, screenWidth * 0.04),
+              color: "#666",
+              fontWeight: "600",
+              marginTop: 12,
+              marginBottom: 4,
+            }}>
+              No logs found
+            </Text>
+            <Text style={{
+              fontSize: Math.min(14, screenWidth * 0.035),
+              color: "#999",
+              fontWeight: "400",
+              textAlign: "center",
+            }}>
+              Logs will appear here once created
+            </Text>
+          </View>
         )}
       </View>
     </View>
@@ -619,23 +669,23 @@ function WidgetScreen({ navigation, route }) {
 
       <CustomBottomNav
         onAddPress={() => {
-          if (userRole === "Employee") {
-            // Do nothing - no alert, no action
+          // Check if there are no logs and navigate to CreatLog (for Employee and Manager)
+          if (logs.length === 0 && (userRole === "Employee" || userRole === "Manager")) {
+            // Pass project data for Manager role
+            const navigationParams = userRole === "Manager" ? { projectId: managerProjectId } : {};
+            navigation.navigate("CreatLog", navigationParams);
             return;
           }
 
-          if (tasks.length === 0) {
-            // Only navigate to create task screen if no tasks found
+          // For other roles, check if there are no tasks and navigate to CreateTaskScreen
+          if (userRole !== "Employee" && tasks.length === 0) {
             const navigationParams =
-              userRole === "Employee"
-                ? {}
-                : {
-                    projectId:
-                      userRole === "Manager" ? managerProjectId : projectId,
-                  };
+              userRole === "Manager" ? { projectId: managerProjectId } : { projectId: projectId };
             navigation.navigate("CreateTask", navigationParams);
+            return;
           }
-          // If tasks exist, do nothing (don't navigate anywhere)
+
+          // If both logs and tasks exist, or user doesn't have permission, do nothing
         }}
       />
     </View>

@@ -15,11 +15,21 @@ import {
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 import { Ionicons } from "@expo/vector-icons";
 import { uploadImage } from "../../services/images/uploadImage";
+import { updateLogById } from "../../services/log/updateLogById";
+import { updateImageById } from "../../services/images/updateImageById";
 import * as ImagePicker from "expo-image-picker";
 
 // --- Update Log Modal Component ---
-// Purpose: Allows users to update existing logs with modified notes and images
+// Purpose: Allows users to update existing logs with modified notes and new images
 // Business Logic: Follows MCP context 7 best practices for clean, maintainable code
+// 
+// CHANGES MADE:
+// - Removed image deletion functionality (updateImageById)
+// - Simplified to only handle note updates and new image uploads
+// - Uses correct field name 'Image' for backend compatibility
+// - Added updateLogById service for log note updates
+// - Separated image handling: uploadImage for new images (accepts arrays), updateLogById for notes (no arrays)
+// 
 const UpdateLogModal = ({ 
   visible, 
   onClose, 
@@ -29,8 +39,9 @@ const UpdateLogModal = ({
 }) => {
   // --- State Management ---
   const [logNote, setLogNote] = useState("");
-  const [selectedImages, setSelectedImages] = useState([]);
+  const [selectedImage, setSelectedImage] = useState(null); // Single image only
   const [existingImages, setExistingImages] = useState([]);
+  const [removedImageId, setRemovedImageId] = useState(null); // Single removed image ID
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingImages, setIsUploadingImages] = useState(false);
 
@@ -41,12 +52,13 @@ const UpdateLogModal = ({
       // Pre-fill existing data
       setLogNote(log.description || log.note || "");
       setExistingImages(log.images || []);
-      setSelectedImages([]);
+      setSelectedImage(null); // Reset selected image when modal opens
+      setRemovedImageId(null); // Reset removed image ID when modal opens
     }
   }, [visible, log]);
 
   // --- Image Picker Function ---
-  const pickImages = async () => {
+  const pickImage = async () => {
     try {
       // Request permissions
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -55,37 +67,41 @@ const UpdateLogModal = ({
         return;
       }
 
-      // Launch image picker
+      // Launch image picker for single image only
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsMultipleSelection: true,
+        allowsMultipleSelection: false, // Single image only
         quality: 0.8,
         aspect: [4, 3],
       });
 
-      if (!result.canceled && result.assets) {
-        // Add new images to existing ones
-        const newImages = result.assets.map(asset => ({
-          uri: asset.uri,
-          id: Date.now() + Math.random(), // Unique ID for each image
-          name: asset.fileName || `image_${Date.now()}.jpg`,
+      if (!result.canceled && result.assets && result.assets[0]) {
+        // Set single new image
+        const newImage = {
+          uri: result.assets[0].uri,
+          id: Date.now() + Math.random(), // Unique ID for UI
+          name: result.assets[0].fileName || `image_${Date.now()}.jpg`,
           isNew: true, // Mark as new image
-        }));
-        setSelectedImages(prev => [...prev, ...newImages]);
+        };
+        setSelectedImage(newImage);
       }
     } catch (error) {
-      console.error('Error picking images:', error);
-      Alert.alert('Error', 'Failed to pick images. Please try again.');
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
     }
   };
 
   // --- Remove New Image Function ---
-  const removeNewImage = (imageId) => {
-    setSelectedImages(prev => prev.filter(img => img.id !== imageId));
+  const removeNewImage = () => {
+    console.log("Removing selected image");
+    setSelectedImage(null);
   };
 
   // --- Remove Existing Image Function ---
   const removeExistingImage = (imageId) => {
+    console.log("Removing existing image with ID:", imageId);
+    console.log("UpdateLogModal - Stored removed image ID:", imageId);
+    setRemovedImageId(imageId); // Store the removed image ID
     setExistingImages(prev => prev.filter(img => img.id !== imageId));
   };
 
@@ -100,23 +116,42 @@ const UpdateLogModal = ({
     try {
       setIsSubmitting(true);
       
-      // --- Step 1: Prepare Update Data ---
-      const updateData = {
-        id: log.id,
-        note: logNote.trim(),
-        // Include existing images that weren't removed
-        existingImages: existingImages.map(img => img.id),
-      };
+      // --- Step 1: Check if any changes were made ---
+      const currentNote = log.description || log.note || '';
+      const newNote = logNote.trim();
+      const hasNoteChange = currentNote !== newNote;
+      const hasNewImage = selectedImage !== null;
       
-      console.log("Update data prepared:", updateData);
-      
-      // --- Step 2: Call Update Function ---
-      await onUpdate(updateData);
-      
-      // --- Step 3: Upload New Images (if any) ---
-      if (selectedImages.length > 0) {
-        await uploadNewImages(log.id);
+      // If no changes detected, show message and stay in modal
+      if (!hasNoteChange && !hasNewImage && !removedImageId) {
+        Alert.alert("Info", "No changes detected");
+        return;
       }
+      
+      console.log("UpdateLogModal - Changes detected:", {
+        noteChanged: hasNoteChange,
+        newImage: hasNewImage,
+        removedImageId: removedImageId
+      });
+      
+      // --- Step 2: Update Log Note (if changed) ---
+      if (hasNoteChange) {
+        console.log("UpdateLogModal - Updating log note");
+        const updateData = {
+          note: newNote // Only pass the note field
+        };
+        
+        await updateLogById(log.id, updateData);
+        console.log("UpdateLogModal - Log note updated successfully");
+      }
+      
+      // --- Step 3: Handle New Image (if any) ---
+      if (hasNewImage || removedImageId) {
+        console.log(`UpdateLogModal - Handling image update/replacement`);
+        await uploadNewImage(log.id);
+      }
+      
+
       
       Alert.alert('Success', 'Log updated successfully!');
       onClose();
@@ -130,37 +165,66 @@ const UpdateLogModal = ({
     }
   };
 
-  // --- Helper Function for New Image Upload ---
-  const uploadNewImages = async (logId) => {
+  // --- Helper Function for Single Image Upload ---
+  const uploadNewImage = async (logId) => {
     setIsUploadingImages(true);
     
     try {
-      const formData = new FormData();
-      
-      // Add only new images to the 'images' field
-      selectedImages.forEach(image => {
-        formData.append('images', {
-          uri: image.uri,
+      // Check if we have a removed image ID to associate with
+      if (removedImageId && selectedImage) {
+        console.log(`UpdateLogModal - Removed image ID: ${removedImageId}`);
+        console.log(`UpdateLogModal - Replacing with new image`);
+        
+        // Create FormData for updateImageById
+        const formData = new FormData();
+        formData.append('image', {
+          uri: selectedImage.uri,
           type: 'image/jpeg',
-          name: image.name,
+          name: `replacement_image_${Date.now()}.jpg`,
         });
-      });
-      
-      formData.append('logId', logId);
-      
-      console.log(`UpdateLogModal - Uploading ${selectedImages.length} new images`);
-      
-      const uploadResponse = await uploadImage(formData);
-      
-      // Handle response from backend
-      if (uploadResponse.images?.length > 0) {
-        const successful = uploadResponse.images.filter(img => !img.error);
-        const failed = uploadResponse.images.filter(img => img.error);
         
-        console.log(`UpdateLogModal - Upload result: ${successful.length} successful, ${failed.length} failed`);
+        console.log(`UpdateLogModal - Updating image ID ${removedImageId} with new image`);
+        console.log(`UpdateLogModal - FormData being sent:`, formData._parts);
         
-        if (failed.length > 0) {
-          Alert.alert("Partial Success", `Uploaded ${successful.length} image(s), ${failed.length} failed.`);
+        try {
+          const response = await updateImageById(removedImageId, formData);
+          console.log(`UpdateLogModal - Successfully updated image ${removedImageId}:`, response);
+          Alert.alert("Success", "Image replaced successfully!");
+        } catch (error) {
+          console.error(`UpdateLogModal - Failed to update image ${removedImageId}:`, error);
+          Alert.alert("Error", "Failed to replace image. Please try again.");
+        }
+        
+      } else if (selectedImage) {
+        // Regular upload for new image (no association needed)
+        console.log(`UpdateLogModal - Regular upload for new image`);
+        
+        const formData = new FormData();
+        formData.append('logId', logId);
+        formData.append('image', {
+          uri: selectedImage.uri,
+          type: 'image/jpeg',
+          name: `new_image_${Date.now()}.jpg`,
+        });
+        
+        const uploadResponse = await uploadImage(formData);
+        
+        // Handle response from backend
+        console.log("UpdateLogModal - Upload response:", uploadResponse);
+        
+        const responseImages = uploadResponse.images || uploadResponse.Image || uploadResponse.data?.images || uploadResponse.data?.Image;
+        
+        if (responseImages?.length > 0) {
+          const successful = responseImages.filter(img => !img.error);
+          const failed = responseImages.filter(img => img.error);
+          
+          console.log(`UpdateLogModal - Upload result: ${successful.length} successful, ${failed.length} failed`);
+          
+          if (failed.length > 0) {
+            Alert.alert("Partial Success", `Uploaded ${successful.length} image(s), ${failed.length} failed.`);
+          } else {
+            console.log("UpdateLogModal - Image uploaded successfully");
+          }
         }
       }
       
@@ -171,6 +235,8 @@ const UpdateLogModal = ({
       setIsUploadingImages(false);
     }
   };
+
+
 
   // --- Render Image Preview ---
   const renderImagePreview = (image, index, isExisting = false) => (
@@ -191,7 +257,7 @@ const UpdateLogModal = ({
         
         {/* Remove Button */}
         <TouchableOpacity
-          onPress={() => isExisting ? removeExistingImage(image.id) : removeNewImage(image.id)}
+          onPress={() => isExisting ? removeExistingImage(image.id) : removeNewImage()}
           style={{
             position: 'absolute',
             top: 4,
@@ -214,7 +280,7 @@ const UpdateLogModal = ({
         textAlign: 'center',
         marginTop: 4,
       }}>
-        {isExisting ? `Existing ${index + 1}` : `New ${index + 1}`}
+        {isExisting ? `Existing ${index + 1}` : `New Image`}
       </Text>
     </View>
   );
@@ -298,7 +364,7 @@ const UpdateLogModal = ({
             />
           </View>
 
-          {/* --- Existing Images Section --- */}
+          {/* --- Existing Images Section (Read-only) --- */}
           {existingImages.length > 0 && (
             <View style={{ marginBottom: Math.min(24, screenHeight * 0.03) }}>
               <Text style={{
@@ -346,7 +412,7 @@ const UpdateLogModal = ({
                 backgroundColor: '#f8f9fa',
                 marginBottom: Math.min(12, screenHeight * 0.015),
               }}
-              onPress={pickImages}
+              onPress={pickImage}
             >
               <Ionicons 
                 name="camera-outline" 
@@ -359,15 +425,15 @@ const UpdateLogModal = ({
                 color: "#666",
                 textAlign: 'center',
               }}>
-                {selectedImages.length > 0 
-                  ? `Add More Images (${selectedImages.length} selected)`
-                  : 'Select New Images'
+                {selectedImage 
+                  ? 'Replace Selected Image'
+                  : 'Select New Image'
                 }
               </Text>
             </TouchableOpacity>
 
-            {/* New Images Preview */}
-            {selectedImages.length > 0 && (
+            {/* New Image Preview */}
+            {selectedImage && (
               <View>
                 <View style={{
                   flexDirection: 'row',
@@ -379,10 +445,10 @@ const UpdateLogModal = ({
                     fontSize: Math.min(14, screenWidth * 0.035),
                     color: "#666",
                   }}>
-                    New Images to Upload:
+                    New Image to Upload:
                   </Text>
                   <TouchableOpacity
-                    onPress={() => setSelectedImages([])}
+                    onPress={() => setSelectedImage(null)}
                     style={{
                       backgroundColor: '#dc3545',
                       paddingHorizontal: Math.min(12, screenWidth * 0.03),
@@ -395,20 +461,14 @@ const UpdateLogModal = ({
                       fontSize: Math.min(12, screenWidth * 0.03),
                       fontWeight: '500',
                     }}>
-                      Clear All
+                      Clear
                     </Text>
                   </TouchableOpacity>
                 </View>
                 
-                <ScrollView 
-                  horizontal 
-                  showsHorizontalScrollIndicator={false}
-                  style={{ flexDirection: 'row' }}
-                >
-                  {selectedImages.map((image, index) => 
-                    renderImagePreview(image, index, false)
-                  )}
-                </ScrollView>
+                <View style={{ flexDirection: 'row' }}>
+                  {renderImagePreview(selectedImage, 0, false)}
+                </View>
               </View>
             )}
           </View>
