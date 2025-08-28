@@ -26,8 +26,8 @@ import { useFocusEffect } from "@react-navigation/native";
 import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
 import { getTasksAssignedToEmployees } from "../services/tasks/getTasksAssignedToEmployees";
-import { getMyProjects } from "../services/projects/getProjectsByLoginUserId";
-import { getTaskByProjectId } from "../services/tasks/getTaskByProjectId";
+import getTodaysTask from "../services/tasks/getTodayTask";
+
 import { createLog } from "../services/log/createLog";
 import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
@@ -101,84 +101,38 @@ function CreatLogScreen({ navigation, route }) {
       // Get data based on user role
       let response;
       if (role === "Manager") {
-        // First get projects to get projectId (same logic as WidgetScreen)
-        console.log("CreatLogScreen - Calling getMyProjects for Manager");
-        const projectsResponse = await getMyProjects();
-        console.log("CreatLogScreen - Manager projects response:", projectsResponse);
-        
-        // Get the first project's ID (same as WidgetScreen logic)
-        const managerProjectId = projectsResponse && projectsResponse.length > 0 ? projectsResponse[0].id : null;
-        console.log("CreatLogScreen - Manager project ID:", managerProjectId);
-        
-        if (managerProjectId) {
-          // Now call getTaskByProjectId with the project ID
-          console.log("CreatLogScreen - Calling getTaskByProjectId with projectId:", managerProjectId);
-          response = await getTaskByProjectId(managerProjectId);
-          console.log("CreatLogScreen - Manager project tasks response:", response);
-        } else {
-          console.log("CreatLogScreen - No project ID found, using empty response");
-          response = null;
-        }
-      } else {
-        // For employees, get tasks assigned to them (using the same API as ViewAllTasksScreen)
-        console.log("CreatLogScreen - Calling getTasksAssignedToEmployees for Employee");
-        response = await getTasksAssignedToEmployees();
-        console.log("CreatLogScreen - Employee tasks response:", response);
+        // For Manager role, get today's tasks
+        console.log("CreatLogScreen - Calling getTodaysTask for Manager");
+        response = await getTodaysTask();
+        console.log("CreatLogScreen - Manager today's tasks response:", response);
+      } else if (role === "Employee") {
+        // For employees, get today's tasks
+        console.log("CreatLogScreen - Calling getTodaysTask for Employee");
+        response = await getTodaysTask();
+        console.log("CreatLogScreen - Employee today's tasks response:", response);
       }
       
       // Convert data to logs format for display
       let logsData = [];
       
       if (response) {
-        if (role === "Manager") {
-          // Handle getTaskByProjectId response structure
-          console.log("CreatLogScreen - Processing Manager project tasks response");
-          console.log("CreatLogScreen - Response structure:", response);
-          
-          let tasks = [];
-          if (response && response.tasks) {
-            tasks = response.tasks;
-            console.log("CreatLogScreen - Found tasks in response.tasks:", tasks.length);
-          } else if (response && Array.isArray(response)) {
-            tasks = response;
-            console.log("CreatLogScreen - Found tasks in response array:", tasks.length);
-          } else {
-            console.log("CreatLogScreen - No tasks found in response");
-            tasks = [];
-          }
-          
-          logsData = tasks.map(task => ({
-            id: task.id,
-            title: task.title,
-            description: task.description,
-            startTime: task.startTime,
-            endTime: task.endTime,
-            assignedTo: task.assignedTo,
-            priority: task.priority,
-            status: task.status,
-            projectName: response.project?.name || "Project Tasks",
-            createdBy: task.assignedTo ? `${task.assignedTo.first_name || ""} ${task.assignedTo.last_name || ""}`.trim() : "Unassigned",
-            date: task.startTime ? new Date(task.startTime).toLocaleDateString() : "N/A"
-          }));
-          
-          console.log("CreatLogScreen - Processed logsData for Manager:", logsData.length);
-        } else {
-          // Handle getTasksAssignedToEmployees response structure (direct tasks array)
-          console.log("CreatLogScreen - Processing Employee tasks response");
-          logsData = response.map(task => ({
-            id: task.id,
-            title: task.title,
-            description: task.description,
-            startTime: task.startTime,
-            endTime: task.endTime,
-            assignedTo: task.assignedTo,
-            priority: task.priority,
-            status: task.status,
-            projectName: task.project?.name || "My Tasks",
-            createdBy: task.assignedTo ? `${task.assignedTo.first_name || ""} ${task.assignedTo.last_name || ""}`.trim() : "Unassigned",
-            date: task.startTime ? new Date(task.startTime).toLocaleDateString() : "N/A"
-          }));
-        }
+        // Handle getTodaysTask response structure for both Employee and Manager
+        console.log("CreatLogScreen - Processing today's tasks response for role:", role);
+        logsData = response.map(task => ({
+          id: task.id,
+          title: task.title,
+          description: task.description,
+          startTime: task.startTime,
+          endTime: task.endTime,
+          assignedTo: task.assignedTo,
+          priority: task.priority,
+          status: task.status,
+          projectName: task.project?.name || "Today's Tasks",
+          createdBy: task.assignedTo ? `${task.assignedTo.first_name || ""} ${task.assignedTo.last_name || ""}`.trim() : "Unassigned",
+          date: task.startTime ? new Date(task.startTime).toLocaleDateString() : "N/A"
+        }));
+        
+        console.log("CreatLogScreen - Processed today's tasks for", role + ":", logsData.length);
       }
 
       setLogs(logsData);
@@ -425,12 +379,12 @@ function CreatLogScreen({ navigation, route }) {
     );
   };
 
-  const renderLogCard = React.useCallback((log) => {
+  const renderLogCard = React.useCallback((log, index) => {
     const isChecked = checkedTasks.has(log.id);
     console.log('Rendering log card:', log.id, 'isChecked:', isChecked);
     
     return (
-      <View className="mb-4">
+      <View style={{ marginBottom: Math.min(16, screenHeight * 0.02) }}>
         {/* Task Card */}
         <View
           className="rounded-[8px] border shadow-sm"
@@ -446,12 +400,23 @@ function CreatLogScreen({ navigation, route }) {
             <View className="flex-row justify-between items-center">
               <View className="flex-row items-center flex-1">
                 <View className="flex-row items-center mr-2" style={{ minWidth: Math.max(70, screenWidth * 0.17) }}>
-                  <Ionicons
-                    name="document-text"
-                    size={Math.min(14, screenWidth * 0.035)}
-                    color="#374151"
-                    style={{ marginRight: 4 }}
-                  />
+                  <View style={{
+                    backgroundColor: '#000000',
+                    borderRadius: Math.min(16, screenWidth * 0.04),
+                    width: Math.max(20, screenWidth * 0.05),
+                    height: Math.max(20, screenWidth * 0.05),
+                    marginRight: Math.min(8, screenWidth * 0.02),
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    <Text style={{
+                      fontSize: Math.min(12, screenWidth * 0.03),
+                      color: "white",
+                      fontWeight: "700",
+                    }}>
+                      {index + 1}
+                    </Text>
+                  </View>
                   <Text style={{
                     fontSize: Math.min(15, screenWidth * 0.038),
                     color: "black",
@@ -517,10 +482,28 @@ function CreatLogScreen({ navigation, route }) {
       maxToRenderPerBatch={10}
       windowSize={10}
       initialNumToRender={5}
+      ListHeaderComponent={() => (
+        logs.length > 0 ? (
+          <View style={{
+            marginBottom: Math.min(24, screenHeight * 0.03),
+            paddingBottom: Math.min(16, screenHeight * 0.02),
+          }}>
+            <Text style={{
+              fontSize: Math.min(24, screenWidth * 0.06),
+              fontWeight: '700',
+              color: '#111827',
+              marginBottom: Math.min(8, screenHeight * 0.01),
+              textAlign: 'center',
+            }}>
+              Today's Tasks ({logs.length})
+            </Text>
+          </View>
+        ) : null
+      )}
  
 
       ListFooterComponent={() => (
-        checkedTasks.size > 0 ? (
+        logs.length > 0 ? (
           <View style={{ 
             paddingHorizontal: Math.min(20, screenWidth * 0.05), 
             paddingVertical: Math.min(16, screenHeight * 0.02) 
@@ -528,26 +511,30 @@ function CreatLogScreen({ navigation, route }) {
             <TouchableOpacity
               style={{
                 minWidth: Math.max(200, screenWidth * 0.5),
-                backgroundColor: 'black',
+                backgroundColor: checkedTasks.size > 0 ? 'black' : '#D1D5DB',
                 borderRadius: Math.min(12, screenWidth * 0.03),
                 paddingVertical: Math.min(12, screenHeight * 0.015),
                 paddingHorizontal: Math.min(24, screenWidth * 0.06),
                 alignItems: 'center',
                 justifyContent: 'center',
                 alignSelf: 'center',
+                opacity: checkedTasks.size > 0 ? 1 : 0.6,
               }}
               onPress={() => {
-                // Get the first selected task to open the modal
-                const selectedTaskId = Array.from(checkedTasks)[0];
-                const selectedTask = logs.find(log => log.id === selectedTaskId);
-                if (selectedTask) {
-                  handleCreateLog(selectedTask);
+                if (checkedTasks.size > 0) {
+                  // Get the first selected task to open the modal
+                  const selectedTaskId = Array.from(checkedTasks)[0];
+                  const selectedTask = logs.find(log => log.id === selectedTaskId);
+                  if (selectedTask) {
+                    handleCreateLog(selectedTask);
+                  }
                 }
               }}
-              activeOpacity={0.8}
+              disabled={checkedTasks.size === 0}
+              activeOpacity={checkedTasks.size > 0 ? 0.8 : 1}
             >
               <Text style={{
-                color: 'white',
+                color: checkedTasks.size > 0 ? 'white' : '#6B7280',
                 fontSize: Math.min(16, screenWidth * 0.04),
                 fontWeight: '600',
               }}>
@@ -563,7 +550,8 @@ function CreatLogScreen({ navigation, route }) {
           justifyContent: "center",
           alignItems: "center",
           padding: Math.min(20, screenWidth * 0.05),
-          minHeight: Math.min(300, screenHeight * 0.375),
+          minHeight: Math.min(400, screenHeight * 0.5),
+          marginTop: Math.min(100, screenHeight * 0.125), // Shift downward
         }}>
           {error ? (
             <>
@@ -590,23 +578,40 @@ function CreatLogScreen({ navigation, route }) {
                   fontSize: Math.min(16, screenWidth * 0.04),
                   fontWeight: "600",
                 }}>
-                  Retry
+                  {error.includes("Authentication failed") || error.includes("Session expired") ? "Login Again" : "Retry"}
                 </Text>
               </TouchableOpacity>
             </>
           ) : (
-            <Text style={{
-              fontSize: Math.min(16, screenWidth * 0.04),
-              color: "#666",
-              textAlign: "center",
-              fontWeight: "500",
-            }}>
-              No logs found
-            </Text>
+            <>
+              <Ionicons 
+                name="document-text-outline" 
+                size={Math.min(64, screenWidth * 0.16)} 
+                color="#ccc" 
+                style={{ marginBottom: Math.min(16, screenHeight * 0.02) }}
+              />
+              <Text style={{
+                fontSize: Math.min(18, screenWidth * 0.045),
+                color: "#666",
+                textAlign: "center",
+                fontWeight: "600",
+                marginBottom: Math.min(8, screenHeight * 0.01),
+              }}>
+                No tasks for today
+              </Text>
+              <Text style={{
+                fontSize: Math.min(14, screenWidth * 0.035),
+                color: "#999",
+                textAlign: "center",
+                fontWeight: "400",
+              }}>
+                Tasks will appear here once assigned
+              </Text>
+            </>
           )}
         </View>
       )}
-      renderItem={({ item }) => renderLogCard(item)}
+      renderItem={({ item, index }) => renderLogCard(item, index)}
     />
   );
 

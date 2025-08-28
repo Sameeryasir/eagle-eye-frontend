@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   ScrollView,
   RefreshControl,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -36,6 +37,8 @@ import {
   MenuTrigger,
 } from "react-native-popup-menu";
 
+const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
+
 const searchBarClasses = `flex-row items-center rounded-2xl px-4 py-3 bg-[#F8FAFC] border border-[#EAECF0]`;
 
 const SearchBarHeader = React.memo(function SearchBarHeader({
@@ -43,19 +46,31 @@ const SearchBarHeader = React.memo(function SearchBarHeader({
   onChange,
 }) {
   return (
-    <View className="py-5 px-5">
+    <View style={{
+      paddingVertical: Math.min(20, screenHeight * 0.025),
+      paddingHorizontal: Math.min(20, screenWidth * 0.05),
+    }}>
       <View
         className={searchBarClasses}
-        style={{ width: "100%", maxWidth: 600 }}
+        style={{ 
+          width: "100%", 
+          maxWidth: Math.min(600, screenWidth * 0.9),
+          paddingHorizontal: Math.min(16, screenWidth * 0.04),
+          paddingVertical: Math.min(12, screenHeight * 0.015),
+        }}
       >
         <Ionicons
           name="search"
-          size={18}
+          size={Math.min(18, screenWidth * 0.045)}
           color="#6B7280"
-          style={{ marginRight: 8 }}
+          style={{ marginRight: Math.min(8, screenWidth * 0.02) }}
         />
         <TextInput
-          className="flex-1 text-[15px] text-[#111827]"
+          style={{
+            flex: 1,
+            fontSize: Math.min(15, screenWidth * 0.038),
+            color: "#111827",
+          }}
           placeholder="Search tasks"
           placeholderTextColor="#9CA3AF"
           value={searchTerm}
@@ -64,8 +79,8 @@ const SearchBarHeader = React.memo(function SearchBarHeader({
           blurOnSubmit={false}
         />
         {searchTerm.length > 0 && (
-          <TouchableOpacity onPress={() => onChange("")} className="ml-2">
-            <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+          <TouchableOpacity onPress={() => onChange("")} style={{ marginLeft: Math.min(8, screenWidth * 0.02) }}>
+            <Ionicons name="close-circle" size={Math.min(18, screenWidth * 0.045)} color="#9CA3AF" />
           </TouchableOpacity>
         )}
       </View>
@@ -212,11 +227,6 @@ function ViewAllTasksScreen({ navigation, route }) {
         newDate.setHours(currentDraft.startTime.getHours());
         newDate.setMinutes(currentDraft.startTime.getMinutes());
         updateDraftTask(activeDraftId, "startTime", newDate);
-
-        // Ensure end date is not before start date
-        if (newDate > currentDraft.endTime) {
-          updateDraftTask(activeDraftId, "endTime", newDate);
-        }
         
         // Open time picker after date selection
         setPendingTimePicker("start");
@@ -244,11 +254,6 @@ function ViewAllTasksScreen({ navigation, route }) {
           newDate.setHours(selectedDate.getHours());
           newDate.setMinutes(selectedDate.getMinutes());
           updateDraftTask(activeDraftId, "startTime", newDate);
-
-          // Ensure end date is not before start date
-          if (newDate > currentDraft.endTime) {
-            updateDraftTask(activeDraftId, "endTime", newDate);
-          }
         }
       }
     } else {
@@ -634,65 +639,116 @@ function ViewAllTasksScreen({ navigation, route }) {
       const isActiveDropdown = task.id === activeEmployeeDraftId || task.id === activePriorityDraftId;
       return (
         <View
-          className="bg-[#f8f9fa] rounded-[8px] p-4 mb-4 border border-[#e9ecef] shadow-sm"
+          className="bg-[#f8f9fa] rounded-[8px] border border-[#e9ecef] shadow-sm"
           style={{ 
             overflow: "visible", 
             zIndex: isActiveDropdown ? 9999 : 1,
-            position: 'relative'
+            position: 'relative',
+            padding: Math.min(16, screenWidth * 0.04),
+            marginBottom: Math.min(16, screenHeight * 0.02),
+            borderRadius: Math.min(8, screenWidth * 0.02),
           }}
         >
           <View style={{ 
             overflow: "visible", 
             position: 'relative'
           }}>
-            <View className="flex-row justify-between items-center mb-4">
-              <View className="flex-row items-center flex-1">
-                <View className="flex-row items-center mr-1 min-w-[70px]">
+            <View style={{ 
+              flexDirection: "row", 
+              justifyContent: "space-between", 
+              alignItems: "center", 
+              marginBottom: Math.min(16, screenHeight * 0.02) 
+            }}>
+              <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+                <View style={{ 
+                  flexDirection: "row", 
+                  alignItems: "center", 
+                  marginRight: Math.min(4, screenWidth * 0.01),
+                  minWidth: Math.max(70, screenWidth * 0.17)
+                }}>
                   <Ionicons
                     name="document-text"
-                    size={14}
+                    size={Math.min(14, screenWidth * 0.035)}
                     color="#374151"
-                    style={{ marginRight: 4 }}
+                    style={{ marginRight: Math.min(4, screenWidth * 0.01) }}
                   />
-                  <Text className="text-[15px] text-black font-semibold tracking-[0.3px]">
+                  <Text style={{
+                    fontSize: Math.min(15, screenWidth * 0.038),
+                    color: "black",
+                    fontWeight: "600",
+                    letterSpacing: 0.3,
+                  }}>
                     Title:
                   </Text>
                 </View>
                 <TextInput
-                  className="flex-1 text-[15px] text-[#333] leading-6 bg-transparent"
+                  style={{
+                    flex: 1,
+                    fontSize: Math.min(15, screenWidth * 0.038),
+                    color: "#333",
+                    lineHeight: Math.min(24, screenHeight * 0.03),
+                    backgroundColor: "transparent",
+                    padding: 0,
+                    margin: 0,
+                  }}
                   placeholder="Enter task title..."
                   placeholderTextColor="#9ca3af"
                   value={task.title}
                   onChangeText={(text) =>
                     updateDraftTask(task.id, "title", text)
                   }
-                  style={{ padding: 0, margin: 0 }}
                 />
               </View>
               <TouchableOpacity
-                className="mb-1 rounded-full bg-red-50 ml-3"
+                style={{
+                  marginBottom: Math.min(4, screenHeight * 0.005),
+                  borderRadius: Math.min(20, screenWidth * 0.05),
+                  backgroundColor: "#fef2f2",
+                  marginLeft: Math.min(12, screenWidth * 0.03),
+                  padding: Math.min(4, screenWidth * 0.01),
+                }}
                 onPress={() => removeDraftTask(task.id)}
               >
-                <Ionicons name="trash-outline" size={16} color="#dc3545" />
+                <Ionicons name="trash-outline" size={Math.min(16, screenWidth * 0.04)} color="#dc3545" />
               </TouchableOpacity>
             </View>
 
             <View>
-              <View className="mb-1">
-                <View className="flex-row items-start">
-                  <View className="flex-row items-center mr-3 min-w-[85px]">
+              <View style={{ marginBottom: Math.min(4, screenHeight * 0.005) }}>
+                <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+                  <View style={{ 
+                    flexDirection: "row", 
+                    alignItems: "center", 
+                    marginRight: Math.min(12, screenWidth * 0.03),
+                    minWidth: Math.max(85, screenWidth * 0.21)
+                  }}>
                     <Ionicons
                       name="chatbubble-ellipses"
-                      size={14}
+                      size={Math.min(14, screenWidth * 0.035)}
                       color="#374151"
-                      style={{ marginRight: 4 }}
+                      style={{ marginRight: Math.min(4, screenWidth * 0.01) }}
                     />
-                    <Text className="text-[15px] text-black font-semibold tracking-[0.3px]">
+                    <Text style={{
+                      fontSize: Math.min(15, screenWidth * 0.038),
+                      color: "black",
+                      fontWeight: "600",
+                      letterSpacing: 0.3,
+                    }}>
                       Description:
                     </Text>
                   </View>
                   <TextInput
-                    className="flex-1 text-[15px] text-[#333] leading-6 min-h-[30px] bg-transparent"
+                    style={{
+                      flex: 1,
+                      fontSize: Math.min(15, screenWidth * 0.038),
+                      color: "#333",
+                      lineHeight: Math.min(24, screenHeight * 0.03),
+                      minHeight: Math.min(30, screenHeight * 0.0375),
+                      backgroundColor: "transparent",
+                      textAlignVertical: "top",
+                      padding: 0,
+                      margin: 0,
+                    }}
                     placeholder="Enter task description..."
                     placeholderTextColor="#9ca3af"
                     value={task.description}
@@ -700,20 +756,29 @@ function ViewAllTasksScreen({ navigation, route }) {
                       updateDraftTask(task.id, "description", text)
                     }
                     multiline
-                    style={{ textAlignVertical: "top", padding: 0, margin: 0 }}
                   />
                 </View>
               </View>
-              <View className="mb-3">
-                <View className="flex-row items-start">
-                  <View className="flex-row items-center mr-3 min-w-[70px]">
+              <View style={{ marginBottom: Math.min(12, screenHeight * 0.015) }}>
+                <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+                  <View style={{ 
+                    flexDirection: "row", 
+                    alignItems: "center", 
+                    marginRight: Math.min(12, screenWidth * 0.03),
+                    minWidth: Math.max(70, screenWidth * 0.17)
+                  }}>
                     <Ionicons
                       name="flag"
-                      size={14}
+                      size={Math.min(14, screenWidth * 0.035)}
                       color="#374151"
-                      style={{ marginRight: 4 }}
+                      style={{ marginRight: Math.min(4, screenWidth * 0.01) }}
                     />
-                    <Text className="text-[15px] text-black font-semibold tracking-[0.3px]">
+                    <Text style={{
+                      fontSize: Math.min(15, screenWidth * 0.038),
+                      color: "black",
+                      fontWeight: "600",
+                      letterSpacing: 0.3,
+                    }}>
                       Priority:
                     </Text>
                   </View>
@@ -751,7 +816,7 @@ function ViewAllTasksScreen({ navigation, route }) {
                       placeholder="Select Priority"
                       placeholderStyle={{
                         color: "#9ca3af",
-                        fontSize: 15,
+                        fontSize: Math.min(15, screenWidth * 0.038),
                         fontWeight: "400",
                       }}
                       style={{
@@ -762,187 +827,62 @@ function ViewAllTasksScreen({ navigation, route }) {
                         paddingHorizontal: 0,
                       }}
                       textStyle={{
-                        fontSize: 15,
+                        fontSize: Math.min(15, screenWidth * 0.038),
                         color: task.priority ? "#333" : "#9ca3af",
                         fontWeight: "400",
                       }}
                       dropDownContainerStyle={{
-                        backgroundColor: "white",
-                        borderColor: "#e5e7eb",
-                        borderRadius: 8,
+                        backgroundColor: "#ffffff",
+                        borderColor: "#e2e8f0",
+                        borderWidth: 1.5,
+                        borderRadius: Math.min(12, screenWidth * 0.03),
                         shadowColor: "#000",
-                        shadowOpacity: 0.15,
-                        shadowRadius: 6,
-                        shadowOffset: { width: 0, height: 3 },
+                        shadowOpacity: 0.12,
+                        shadowRadius: Math.min(12, screenWidth * 0.03),
+                        shadowOffset: { width: 0, height: 6 },
                         elevation: 999999,
-                        maxHeight: 160,
-                        width: 140,
-                        marginLeft: -10,
-                        marginTop: 24,
+                        maxHeight: Math.min(160, screenHeight * 0.2),
+                        width: Math.max(140, screenWidth * 0.35),
+                        marginLeft: -Math.min(10, screenWidth * 0.025),
+                        marginTop: Math.min(24, screenHeight * 0.03),
                         zIndex: 999999,
                         position: 'absolute',
                         top: 0,
+                        paddingVertical: Math.min(4, screenHeight * 0.005),
                       }}
                       listItemContainerStyle={{
-                        height: 40,
-                        paddingHorizontal: 12,
-                      }}
-                      listItemLabelStyle={{
-                        fontSize: 14,
-                        fontWeight: "500",
-                        color: "#333",
-                      }}
-                      arrowIconStyle={{
-                        width: 16,
-                        height: 16,
-                        tintColor: "#6b7280",
-                      }}
-                      showArrowIcon={true}
-                      arrowIconContainerStyle={{
-                        marginRight:130,
-                      }}
-                    />
-                  </View>
-                </View>
-              </View>
-              <View className="mb-3">
-                <View className="flex-row items-start">
-                  <View className="flex-row items-center mr-3 min-w-[70px]">
-                    <Ionicons
-                      name="person"
-                      size={14}
-                      color="#374151"
-                      style={{ marginRight: 4 }}
-                    />
-                    <Text className="text-[15px] text-black font-semibold tracking-[0.3px]">
-                      Assigned:
-                    </Text>
-                  </View>
-                  <View className="flex-1">
-                    <DropDownPicker
-                      open={employeeOpen && activeEmployeeDraftId === task.id}
-                      value={task.assignedToUserId || null}
-                      items={filteredEmployees.map((employee) => ({
-                        label: `${employee.first_name || ""} ${employee.last_name || ""}`.trim() || employee.email,
-                        value: employee.id,
-                      
-                      }))}
-                      setOpen={(open) => {
-                        if (open) {
-                          setActiveEmployeeDraftId(task.id);
-                          // Close priority dropdown if open
-                          setPriorityOpen(false);
-                          setActivePriorityDraftId(null);
-                          setIsDropdownInteracting(true);
-                        } else {
-                          setActiveEmployeeDraftId(null);
-                          setIsDropdownInteracting(false);
-                        }
-                        setEmployeeOpen(open);
-                      }}
-                      setValue={(callback) => {
-                        const newValue = callback(task.assignedToUserId || null);
-                        const selectedEmployee = employees.find(emp => emp.id === newValue);
-                        updateDraftTask(task.id, "assignedToUserId", newValue);
-                        updateDraftTask(task.id, "assignedTo", selectedEmployee || null);
-                      }}
-                      placeholder="Select Employee"
-                      placeholderStyle={{
-                        color: "#9ca3af",
-                        fontSize: 15,
-                        fontWeight: "400",
-                      }}
-                      style={{
+                        height: Math.min(44, screenHeight * 0.055),
+                        paddingHorizontal: Math.min(14, screenWidth * 0.035),
+                        marginHorizontal: Math.min(4, screenWidth * 0.01),
+                        marginVertical: Math.min(1, screenHeight * 0.001),
+                        borderRadius: Math.min(8, screenWidth * 0.02),
                         backgroundColor: "transparent",
-                        borderWidth: 0,
-                        minHeight: 0,
-                        paddingVertical: 0,
-                        paddingHorizontal: 0,
-                      }}
-                      textStyle={{
-                        fontSize: 15,
-                        color: task.assignedTo ? "#333" : "#9ca3af",
-                        fontWeight: "400",
-                      }}
-                      dropDownContainerStyle={{
-                        backgroundColor: "white",
-                        borderColor: "#e5e7eb",
-                        borderRadius: 8,
-                        shadowColor: "#000",
-                        shadowOpacity: 0.15,
-                        shadowRadius: 6,
-                        shadowOffset: { width: 0, height: 3 },
-                        elevation: 999999,
-                        maxHeight: 200,
-                        width: 200,
-                        marginLeft: -10,
-                        marginTop: 25,
-                        zIndex: 999999,
-                        position: 'absolute',
-                        top: 0,
-                      }}
-                      listMode="SCROLLVIEW"
-                      scrollViewProps={{
-                        nestedScrollEnabled: true,
-                        showsVerticalScrollIndicator: true,
-                        onScrollBeginDrag: () => {
-                          setIsDropdownInteracting(true);
-                        },
-                        onScrollEndDrag: () => {
-                          // Keep interaction state true while dropdown is open
-                          if (employeeOpen && activeEmployeeDraftId === task.id) {
-                            setIsDropdownInteracting(true);
-                          }
-                        },
-                        scrollEventThrottle: 16,
-                        onTouchStart: () => {
-                          setIsDropdownInteracting(true);
-                        },
-                        onTouchEnd: () => {
-                          // Only disable interaction if dropdown is closed
-                          if (!employeeOpen || activeEmployeeDraftId !== task.id) {
-                            setIsDropdownInteracting(false);
-                          }
-                        },
-                      }}
-                      listItemContainerStyle={{
-                        height: 40,
-                        paddingHorizontal: 12,
+                        borderBottomWidth: 1,
+                        borderBottomColor: "#f1f5f9",
                       }}
                       listItemLabelStyle={{
-                        fontSize: 14,
+                        fontSize: Math.min(14, screenWidth * 0.035),
                         fontWeight: "500",
-                        color: "#333",
+                        color: "#374151",
+                        lineHeight: Math.min(18, screenHeight * 0.0225),
                       }}
                       arrowIconStyle={{
-                        width: 16,
-                        height: 16,
+                        width: Math.min(16, screenWidth * 0.04),
+                        height: Math.min(16, screenWidth * 0.04),
                         tintColor: "#6b7280",
                       }}
                       showArrowIcon={true}
                       arrowIconContainerStyle={{
-                        marginRight: 40,
-                      }}
-                      searchable={true}
-                      searchPlaceholder="Search employees..."
-                      searchTextInputStyle={{
-                        borderColor: "#e5e7eb",
-                        borderRadius: 6,
-                        fontSize: 14,
-                      }}
-                      searchTextInputProps={{
-                        placeholderTextColor: "#9ca3af",
-                      }}
-                      onSearch={(text) => {
-                        handleEmployeeSearch(text);
+                        marginRight: Math.max(130, screenWidth * 0.325),
                       }}
                     />
                   </View>
                 </View>
               </View>
 
+
               <TouchableOpacity
-                className="mb-3"
+                style={{ marginBottom: Math.min(12, screenHeight * 0.015) }}
                 onPress={() => {
                   Keyboard.dismiss();
                   setActiveDraftId(task.id);
@@ -951,20 +891,34 @@ function ViewAllTasksScreen({ navigation, route }) {
                   setShowStartDatePicker(true);
                 }}
               >
-                <View className="flex-row items-start">
-                  <View className="flex-row items-center mr-3 min-w-[85px]">
+                <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+                  <View style={{ 
+                    flexDirection: "row", 
+                    alignItems: "center", 
+                    marginRight: Math.min(12, screenWidth * 0.03),
+                    minWidth: Math.max(85, screenWidth * 0.21)
+                  }}>
                     <Ionicons
                       name="time"
-                      size={14}
+                      size={Math.min(14, screenWidth * 0.035)}
                       color="#374151"
-                      style={{ marginRight: 4 }}
+                      style={{ marginRight: Math.min(4, screenWidth * 0.01) }}
                     />
-                    <Text className="text-[15px] text-black font-semibold tracking-[0.3px]">
+                    <Text style={{
+                      fontSize: Math.min(15, screenWidth * 0.038),
+                      color: "black",
+                      fontWeight: "600",
+                      letterSpacing: 0.3,
+                    }}>
                       Start Date:
                     </Text>
                   </View>
-                  <View className="flex-1">
-                    <Text className="text-[15px] text-[#333] leading-6">
+                  <View style={{ flex: 1 }}>
+                    <Text style={{
+                      fontSize: Math.min(15, screenWidth * 0.038),
+                      color: "#333",
+                      lineHeight: Math.min(24, screenHeight * 0.03),
+                    }}>
                       {task.startTime
                         ? `${task.startTime.toLocaleDateString()} ${task.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true })}`
                         : "Not set"}
@@ -974,7 +928,7 @@ function ViewAllTasksScreen({ navigation, route }) {
               </TouchableOpacity>
 
               <TouchableOpacity
-                className="mb-3"
+                style={{ marginBottom: Math.min(12, screenHeight * 0.015) }}
                 onPress={() => {
                   Keyboard.dismiss();
                   setActiveDraftId(task.id);
@@ -983,20 +937,34 @@ function ViewAllTasksScreen({ navigation, route }) {
                   setShowEndDatePicker(true);
                 }}
               >
-                <View className="flex-row items-start">
-                  <View className="flex-row items-center mr-3 min-w-[85px]">
+                <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+                  <View style={{ 
+                    flexDirection: "row", 
+                    alignItems: "center", 
+                    marginRight: Math.min(12, screenWidth * 0.03),
+                    minWidth: Math.max(85, screenWidth * 0.21)
+                  }}>
                     <Ionicons
                       name="calendar"
-                      size={14}
+                      size={Math.min(14, screenWidth * 0.035)}
                       color="#374151"
-                      style={{ marginRight: 4 }}
+                      style={{ marginRight: Math.min(4, screenWidth * 0.01) }}
                     />
-                    <Text className="text-[15px] text-black font-semibold tracking-[0.3px]">
+                    <Text style={{
+                      fontSize: Math.min(15, screenWidth * 0.038),
+                      color: "black",
+                      fontWeight: "600",
+                      letterSpacing: 0.3,
+                    }}>
                       End Date:
                     </Text>
                   </View>
-                  <View className="flex-1">
-                    <Text className="text-[15px] leading-6" style={{ color: task.endTime ? "#333" : "#9ca3af" }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{
+                      fontSize: Math.min(15, screenWidth * 0.038),
+                      lineHeight: Math.min(24, screenHeight * 0.03),
+                      color: task.endTime ? "#333" : "#9ca3af"
+                    }}>
                       {task.endTime
                         ? `${task.endTime.toLocaleDateString()} ${task.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true })}`
                         : "No end date selected"}
@@ -1006,22 +974,37 @@ function ViewAllTasksScreen({ navigation, route }) {
               </TouchableOpacity>
             </View>
 
-            <View className="mt-3">
-              <View className="items-center">
+            <View style={{ marginTop: Math.min(12, screenHeight * 0.015) }}>
+              <View style={{ alignItems: "center" }}>
                 <TouchableOpacity
-                  className={`bg-black py-2 px-6 rounded-lg shadow-sm ${creatingTaskId === task.id ? "opacity-60" : "active:opacity-80"}`}
                   style={{
-                    minWidth: 120,
+                    backgroundColor: "black",
+                    paddingVertical: Math.min(8, screenHeight * 0.01),
+                    paddingHorizontal: Math.min(24, screenWidth * 0.06),
+                    borderRadius: Math.min(8, screenWidth * 0.02),
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 2,
+                    elevation: 2,
+                    minWidth: Math.max(120, screenWidth * 0.3),
                     alignItems: "center",
                     justifyContent: "center",
+                    opacity: creatingTaskId === task.id ? 0.6 : 1,
                   }}
                   onPress={() => handleCreateTaskFromDraft(task)}
                   disabled={creatingTaskId === task.id}
+                  activeOpacity={creatingTaskId === task.id ? 1 : 0.8}
                 >
                   {creatingTaskId === task.id ? (
                     <ActivityIndicator color="white" size="small" />
                   ) : (
-                    <Text className="text-white text-[15px] font-semibold tracking-[0.3px] ">
+                    <Text style={{
+                      color: "white",
+                      fontSize: Math.min(15, screenWidth * 0.038),
+                      fontWeight: "600",
+                      letterSpacing: 0.3,
+                    }}>
                       Create Task
                     </Text>
                   )}

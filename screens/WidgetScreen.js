@@ -56,6 +56,8 @@ function WidgetScreen({ navigation, route }) {
       
       const logsResponse = await getLogs();
       console.log("WidgetScreen - Logs response:", logsResponse);
+      console.log("WidgetScreen - Logs response type:", typeof logsResponse);
+      console.log("WidgetScreen - Is logs response array?", Array.isArray(logsResponse));
       
       // Check if response has logs array or if it's directly an array
       let logsArray = [];
@@ -90,6 +92,7 @@ function WidgetScreen({ navigation, route }) {
       });
       
       console.log("WidgetScreen - Transformed and sorted logs:", sortedLogs);
+      console.log("WidgetScreen - Setting logs state with length:", sortedLogs.length);
       setLogs(sortedLogs);
     } catch (error) {
       console.error("WidgetScreen - Error loading logs:", error);
@@ -116,12 +119,12 @@ function WidgetScreen({ navigation, route }) {
       const role = await getUserRole();
       setUserRole(role);
 
-      // Load logs after role is determined
-      await loadLogs();
-
       let response;
 
       if (role === "Employee") {
+        // Load logs for Employee role
+        await loadLogs();
+        
         // Get employee's projects and extract tasks from them
         const projectsResponse = await getMyProjects();
         
@@ -141,6 +144,9 @@ function WidgetScreen({ navigation, route }) {
           setTasks([]);
         }
       } else if (role === "Manager") {
+        // Load logs for Manager role
+        await loadLogs();
+        
         // First get the manager's projects
         const projectsResponse = await getMyProjects();
 
@@ -170,24 +176,110 @@ function WidgetScreen({ navigation, route }) {
           setProject({ name: "No Projects" });
           setTasks([]);
         }
-      } else if (role === "Admin" || role === "Owner") {
+      } else if (role === "Admin") {
+        // Load logs for Admin role
+        await loadLogs();
+        
+        console.log("WidgetScreen - Calling getTaskByProjectId for role:", role, "with projectId:", projectId);
         response = await getTaskByProjectId(projectId);
+        console.log("WidgetScreen - getTaskByProjectId response:", response);
 
         if (response && response.project) {
+          console.log("WidgetScreen - Response has project property");
           setProject(response.project);
           setTasks(response.tasks || []);
         } else if (response && response.tasks) {
+          console.log("WidgetScreen - Response has tasks property");
           setProject(response);
           setTasks(response.tasks || []);
         } else if (response && Array.isArray(response)) {
+          console.log("WidgetScreen - Response is an array of tasks, length:", response.length);
+          console.log("WidgetScreen - First task in array:", response[0]);
           setProject({ name: "Project" });
           setTasks(response);
         } else if (response) {
+          console.log("WidgetScreen - Response exists but no expected structure");
           setProject(response);
           setTasks([]);
         } else {
+          console.log("WidgetScreen - No response received");
           setProject({ name: "Project" });
           setTasks([]);
+        }
+      } else if (role === "Owner") {
+        // For Owner role, get tasks and extract logs from them
+        console.log("WidgetScreen - Calling getTaskByProjectId for role:", role, "with projectId:", projectId);
+        response = await getTaskByProjectId(projectId);
+        console.log("WidgetScreen - getTaskByProjectId response:", response);
+
+        if (response && response.tasks) {
+          console.log("WidgetScreen - Owner: Response has tasks property, tasks count:", response.tasks.length);
+          setProject(response);
+          setTasks(response.tasks || []);
+          
+          // Extract logs from tasks for Owner role
+          const tasksWithLogs = response.tasks.filter(task => task.log && task.log !== null);
+          console.log("WidgetScreen - Owner: Tasks with logs:", tasksWithLogs.length);
+          
+          const extractedLogs = tasksWithLogs.map(task => ({
+            id: task.log.id,
+            createdBy: task.assignedTo ? `${task.assignedTo.first_name || ''} ${task.assignedTo.last_name || ''}`.trim() : 'Unknown User',
+            date: task.log.createdAt ? new Date(task.log.createdAt).toLocaleDateString() : 'N/A',
+            createdAt: task.log.createdAt,
+            description: task.log.note || 'No description',
+            images: task.log.images || [],
+            image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
+            taskTitle: task.title,
+          }));
+          
+          // Sort logs by date (newest first)
+          const sortedLogs = extractedLogs.sort((a, b) => {
+            const dateA = new Date(a.createdAt);
+            const dateB = new Date(b.createdAt);
+            return dateB - dateA;
+          });
+          
+          console.log("WidgetScreen - Owner: Extracted and sorted logs:", sortedLogs);
+          setLogs(sortedLogs);
+        } else if (response && Array.isArray(response)) {
+          console.log("WidgetScreen - Owner: Response is an array of tasks, length:", response.length);
+          setProject({ name: "Project" });
+          setTasks(response);
+          
+          // Extract logs from tasks for Owner role
+          const tasksWithLogs = response.filter(task => task.log && task.log !== null);
+          console.log("WidgetScreen - Owner: Tasks with logs:", tasksWithLogs.length);
+          
+          const extractedLogs = tasksWithLogs.map(task => ({
+            id: task.log.id,
+            createdBy: task.assignedTo ? `${task.assignedTo.first_name || ''} ${task.assignedTo.last_name || ''}`.trim() : 'Unknown User',
+            date: task.log.createdAt ? new Date(task.log.createdAt).toLocaleDateString() : 'N/A',
+            createdAt: task.log.createdAt,
+            description: task.log.note || 'No description',
+            images: task.log.images || [],
+            image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
+            taskTitle: task.title,
+          }));
+          
+          // Sort logs by date (newest first)
+          const sortedLogs = extractedLogs.sort((a, b) => {
+            const dateA = new Date(a.createdAt);
+            const dateB = new Date(b.createdAt);
+            return dateB - dateA;
+          });
+          
+          console.log("WidgetScreen - Owner: Extracted and sorted logs:", sortedLogs);
+          setLogs(sortedLogs);
+        } else if (response) {
+          console.log("WidgetScreen - Owner: Response exists but no expected structure");
+          setProject(response);
+          setTasks([]);
+          setLogs([]);
+        } else {
+          console.log("WidgetScreen - Owner: No response received");
+          setProject({ name: "Project" });
+          setTasks([]);
+          setLogs([]);
         }
       }
     } catch (err) {
@@ -497,6 +589,7 @@ function WidgetScreen({ navigation, route }) {
       </View>
 
       <View style={{ height: Math.min(200, screenHeight * 0.25) }}>
+        {console.log("WidgetScreen - LogsWidget render: logs state:", logs, "logs.length:", logs ? logs.length : 0)}
         {logs && logs.length > 0 ? (
           <ScrollView
             showsVerticalScrollIndicator={false}
@@ -540,6 +633,7 @@ function WidgetScreen({ navigation, route }) {
                   </Text>
                 </View>
               </View>
+
               {userRole !== "Employee" && (
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <Ionicons name="person" size={Math.min(14, screenWidth * 0.035)} color="#666" />
@@ -678,9 +772,8 @@ function WidgetScreen({ navigation, route }) {
           }
 
           // For other roles, check if there are no tasks and navigate to CreateTaskScreen
-          if (userRole !== "Employee" && tasks.length === 0) {
-            const navigationParams =
-              userRole === "Manager" ? { projectId: managerProjectId } : { projectId: projectId };
+          if (userRole !== "Employee" && userRole !== "Manager" && tasks.length === 0) {
+            const navigationParams = { projectId: projectId };
             navigation.navigate("CreateTask", navigationParams);
             return;
           }

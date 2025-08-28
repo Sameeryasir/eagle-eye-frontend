@@ -13,6 +13,7 @@ import {
   TouchableWithoutFeedback,
   Alert,
   Modal,
+  RefreshControl,
 } from "react-native";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
@@ -38,6 +39,17 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   
   // Debug: Log the received logs data to check createdAt field
   console.log("ViewAllLogScreen - Received logs from route.params:", logs);
+  
+  // Debug: Show current date and time for reference
+  const now = new Date();
+  console.log("ViewAllLogScreen - Current date/time:", {
+    fullDate: now.toISOString(),
+    dateOnly: now.toISOString().split('T')[0],
+    localDate: now.toLocaleDateString(),
+    localTime: now.toLocaleTimeString()
+  });
+  console.log("ViewAllLogScreen - Expected log createdAt format: '2025-08-28T10:44:55.453Z'");
+  
   if (logs && logs.length > 0) {
     console.log("ViewAllLogScreen - Sample log data:", {
       id: logs[0].id,
@@ -47,9 +59,13 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     });
   }
   
+  // State to store all logs from projects
+  const [allLogsFromProjects, setAllLogsFromProjects] = useState([]);
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [userRole, setUserRole] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   // --- Update Modal State ---
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
@@ -70,16 +86,63 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       const { options, projects } = await generateProjectOptions();
       setProjectFilterOptions(options);
       setProjectsData(projects);
+      
+      // Extract all logs from all projects (prevent duplicates)
+      const allLogs = [];
+      const seenLogIds = new Set(); // Track seen log IDs to prevent duplicates
+      
+      projects.forEach(project => {
+        if (project.tasks && Array.isArray(project.tasks)) {
+          project.tasks.forEach(task => {
+            if (task.log) {
+              // Create a unique identifier for this log
+              const logKey = `${task.log.id}-${project.name}`;
+              
+              // Only add if we haven't seen this log before
+              if (!seenLogIds.has(logKey)) {
+                seenLogIds.add(logKey);
+                
+                const transformedLog = {
+                  id: task.log.id,
+                  createdBy: task.assignedTo ? `${task.assignedTo.first_name || ''} ${task.assignedTo.last_name || ''}`.trim() : 'Unknown User',
+                  date: task.log.createdAt ? new Date(task.log.createdAt).toLocaleDateString() : 'N/A',
+                  createdAt: task.log.createdAt, // Keep original createdAt for filtering (format: "2025-08-28T10:44:55.453Z")
+                  description: task.log.note || 'No description',
+                  images: task.log.images || [],
+                  image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
+                  projectName: project.name,
+                };
+                allLogs.push(transformedLog);
+              }
+            }
+          });
+        }
+      });
+      
+      console.log("ViewAllLogScreen - Extracted all logs from projects:", allLogs.length);
+      if (allLogs.length > 0) {
+        console.log("ViewAllLogScreen - Sample log from projects:", {
+          id: allLogs[0].id,
+          createdAt: allLogs[0].createdAt,
+          projectName: allLogs[0].projectName
+        });
+      }
+      
+      setAllLogsFromProjects(allLogs);
     };
     loadProjectOptions();
   }, []);
 
-  // Re-apply filters when projectsData changes
+  // Re-apply filters when projectsData or allLogsFromProjects changes
   React.useEffect(() => {
     if (projectsData.length > 0) {
-      applyFilters(searchQuery, selectedTimeFilter, selectedProjectFilter);
+      // If "All Logs" is selected, we can apply filters immediately since we have logs from route params
+      // If a specific project is selected, we need to wait for allLogsFromProjects to be populated
+      if (selectedProjectFilter === "All Logs" || allLogsFromProjects.length > 0) {
+        applyFilters(searchQuery, selectedTimeFilter, selectedProjectFilter);
+      }
     }
-  }, [projectsData]);
+  }, [projectsData, allLogsFromProjects, selectedProjectFilter]);
 
   // Reset time filter when project changes (to avoid invalid selections)
   React.useEffect(() => {
@@ -119,6 +182,14 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     // Always add "All Time" option first
     dateOptions.push({ label: "All Time", value: "All Time" });
 
+    // Helper function to get consistent date format (YYYY-MM-DD)
+    const getDateString = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
     // If no specific project is selected, generate dates for the last 30 days
     if (selectedProjectFilter === "All Logs") {
       console.log("generateDateOptions - Generating dates for All Logs (last 30 days)");
@@ -133,16 +204,17 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         const month = currentDate.toLocaleDateString('en-US', { month: 'short' });
         const year = currentDate.getFullYear();
         
-        // Use ISO date format (YYYY-MM-DD) to match your createdAt format
-        const isoDate = currentDate.toISOString().split('T')[0];
+        // Use consistent date format (YYYY-MM-DD) to match your createdAt format
+        const dateString = getDateString(currentDate);
         
         dateOptions.push({
           label: `${dayName}, ${month} ${day}, ${year}`,
-          value: isoDate, // This will be "2025-08-22" format
+          value: dateString, // This will be "2025-08-28" format
         });
       }
       
       console.log(`generateDateOptions - Generated ${dateOptions.length} date options for All Logs`);
+      console.log(`generateDateOptions - Today's date string: ${getDateString(today)}`);
       return dateOptions;
     }
 
@@ -182,12 +254,12 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       const month = currentDate.toLocaleString("default", { month: "short" });
       const year = currentDate.getFullYear();
       
-      // Use ISO date format (YYYY-MM-DD) to match your createdAt format
-      const isoDate = currentDate.toISOString().split('T')[0];
+      // Use consistent date format (YYYY-MM-DD) to match your createdAt format
+      const dateString = getDateString(currentDate);
       
       dateOptions.push({
         label: `${dayName}, ${month} ${day}, ${year}`,
-        value: isoDate, // This will be "2025-08-22" format
+        value: dateString, // This will be "2025-08-28" format
       });
 
       // Move to next day
@@ -214,9 +286,9 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   // Get logs for a specific project
   const getLogsForProject = (projectName) => {
     if (!projectName || projectName === "All Logs") {
-      console.log("getLogsForProject - Returning all logs (All Logs selected):", logs?.length || 0);
+      console.log("getLogsForProject - Returning logs from WidgetScreen (All Logs selected):", logs?.length || 0);
       if (logs && logs.length > 0) {
-        console.log("getLogsForProject - Sample log from All Logs:", {
+        console.log("getLogsForProject - Sample log from WidgetScreen:", {
           id: logs[0].id,
           createdAt: logs[0].createdAt,
           date: logs[0].date
@@ -228,6 +300,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     // Find the project by name
     const project = projectsData.find(p => p.name === projectName);
     if (!project || !project.tasks) {
+      console.log(`getLogsForProject - Project "${projectName}" not found or has no tasks`);
       return [];
     }
 
@@ -235,12 +308,14 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     const projectLogs = [];
     project.tasks.forEach(task => {
       if (task.log) {
+        console.log(`getLogsForProject - Processing task ${task.id}, log createdAt: ${task.log.createdAt}`);
+        
         // Transform the log to match the expected format
         const transformedLog = {
           id: task.log.id,
           createdBy: task.assignedTo ? `${task.assignedTo.first_name || ''} ${task.assignedTo.last_name || ''}`.trim() : 'Unknown User',
           date: task.log.createdAt ? new Date(task.log.createdAt).toLocaleDateString() : 'N/A',
-          createdAt: task.log.createdAt, // Keep original createdAt for filtering
+          createdAt: task.log.createdAt, // Keep original createdAt for filtering (format: "2025-08-28T10:44:55.453Z")
           description: task.log.note || 'No description',
           images: task.log.images || [],
           image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
@@ -251,6 +326,9 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     });
 
     console.log(`getLogsForProject - Found ${projectLogs.length} logs for project: ${projectName}`);
+    if (projectLogs.length > 0) {
+      console.log(`getLogsForProject - Sample log createdAt: ${projectLogs[0].createdAt}`);
+    }
     return projectLogs;
   };
 
@@ -358,6 +436,27 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     console.log(`applyFilters - Time filter: '${timeFilter}'`);
     console.log(`applyFilters - Search query: '${query}'`);
     
+    // Remove duplicate logs based on log ID (same log can appear in multiple projects)
+    const uniqueLogs = [];
+    const seenLogIds = new Set();
+    const duplicateLogIds = [];
+    
+    filtered.forEach(log => {
+      if (!seenLogIds.has(log.id)) {
+        seenLogIds.add(log.id);
+        uniqueLogs.push(log);
+      } else {
+        duplicateLogIds.push(log.id);
+      }
+    });
+    
+    filtered = uniqueLogs;
+    console.log(`applyFilters - After removing duplicates:`, filtered.length);
+    
+    if (duplicateLogIds.length > 0) {
+      console.log(`applyFilters - Found ${duplicateLogIds.length} duplicate log IDs:`, duplicateLogIds);
+    }
+    
     // Debug: Show sample log data structure
     if (filtered.length > 0) {
       console.log("applyFilters - Sample log structure:", {
@@ -373,6 +472,29 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       console.log("Filtering by time:", timeFilter);
       console.log("Available logs before time filtering:", filtered.length);
       
+      // Helper function to extract date from createdAt string
+      const extractDateFromCreatedAt = (createdAtString) => {
+        if (!createdAtString) return null;
+        
+        // Handle different formats:
+        // 1. "2025-08-28T10:44:55.453Z" -> extract "2025-08-28"
+        // 2. "2025-08-28 15:44:55.453325" -> extract "2025-08-28"
+        // 3. "2025-08-28" -> return as is
+        
+        // Handle ISO format (2025-08-28T10:44:55.453Z)
+        if (createdAtString.includes('T')) {
+          return createdAtString.split('T')[0];
+        }
+        
+        // Handle space-separated format (2025-08-28 15:44:55.453325)
+        if (createdAtString.includes(' ')) {
+          return createdAtString.split(' ')[0];
+        }
+        
+        // Already in date format
+        return createdAtString;
+      };
+      
       filtered = filtered.filter((log) => {
         // Get the log's creation date
         const logCreatedAt = log.createdAt || log.date;
@@ -381,12 +503,16 @@ const ViewAllLogScreen = ({ route, navigation }) => {
           return false;
         }
         
-        // Your createdAt format: "2025-08-22 21:57:51.004647"
-        // Filter format: "2025-08-22"
-        // Use string comparison to check if createdAt starts with the filter date
-        const matches = logCreatedAt && logCreatedAt.startsWith(timeFilter);
+        // Extract date from log's createdAt
+        const logDate = extractDateFromCreatedAt(logCreatedAt);
+        if (!logDate) {
+          console.log(`Log ${log.id}: Could not extract date from "${logCreatedAt}", skipping`);
+          return false;
+        }
         
-        console.log(`Log ${log.id}: createdAt="${logCreatedAt}", filter="${timeFilter}", matches=${matches}`);
+        const matches = logDate === timeFilter;
+        
+        console.log(`Log ${log.id}: createdAt="${logCreatedAt}" -> extracted="${logDate}", filter="${timeFilter}", matches=${matches}`);
         return matches;
       });
       
@@ -404,7 +530,8 @@ const ViewAllLogScreen = ({ route, navigation }) => {
           (logs || []).map(log => ({
             id: log.id,
             createdAt: log.createdAt,
-            date: log.date
+            date: log.date,
+            extractedDate: extractDateFromCreatedAt(log.createdAt || log.date)
           }))
         );
       }
@@ -505,12 +632,50 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     }
   };
 
-  const handleDelete = (log) => {
-    // Allow deleting logs if user is Manager, Employee, Owner, or Admin
-    if (userRole === "Employee") {
-      Alert.alert("Access Denied", "Employees cannot delete logs.");
-      return;
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    try {
+      // Reload project options
+      const { options, projects } = await generateProjectOptions();
+      setProjectFilterOptions(options);
+      setProjectsData(projects);
+      
+      // Extract all logs from all projects
+      const allLogs = [];
+      projects.forEach(project => {
+        if (project.tasks && Array.isArray(project.tasks)) {
+          project.tasks.forEach(task => {
+            if (task.log) {
+              const transformedLog = {
+                id: task.log.id,
+                createdBy: task.assignedTo ? `${task.assignedTo.first_name || ''} ${task.assignedTo.last_name || ''}`.trim() : 'Unknown User',
+                date: task.log.createdAt ? new Date(task.log.createdAt).toLocaleDateString() : 'N/A',
+                createdAt: task.log.createdAt,
+                description: task.log.note || 'No description',
+                images: task.log.images || [],
+                image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
+                projectName: project.name,
+              };
+              allLogs.push(transformedLog);
+            }
+          });
+        }
+      });
+      
+      setAllLogsFromProjects(allLogs);
+      
+      // Re-apply filters with current settings
+      applyFilters(searchQuery, selectedTimeFilter, selectedProjectFilter);
+    } catch (error) {
+      console.error("Error refreshing data:", error);
+    } finally {
+      setRefreshing(false);
     }
+  }, [searchQuery, selectedTimeFilter, selectedProjectFilter]);
+
+  const handleDelete = (log) => {
+    // Allow deleting logs for all roles (Employee, Manager, Owner, Admin)
+    // No restrictions - all users can delete logs
 
     const logId = log?.id;
     const logTitle = log?.description || "this log";
@@ -570,7 +735,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         backgroundColor: "#f8f9fa",
         borderRadius: Math.min(8, screenWidth * 0.02),
         padding: Math.min(16, screenWidth * 0.04),
-        marginBottom: 16,
         borderWidth: 1,
         borderColor: "#e9ecef",
         shadowColor: "#000",
@@ -582,39 +746,29 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       activeOpacity={0.7}
     >
       <View>
-        {/* Manager Card - Always shows Created by */}
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-            <View style={{ 
-              flexDirection: "row", 
-              alignItems: "center", 
-              marginRight: 12, 
-              minWidth: Math.max(85, screenWidth * 0.15),
-              flexShrink: 0
-            }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <View style={{ flex: 1, marginRight: 12 }}>
+            {/* Created by section first */}
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
               <Text style={{
                 fontSize: Math.min(15, screenWidth * 0.038),
                 color: "black",
                 fontWeight: "600",
                 letterSpacing: 0.3,
+                marginRight: 8,
               }}>
                 Created by:
               </Text>
+              <Text style={{
+                fontSize: Math.min(15, screenWidth * 0.038),
+                color: "#333",
+                fontWeight: "500",
+              }}>
+                {log.createdBy}
+              </Text>
             </View>
-            <Text style={{
-              flex: 1,
-              fontSize: Math.min(15, screenWidth * 0.038),
-              color: "#333",
-              lineHeight: 24,
-              flexShrink: 1,
-            }}>
-              {log.createdBy}
-            </Text>
-          </View>
-        </View>
-
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <View style={{ flex: 1, marginRight: 12 }}>
+            
+            {/* Note section second */}
             <Text style={{
               fontSize: Math.min(15, screenWidth * 0.038),
               color: "#333",
@@ -633,8 +787,8 @@ const ViewAllLogScreen = ({ route, navigation }) => {
               }}>
                 Note:{" "}
               </Text>
-              {log.description && log.description.length > 14
-                ? log.description.substring(0, 14) + "..."
+              {log.description && log.description.length > 15
+                ? log.description.substring(0, 15) + "..."
                 : log.description}
             </Text>
           </View>
@@ -642,7 +796,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
           <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
             {/* Show uploaded images if available */}
             {log.images && log.images.length > 0 ? (
-              <View style={{ marginRight: 12, marginTop: -30 }}>
+              <View style={{ marginRight: 12, marginTop: 0 }}>
                 <TouchableOpacity
                   onPress={() => handleImageTap(log.images[0])}
                   style={{ position: 'relative' }}
@@ -682,7 +836,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                 </TouchableOpacity>
               </View>
             ) : (log.thumbnail || log.image) ? (
-              <View style={{ marginRight: 12, marginTop: -30 }}>
+              <View style={{ marginRight: 12, marginTop: 0 }}>
                 {log.thumbnail ? (
                   <Image
                     source={{ uri: log.thumbnail }}
@@ -719,7 +873,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
               <MenuTrigger>
                 <View style={{ 
                   activeOpacity: 1,
-                  marginTop: -35
+                  marginTop: 0
                 }}>
                   <Ionicons
                     name="ellipsis-vertical"
@@ -1020,9 +1174,17 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
       showsVerticalScrollIndicator={true}
-      bounces={false}
+      bounces={true}
       scrollEnabled={!(showTimeDropdown || showProjectDropdown)}
       nestedScrollEnabled={true}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={["#3155A1"]}
+          tintColor="#3155A1"
+        />
+      }
     >
       {/* Header Section */}
       <View style={{ paddingVertical: Math.min(20, screenHeight * 0.025) }}>
@@ -1155,26 +1317,21 @@ const ViewAllLogScreen = ({ route, navigation }) => {
           }}>
             <TouchableOpacity
               onPress={() => {
-                // Only allow time dropdown if a specific project is selected
-                if (selectedProjectFilter !== "All Logs") {
-                  setShowTimeDropdown(!showTimeDropdown);
-                  setShowProjectDropdown(false);
-                }
+                setShowTimeDropdown(!showTimeDropdown);
+                setShowProjectDropdown(false);
               }}
               style={{
                 flexDirection: "row",
                 alignItems: "center",
                 justifyContent: "space-between",
-                backgroundColor: selectedProjectFilter === "All Logs" ? "#F1F5F9" : "#F8FAFC",
+                backgroundColor: "#F8FAFC",
                 borderWidth: 1,
-                borderColor: selectedProjectFilter === "All Logs" ? "#D1D5DB" : "#EAECF0",
+                borderColor: "#EAECF0",
                 borderRadius: Math.min(16, screenWidth * 0.04),
                 paddingHorizontal: Math.min(16, screenWidth * 0.04),
                 paddingVertical: Math.min(12, screenHeight * 0.015),
                 width: "100%",
-                opacity: selectedProjectFilter === "All Logs" ? 0.6 : 1,
               }}
-              disabled={selectedProjectFilter === "All Logs"}
             >
               <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
                 <Ionicons
@@ -1300,17 +1457,17 @@ const ViewAllLogScreen = ({ route, navigation }) => {
             style={{
               flex: 1,
               fontSize: Math.min(15, screenWidth * 0.038),
-              color: selectedProjectFilter === "All Logs" ? "#9CA3AF" : "#111827",
+              color: "#111827",
             }}
-            placeholder={selectedProjectFilter === "All Logs" ? "Select Project First" : "Search logs"}
+            placeholder="Search logs"
             placeholderTextColor="#9CA3AF"
             value={searchQuery}
             onChangeText={handleSearch}
             returnKeyType="search"
             blurOnSubmit={false}
-            editable={!(showTimeDropdown || showProjectDropdown) && selectedProjectFilter !== "All Logs"}
+            editable={!(showTimeDropdown || showProjectDropdown)}
           />
-          {searchQuery.length > 0 && !(showTimeDropdown || showProjectDropdown) && selectedProjectFilter !== "All Logs" && (
+          {searchQuery.length > 0 && !(showTimeDropdown || showProjectDropdown) && (
             <TouchableOpacity onPress={() => handleSearch("")} style={{ marginLeft: 8 }}>
               <Ionicons name="close-circle" size={Math.min(18, screenWidth * 0.045)} color="#9CA3AF" />
             </TouchableOpacity>
@@ -1350,12 +1507,14 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         </View>
       ) : (
         <View>
-          {filteredLogs.map((log) => (
-            userRole === "Manager" ? (
-              <ManagerLogCard key={String(log.id)} log={log} />
-            ) : (
-              <LogCard key={String(log.id)} log={log} />
-            )
+          {filteredLogs.map((log, index) => (
+            <View key={`${log.id}-${log.projectName || 'unknown'}-${index}`} style={{ marginBottom: index < filteredLogs.length - 1 ? 20 : 0 }}>
+              {userRole === "Manager" || userRole === "Owner" ? (
+                <ManagerLogCard log={log} />
+              ) : (
+                <LogCard log={log} />
+              )}
+            </View>
           ))}
         </View>
       )}
@@ -1365,7 +1524,39 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   return (
     <View className="flex-1 bg-white">
       {renderContent()}
-      <CustomBottomNav keyboardVisible={keyboardVisible} />
+      <CustomBottomNav 
+        keyboardVisible={keyboardVisible}
+        onAddPress={() => {
+          // For Employee role, navigate to CreatLog
+          if (userRole === "Employee") {
+            navigation.navigate("CreatLog", {});
+            return;
+          }
+
+          // For Manager role, navigate to CreatLog with project data
+          if (userRole === "Manager") {
+            // Get the first project from route params or use a default
+            const projectId = route.params?.projectId || null;
+            const navigationParams = projectId ? { projectId: projectId } : {};
+            navigation.navigate("CreatLog", navigationParams);
+            return;
+          }
+
+          // For Admin role, navigate to CreatLog with project data
+          if (userRole === "Admin") {
+            const projectId = route.params?.projectId || null;
+            const navigationParams = projectId ? { projectId: projectId } : {};
+            navigation.navigate("CreatLog", navigationParams);
+            return;
+          }
+
+          // Owner role - do nothing (no navigation)
+          if (userRole === "Owner") {
+            // Owner cannot create logs, so do nothing when FAB is pressed
+            return;
+          }
+        }}
+      />
       
       {/* Full Screen Image Modal */}
       <Modal

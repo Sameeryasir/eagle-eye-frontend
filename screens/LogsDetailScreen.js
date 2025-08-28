@@ -21,6 +21,14 @@ function LogsDetailScreen({ navigation, route }) {
   const { log } = route.params || {};
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [userRole, setUserRole] = useState(null);
+  
+  // Debug: Log the received log data
+  console.log("LogsDetailScreen - Received log data:", log);
+  console.log("LogsDetailScreen - Log date fields:", {
+    createdAt: log?.createdAt,
+    date: log?.date,
+    userRole: userRole
+  });
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   
@@ -52,14 +60,21 @@ function LogsDetailScreen({ navigation, route }) {
 
   const formatDateTime = (dateString) => {
     if (!dateString) return "N/A";
-    const date = new Date(dateString);
-    const dateStr = date.toLocaleDateString();
-    const timeStr = date.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
-    return `${dateStr} ${timeStr}`;
+    
+    try {
+      const date = new Date(dateString);
+      
+      // Check if the date is valid
+      if (isNaN(date.getTime())) {
+        return "Invalid Date";
+      }
+      
+      const dateStr = date.toLocaleDateString();
+      return dateStr;
+    } catch (error) {
+      console.error("Error formatting date:", error, "Date string:", dateString);
+      return "Invalid Date";
+    }
   };
 
   const handleUpdate = () => {
@@ -295,7 +310,7 @@ function LogsDetailScreen({ navigation, route }) {
                 <View className="flex-1">
                   <Text className="text-sm font-medium text-gray-600 mb-1">DATE</Text>
                   <Text className="text-lg font-semibold text-gray-900">
-                    {log.date ? formatDateTime(log.date) : "N/A"}
+                    {log.createdAt ? formatDateTime(log.createdAt) : "N/A"}
                   </Text>
                 </View>
               </View>

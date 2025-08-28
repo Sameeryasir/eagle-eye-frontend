@@ -469,10 +469,21 @@ function CreateTaskScreen({ navigation, route }) {
                     <DropDownPicker
                       open={showAssignedDropdown}
                       value={taskData.assignedTo?.id || null}
-                      items={filteredEmployees.map((employee) => ({
-                        label: `${employee.first_name || ""} ${employee.last_name || ""}`.trim() || employee.email,
-                        value: employee.id,
-                      }))}
+                      items={filteredEmployees.map((employee) => {
+                        const fullName = `${employee.first_name || ""} ${employee.last_name || ""}`.trim();
+                        let displayName = fullName ? `${fullName} - ${employee.email}` : employee.email;
+                        
+                        // Truncate if too long (max 40 characters)
+                        if (displayName.length > 40) {
+                          displayName = displayName.substring(0, 37) + "...";
+                        }
+                        
+                        return {
+                          label: displayName,
+                          value: employee.id,
+                          labelForSelected: fullName || employee.email, // Show only name when selected
+                        };
+                      })}
                       setOpen={(open) => {
                         if (open) {
                           // Close priority dropdown if open
@@ -508,6 +519,17 @@ function CreateTaskScreen({ navigation, route }) {
                         fontSize: 16,
                         color: taskData.assignedTo ? "#333" : "#9ca3af",
                         fontWeight: "400",
+                      }}
+                      labelProps={{
+                        numberOfLines: 1,
+                      }}
+                      customItemContainerStyle={{
+                        height: 40,
+                      }}
+                      customItemLabelStyle={{
+                        fontSize: 14,
+                        fontWeight: "500",
+                        color: "#333",
                       }}
                       dropDownContainerStyle={{
                         backgroundColor: "white",

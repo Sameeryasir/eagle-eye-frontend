@@ -31,7 +31,7 @@ export default async function refreshToken(refreshTokenValue) {
       await AsyncStorage.setItem("refreshToken", data.refresh_token);
     }
 
-    return data.accessToken;
+    return data.access_token;
   } catch (error) {
     console.error("Error refreshing token:", error);
     // Clear tokens on refresh failure

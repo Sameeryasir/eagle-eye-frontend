@@ -395,7 +395,7 @@ export default function UpdateTaskModal({
                   <View className="mb-5">
                     <View className="flex-row items-center mb-2">
                       <Ionicons name="document-text" size={16} color="#374151" style={{ marginRight: 6 }} />
-                      <Text className="text-[16px] font-semibold text-[#333]">Task Title *</Text>
+                      <Text className="text-[16px] font-semibold text-[#333]">Task Title</Text>
                     </View>
                     <TextInput
                       className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333]"
@@ -411,7 +411,7 @@ export default function UpdateTaskModal({
                   <View className="mb-5">
                     <View className="flex-row items-center mb-2">
                       <Ionicons name="chatbubble-ellipses" size={16} color="#374151" style={{ marginRight: 6 }} />
-                      <Text className="text-[16px] font-semibold text-[#333]">Description *</Text>
+                      <Text className="text-[16px] font-semibold text-[#333]">Description</Text>
                     </View>
                     <TextInput
                       className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333] h-24"
@@ -517,10 +517,20 @@ export default function UpdateTaskModal({
                     <DropDownPicker
                       open={showAssignedDropdown}
                       value={taskData.assignedTo?.id || null}
-                      items={filteredEmployees.map((employee) => ({
-                        label: `${employee.first_name || ""} ${employee.last_name || ""}`.trim() || employee.email,
-                        value: employee.id,
-                      }))}
+                      items={filteredEmployees.map((employee) => {
+                        const fullName = `${employee.first_name || ""} ${employee.last_name || ""}`.trim();
+                        let displayName = fullName ? `${fullName} - ${employee.email}` : employee.email;
+                        
+                        // Truncate if too long (max 40 characters)
+                        if (displayName.length > 40) {
+                          displayName = displayName.substring(0, 37) + "...";
+                        }
+                        
+                        return {
+                          label: displayName,
+                          value: employee.id,
+                        };
+                      })}
                       setOpen={(open) => {
                         if (open) {
                           // Close priority dropdown if open
@@ -556,6 +566,17 @@ export default function UpdateTaskModal({
                         fontSize: 16,
                         color: taskData.assignedTo ? "#333" : "#9ca3af",
                         fontWeight: "400",
+                      }}
+                      labelProps={{
+                        numberOfLines: 1,
+                      }}
+                      customItemContainerStyle={{
+                        height: 40,
+                      }}
+                      customItemLabelStyle={{
+                        fontSize: 14,
+                        fontWeight: "500",
+                        color: "#333",
                       }}
                       dropDownContainerStyle={{
                         backgroundColor: "white",
@@ -626,7 +647,7 @@ export default function UpdateTaskModal({
                   <View className="mb-5">
                     <View className="flex-row items-center mb-2">
                       <Ionicons name="time" size={16} color="#374151" style={{ marginRight: 6 }} />
-                      <Text className="text-[16px] font-semibold text-[#333]">Start Date & Time *</Text>
+                      <Text className="text-[16px] font-semibold text-[#333]">Start Date & Time</Text>
                     </View>
                     <View className="flex-row gap-2">
                       <TouchableOpacity
@@ -643,7 +664,7 @@ export default function UpdateTaskModal({
                         onPress={() => setShowStartTimePicker(true)}
                       >
                         <Text className="text-[16px] text-[#333] font-medium">
-                          {startDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {startDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
                         </Text>
                         <Ionicons name="time-outline" size={16} color="#666" />
                       </TouchableOpacity>
@@ -654,7 +675,7 @@ export default function UpdateTaskModal({
                   <View className="mb-5">
                     <View className="flex-row items-center mb-2">
                       <Ionicons name="calendar" size={16} color="#374151" style={{ marginRight: 6 }} />
-                      <Text className="text-[16px] font-semibold text-[#333]">End Date & Time *</Text>
+                      <Text className="text-[16px] font-semibold text-[#333]">End Date & Time</Text>
                     </View>
                     <View className="flex-row gap-2">
                       <TouchableOpacity
@@ -671,7 +692,7 @@ export default function UpdateTaskModal({
                         onPress={() => setShowEndTimePicker(true)}
                       >
                         <Text className="text-[16px] text-[#333] font-medium">
-                          {endDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {endDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
                         </Text>
                         <Ionicons name="time-outline" size={16} color="#666" />
                       </TouchableOpacity>
