@@ -116,7 +116,16 @@ function TaskDetailsScreen({ navigation, route }) {
                   {
                     text: "OK",
                     onPress: () => {
-                      navigation.navigate('ViewAllTasksScreen');
+                      // Get projectId from task object
+                      const projectId = task.project?.id || task.projectId;
+                      
+                      if (projectId) {
+                        // Navigate back to ViewAllTasksScreen with projectId
+                        navigation.navigate('ViewAllTasksScreen', { projectId });
+                      } else {
+                        // Fallback: go back to previous screen
+                        navigation.goBack();
+                      }
                     }
                   }
                 ]

@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { useFocusEffect } from "@react-navigation/native";
 import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
 import UpdateTaskModal from "./components/UpdateTaskModal";
@@ -137,6 +138,20 @@ function ViewAllTasksScreen({ navigation, route }) {
       handleFabPress();
     }
   }, [projectId, createDraft, userRole]);
+
+  // --- Reload data when screen comes back into focus ---
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log("ViewAllTasksScreen - Screen focused, reloading data");
+      loadProjectData();
+    }, [projectId])
+  );
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log("ViewAllTasksScreen - useFocusEffect triggered");
+      loadProjectData();
+    }, [projectId])
+  );
 
   useEffect(() => {
     if (tasks.length > 0) {
@@ -450,7 +465,16 @@ function ViewAllTasksScreen({ navigation, route }) {
           "projectId:",
           projectId
         );
+        
+        // Validate projectId before making API call
+        if (!projectId) {
+          console.error("ViewAllTasksScreen - No projectId provided");
+          setError("Project ID is required");
+          return;
+        }
+        
         response = await getTaskByProjectId(projectId);
+        console.log("ViewAllTasksScreen - API response:", response);
 
         if (response && response.project) {
           setProject(response.project);
@@ -473,7 +497,21 @@ function ViewAllTasksScreen({ navigation, route }) {
       setSearchTerm("");
     } catch (err) {
       console.error("ViewAllTasksScreen - Error loading project data:", err);
-      setError("Failed to load project data");
+      console.error("ViewAllTasksScreen - Error details:", {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+        projectId: projectId
+      });
+      
+      let errorMessage = "Failed to load project data";
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       if (!isRefresh) {
         setInitialLoading(false);

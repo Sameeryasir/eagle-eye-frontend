@@ -144,7 +144,7 @@ function WidgetScreen({ navigation, route }) {
           setTasks([]);
         }
       } else if (role === "Manager") {
-        // Load logs for Manager role
+        // Load logs for Manager role (using getLogs API)
         await loadLogs();
         
         // First get the manager's projects

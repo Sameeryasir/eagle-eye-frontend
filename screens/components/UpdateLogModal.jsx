@@ -10,6 +10,9 @@ import {
   Modal,
   Dimensions,
   Image,
+  FlatList,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from "react-native";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
@@ -44,9 +47,24 @@ const UpdateLogModal = ({
   const [removedImageId, setRemovedImageId] = useState(null); // Single removed image ID
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingImages, setIsUploadingImages] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   // --- Initialize Modal Data ---
   useEffect(() => {
+    // Add keyboard listeners
+    const keyboardDidShowListener = Keyboard.addListener(
+      'keyboardDidShow',
+      () => {
+        setKeyboardVisible(true);
+      }
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      'keyboardDidHide',
+      () => {
+        setKeyboardVisible(false);
+      }
+    );
+
     if (visible && log) {
       console.log("UpdateLogModal - Initializing with log:", log);
       // Pre-fill existing data
@@ -55,6 +73,12 @@ const UpdateLogModal = ({
       setSelectedImage(null); // Reset selected image when modal opens
       setRemovedImageId(null); // Reset removed image ID when modal opens
     }
+
+    // Cleanup listeners
+    return () => {
+      keyboardDidShowListener?.remove();
+      keyboardDidHideListener?.remove();
+    };
   }, [visible, log]);
 
   // --- Image Picker Function ---
@@ -285,6 +309,10 @@ const UpdateLogModal = ({
     </View>
   );
 
+  const dismissKeyboard = () => {
+    Keyboard.dismiss();
+  };
+
   // Debug logging
   console.log("UpdateLogModal render - visible:", visible);
   console.log("UpdateLogModal render - log:", log);
@@ -299,228 +327,141 @@ const UpdateLogModal = ({
     <Modal
       visible={visible}
       animationType="slide"
-      presentationStyle="pageSheet"
+      presentationStyle="formSheet"
       onRequestClose={onClose}
     >
-      <View style={{ flex: 1, backgroundColor: 'white' }}>
-        {/* --- Black Navbar/Header --- */}
-        <View style={{
-          backgroundColor: 'black',
-          paddingHorizontal: Math.min(16, screenWidth * 0.04),
-          paddingVertical: Math.min(12, screenHeight * 0.015),
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}>
-          <Text style={{
-            color: 'white',
-            fontSize: Math.min(18, screenWidth * 0.045),
-            fontWeight: '600',
-          }}>
-            Update Log
-          </Text>
-          <TouchableOpacity
-            onPress={onClose}
-            style={{ padding: 8 }}
-          >
+      <View className="flex-1 bg-white">
+        {/* Black Navbar */}
+        <View className="bg-black px-4 py-3 flex-row items-center justify-between">
+          <Text className="text-black text-[18px] font-semibold">Update Log</Text>
+          <TouchableOpacity onPress={onClose}>
             <Ionicons name="close" size={24} color="white" />
           </TouchableOpacity>
         </View>
+        
+        <TouchableWithoutFeedback onPress={dismissKeyboard}>
+          <View className="flex-1 p-5 items-center">
+            <FlatList
+              className="flex-1 w-full max-w-md"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 20 }}
+              keyboardShouldPersistTaps="handled"
+              data={[{ key: 'form' }]}
+                            renderItem={() => (
+                <View>
+                  <View className="mb-8 items-center">
+                    <Text className="text-[28px] font-bold text-[#333]">Update Log</Text>
+                    <Text className="text-[16px] text-[#666] text-center">Modify the log details below</Text>
+                  </View>
 
-        {/* --- Content Section --- */}
-        <ScrollView 
-          style={{ flex: 1 }}
-          contentContainerStyle={{ padding: Math.min(24, screenWidth * 0.06) }}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* --- Note Section --- */}
-          <View style={{ marginBottom: Math.min(24, screenHeight * 0.03) }}>
-            <Text style={{
-              fontSize: Math.min(16, screenWidth * 0.04),
-              fontWeight: "600",
-              color: "#333",
-              marginBottom: Math.min(8, screenHeight * 0.01),
-            }}>
-              Note *
-            </Text>
-            <TextInput
-              style={{
-                borderWidth: 1,
-                borderColor: "#e1e8ed",
-                borderRadius: Math.min(8, screenWidth * 0.02),
-                padding: Math.min(12, screenWidth * 0.03),
-                fontSize: Math.min(16, screenWidth * 0.04),
-                backgroundColor: "#f8f9fa",
-                color: "#333",
-                height: Math.min(96, screenHeight * 0.12),
-                textAlignVertical: 'top',
-              }}
-              placeholder="Enter updated note for the log..."
-              value={logNote}
-              onChangeText={setLogNote}
-              multiline
-              numberOfLines={4}
-              placeholderTextColor="#999"
+                  {/* --- Note Section --- */}
+                  <View className="mb-5">
+                    <View className="flex-row items-center mb-2">
+                      <Ionicons name="document-text" size={16} color="#374151" style={{ marginRight: 6 }} />
+                      <Text className="text-[16px] font-semibold text-[#333]">Note *</Text>
+                    </View>
+                    <TextInput
+                      className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333] h-24"
+                      placeholder="Enter updated note for the log..."
+                      value={logNote}
+                      onChangeText={setLogNote}
+                      multiline
+                      numberOfLines={4}
+                      placeholderTextColor="#999"
+                      style={{ textAlignVertical: 'top' }}
+                    />
+                  </View>
+
+                  {/* --- Existing Images Section (Read-only) --- */}
+                  {existingImages.length > 0 && (
+                    <View className="mb-5">
+                      <View className="flex-row items-center mb-2">
+                        <Ionicons name="images" size={16} color="#374151" style={{ marginRight: 6 }} />
+                        <Text className="text-[16px] font-semibold text-[#333]">Current Images ({existingImages.length})</Text>
+                      </View>
+                      
+                      <ScrollView 
+                        horizontal 
+                        showsHorizontalScrollIndicator={false}
+                        style={{ flexDirection: 'row' }}
+                      >
+                        {existingImages.map((image, index) => 
+                          renderImagePreview(image, index, true)
+                        )}
+                      </ScrollView>
+                    </View>
+                  )}
+
+                  {/* --- New Images Section --- */}
+                  <View className="mb-5">
+                    <View className="flex-row items-center mb-2">
+                      <Ionicons name="camera" size={16} color="#374151" style={{ marginRight: 6 }} />
+                      <Text className="text-[16px] font-semibold text-[#333]">Add New Images</Text>
+                    </View>
+                    
+                    {/* Image Picker Button */}
+                    <TouchableOpacity
+                      className="border-2 border-dashed border-[#e1e8ed] rounded-lg p-4 items-center justify-center bg-[#f8f9fa] mb-3"
+                      onPress={pickImage}
+                    >
+                      <Ionicons 
+                        name="camera-outline" 
+                        size={24} 
+                        color="#666" 
+                        style={{ marginBottom: 8 }} 
+                      />
+                      <Text className="text-[14px] text-[#666] text-center">
+                        {selectedImage 
+                          ? 'Replace Selected Image'
+                          : 'Select New Image'
+                        }
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* New Image Preview */}
+                    {selectedImage && (
+                      <View>
+                        <View className="flex-row justify-between items-center mb-2">
+                          <Text className="text-[14px] text-[#666]">
+                            New Image to Upload:
+                          </Text>
+                          <TouchableOpacity
+                            onPress={() => setSelectedImage(null)}
+                            className="bg-[#dc3545] px-3 py-1 rounded"
+                          >
+                            <Text className="text-white text-[12px] font-medium">
+                              Clear
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                        
+                        <View className="flex-row">
+                          {renderImagePreview(selectedImage, 0, false)}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              )}
+              keyExtractor={(item) => item.key}
             />
           </View>
+        </TouchableWithoutFeedback>
 
-          {/* --- Existing Images Section (Read-only) --- */}
-          {existingImages.length > 0 && (
-            <View style={{ marginBottom: Math.min(24, screenHeight * 0.03) }}>
-              <Text style={{
-                fontSize: Math.min(16, screenWidth * 0.04),
-                fontWeight: "600",
-                color: "#333",
-                marginBottom: Math.min(12, screenHeight * 0.015),
-              }}>
-                Current Images ({existingImages.length})
-              </Text>
-              
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                style={{ flexDirection: 'row' }}
-              >
-                {existingImages.map((image, index) => 
-                  renderImagePreview(image, index, true)
-                )}
-              </ScrollView>
-            </View>
-          )}
-
-          {/* --- New Images Section --- */}
-          <View style={{ marginBottom: Math.min(24, screenHeight * 0.03) }}>
-            <Text style={{
-              fontSize: Math.min(16, screenWidth * 0.04),
-              fontWeight: "600",
-              color: "#333",
-              marginBottom: Math.min(12, screenHeight * 0.015),
-            }}>
-              Add New Images
-            </Text>
-            
-            {/* Image Picker Button */}
-            <TouchableOpacity
-              style={{
-                borderWidth: 2,
-                borderStyle: 'dashed',
-                borderColor: "#e1e8ed",
-                borderRadius: Math.min(8, screenWidth * 0.02),
-                padding: Math.min(16, screenWidth * 0.04),
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: '#f8f9fa',
-                marginBottom: Math.min(12, screenHeight * 0.015),
-              }}
-              onPress={pickImage}
-            >
-              <Ionicons 
-                name="camera-outline" 
-                size={24} 
-                color="#666" 
-                style={{ marginBottom: 8 }} 
-              />
-              <Text style={{
-                fontSize: Math.min(14, screenWidth * 0.035),
-                color: "#666",
-                textAlign: 'center',
-              }}>
-                {selectedImage 
-                  ? 'Replace Selected Image'
-                  : 'Select New Image'
-                }
-              </Text>
-            </TouchableOpacity>
-
-            {/* New Image Preview */}
-            {selectedImage && (
-              <View>
-                <View style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: Math.min(8, screenHeight * 0.01),
-                }}>
-                  <Text style={{
-                    fontSize: Math.min(14, screenWidth * 0.035),
-                    color: "#666",
-                  }}>
-                    New Image to Upload:
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setSelectedImage(null)}
-                    style={{
-                      backgroundColor: '#dc3545',
-                      paddingHorizontal: Math.min(12, screenWidth * 0.03),
-                      paddingVertical: Math.min(6, screenHeight * 0.0075),
-                      borderRadius: Math.min(6, screenWidth * 0.015),
-                    }}
-                  >
-                    <Text style={{
-                      color: 'white',
-                      fontSize: Math.min(12, screenWidth * 0.03),
-                      fontWeight: '500',
-                    }}>
-                      Clear
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                
-                <View style={{ flexDirection: 'row' }}>
-                  {renderImagePreview(selectedImage, 0, false)}
-                </View>
-              </View>
-            )}
-          </View>
-        </ScrollView>
-
-        {/* --- Fixed Action Button --- */}
-        <View style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          paddingHorizontal: Math.min(24, screenWidth * 0.06),
-          paddingTop: Math.min(20, screenHeight * 0.025),
-          paddingBottom: Math.min(20, screenHeight * 0.025),
-          backgroundColor: 'white',
-          alignItems: 'center',
-          borderTopWidth: 1,
-          borderTopColor: '#e9ecef',
-        }}>
+        {/* Fixed Action Button - Always positioned at bottom */}
+        <View className="absolute bottom-0 left-0 right-0 px-5 pt-5 pb-5 bg-transparent items-center">
           <TouchableOpacity
-            style={{
-              width: Math.min(280, screenWidth * 0.7),
-              backgroundColor: 'black',
-              borderRadius: Math.min(12, screenWidth * 0.03),
-              paddingVertical: Math.min(16, screenHeight * 0.02),
-              alignItems: 'center',
-              justifyContent: 'center',
-              opacity: (isSubmitting || isUploadingImages) ? 0.6 : 1,
-            }}
+            className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
             onPress={handleUpdateLog}
             disabled={isSubmitting || isUploadingImages}
             activeOpacity={0.8}
           >
             {(isSubmitting || isUploadingImages) ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <ActivityIndicator size="small" color="white" style={{ marginRight: 8 }} />
-                <Text style={{
-                  color: 'white',
-                  fontSize: Math.min(16, screenWidth * 0.04),
-                  fontWeight: '600',
-                }}>
-                  Updating Log...
-                </Text>
+              <View className="flex-row items-center">
+                <ActivityIndicator color="#ffffff" size="small" />
               </View>
             ) : (
-              <Text style={{
-                color: 'white',
-                fontSize: Math.min(16, screenWidth * 0.04),
-                fontWeight: '600',
-              }}>
-                Update Log
-              </Text>
+              <Text className="text-white text-[16px] font-semibold">Update Log</Text>
             )}
           </TouchableOpacity>
         </View>

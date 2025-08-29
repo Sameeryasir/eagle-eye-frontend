@@ -25,7 +25,6 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
-import { getTasksAssignedToEmployees } from "../services/tasks/getTasksAssignedToEmployees";
 import getTodaysTask from "../services/tasks/getTodayTask";
 
 import { createLog } from "../services/log/createLog";
@@ -129,7 +128,12 @@ function CreatLogScreen({ navigation, route }) {
           status: task.status,
           projectName: task.project?.name || "Today's Tasks",
           createdBy: task.assignedTo ? `${task.assignedTo.first_name || ""} ${task.assignedTo.last_name || ""}`.trim() : "Unassigned",
-          date: task.startTime ? new Date(task.startTime).toLocaleDateString() : "N/A"
+          date: task.startTime ? new Date(task.startTime).toLocaleDateString() : "N/A",
+          // --- Log Status Information ---
+          hasLog: task.log !== null,
+          logId: task.log?.id || null,
+          logNote: task.log?.note || null,
+          logCreatedAt: task.log?.createdAt || null
         }));
         
         console.log("CreatLogScreen - Processed today's tasks for", role + ":", logsData.length);
@@ -146,6 +150,13 @@ function CreatLogScreen({ navigation, route }) {
   };
 
   const handleCheckboxToggle = (taskId) => {
+    // --- Prevent selection of tasks that already have logs ---
+    const task = logs.find(log => log.id === taskId);
+    if (task && task.hasLog) {
+      Alert.alert("Log Already Created", "This task already has a log created. You cannot select it again.");
+      return;
+    }
+
     setCheckedTasks(prev => {
       const newSet = new Set(prev);
       if (newSet.has(taskId)) {
@@ -381,7 +392,8 @@ function CreatLogScreen({ navigation, route }) {
 
   const renderLogCard = React.useCallback((log, index) => {
     const isChecked = checkedTasks.has(log.id);
-    console.log('Rendering log card:', log.id, 'isChecked:', isChecked);
+    const hasLog = log.hasLog;
+    console.log('Rendering log card:', log.id, 'isChecked:', isChecked, 'hasLog:', hasLog);
     
     return (
       <View style={{ marginBottom: Math.min(16, screenHeight * 0.02) }}>
@@ -389,11 +401,12 @@ function CreatLogScreen({ navigation, route }) {
         <View
           className="rounded-[8px] border shadow-sm"
           style={{
-            backgroundColor: isChecked ? '#e5e7eb' : '#f8f9fa',
+            backgroundColor: hasLog ? '#e5e7eb' : (isChecked ? '#e5e7eb' : '#f8f9fa'),
             borderColor: '#e9ecef',
             borderWidth: 1,
             padding: Math.min(16, screenWidth * 0.04),
             borderRadius: Math.min(8, screenWidth * 0.02),
+            opacity: hasLog ? 0.6 : 1,
           }}
         >
           <View>
@@ -436,35 +449,51 @@ function CreatLogScreen({ navigation, route }) {
                 </Text>
               </View>
               
-              {/* Checkbox at the end */}
-              <TouchableOpacity
-                onPress={() => handleCheckboxToggle(log.id)}
-                className="ml-3 border-2 rounded-lg items-center justify-center"
-                style={{
-                  backgroundColor: isChecked ? '#000000' : 'white',
-                  borderColor: isChecked ? '#000000' : '#6B7280',
-                  borderWidth: 2,
-                  minWidth: Math.max(20, screenWidth * 0.05),
-                  minHeight: Math.max(20, screenWidth * 0.05),
-                  width: Math.max(20, screenWidth * 0.05),
-                  height: Math.max(20, screenWidth * 0.05),
-                }}
-              >
-                {isChecked && (
-                  <Ionicons
-                    name="checkmark"
-                    size={Math.min(16, screenWidth * 0.04)}
-                    color="white"
-                    style={{ fontWeight: 'bold' }}
-                  />
-                )}
-              </TouchableOpacity>
+              {/* Checkbox or Log Status at the end */}
+              {hasLog ? (
+                // --- Simple "Log Created" text for tasks with logs ---
+                <Text
+                  className="ml-3 text-center"
+                  style={{
+                    fontSize: Math.min(12, screenWidth * 0.03),
+                    color: '#6b7280',
+                    fontWeight: '500',
+                    minWidth: Math.max(60, screenWidth * 0.15),
+                  }}
+                >
+                  Log Created
+                </Text>
+              ) : (
+                // --- Active Checkbox for tasks without logs ---
+                <TouchableOpacity
+                  onPress={() => handleCheckboxToggle(log.id)}
+                  className="ml-3 border-2 rounded-lg items-center justify-center"
+                  style={{
+                    backgroundColor: isChecked ? '#000000' : 'white',
+                    borderColor: isChecked ? '#000000' : '#6B7280',
+                    borderWidth: 2,
+                    minWidth: Math.max(20, screenWidth * 0.05),
+                    minHeight: Math.max(20, screenWidth * 0.05),
+                    width: Math.max(20, screenWidth * 0.05),
+                    height: Math.max(20, screenWidth * 0.05),
+                  }}
+                >
+                  {isChecked && (
+                    <Ionicons
+                      name="checkmark"
+                      size={Math.min(16, screenWidth * 0.04)}
+                      color="white"
+                      style={{ fontWeight: 'bold' }}
+                    />
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
       </View>
     );
-  }, [userRole, navigation, checkedTasks]);
+  }, [userRole, navigation, checkedTasks, logs]);
 
   const renderContent = () => (
     <FlatList
@@ -495,7 +524,7 @@ function CreatLogScreen({ navigation, route }) {
               marginBottom: Math.min(8, screenHeight * 0.01),
               textAlign: 'center',
             }}>
-              Today's Tasks ({logs.length})
+              Select Tasks
             </Text>
           </View>
         ) : null

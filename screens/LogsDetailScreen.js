@@ -8,27 +8,30 @@ import {
   Alert,
   TouchableWithoutFeedback,
   useWindowDimensions,
+  RefreshControl,
 } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
+import UpdateLogModal from "./components/UpdateLogModal";
 import { getUserRole } from "../services/utils/userRole";
+import { deleteLogById } from "../services/log/deleteLogById";
+import { getLogById } from "../services/log/getLogById";
 import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
 
 function LogsDetailScreen({ navigation, route }) {
-  const { log } = route.params || {};
+  const { logId } = route.params || {};
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [userRole, setUserRole] = useState(null);
+  const [log, setLog] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [updateModalVisible, setUpdateModalVisible] = useState(false);
   
-  // Debug: Log the received log data
-  console.log("LogsDetailScreen - Received log data:", log);
-  console.log("LogsDetailScreen - Log date fields:", {
-    createdAt: log?.createdAt,
-    date: log?.date,
-    userRole: userRole
-  });
+  // Debug: Log the received logId
+  console.log("LogsDetailScreen - Received logId:", logId);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   
@@ -58,6 +61,35 @@ function LogsDetailScreen({ navigation, route }) {
     loadUserRole();
   }, []);
 
+  // --- Load log data when component mounts ---
+  useEffect(() => {
+    const loadLogData = async () => {
+      if (!logId) {
+        setError("No log ID provided");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+        
+        console.log("LogsDetailScreen - Fetching log with ID:", logId);
+        const logData = await getLogById(logId);
+        
+        console.log("LogsDetailScreen - Received log data:", logData);
+        setLog(logData);
+      } catch (err) {
+        console.error("LogsDetailScreen - Error fetching log:", err);
+        setError(err.message || "Failed to load log data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadLogData();
+  }, [logId]);
+
   const formatDateTime = (dateString) => {
     if (!dateString) return "N/A";
     
@@ -78,13 +110,52 @@ function LogsDetailScreen({ navigation, route }) {
   };
 
   const handleUpdate = () => {
-    // TODO: Implement log update functionality
-    Alert.alert(
-      "Update Log",
-      "Log update functionality will be implemented soon.",
-      [{ text: "OK" }]
-    );
+    // Show the update modal with the current log data
+    setUpdateModalVisible(true);
   };
+
+  const handleUpdateModalClose = () => {
+    setUpdateModalVisible(false);
+  };
+
+  const handleUpdateSuccess = () => {
+    // Refresh the log data after successful update
+    if (logId) {
+      getLogById(logId).then(updatedLog => {
+        setLog(updatedLog);
+      }).catch(err => {
+        console.error("Error refreshing log data:", err);
+      });
+    }
+    setUpdateModalVisible(false);
+  };
+
+  // Add refresh functionality
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = React.useCallback(async () => {
+    if (!logId) {
+      setRefreshing(false);
+      return;
+    }
+
+    setRefreshing(true);
+    try {
+      console.log("LogsDetailScreen - Starting refresh for log ID:", logId);
+      
+      // Call getLogById to refresh the log data
+      const refreshedLog = await getLogById(logId);
+      console.log("LogsDetailScreen - Log refreshed successfully");
+      
+      setLog(refreshedLog);
+      setError(null);
+    } catch (error) {
+      console.error("LogsDetailScreen - Error refreshing log:", error);
+      setError("Failed to refresh log data");
+    } finally {
+      setRefreshing(false);
+    }
+  }, [logId]);
 
   const handleDelete = () => {
     Alert.alert(
@@ -100,8 +171,9 @@ function LogsDetailScreen({ navigation, route }) {
           style: "destructive",
           onPress: async () => {
             try {
-              // TODO: Implement log deletion API call
-              // await deleteLogById(log.id);
+              // Call the delete log API
+              await deleteLogById(logId);
+              
               Alert.alert(
                 "Success",
                 "Log deleted successfully!",
@@ -109,16 +181,23 @@ function LogsDetailScreen({ navigation, route }) {
                   {
                     text: "OK",
                     onPress: () => {
-                      navigation.navigate('ViewAllLogScreen');
+                      // Navigate back to previous screen
+                      navigation.goBack();
                     }
                   }
                 ]
               );
             } catch (error) {
               console.error('Error deleting log:', error);
+              
+              let errorMessage = "Failed to delete log. Please try again.";
+              if (error.message) {
+                errorMessage = error.message;
+              }
+              
               Alert.alert(
                 "Error",
-                "Failed to delete log. Please try again.",
+                errorMessage,
                 [{ text: "OK" }]
               );
             }
@@ -129,7 +208,7 @@ function LogsDetailScreen({ navigation, route }) {
   };
 
   // Get actual uploaded images from log
-  const logImages = log.images && log.images.length > 0 
+  const logImages = log && log.images && log.images.length > 0 
     ? log.images.map(img => ({ uri: img.imageUrl }))
     : [require('../assets/robot.png')]; // Fallback to default image
 
@@ -145,10 +224,58 @@ function LogsDetailScreen({ navigation, route }) {
     );
   };
 
+  if (loading) {
+    return (
+      <View className="flex-1 bg-white">
+        <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
+        
+        <View className="flex-1 justify-center items-center">
+          <Text className="text-[16px] text-[#666]">Loading log details...</Text>
+        </View>
+        
+        {/* Show CustomBottomNav during loading */}
+        <CustomBottomNav navigation={navigation} />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View className="flex-1 bg-white">
+        <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
+        
+        <View className="flex-1 justify-center items-center">
+          <Text className="text-[16px] text-[#dc3545] mb-4">{error}</Text>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={{
+              backgroundColor: "#007AFF",
+              paddingVertical: 12,
+              paddingHorizontal: 24,
+              borderRadius: 8,
+            }}
+          >
+            <Text className="text-white text-[16px] font-semibold">Go Back</Text>
+          </TouchableOpacity>
+        </View>
+        
+        {/* Show CustomBottomNav during error */}
+        <CustomBottomNav navigation={navigation} />
+      </View>
+    );
+  }
+
   if (!log) {
     return (
-      <View className="flex-1 bg-white justify-center items-center">
-        <Text className="text-[16px] text-[#666]">Log not found</Text>
+      <View className="flex-1 bg-white">
+        <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
+        
+        <View className="flex-1 justify-center items-center">
+          <Text className="text-[16px] text-[#666]">Log not found</Text>
+        </View>
+        
+        {/* Show CustomBottomNav when log not found */}
+        <CustomBottomNav navigation={navigation} />
       </View>
     );
   }
@@ -169,6 +296,14 @@ function LogsDetailScreen({ navigation, route }) {
           paddingBottom: isLargeScreen ? 120 : isMediumScreen ? 100 : 80,
           alignItems: isTablet ? 'center' : 'stretch'
         }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#3155A1"]}
+            tintColor="#3155A1"
+          />
+        }
       >
         {/* Log Title Card */}
         <View style={{ marginHorizontal: horizontalMargin, marginBottom: cardSpacing }}>
@@ -192,70 +327,68 @@ function LogsDetailScreen({ navigation, route }) {
                 <Text className="text-sm font-medium text-green-600 mb-1">DAILY LOG</Text>
               </View>
               
-              {userRole !== "Admin" && userRole !== "Owner" && (
-                <Menu rendererProps={{ 
-                  placement: 'bottom-end', 
-                  anchorStyle: { marginRight: 0 },
-                  triggerStyle: { marginRight: 0 }
-                }}>
-                  <MenuTrigger>
-                    <View style={{ activeOpacity: 1 }}>
-                      <Ionicons name="ellipsis-vertical" size={16} color="#374151" />
-                    </View>
-                  </MenuTrigger>
-                <MenuOptions customStyles={{
-                  optionsContainer: {
-                    backgroundColor: 'white',
-                    borderRadius: 8,
-                    padding: 8,
-                    width: 120,
-                    marginRight: -40,
-                    marginTop: 15,
-                    shadowColor: "#000",
-                    shadowOpacity: 0.15,
-                    shadowRadius: 6,
-                    shadowOffset: { width: 0, height: 3 },
-                    elevation: 3,
+              <Menu rendererProps={{ 
+                placement: 'bottom-end', 
+                anchorStyle: { marginRight: 0 },
+                triggerStyle: { marginRight: 0 }
+              }}>
+                <MenuTrigger>
+                  <View style={{ activeOpacity: 1 }}>
+                    <Ionicons name="ellipsis-vertical" size={16} color="#374151" />
+                  </View>
+                </MenuTrigger>
+              <MenuOptions customStyles={{
+                optionsContainer: {
+                  backgroundColor: 'white',
+                  borderRadius: 8,
+                  padding: 8,
+                  width: 120,
+                  marginRight: -40,
+                  marginTop: 15,
+                  shadowColor: "#000",
+                  shadowOpacity: 0.15,
+                  shadowRadius: 6,
+                  shadowOffset: { width: 0, height: 3 },
+                  elevation: 3,
+                }
+              }}>
+                <MenuOption onSelect={handleUpdate} customStyles={{
+                  optionWrapper: {
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: 10,
+                    paddingHorizontal: 16,
+                    borderRadius: 4,
                   }
                 }}>
-                  <MenuOption onSelect={handleUpdate} customStyles={{
-                    optionWrapper: {
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      paddingVertical: 10,
-                      paddingHorizontal: 16,
-                      borderRadius: 4,
-                    }
-                  }}>
-                    <Ionicons name="create-outline" size={18} color="#000" />
-                    <Text style={{ marginLeft: 10, fontSize: 14, fontWeight: '600', color: 'black' }}>
-                      Update
-                    </Text>
-                  </MenuOption>
-                  <MenuOption onSelect={handleDelete} customStyles={{
-                    optionWrapper: {
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      paddingVertical: 10,
-                      paddingHorizontal: 16,
-                      borderRadius: 4,
-                    }
-                  }}>
-                    <Ionicons name="trash-outline" size={18} color="#dc3545" />
-                    <Text style={{ marginLeft: 10, fontSize: 14, fontWeight: '600', color: '#dc3545' }}>
-                      Delete
-                    </Text>
-                  </MenuOption>
-                </MenuOptions>
-              </Menu>
-              )}
+                  <Ionicons name="create-outline" size={18} color="#000" />
+                  <Text style={{ marginLeft: 10, fontSize: 14, fontWeight: '600', color: 'black' }}>
+                    Update
+                  </Text>
+                </MenuOption>
+                <MenuOption onSelect={handleDelete} customStyles={{
+                  optionWrapper: {
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: 10,
+                    paddingHorizontal: 16,
+                    borderRadius: 4,
+                  }
+                }}>
+                  <Ionicons name="trash-outline" size={18} color="#dc3545" />
+                  <Text style={{ marginLeft: 10, fontSize: 14, fontWeight: '600', color: '#dc3545' }}>
+                    Delete
+                  </Text>
+                </MenuOption>
+              </MenuOptions>
+            </Menu>
             </View>
             
-            {log.description && (
+            {log && log.note && (
               <View className="pt-4 border-t border-gray-100">
                 <Text className="text-sm font-bold text-gray-600 mb-2">DESCRIPTION</Text>
                 <Text className="text-base text-gray-700 leading-relaxed">
-                  {log.description}
+                  {log.note}
                 </Text>
               </View>
             )}
@@ -290,7 +423,7 @@ function LogsDetailScreen({ navigation, route }) {
                   <View className="flex-1">
                     <Text className="text-sm font-medium text-gray-600 mb-1">CREATED BY</Text>
                     <Text className="text-lg font-semibold text-gray-900">
-                      {log.createdBy || "Unknown"}
+                      {log && log.user ? `${log.user.first_name || ''} ${log.user.last_name || ''}`.trim() || log.user.email : "Unknown"}
                     </Text>
                   </View>
                 </View>
@@ -310,7 +443,7 @@ function LogsDetailScreen({ navigation, route }) {
                 <View className="flex-1">
                   <Text className="text-sm font-medium text-gray-600 mb-1">DATE</Text>
                   <Text className="text-lg font-semibold text-gray-900">
-                    {log.createdAt ? formatDateTime(log.createdAt) : "N/A"}
+                    {log && log.createdAt ? formatDateTime(log.createdAt) : "N/A"}
                   </Text>
                 </View>
               </View>
@@ -348,75 +481,67 @@ function LogsDetailScreen({ navigation, route }) {
                  </View>
                  <View className="flex-1">
                    <Text className="text-sm font-medium text-gray-600 mb-1">RELATED TASKS</Text>
-                   <Text className="text-lg font-semibold text-gray-900">3 Tasks</Text>
+                   <Text className="text-lg font-semibold text-gray-900">
+                     {log && log.tasks && log.tasks.length > 0 ? `${log.tasks.length} Task${log.tasks.length !== 1 ? 's' : ''}` : 'No Tasks'}
+                   </Text>
                  </View>
                </View>
              </View>
 
-             {/* Dummy Tasks */}
-             {[
-               {
-                 id: 1,
-                 title: "Complete Project Documentation",
-                 status: "In Progress",
-                 priority: "High",
-                 assignedTo: "John Doe",
-                 dueDate: "2024-01-15"
-               },
-               {
-                 id: 2,
-                 title: "Review Code Changes",
-                 status: "Pending",
-                 priority: "Medium",
-                 assignedTo: "Jane Smith",
-                 dueDate: "2024-01-20"
-               },
-               {
-                 id: 3,
-                 title: "Update User Interface",
-                 status: "Completed",
-                 priority: "Low",
-                 assignedTo: "Mike Johnson",
-                 dueDate: "2024-01-10"
-               }
-             ].map((task, index) => (
-               <View key={task.id} style={{ 
-                 padding: cardPadding, 
-                 borderBottomWidth: index < 2 ? 1 : 0, 
-                 borderBottomColor: '#f3f4f6' 
-               }}>
-                 <View className="flex-row items-start justify-between mb-2">
-                   <View className="flex-1 mr-3">
-                     <View className="flex-row items-center mb-1">
-                       <View className="w-6 h-6 rounded-full bg-indigo-100 items-center justify-center mr-3">
-                         <Text className="text-xs font-bold text-indigo-600">
-                           {index + 1}
+             {/* Actual Tasks from Log */}
+             {log && log.tasks && log.tasks.length > 0 ? (
+               log.tasks.map((task, index) => (
+                 <View key={task.id || index} style={{ 
+                   padding: cardPadding, 
+                   borderBottomWidth: index < log.tasks.length - 1 ? 1 : 0, 
+                   borderBottomColor: '#f3f4f6' 
+                 }}>
+                   <View className="flex-row items-center justify-between">
+                     <View className="flex-1 mr-3">
+                       <View className="flex-row items-center mb-2">
+                         <View className="w-6 h-6 rounded-full bg-indigo-100 items-center justify-center mr-3">
+                           <Text className="text-xs font-bold text-indigo-600">
+                             {index + 1}
+                           </Text>
+                         </View>
+                         <Text className="text-base font-semibold text-gray-900">
+                           {task.title || "Untitled Task"}
                          </Text>
                        </View>
-                       <Text className="text-base font-semibold text-gray-900">
-                         {task.title}
-                       </Text>
-                     </View>
-                     
-                     <View className="flex-row items-center ml-9 mt-1">
-                       <View style={{
-                         width: 8,
-                         height: 8,
-                         borderRadius: 4,
-                         backgroundColor: 
-                           task.priority === 'High' ? '#EF4444' :
-                           task.priority === 'Medium' ? '#F59E0B' : '#10B981',
-                         marginRight: 8
-                       }} />
                        
-                       <Text className="text-sm text-gray-600">
-                         {task.priority} Priority
-                       </Text>
+                       {task.priority && (
+                         <View className="flex-row items-center ml-9">
+                           <View style={{
+                             width: 8,
+                             height: 8,
+                             borderRadius: 4,
+                             backgroundColor: 
+                               task.priority === 'high' ? '#EF4444' :
+                               task.priority === 'medium' ? '#F59E0B' : 
+                               task.priority === 'critical' ? '#DC2626' : '#10B981',
+                             marginRight: 8
+                           }} />
+                           
+                           <Text className="text-sm text-gray-600">
+                             {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)} Priority
+                           </Text>
+                         </View>
+                       )}
                      </View>
                    </View>
                  </View>
+               ))
+             ) : (
+               <View style={{ 
+                 padding: cardPadding, 
+                 alignItems: 'center',
+                 justifyContent: 'center'
+               }}>
+                 <Text className="text-sm text-gray-500 text-center">
+                   No tasks associated with this log
+                 </Text>
                </View>
-             ))}
+             )}
            </View>
          </View>
 
@@ -447,7 +572,7 @@ function LogsDetailScreen({ navigation, route }) {
                                    <View className="flex-1">
                     <Text className="text-sm font-medium text-gray-600 mb-1">ATTACHMENTS</Text>
                     <Text className="text-lg font-semibold text-gray-900">
-                      {logImages.length} {logImages.length === 1 ? 'File' : 'Files'}
+                      {log && logImages.length} {logImages.length === 1 ? 'File' : 'Files'}
                     </Text>
                   </View>
                </View>
@@ -561,6 +686,15 @@ function LogsDetailScreen({ navigation, route }) {
       
       {/* Bottom Navigation */}
       <CustomBottomNav navigation={navigation} />
+
+      {/* Update Log Modal */}
+      <UpdateLogModal
+        visible={updateModalVisible}
+        onClose={handleUpdateModalClose}
+        log={log}
+        onUpdate={handleUpdateSuccess}
+        userRole={userRole}
+      />
     </View>
   );
 }

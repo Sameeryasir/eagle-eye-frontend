@@ -1,4 +1,5 @@
- import React, { useState } from "react";
+
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -286,15 +287,17 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   // Get logs for a specific project
   const getLogsForProject = (projectName) => {
     if (!projectName || projectName === "All Logs") {
-      console.log("getLogsForProject - Returning logs from WidgetScreen (All Logs selected):", logs?.length || 0);
-      if (logs && logs.length > 0) {
-        console.log("getLogsForProject - Sample log from WidgetScreen:", {
-          id: logs[0].id,
-          createdAt: logs[0].createdAt,
-          date: logs[0].date
+      // Use logs from route params (which get refreshed during onRefresh)
+      const currentLogs = route.params?.logs || logs || [];
+      console.log("getLogsForProject - Returning logs from route params (All Logs selected):", currentLogs.length);
+      if (currentLogs && currentLogs.length > 0) {
+        console.log("getLogsForProject - Sample log from route params:", {
+          id: currentLogs[0].id,
+          createdAt: currentLogs[0].createdAt,
+          date: currentLogs[0].date
         });
       }
-      return logs || [];
+      return currentLogs;
     }
 
     // Find the project by name
@@ -603,8 +606,11 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       
       console.log("Log updated successfully:", response);
       
+      // Get current logs from route params or fallback to logs state
+      const currentLogs = route.params?.logs || logs || [];
+      
       // Update the local logs state with only the note
-      const updatedLogs = logs.map(log => 
+      const updatedLogs = currentLogs.map(log => 
         log.id === selectedLogForUpdate.id 
           ? { ...log, description: updateData.note }
           : log
@@ -617,7 +623,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
           : log
       );
       
-      // Update route params if possible
+      // Update route params
       if (route.params) {
         route.params.logs = updatedLogs;
       }
@@ -635,10 +641,14 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
     try {
-      // Reload project options
+      console.log("ViewAllLogScreen - Starting refresh for user role:", userRole);
+      
+      // Reload project options (this calls getMyProjects internally)
       const { options, projects } = await generateProjectOptions();
       setProjectFilterOptions(options);
       setProjectsData(projects);
+      
+      console.log("ViewAllLogScreen - Projects refreshed:", projects.length);
       
       // Extract all logs from all projects
       const allLogs = [];
@@ -662,16 +672,193 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         }
       });
       
+      console.log("ViewAllLogScreen - Extracted logs from projects:", allLogs.length);
       setAllLogsFromProjects(allLogs);
+      
+      // Refresh logs from API for "All Logs" section (Employee, Manager, Admin, Owner roles)
+      if (userRole === "Employee" || userRole === "Manager" || userRole === "Admin" || userRole === "Owner") {
+        console.log("ViewAllLogScreen - Refreshing logs from API for role:", userRole);
+        try {
+          let sortedLogs = [];
+          
+          if (userRole === "Owner") {
+            // Owner role: Extract logs from tasks within projects (same as WidgetScreen logic)
+            console.log("ViewAllLogScreen - Owner role: Extracting logs from tasks");
+            
+            // Get tasks for the current project (if projectId is available)
+            const projectId = route.params?.projectId;
+            if (projectId) {
+              const { getTaskByProjectId } = require("../services/tasks/getTaskByProjectId");
+              const response = await getTaskByProjectId(projectId);
+              
+              if (response && response.tasks) {
+                // Extract logs from tasks
+                const tasksWithLogs = response.tasks.filter(task => task.log && task.log !== null);
+                console.log("ViewAllLogScreen - Owner: Tasks with logs:", tasksWithLogs.length);
+                
+                const extractedLogs = tasksWithLogs.map(task => ({
+                  id: task.log.id,
+                  createdBy: task.assignedTo ? `${task.assignedTo.first_name || ''} ${task.assignedTo.last_name || ''}`.trim() : 'Unknown User',
+                  date: task.log.createdAt ? new Date(task.log.createdAt).toLocaleDateString() : 'N/A',
+                  createdAt: task.log.createdAt,
+                  description: task.log.note || 'No description',
+                  images: task.log.images || [],
+                  image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
+                  taskTitle: task.title,
+                }));
+                
+                // Sort logs by date (newest first)
+                sortedLogs = extractedLogs.sort((a, b) => {
+                  const dateA = new Date(a.createdAt);
+                  const dateB = new Date(b.createdAt);
+                  return dateB - dateA;
+                });
+                
+                console.log("ViewAllLogScreen - Owner: Extracted and sorted logs:", sortedLogs.length);
+              }
+            } else {
+              // If no projectId, extract logs from all projects
+              console.log("ViewAllLogScreen - Owner: No projectId, extracting from all projects");
+              const allLogsFromAllProjects = [];
+              
+              projects.forEach(project => {
+                if (project.tasks && Array.isArray(project.tasks)) {
+                  project.tasks.forEach(task => {
+                    if (task.log && task.log !== null) {
+                      const transformedLog = {
+                        id: task.log.id,
+                        createdBy: task.assignedTo ? `${task.assignedTo.first_name || ''} ${task.assignedTo.last_name || ''}`.trim() : 'Unknown User',
+                        date: task.log.createdAt ? new Date(task.log.createdAt).toLocaleDateString() : 'N/A',
+                        createdAt: task.log.createdAt,
+                        description: task.log.note || 'No description',
+                        images: task.log.images || [],
+                        image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
+                        projectName: project.name,
+                      };
+                      allLogsFromAllProjects.push(transformedLog);
+                    }
+                  });
+                }
+              });
+              
+              // Sort logs by date (newest first)
+              sortedLogs = allLogsFromAllProjects.sort((a, b) => {
+                const dateA = new Date(a.createdAt);
+                const dateB = new Date(b.createdAt);
+                return dateB - dateA;
+              });
+              
+              console.log("ViewAllLogScreen - Owner: Extracted logs from all projects:", sortedLogs.length);
+            }
+          } else if (userRole === "Manager") {
+            // Manager role: Use getLogs API (same as WidgetScreen behavior)
+            console.log("ViewAllLogScreen - Manager role: Using getLogs API");
+            
+            const { getLogs } = require("../services/log/getLogs");
+            const logsResponse = await getLogs();
+            
+            console.log("ViewAllLogScreen - Manager API logs response:", logsResponse);
+            
+            // Check if response has logs array or if it's directly an array
+            let logsArray = [];
+            if (logsResponse?.logs && Array.isArray(logsResponse.logs)) {
+              logsArray = logsResponse.logs;
+            } else if (Array.isArray(logsResponse)) {
+              logsArray = logsResponse;
+            } else {
+              console.log("ViewAllLogScreen - Manager: No logs found in API response:", logsResponse);
+              logsArray = [];
+            }
+            
+            // Transform logs data to match the expected format
+            const transformedLogs = logsArray.map(log => ({
+              id: log.id,
+              createdBy: log.user ? `${log.user.first_name || ''} ${log.user.last_name || ''}`.trim() : 'Unknown User',
+              date: log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'N/A',
+              createdAt: log.createdAt, // Preserve original createdAt for filtering
+              description: log.note || 'No description',
+              images: log.images || [], // Keep all images for the log
+              image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : require("../assets/robot.png"),
+            }));
+            
+            // Sort logs by date (newest first)
+            sortedLogs = transformedLogs.sort((a, b) => {
+              const dateA = new Date(a.createdAt);
+              const dateB = new Date(b.createdAt);
+              return dateB - dateA;
+            });
+            
+            console.log("ViewAllLogScreen - Manager: Updated logs from API:", sortedLogs.length);
+          } else {
+            // Employee, Admin roles: Use getLogs API
+            const { getLogs } = require("../services/log/getLogs");
+            const logsResponse = await getLogs();
+            
+            console.log("ViewAllLogScreen - API logs response:", logsResponse);
+            
+            // Check if response has logs array or if it's directly an array
+            let logsArray = [];
+            if (logsResponse?.logs && Array.isArray(logsResponse.logs)) {
+              logsArray = logsResponse.logs;
+            } else if (Array.isArray(logsResponse)) {
+              logsArray = logsResponse;
+            } else {
+              console.log("ViewAllLogScreen - No logs found in API response:", logsResponse);
+              logsArray = [];
+            }
+            
+            // Transform logs data to match the expected format
+            const transformedLogs = logsArray.map(log => ({
+              id: log.id,
+              createdBy: log.user ? `${log.user.first_name || ''} ${log.user.last_name || ''}`.trim() : 'Unknown User',
+              date: log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'N/A',
+              createdAt: log.createdAt, // Preserve original createdAt for filtering
+              description: log.note || 'No description',
+              images: log.images || [], // Keep all images for the log
+              image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : require("../assets/robot.png"),
+            }));
+            
+            // Sort logs by date (newest first)
+            sortedLogs = transformedLogs.sort((a, b) => {
+              const dateA = new Date(a.createdAt);
+              const dateB = new Date(b.createdAt);
+              return dateB - dateA;
+            });
+            
+            console.log("ViewAllLogScreen - Updated logs from API:", sortedLogs.length);
+          }
+          
+          // Update the logs in route params so "All Logs" section gets refreshed
+          if (route.params) {
+            route.params.logs = sortedLogs;
+          }
+          
+          // Update the local logs state
+          setFilteredLogs(prevFilteredLogs => {
+            // If "All Logs" is selected, update with new logs
+            if (selectedProjectFilter === "All Logs") {
+              return sortedLogs;
+            }
+            // Otherwise keep the current filtered logs
+            return prevFilteredLogs;
+          });
+          
+        } catch (apiError) {
+          console.error("ViewAllLogScreen - Error refreshing logs from API:", apiError);
+          // Continue with the refresh even if API call fails
+        }
+      }
       
       // Re-apply filters with current settings
       applyFilters(searchQuery, selectedTimeFilter, selectedProjectFilter);
+      
+      console.log("ViewAllLogScreen - Refresh completed successfully for role:", userRole);
     } catch (error) {
-      console.error("Error refreshing data:", error);
+      console.error("ViewAllLogScreen - Error refreshing data:", error);
     } finally {
       setRefreshing(false);
     }
-  }, [searchQuery, selectedTimeFilter, selectedProjectFilter]);
+  }, [searchQuery, selectedTimeFilter, selectedProjectFilter, userRole, selectedProjectFilter]);
 
   const handleDelete = (log) => {
     // Allow deleting logs for all roles (Employee, Manager, Owner, Admin)
@@ -696,12 +883,14 @@ const ViewAllLogScreen = ({ route, navigation }) => {
             try {
               await deleteLogById(logId);
 
-              const updatedLogs = logs.filter((log) => log.id !== logId);
+              // Get current logs from route params or fallback to logs state
+              const currentLogs = route.params?.logs || logs || [];
+              const updatedLogs = currentLogs.filter((log) => log.id !== logId);
               const updatedFilteredLogs = filteredLogs.filter(
                 (log) => log.id !== logId
               );
 
-              // Update the logs in route params if possible
+              // Update the logs in route params
               if (route.params) {
                 route.params.logs = updatedLogs;
               }
@@ -730,7 +919,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   // Separate Manager Card Component
   const ManagerLogCard = ({ log }) => (
     <TouchableOpacity
-      onPress={() => navigation.navigate('LogsDetail', { log })}
+      onPress={() => navigation.navigate('LogsDetail', { logId: log.id })}
       style={{
         backgroundColor: "#f8f9fa",
         borderRadius: Math.min(8, screenWidth * 0.02),
@@ -957,7 +1146,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
 
   const LogCard = ({ log }) => (
     <TouchableOpacity
-      onPress={() => navigation.navigate('LogsDetail', { log })}
+      onPress={() => navigation.navigate('LogsDetail', { logId: log.id })}
       style={{
         backgroundColor: "#f8f9fa",
         borderRadius: Math.min(8, screenWidth * 0.02),
