@@ -99,7 +99,7 @@ function HomeScreen({ navigation }) {
     const loadUserRole = async () => {
       const role = await getUserRole();
       setUserRole(role);
-      
+
       // Disable swipe back gesture for admin or owner
       if (role === 'Admin' || role === 'Owner') {
         navigation.setOptions({
@@ -111,7 +111,7 @@ function HomeScreen({ navigation }) {
         });
       }
     };
-    
+
     loadUserRole();
   }, [navigation]);
 
@@ -247,7 +247,7 @@ function HomeScreen({ navigation }) {
 
 
 
-  const ProjectCard = ({ project, cardWidth }) => (
+  const ProjectCard = ({ project, cardWidth, userRole }) => (
     <TouchableOpacity
       key={project.id}
       className="bg-white rounded-2xl p-0 mb-4 border border-[#f0f0f0] overflow-hidden"
@@ -264,70 +264,79 @@ function HomeScreen({ navigation }) {
         >
           {project.name}
         </Text>
-        <Menu rendererProps={{ 
-          placement: 'bottom-end', 
-          anchorStyle: { marginRight: 0 },
-          triggerStyle: { marginRight: 0 }
-        }}>
-          <MenuTrigger>
-            <View style={{ activeOpacity: 1 }}>
-              <Ionicons name="ellipsis-vertical" size={20} color="white" />
-            </View>
-          </MenuTrigger>
-          <MenuOptions customStyles={{
-            optionsContainer: {
-              backgroundColor: 'white',
-              borderRadius: 8,
-              padding: 8,
-              width: 120,
-              marginRight: -40,
-              marginTop: 15,
-              shadowColor: "#000",
-              shadowOpacity: 0.15,
-              shadowRadius: 6,
-              shadowOffset: { width: 0, height: 3 },
-              elevation: 3,
-            }
+{userRole !== 'Employee' && userRole !== 'Manager' && (
+          <Menu rendererProps={{
+            placement: 'bottom-end',
+            anchorStyle: { marginRight: 0 },
+            triggerStyle: { marginRight: 0 }
           }}>
-            <MenuOption onSelect={() => handleUpdate(project)} customStyles={{
-              optionWrapper: {
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingVertical: 10,
-                paddingHorizontal: 16,
-                borderRadius: 4,
+            <MenuTrigger>
+              <View style={{ activeOpacity: 1 }}>
+                <Ionicons name="ellipsis-vertical" size={20} color="white" />
+              </View>
+            </MenuTrigger>
+            <MenuOptions customStyles={{
+              optionsContainer: {
+                backgroundColor: 'white',
+                borderRadius: 8,
+                padding: 8,
+                width: 120,
+                marginRight: -40,
+                marginTop: 15,
+                shadowColor: "#000",
+                shadowOpacity: 0.15,
+                shadowRadius: 6,
+                shadowOffset: { width: 0, height: 3 },
+                elevation: 3,
               }
             }}>
-              <Ionicons name="create-outline" size={18} color="#000" />
-              <Text style={{ marginLeft: 10, fontSize: 14, fontWeight: '600', color: 'black' }}>
-                Update
-              </Text>
-            </MenuOption>
-            <MenuOption onSelect={() => handleDelete(project)} customStyles={{
-              optionWrapper: {
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingVertical: 10,
-                paddingHorizontal: 16,
-                borderRadius: 4,
-              }
-            }}>
-              <Ionicons name="trash-outline" size={18} color="#dc3545" />
-              <Text style={{ marginLeft: 10, fontSize: 14, fontWeight: '600', color: '#dc3545' }}>
-                Delete
-              </Text>
-            </MenuOption>
-          </MenuOptions>
-        </Menu>
+              <MenuOption onSelect={() => handleUpdate(project)} customStyles={{
+                optionWrapper: {
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingVertical: 10,
+                  paddingHorizontal: 16,
+                  borderRadius: 4,
+                }
+              }}>
+                <Ionicons name="create-outline" size={18} color="#000" />
+                <Text style={{ marginLeft: 10, fontSize: 14, fontWeight: '600', color: 'black' }}>
+                  Update
+                </Text>
+              </MenuOption>
+              <MenuOption onSelect={() => handleDelete(project)} customStyles={{
+                optionWrapper: {
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingVertical: 10,
+                  paddingHorizontal: 16,
+                  borderRadius: 4,
+                }
+              }}>
+                <Ionicons name="trash-outline" size={18} color="#dc3545" />
+                <Text style={{ marginLeft: 10, fontSize: 14, fontWeight: '600', color: '#dc3545' }}>
+                  Delete
+                </Text>
+              </MenuOption>
+            </MenuOptions>
+          </Menu>
+        )}
       </View>
 
       {/* Rest of the card content */}
       <View className="p-6 py-8">
-        <View className="flex-row items-center justify-between">
-          <Text className="text-[14px] text-[#666] leading-[22px] flex-1 mr-3">
+        <View className="flex-row items-start justify-between">
+          <Text 
+            className="text-[14px] text-[#666] leading-[22px] flex-1 mr-3"
+            numberOfLines={3}
+            ellipsizeMode="tail"
+          >
             {project.description}
           </Text>
-          <Text className="text-[12px] text-[#999] font-medium">
+          <Text 
+            className="text-[12px] text-[#999] font-medium"
+            style={{ marginTop: '1%' }}
+          >
             {formatDate(project.startDate)}
           </Text>
         </View>
@@ -382,7 +391,7 @@ function HomeScreen({ navigation }) {
         </View>
       )}
       renderItem={({ item }) => (
-        <ProjectCard project={item} cardWidth={cardWidth} />
+        <ProjectCard project={item} cardWidth={cardWidth} userRole={userRole} />
       )}
     />
   );
@@ -406,14 +415,21 @@ function HomeScreen({ navigation }) {
       <Sidebar
         isVisible={sidebarVisible}
         onClose={() => setSidebarVisible(false)}
-        onNavigate={() => {}}
+        onNavigate={() => { }}
       />
 
       {/* Bottom Nav */}
       <CustomBottomNav
         keyboardVisible={keyboardVisible}
         project
-        onAddPress={() => setCreateProjectModalVisible(true)}
+        onAddPress={() => {
+          // Only allow project creation for Owner role
+          if (userRole === "Employee" || userRole === "Manager") {
+            // Do nothing for Employee and Manager roles
+            return;
+          }
+          setCreateProjectModalVisible(true);
+        }}
       />
 
       {/* Create Project Modal */}

@@ -15,7 +15,7 @@ export async function getEmployeeToAssingeTasks() {
 
     try {
         console.log('Making API call to:', `${API_URL}/task`);
-        const response = await axios.get(`${API_URL}/task`, {
+        const response = await axios.get(`${API_URL}/task/assingTo`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json',
@@ -32,7 +32,7 @@ export async function getEmployeeToAssingeTasks() {
             if (!newToken) throw new Error('Unable to refresh token.');
 
             // Retry the original request with new token
-            const retryResponse = await axios.get(`${API_URL}/task`, {
+            const retryResponse = await axios.get(`${API_URL}/task/assignTo`, {
                 headers: {
                     'Authorization': `Bearer ${newToken}`,
                     'Content-Type': 'application/json',

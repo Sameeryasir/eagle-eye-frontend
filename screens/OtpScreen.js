@@ -54,42 +54,44 @@ const Code = () => {
     try {
       const data = await verifyOtp(emailOrPhone, code.trim());
       console.log('Full response data:', data);
-  
+
       // Use AuthContext to handle login
       await login(data);
-  
+
       setLoading(false);
       setCode('');
-  
+
       // Check user role and navigate accordingly
       const userRole = data.user?.role?.name;
       console.log('User role received:', userRole);
       let targetScreen = 'HomeScreen'; // Default to HomeScreen
-      
+
       if (userRole === 'Owner') {
         targetScreen = 'HomeScreen';
-      } else if (userRole === 'Employee' || userRole === 'Manager') {
-        targetScreen = 'WidgetScreen';
+      } else if (userRole === 'Employee') {
+        targetScreen = 'HomeScreen';
+      } else if (userRole === 'Manager') {
+        targetScreen = 'HomeScreen';
       }
       // Other roles will default to HomeScreen
-      
+
       console.log('Navigating to screen:', targetScreen);
-      
+
       Alert.alert("Success", "OTP verified successfully!", [
         { text: "OK", onPress: () => navigation.navigate(targetScreen) }
       ]);
-  
+
     } catch (error) {
       setLoading(false);
       Alert.alert("Error", error.message || "Failed to verify OTP");
     }
   };
-  
+
 
   return (
     <>
       {/* Background layer to ensure full coverage */}
-      <View 
+      <View
         style={{
           position: 'absolute',
           top: 0,
@@ -100,9 +102,9 @@ const Code = () => {
           zIndex: 0,
         }}
       />
-      
+
       {/* Main content layer */}
-      <View 
+      <View
         style={{
           position: 'absolute',
           top: 0,
@@ -113,13 +115,13 @@ const Code = () => {
           zIndex: 1,
         }}
       >
-        <StatusBar 
-          barStyle="dark-content" 
-          backgroundColor="#FFFFFF" 
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor="#FFFFFF"
           translucent={false}
         />
-        
-        <View 
+
+        <View
           style={{
             flex: 1,
             justifyContent: 'center',
@@ -130,7 +132,7 @@ const Code = () => {
           }}
         >
           <Logo width={90} height={90} />
-       
+
           <Text style={styles.title}>Verify OTP</Text>
           <Text style={styles.description}>
             Enter the code sent to your email or phone
@@ -146,12 +148,12 @@ const Code = () => {
             onSubmitEditing={handleContinue}
             blurOnSubmit={false}
           />
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[
               styles.continueButton,
               !code.trim() && styles.disabledButton
-            ]} 
-            onPress={handleContinue} 
+            ]}
+            onPress={handleContinue}
             disabled={loading || !code.trim()}
           >
             {loading ? (

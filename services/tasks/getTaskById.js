@@ -13,9 +13,9 @@ export async function getTaskById(taskId) {
   
   try {
     console.log('Fetching task with ID:', taskId);
-    console.log('API URL:', `${API_URL}/tasks/${taskId}`);
+    console.log('API URL:', `${API_URL}/task/by-id/${taskId}`);
     
-    const response = await axios.get(`${API_URL}/tasks/${taskId}`, {
+    const response = await axios.get(`${API_URL}/task/by-id/${taskId}`, {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
@@ -32,7 +32,7 @@ export async function getTaskById(taskId) {
       if (!newToken) throw new Error('Unable to refresh token.');
 
       // Retry the original request with new token
-      const retryResponse = await axios.get(`${API_URL}/tasks/${taskId}`, {
+      const retryResponse = await axios.get(`${API_URL}/task/by-id/${taskId}`, {
         headers: {
           Authorization: `Bearer ${newToken}`,
           "Content-Type": "application/json",

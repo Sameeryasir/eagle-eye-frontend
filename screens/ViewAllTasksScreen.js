@@ -18,15 +18,14 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useFocusEffect } from "@react-navigation/native";
 import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
 import UpdateTaskModal from "./components/UpdateTaskModal";
+import FilterModal from "./components/FilterModal";
 import { deleteTaskById } from "../services/tasks/deleteTaskById";
 import { getTaskByProjectId } from "../services/tasks/getTaskByProjectId";
 import { createTask } from "../services/tasks/createTask";
 import { getTasksAssignedToEmployees } from "../services/tasks/getTasksAssignedToEmployees";
-
 import { getEmployeesToAssignTask } from "../services/employees/getEmployeesOfTheCompany";
 import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
@@ -45,45 +44,73 @@ const searchBarClasses = `flex-row items-center rounded-2xl px-4 py-3 bg-[#F8FAF
 const SearchBarHeader = React.memo(function SearchBarHeader({
   searchTerm,
   onChange,
+  onFilterPress,
 }) {
   return (
     <View style={{
       paddingVertical: Math.min(20, screenHeight * 0.025),
       paddingHorizontal: Math.min(20, screenWidth * 0.05),
     }}>
-      <View
-        className={searchBarClasses}
-        style={{ 
-          width: "100%", 
-          maxWidth: Math.min(600, screenWidth * 0.9),
-          paddingHorizontal: Math.min(16, screenWidth * 0.04),
-          paddingVertical: Math.min(12, screenHeight * 0.015),
-        }}
-      >
-        <Ionicons
-          name="search"
-          size={Math.min(18, screenWidth * 0.045)}
-          color="#6B7280"
-          style={{ marginRight: Math.min(8, screenWidth * 0.02) }}
-        />
-        <TextInput
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <View
+          className={searchBarClasses}
           style={{
             flex: 1,
-            fontSize: Math.min(15, screenWidth * 0.038),
-            color: "#111827",
+            maxWidth: Math.min(600, screenWidth * 0.9),
+            paddingHorizontal: Math.min(16, screenWidth * 0.04),
+            paddingVertical: Math.min(12, screenHeight * 0.015),
+            marginRight: Math.min(12, screenWidth * 0.03),
           }}
-          placeholder="Search tasks"
-          placeholderTextColor="#9CA3AF"
-          value={searchTerm}
-          onChangeText={onChange}
-          returnKeyType="search"
-          blurOnSubmit={false}
-        />
-        {searchTerm.length > 0 && (
-          <TouchableOpacity onPress={() => onChange("")} style={{ marginLeft: Math.min(8, screenWidth * 0.02) }}>
-            <Ionicons name="close-circle" size={Math.min(18, screenWidth * 0.045)} color="#9CA3AF" />
-          </TouchableOpacity>
-        )}
+        >
+          <Ionicons
+            name="search"
+            size={Math.min(18, screenWidth * 0.045)}
+            color="#6B7280"
+            style={{ marginRight: Math.min(8, screenWidth * 0.02) }}
+          />
+          <TextInput
+            style={{
+              flex: 1,
+              fontSize: Math.min(15, screenWidth * 0.038),
+              color: "#111827",
+            }}
+            placeholder="Search tasks"
+            placeholderTextColor="#9CA3AF"
+            value={searchTerm}
+            onChangeText={onChange}
+            returnKeyType="search"
+            blurOnSubmit={false}
+          />
+          {searchTerm.length > 0 && (
+            <TouchableOpacity onPress={() => onChange("")} style={{ marginLeft: Math.min(8, screenWidth * 0.02) }}>
+              <Ionicons name="close-circle" size={Math.min(18, screenWidth * 0.045)} color="#9CA3AF" />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Filter Icon */}
+        <TouchableOpacity
+          style={{
+            backgroundColor: '#F8FAFC',
+            borderRadius: Math.min(12, screenWidth * 0.03),
+            padding: Math.min(12, screenWidth * 0.03),
+            borderWidth: 1,
+            borderColor: '#EAECF0',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          onPress={onFilterPress}
+        >
+          <Ionicons
+            name="filter"
+            size={Math.min(20, screenWidth * 0.05)}
+            color="#374151"
+          />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -127,31 +154,27 @@ function ViewAllTasksScreen({ navigation, route }) {
   const [userRole, setUserRole] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Filter Modal State
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [selectedFilters, setSelectedFilters] = useState({
+    createdAt: 'created-at',
+    assignedTo: 'all',
+    upcoming: 'all'
+  });
+
   const { projectId, createDraft } = route.params || {};
 
   useEffect(() => {
     // Load data on initial mount
     loadProjectData();
-    
+
     // Only create draft if user is not an Employee and createDraft is true
     if (createDraft && userRole && userRole !== "Employee") {
       handleFabPress();
     }
   }, [projectId, createDraft, userRole]);
 
-  // --- Reload data when screen comes back into focus ---
-  useFocusEffect(
-    React.useCallback(() => {
-      console.log("ViewAllTasksScreen - Screen focused, reloading data");
-      loadProjectData();
-    }, [projectId])
-  );
-  useFocusEffect(
-    React.useCallback(() => {
-      console.log("ViewAllTasksScreen - useFocusEffect triggered");
-      loadProjectData();
-    }, [projectId])
-  );
+  // Removed useFocusEffect to prevent duplicate reloads
 
   useEffect(() => {
     if (tasks.length > 0) {
@@ -195,6 +218,7 @@ function ViewAllTasksScreen({ navigation, route }) {
       title: "",
       description: "",
       startTime: now,
+      minStartTime: now, // Capture when draft was created for backend validation
       endTime: null, // Let user manually select end time
       assignedTo: null,
       priority: "low",
@@ -234,7 +258,7 @@ function ViewAllTasksScreen({ navigation, route }) {
     // Only proceed if user clicked OK (not cancel)
     if (event.type === 'set' && selectedDate) {
       setShowStartDatePicker(false);
-      
+
       const currentDraft = draftTasks.find((draft) => draft.id === activeDraftId);
       if (currentDraft) {
         const newDate = new Date(selectedDate);
@@ -242,7 +266,7 @@ function ViewAllTasksScreen({ navigation, route }) {
         newDate.setHours(currentDraft.startTime.getHours());
         newDate.setMinutes(currentDraft.startTime.getMinutes());
         updateDraftTask(activeDraftId, "startTime", newDate);
-        
+
         // Open time picker after date selection
         setPendingTimePicker("start");
         setTimeout(() => setShowStartTimePicker(true), 100);
@@ -259,7 +283,7 @@ function ViewAllTasksScreen({ navigation, route }) {
     if (event.type === 'set' && selectedDate) {
       setShowStartTimePicker(false);
       setPendingTimePicker(null);
-      
+
       if (activeDraftId) {
         const currentDraft = draftTasks.find(
           (draft) => draft.id === activeDraftId
@@ -281,7 +305,7 @@ function ViewAllTasksScreen({ navigation, route }) {
     // Only proceed if user clicked OK (not cancel)
     if (event.type === 'set' && selectedDate) {
       setShowEndDatePicker(false);
-      
+
       const currentDraft = draftTasks.find((draft) => draft.id === activeDraftId);
       if (currentDraft) {
         const newDate = new Date(selectedDate);
@@ -293,7 +317,7 @@ function ViewAllTasksScreen({ navigation, route }) {
           newDate.setHours(12, 0, 0, 0); // Default to 12:00 PM
         }
         updateDraftTask(activeDraftId, "endTime", newDate);
-        
+
         // Open time picker after date selection
         setPendingTimePicker("end");
         setTimeout(() => setShowEndTimePicker(true), 100);
@@ -310,7 +334,7 @@ function ViewAllTasksScreen({ navigation, route }) {
     if (event.type === 'set' && selectedDate) {
       setShowEndTimePicker(false);
       setPendingTimePicker(null);
-      
+
       if (activeDraftId) {
         const currentDraft = draftTasks.find(
           (draft) => draft.id === activeDraftId
@@ -335,6 +359,13 @@ function ViewAllTasksScreen({ navigation, route }) {
     }
   };
 
+  /**
+   * CHANGE SUMMARY (MCP Context 7):
+   * - What: Updated validation to match backend logic. Validates startTime >= minStartTime (draft creation time)
+   *   and endTime > startTime. Includes minStartTime in API payload for backend validation.
+   * - Why: Backend expects minStartTime to handle draft-friendly validation allowing past start times.
+   * - Dependencies: Backend API expects minStartTime field in the payload.
+   */
   const handleCreateTaskFromDraft = async (draftTask) => {
     // Validate required fields
     if (!draftTask.title.trim()) {
@@ -353,12 +384,21 @@ function ViewAllTasksScreen({ navigation, route }) {
       return;
     }
 
-    // Validate and format dates
-    const now = new Date();
+    // Validate that end time is provided
+    if (!draftTask.endTime) {
+      Alert.alert("Error", "End date and time is required");
+      return;
+    }
 
-    // Ensure start time is not in the past
-    if (draftTask.startTime <= now) {
-      Alert.alert("Error", "Start date and time must be in the future");
+    // --- Validation: Dates & Times (MCP Context 7) ---
+    // Business Rule: Validate startTime >= minStartTime (when draft was created) and endTime > startTime
+
+    // Ensure start time is not before the minimum start time (when draft was created)
+    if (draftTask.minStartTime && draftTask.startTime < draftTask.minStartTime) {
+      Alert.alert(
+        "Error",
+        "Start time cannot be before the draft creation time"
+      );
       return;
     }
 
@@ -395,6 +435,7 @@ function ViewAllTasksScreen({ navigation, route }) {
         title: draftTask.title.trim(),
         description: draftTask.description.trim(),
         startTime: draftTask.startTime.toISOString(),
+        minStartTime: draftTask.minStartTime.toISOString(), // Include minStartTime for backend validation
         endTime: draftTask.endTime.toISOString(),
         projectId: projectId,
         assignedToUserId: draftTask.assignedToUserId || null,
@@ -465,14 +506,14 @@ function ViewAllTasksScreen({ navigation, route }) {
           "projectId:",
           projectId
         );
-        
+
         // Validate projectId before making API call
         if (!projectId) {
           console.error("ViewAllTasksScreen - No projectId provided");
           setError("Project ID is required");
           return;
         }
-        
+
         response = await getTaskByProjectId(projectId);
         console.log("ViewAllTasksScreen - API response:", response);
 
@@ -503,14 +544,14 @@ function ViewAllTasksScreen({ navigation, route }) {
         status: err.response?.status,
         projectId: projectId
       });
-      
+
       let errorMessage = "Failed to load project data";
       if (err.response?.data?.message) {
         errorMessage = err.response.data.message;
       } else if (err.message) {
         errorMessage = err.message;
       }
-      
+
       setError(errorMessage);
     } finally {
       if (!isRefresh) {
@@ -672,14 +713,20 @@ function ViewAllTasksScreen({ navigation, route }) {
     setSelectedTask(null);
   };
 
+  const handleApplyFilters = (filters) => {
+    console.log('Applied filters:', filters);
+    // TODO: Implement actual filtering logic
+    // Apply filters to the tasks list based on selected criteria
+  };
+
   const renderTaskCard = React.useCallback((task) => {
     if (task.isDraft) {
       const isActiveDropdown = task.id === activeEmployeeDraftId || task.id === activePriorityDraftId;
       return (
         <View
           className="bg-[#f8f9fa] rounded-[8px] border border-[#e9ecef] shadow-sm"
-          style={{ 
-            overflow: "visible", 
+          style={{
+            overflow: "visible",
             zIndex: isActiveDropdown ? 9999 : 1,
             position: 'relative',
             padding: Math.min(16, screenWidth * 0.04),
@@ -687,20 +734,20 @@ function ViewAllTasksScreen({ navigation, route }) {
             borderRadius: Math.min(8, screenWidth * 0.02),
           }}
         >
-          <View style={{ 
-            overflow: "visible", 
+          <View style={{
+            overflow: "visible",
             position: 'relative'
           }}>
-            <View style={{ 
-              flexDirection: "row", 
-              justifyContent: "space-between", 
-              alignItems: "center", 
-              marginBottom: Math.min(16, screenHeight * 0.02) 
+            <View style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: Math.min(16, screenHeight * 0.02)
             }}>
               <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-                <View style={{ 
-                  flexDirection: "row", 
-                  alignItems: "center", 
+                <View style={{
+                  flexDirection: "row",
+                  alignItems: "center",
                   marginRight: Math.min(4, screenWidth * 0.01),
                   minWidth: Math.max(70, screenWidth * 0.17)
                 }}>
@@ -754,9 +801,9 @@ function ViewAllTasksScreen({ navigation, route }) {
             <View>
               <View style={{ marginBottom: Math.min(4, screenHeight * 0.005) }}>
                 <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-                  <View style={{ 
-                    flexDirection: "row", 
-                    alignItems: "center", 
+                  <View style={{
+                    flexDirection: "row",
+                    alignItems: "center",
                     marginRight: Math.min(12, screenWidth * 0.03),
                     minWidth: Math.max(85, screenWidth * 0.21)
                   }}>
@@ -799,9 +846,9 @@ function ViewAllTasksScreen({ navigation, route }) {
               </View>
               <View style={{ marginBottom: Math.min(12, screenHeight * 0.015) }}>
                 <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-                  <View style={{ 
-                    flexDirection: "row", 
-                    alignItems: "center", 
+                  <View style={{
+                    flexDirection: "row",
+                    alignItems: "center",
                     marginRight: Math.min(12, screenWidth * 0.03),
                     minWidth: Math.max(70, screenWidth * 0.17)
                   }}>
@@ -930,9 +977,9 @@ function ViewAllTasksScreen({ navigation, route }) {
                 }}
               >
                 <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-                  <View style={{ 
-                    flexDirection: "row", 
-                    alignItems: "center", 
+                  <View style={{
+                    flexDirection: "row",
+                    alignItems: "center",
                     marginRight: Math.min(12, screenWidth * 0.03),
                     minWidth: Math.max(85, screenWidth * 0.21)
                   }}>
@@ -976,9 +1023,9 @@ function ViewAllTasksScreen({ navigation, route }) {
                 }}
               >
                 <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-                  <View style={{ 
-                    flexDirection: "row", 
-                    alignItems: "center", 
+                  <View style={{
+                    flexDirection: "row",
+                    alignItems: "center",
                     marginRight: Math.min(12, screenWidth * 0.03),
                     minWidth: Math.max(85, screenWidth * 0.21)
                   }}>
@@ -1213,7 +1260,11 @@ function ViewAllTasksScreen({ navigation, route }) {
         />
       }
       ListHeaderComponent={
-        <SearchBarHeader searchTerm={searchTerm} onChange={handleSearch} />
+        <SearchBarHeader
+          searchTerm={searchTerm}
+          onChange={handleSearch}
+          onFilterPress={() => setFilterModalVisible(true)}
+        />
       }
       ListHeaderComponentStyle={{ marginHorizontal: -20 }}
       ListEmptyComponent={() => (
@@ -1290,7 +1341,6 @@ function ViewAllTasksScreen({ navigation, route }) {
           value={datePickerValue}
           mode="date"
           onChange={handleStartDateChange}
-          minimumDate={new Date()}
         />
       )}
 
@@ -1299,7 +1349,7 @@ function ViewAllTasksScreen({ navigation, route }) {
           value={
             activeDraftId
               ? draftTasks.find((draft) => draft.id === activeDraftId)
-                  ?.startTime || new Date()
+                ?.startTime || new Date()
               : new Date()
           }
           mode="time"
@@ -1315,7 +1365,7 @@ function ViewAllTasksScreen({ navigation, route }) {
           minimumDate={
             activeDraftId
               ? draftTasks.find((draft) => draft.id === activeDraftId)
-                  ?.startTime || new Date()
+                ?.startTime || new Date()
               : new Date()
           }
         />
@@ -1326,7 +1376,7 @@ function ViewAllTasksScreen({ navigation, route }) {
           value={
             activeDraftId
               ? draftTasks.find((draft) => draft.id === activeDraftId)
-                  ?.endTime || new Date()
+                ?.endTime || new Date()
               : new Date()
           }
           mode="time"
@@ -1344,6 +1394,16 @@ function ViewAllTasksScreen({ navigation, route }) {
           onSuccess={handleUpdateTaskSuccess}
         />
       )}
+
+      {/* Filter Modal */}
+      <FilterModal
+        visible={filterModalVisible}
+        onClose={() => setFilterModalVisible(false)}
+        selectedFilters={selectedFilters}
+        setSelectedFilters={setSelectedFilters}
+        onApplyFilters={handleApplyFilters}
+        userRole={userRole}
+      />
     </View>
   );
 }

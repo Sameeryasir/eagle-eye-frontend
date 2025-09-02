@@ -12,7 +12,7 @@ export async function getTaskByProjectId(projectId) {
   }
   
   try {
-    const response = await axios.get(`${API_URL}/project/${projectId}`, {
+    const response = await axios.get(`${API_URL}/task/${projectId}`, {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
@@ -27,7 +27,7 @@ export async function getTaskByProjectId(projectId) {
       if (!newToken) throw new Error('Unable to refresh token.');
 
       // Retry the original request with new token
-      const retryResponse = await axios.get(`${API_URL}/project/${projectId}`, {
+      const retryResponse = await axios.get(`${API_URL}/task/${projectId}`, {
         headers: {
           Authorization: `Bearer ${newToken}`,
           "Content-Type": "application/json",

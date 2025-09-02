@@ -40,8 +40,9 @@ const SignIn = () => {
       {/* Sharp image at the top */}
       <Logo width={90} height={90} />
 
-      <Text className="text-[28px] font-bold text-center mb-3 text-[#222]">Welcome to{"\n"}EagleEye</Text>
-      <Text className="text-[14px] text-[#888] text-center mb-8 leading-[20px]"></Text>
+      {/* Add spacing between logo and button */}
+      <View className="h-20" />
+    
       <TouchableOpacity
         className="w-full bg-[#222] py-4 rounded-xl mb-4 items-center"
         onPress={() => navigation.navigate("LogIn")} // Navigate to Login screen

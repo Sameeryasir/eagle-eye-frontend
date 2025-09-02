@@ -25,7 +25,7 @@ export const AuthProvider = ({ children }) => {
   const checkAuthStatus = async () => {
     try {
       setIsLoading(true);
-      
+
       // Check if token exists
       const token = await AsyncStorage.getItem('token');
       const refreshToken = await AsyncStorage.getItem('refreshToken');
@@ -42,13 +42,9 @@ export const AuthProvider = ({ children }) => {
           lastName,
           role: storedUserRole
         });
-        
-        // Set initial route based on user role
-        if (storedUserRole === 'Manager' || storedUserRole === 'Employee') {
-          setInitialRoute('WidgetScreen');
-        } else {
-          setInitialRoute('HomeScreen');
-        }
+
+        // Set initial route to HomeScreen for all authenticated users
+        setInitialRoute('HomeScreen');
       } else {
         // No tokens found, user needs to sign in
         setIsAuthenticated(false);
@@ -93,13 +89,9 @@ export const AuthProvider = ({ children }) => {
         lastName: userData.user?.last_name,
         role: userData.user?.role?.name
       });
-      
-      // Set initial route based on user role
-      if (userData.user?.role?.name === 'Manager' || userData.user?.role?.name === 'Employee') {
-        setInitialRoute('WidgetScreen');
-      } else {
-        setInitialRoute('HomeScreen');
-      }
+
+      // Set initial route to HomeScreen for all authenticated users
+      setInitialRoute('HomeScreen');
     } catch (error) {
       console.error('Error during login:', error);
       throw error;
@@ -109,7 +101,7 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       console.log('Starting logout process...');
-      
+
       // Clear all stored data
       await AsyncStorage.multiRemove([
         'token',

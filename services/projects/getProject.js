@@ -10,14 +10,16 @@ export async function getProjectById(projectId) {
   if (!token) {
     throw new Error("No token Found");
   }
-  
+
   try {
+    console.log("getProjectById - Calling API with projectId:", projectId);
     const response = await axios.get(`${API_URL}/project/${projectId}`, {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
     });
+    console.log("getProjectById - API response:", response.data);
     return response.data;
   } catch (err) {
     if (axios.isAxiosError(err) && err.response?.status === 401 && refreshTokenValue) {

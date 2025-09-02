@@ -49,7 +49,7 @@ export default function CustomBottomNav({
   const navigateToHome = async () => {
     setActiveTab("home");
     const userRole = await getUserRole();
-    
+
     if (userRole === "Owner" || userRole === "Admin") {
       navigation.navigate("HomeScreen");
     } else {
@@ -74,7 +74,7 @@ export default function CustomBottomNav({
   }
 
   return (
-    <View 
+    <View
       style={{
         position: 'absolute',
         bottom: 0,
@@ -154,7 +154,7 @@ export default function CustomBottomNav({
       </View>
 
       {/* Floating Action Button */}
-      <View 
+      <View
         style={{
           position: 'absolute',
           bottom: 45,

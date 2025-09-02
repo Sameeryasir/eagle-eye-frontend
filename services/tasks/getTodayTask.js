@@ -12,7 +12,7 @@ export default async function getTodaysTask() {
     }
     
     try {
-        const response = await axios.get(`${API_URL}/task/todays`, {
+        const response = await axios.get(`${API_URL}/task`, {
             headers: {
                 Authorization: `Bearer ${token}`,
                 "Content-Type": "application/json",

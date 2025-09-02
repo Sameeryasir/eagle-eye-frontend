@@ -1,4 +1,4 @@
-import React, { useState, useRef,useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
 import { getTaskByProjectId } from "../services/tasks/getTaskByProjectId";
+import { getProjectById } from "../services/projects/getProject";
 import { getTasksAssignedToEmployees } from "../services/tasks/getTasksAssignedToEmployees";
 import getTasksByloginId from "../services/tasks/getTasksByloginId";
 import { deleteTaskById } from "../services/tasks/deleteTaskById";
@@ -53,12 +54,12 @@ function WidgetScreen({ navigation, route }) {
     try {
       setLogsLoading(true);
       console.log("WidgetScreen - Starting to load logs...");
-      
+
       const logsResponse = await getLogs();
       console.log("WidgetScreen - Logs response:", logsResponse);
       console.log("WidgetScreen - Logs response type:", typeof logsResponse);
       console.log("WidgetScreen - Is logs response array?", Array.isArray(logsResponse));
-      
+
       // Check if response has logs array or if it's directly an array
       let logsArray = [];
       if (logsResponse?.logs && Array.isArray(logsResponse.logs)) {
@@ -70,9 +71,9 @@ function WidgetScreen({ navigation, route }) {
         setLogs([]);
         return;
       }
-      
+
       console.log("WidgetScreen - Processing logs array:", logsArray);
-      
+
       // Transform logs data to match the expected format
       const transformedLogs = logsArray.map(log => ({
         id: log.id,
@@ -83,14 +84,14 @@ function WidgetScreen({ navigation, route }) {
         images: log.images || [], // Keep all images for the log
         image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : require("../assets/robot.png"),
       }));
-      
+
       // Sort logs by date (newest first)
       const sortedLogs = transformedLogs.sort((a, b) => {
         const dateA = new Date(a.date);
         const dateB = new Date(b.date);
         return dateB - dateA;
       });
-      
+
       console.log("WidgetScreen - Transformed and sorted logs:", sortedLogs);
       console.log("WidgetScreen - Setting logs state with length:", sortedLogs.length);
       setLogs(sortedLogs);
@@ -122,39 +123,83 @@ function WidgetScreen({ navigation, route }) {
       let response;
 
       if (role === "Employee") {
-        // Load logs for Employee role
-        await loadLogs();
-        
-        // Get employee's projects and extract tasks from them
-        const projectsResponse = await getMyProjects();
-        
-        if (projectsResponse && projectsResponse.length > 0) {
-          // Extract all tasks from all projects
-          const allTasks = [];
-          projectsResponse.forEach(project => {
-            if (project.tasks && Array.isArray(project.tasks)) {
-              allTasks.push(...project.tasks);
-            }
-          });
-          
-          setProject({ name: "My Projects" });
-          setTasks(allTasks);
+        // Check if projectId is provided in route params
+        if (projectId) {
+          // Use getProjectById when projectId is provided
+          console.log("WidgetScreen - Employee: Using getProjectById with projectId:", projectId);
+          response = await getProjectById(projectId);
+          console.log("WidgetScreen - Employee: getProjectById response:", response);
+
+          if (response) {
+            // Map the project data
+            setProject({
+              id: response.id,
+              name: response.name || "Project",
+              description: response.description,
+              startDate: response.startDate,
+              endDate: response.endDate
+            });
+
+            // Map the tasks from the response
+            const projectTasks = response.tasks || [];
+            console.log("WidgetScreen - Employee: Project tasks:", projectTasks);
+            setTasks(projectTasks);
+
+            // Extract and map logs from tasks for Employee role (don't use getLogs)
+            const tasksWithLogs = projectTasks.filter(task => task.log && task.log !== null);
+            console.log("WidgetScreen - Employee: Tasks with logs:", tasksWithLogs.length);
+
+            const extractedLogs = tasksWithLogs.map(task => ({
+              id: task.log.id,
+              createdBy: task.assignedTo ? `${task.assignedTo.first_name || ''} ${task.assignedTo.last_name || ''}`.trim() : 'Unknown User',
+              date: task.log.createdAt ? new Date(task.log.createdAt).toLocaleDateString() : 'N/A',
+              createdAt: task.log.createdAt,
+              description: task.log.note || 'No description',
+              images: task.log.images || [],
+              image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
+              taskTitle: task.title,
+            }));
+
+            // Sort logs by date (newest first)
+            const sortedLogs = extractedLogs.sort((a, b) => {
+              const dateA = new Date(a.createdAt);
+              const dateB = new Date(b.createdAt);
+              return dateB - dateA;
+            });
+
+            console.log("WidgetScreen - Employee: Extracted and sorted logs:", sortedLogs);
+            setLogs(sortedLogs);
+          } else {
+            setProject({ name: "Project" });
+            setTasks([]);
+            setLogs([]);
+          }
         } else {
-          setProject({ name: "No Projects" });
-          setTasks([]);
+          // Fallback to getTasksByloginId when no projectId is provided
+          console.log("WidgetScreen - Employee: Using getTasksByloginId (no projectId provided)");
+          const employeeTasks = await getTasksByloginId();
+          setProject({ name: "My Tasks" });
+          if (employeeTasks && Array.isArray(employeeTasks)) {
+            setTasks(employeeTasks);
+          } else if (employeeTasks && employeeTasks.tasks && Array.isArray(employeeTasks.tasks)) {
+            setTasks(employeeTasks.tasks);
+          } else {
+            setTasks([]);
+          }
+          // Set empty logs when no projectId
+          setLogs([]);
         }
       } else if (role === "Manager") {
-        // Load logs for Manager role (using getLogs API)
-        await loadLogs();
-        
-        // First get the manager's projects
-        const projectsResponse = await getMyProjects();
+        // Disabled: Load logs for Manager role (use getProjectById response instead)
+        // await loadLogs();
 
-        if (projectsResponse && projectsResponse.length > 0) {
-          // Use the first project's ID to get tasks
-          const firstProjectId = projectsResponse[0].id;
-          setManagerProjectId(firstProjectId);
-          response = await getTaskByProjectId(firstProjectId);
+        // Check if projectId is provided from HomeScreen (when Manager taps on project card)
+        if (projectId) {
+          // Use the projectId passed from HomeScreen
+          console.log("WidgetScreen - Manager: Using projectId from HomeScreen:", projectId);
+          setManagerProjectId(projectId);
+          response = await getProjectById(projectId);
+          console.log("WidgetScreen - Manager: getProjectById response:", response);
 
           if (response && response.project) {
             setProject(response.project);
@@ -172,14 +217,101 @@ function WidgetScreen({ navigation, route }) {
             setProject({ name: "Project" });
             setTasks([]);
           }
+
+          // Extract and map logs from getProjectById response for Manager role
+          if (response) {
+            const projectTasks = response.tasks || [];
+
+            // Extract logs from tasks (same logic as Employee role)
+            const tasksWithLogs = projectTasks.filter(task => task.log && task.log !== null);
+            console.log("WidgetScreen - Manager: Tasks with logs:", tasksWithLogs.length);
+
+            const extractedLogs = tasksWithLogs.map(task => ({
+              id: task.log.id,
+              createdBy: task.assignedTo ? `${task.assignedTo.first_name || ''} ${task.assignedTo.last_name || ''}`.trim() : 'Unknown User',
+              date: task.log.createdAt ? new Date(task.log.createdAt).toLocaleDateString() : 'N/A',
+              createdAt: task.log.createdAt,
+              description: task.log.note || 'No description',
+              images: task.log.images || [],
+              image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
+              taskTitle: task.title,
+            }));
+
+            // Sort logs by date (newest first)
+            const sortedLogs = extractedLogs.sort((a, b) => {
+              const dateA = new Date(a.createdAt);
+              const dateB = new Date(b.createdAt);
+              return dateB - dateA;
+            });
+
+            console.log("WidgetScreen - Manager: Extracted and sorted logs:", sortedLogs);
+            setLogs(sortedLogs);
+          } else {
+            setLogs([]);
+          }
         } else {
-          setProject({ name: "No Projects" });
-          setTasks([]);
+          // Fallback: Get manager's projects if no projectId provided
+          const projectsResponse = await getMyProjects();
+
+          if (projectsResponse && projectsResponse.length > 0) {
+            // Use the first project's ID to get tasks
+            const firstProjectId = projectsResponse[0].id;
+            setManagerProjectId(firstProjectId);
+            response = await getProjectById(firstProjectId);
+
+            if (response && response.project) {
+              setProject(response.project);
+              setTasks(response.tasks || []);
+            } else if (response && response.tasks) {
+              setProject(response);
+              setTasks(response.tasks || []);
+            } else if (response && Array.isArray(response)) {
+              setProject({ name: "Project" });
+              setTasks(response);
+            } else if (response) {
+              setProject(response);
+              setTasks([]);
+            } else {
+              setProject({ name: "Project" });
+              setTasks([]);
+            }
+
+            // Extract logs from fallback getProjectById response
+            if (response) {
+              const projectTasks = response.tasks || [];
+              const tasksWithLogs = projectTasks.filter(task => task.log && task.log !== null);
+              
+              const extractedLogs = tasksWithLogs.map(task => ({
+                id: task.log.id,
+                createdBy: task.assignedTo ? `${task.assignedTo.first_name || ''} ${task.assignedTo.last_name || ''}`.trim() : 'Unknown User',
+                date: task.log.createdAt ? new Date(task.log.createdAt).toLocaleDateString() : 'N/A',
+                createdAt: task.log.createdAt,
+                description: task.log.note || 'No description',
+                images: task.log.images || [],
+                image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
+                taskTitle: task.title,
+              }));
+
+              const sortedLogs = extractedLogs.sort((a, b) => {
+                const dateA = new Date(a.createdAt);
+                const dateB = new Date(b.createdAt);
+                return dateB - dateA;
+              });
+
+              setLogs(sortedLogs);
+            } else {
+              setLogs([]);
+            }
+          } else {
+            setProject({ name: "No Projects" });
+            setTasks([]);
+            setLogs([]);
+          }
         }
       } else if (role === "Admin") {
         // Load logs for Admin role
         await loadLogs();
-        
+
         console.log("WidgetScreen - Calling getTaskByProjectId for role:", role, "with projectId:", projectId);
         response = await getTaskByProjectId(projectId);
         console.log("WidgetScreen - getTaskByProjectId response:", response);
@@ -216,11 +348,11 @@ function WidgetScreen({ navigation, route }) {
           console.log("WidgetScreen - Owner: Response has tasks property, tasks count:", response.tasks.length);
           setProject(response);
           setTasks(response.tasks || []);
-          
+
           // Extract logs from tasks for Owner role
           const tasksWithLogs = response.tasks.filter(task => task.log && task.log !== null);
           console.log("WidgetScreen - Owner: Tasks with logs:", tasksWithLogs.length);
-          
+
           const extractedLogs = tasksWithLogs.map(task => ({
             id: task.log.id,
             createdBy: task.assignedTo ? `${task.assignedTo.first_name || ''} ${task.assignedTo.last_name || ''}`.trim() : 'Unknown User',
@@ -231,25 +363,25 @@ function WidgetScreen({ navigation, route }) {
             image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
             taskTitle: task.title,
           }));
-          
+
           // Sort logs by date (newest first)
           const sortedLogs = extractedLogs.sort((a, b) => {
             const dateA = new Date(a.createdAt);
             const dateB = new Date(b.createdAt);
             return dateB - dateA;
           });
-          
+
           console.log("WidgetScreen - Owner: Extracted and sorted logs:", sortedLogs);
           setLogs(sortedLogs);
         } else if (response && Array.isArray(response)) {
           console.log("WidgetScreen - Owner: Response is an array of tasks, length:", response.length);
           setProject({ name: "Project" });
           setTasks(response);
-          
+
           // Extract logs from tasks for Owner role
           const tasksWithLogs = response.filter(task => task.log && task.log !== null);
           console.log("WidgetScreen - Owner: Tasks with logs:", tasksWithLogs.length);
-          
+
           const extractedLogs = tasksWithLogs.map(task => ({
             id: task.log.id,
             createdBy: task.assignedTo ? `${task.assignedTo.first_name || ''} ${task.assignedTo.last_name || ''}`.trim() : 'Unknown User',
@@ -260,14 +392,14 @@ function WidgetScreen({ navigation, route }) {
             image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
             taskTitle: task.title,
           }));
-          
+
           // Sort logs by date (newest first)
           const sortedLogs = extractedLogs.sort((a, b) => {
             const dateA = new Date(a.createdAt);
             const dateB = new Date(b.createdAt);
             return dateB - dateA;
           });
-          
+
           console.log("WidgetScreen - Owner: Extracted and sorted logs:", sortedLogs);
           setLogs(sortedLogs);
         } else if (response) {
@@ -415,9 +547,9 @@ function WidgetScreen({ navigation, route }) {
               userRole === "Employee"
                 ? {}
                 : {
-                    projectId:
-                      userRole === "Manager" ? managerProjectId : projectId,
-                  };
+                  projectId:
+                    userRole === "Manager" ? managerProjectId : projectId,
+                };
             navigation.navigate("ViewAllTasksScreen", navigationParams);
           }}
           disabled={tasks.length === 0}
@@ -555,19 +687,24 @@ function WidgetScreen({ navigation, route }) {
             marginLeft: Math.min(10, screenWidth * 0.025),
             letterSpacing: 0.5,
           }}>
-                            Activity Logs ({logs.length})
+            Activity Logs ({logs.length})
           </Text>
         </View>
         <TouchableOpacity
-          style={{ 
-            flexDirection: "row", 
+          style={{
+            flexDirection: "row",
             alignItems: "center",
             opacity: logs.length === 0 ? 0.5 : 1,
           }}
           onPress={() => {
             if (logs.length > 0) {
               console.log("WidgetScreen - Navigating to ViewAllLogScreen with logs:", logs);
-              navigation.navigate("ViewAllLogScreen", { logs: logs });
+              // Pass Manager project ID when user role is Manager
+              const navigationParams = { 
+                logs: logs,
+                managerProjectId: userRole === "Manager" ? (managerProjectId || projectId) : null
+              };
+              navigation.navigate("ViewAllLogScreen", navigationParams);
             }
           }}
           disabled={logs.length === 0}
@@ -580,10 +717,10 @@ function WidgetScreen({ navigation, route }) {
           }}>
             View All
           </Text>
-          <Ionicons 
-            name="chevron-forward" 
-            size={Math.min(16, screenWidth * 0.04)} 
-            color={logs.length === 0 ? "#999" : "black"} 
+          <Ionicons
+            name="chevron-forward"
+            size={Math.min(16, screenWidth * 0.04)}
+            color={logs.length === 0 ? "#999" : "black"}
           />
         </TouchableOpacity>
       </View>
@@ -597,66 +734,66 @@ function WidgetScreen({ navigation, route }) {
           >
             {console.log("WidgetScreen - Rendering logs:", logs.slice(0, 4))}
             {logs.slice(0, 4).map((log) => (
-            <View
-              key={log.id}
-              style={{
-                backgroundColor: "#f8f9fa",
-                borderRadius: Math.min(12, screenWidth * 0.03),
-                padding: Math.min(12, screenWidth * 0.03),
-                marginBottom: 8,
-                borderWidth: 1,
-                borderColor: "#e9ecef",
-              }}
-            >
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                <Text
-                  style={{
-                    fontSize: Math.min(16, screenWidth * 0.04),
-                    fontWeight: "bold",
-                    color: "#333",
-                    flex: 1,
-                    marginRight: 8,
-                  }}
-                  numberOfLines={1}
-                >
-                  {log.description && log.description.length > 20
-                    ? log.description.substring(0, 20) + "..."
-                    : log.description}
-                </Text>
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <Text style={{
-                    fontSize: Math.min(12, screenWidth * 0.03),
-                    color: "#666",
-                    fontWeight: "500",
-                  }}>
-                    {log.date}
+              <View
+                key={log.id}
+                style={{
+                  backgroundColor: "#f8f9fa",
+                  borderRadius: Math.min(12, screenWidth * 0.03),
+                  padding: Math.min(12, screenWidth * 0.03),
+                  marginBottom: 8,
+                  borderWidth: 1,
+                  borderColor: "#e9ecef",
+                }}
+              >
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <Text
+                    style={{
+                      fontSize: Math.min(16, screenWidth * 0.04),
+                      fontWeight: "bold",
+                      color: "#333",
+                      flex: 1,
+                      marginRight: 8,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {log.description && log.description.length > 20
+                      ? log.description.substring(0, 20) + "..."
+                      : log.description}
                   </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <Text style={{
+                      fontSize: Math.min(12, screenWidth * 0.03),
+                      color: "#666",
+                      fontWeight: "500",
+                    }}>
+                      {log.date}
+                    </Text>
+                  </View>
                 </View>
-              </View>
 
-              {userRole !== "Employee" && (
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <Ionicons name="person" size={Math.min(14, screenWidth * 0.035)} color="#666" />
-                  <Text style={{
-                    fontSize: Math.min(13, screenWidth * 0.032),
-                    color: "#666",
-                    fontWeight: "500",
-                    marginLeft: 4,
-                  }}>
-                    Created by:
-                  </Text>
-                  <Text style={{
-                    fontSize: Math.min(13, screenWidth * 0.032),
-                    color: "#666",
-                    fontWeight: "500",
-                    marginLeft: 4,
-                  }}>
-                    {log.createdBy}
-                  </Text>
-                </View>
-              )}
-            </View>
-          ))}
+                {userRole !== "Employee" && (
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <Ionicons name="person" size={Math.min(14, screenWidth * 0.035)} color="#666" />
+                    <Text style={{
+                      fontSize: Math.min(13, screenWidth * 0.032),
+                      color: "#666",
+                      fontWeight: "500",
+                      marginLeft: 4,
+                    }}>
+                      Created by:
+                    </Text>
+                    <Text style={{
+                      fontSize: Math.min(13, screenWidth * 0.032),
+                      color: "#666",
+                      fontWeight: "500",
+                      marginLeft: 4,
+                    }}>
+                      {log.createdBy}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ))}
           </ScrollView>
         ) : (
           <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingVertical: Math.min(40, screenHeight * 0.05), minHeight: Math.min(120, screenHeight * 0.15) }}>
@@ -763,22 +900,34 @@ function WidgetScreen({ navigation, route }) {
 
       <CustomBottomNav
         onAddPress={() => {
-          // Check if there are no logs and navigate to CreatLog (for Employee and Manager)
-          if (logs.length === 0 && (userRole === "Employee" || userRole === "Manager")) {
-            // Pass project data for Manager role
-            const navigationParams = userRole === "Manager" ? { projectId: managerProjectId } : {};
+          // Check if there are no logs and navigate to CreatLog (for Employee only)
+          if (logs.length === 0 && userRole === "Employee") {
+            navigation.navigate("CreatLog");
+            return;
+          }
+
+          // For Manager role, check if both widgets are empty and navigate to CreateTaskScreen
+          if (userRole === "Manager" && tasks.length === 0 && logs.length === 0) {
+            const navigationParams = { projectId: managerProjectId };
+            navigation.navigate("CreateTask", navigationParams);
+            return;
+          }
+
+          // If tasks are present but logs are empty, navigate to CreateLogScreen with project ID
+          if (tasks.length > 0 && logs.length === 0) {
+            const navigationParams = userRole === "Manager" ? { projectId: managerProjectId } : { projectId: projectId };
             navigation.navigate("CreatLog", navigationParams);
             return;
           }
 
-          // For other roles, check if there are no tasks and navigate to CreateTaskScreen
+          // For other roles (Admin/Owner), check if there are no tasks and navigate to CreateTaskScreen
           if (userRole !== "Employee" && userRole !== "Manager" && tasks.length === 0) {
             const navigationParams = { projectId: projectId };
             navigation.navigate("CreateTask", navigationParams);
             return;
           }
 
-          // If both logs and tasks exist, or user doesn't have permission, do nothing
+          // If widgets exist or user doesn't have permission, do nothing
         }}
       />
     </View>

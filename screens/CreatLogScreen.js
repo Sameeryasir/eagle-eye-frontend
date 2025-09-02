@@ -15,7 +15,7 @@ import {
   Modal,
   Dimensions,
   Image,
-} from "react-native";76
+} from "react-native"; 76
 
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
@@ -26,6 +26,9 @@ import { useFocusEffect } from "@react-navigation/native";
 import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
 import getTodaysTask from "../services/tasks/getTodayTask";
+import { getProjectById } from "../services/projects/getProject";
+import { getTaskByProjectId } from "../services/tasks/getTaskByProjectId";
+import getTasksByloginId from "../services/tasks/getTasksByloginId";
 
 import { createLog } from "../services/log/createLog";
 import Loader from "../services/utils/loader";
@@ -41,6 +44,23 @@ import { uploadImage } from "../services/images/uploadImage";
 import * as ImagePicker from "expo-image-picker";
 
 function CreatLogScreen({ navigation, route }) {
+  // Extract Employee projectId and Manager projectId from route params
+  const employeeProjectId = route.params?.["Employee projectId"] || null;
+  const managerProjectId = route.params?.["Manager projectId"] || route.params?.id || null;
+  const regularProjectId = route.params?.projectId || null;
+
+  console.log("=== CreateLogScreen - Parameter Debug ===");
+  console.log("CreatLogScreen - All route params:", route.params);
+  console.log("CreatLogScreen - route.params type:", typeof route.params);
+  console.log("CreatLogScreen - route.params keys:", route.params ? Object.keys(route.params) : 'no params');
+  console.log("CreatLogScreen - route.params?.projectId:", route.params?.projectId);
+  console.log("CreatLogScreen - PROJECT ID FOR MANAGER:", route.params?.projectId);
+  console.log("CreatLogScreen - Received Employee projectId:", employeeProjectId);
+  console.log("CreatLogScreen - Received Manager projectId:", managerProjectId);
+  console.log("CreatLogScreen - Received regular projectId:", regularProjectId);
+  console.log("CreatLogScreen - route.params?.id:", route.params?.id);
+  console.log("========================================");
+
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [logs, setLogs] = useState([]);
   const [filteredLogs, setFilteredLogs] = useState([]);
@@ -92,6 +112,12 @@ function CreatLogScreen({ navigation, route }) {
       setInitialLoading(true);
       setError(null);
 
+      // Re-extract parameters inside the function to ensure we have the latest values
+      const currentProjectId = route.params?.projectId || null;
+      console.log("CreatLogScreen - loadLogData - Current route params:", route.params);
+      console.log("CreatLogScreen - loadLogData - Extracted projectId:", currentProjectId);
+      console.log("🎯 MANAGER PROJECT ID IN CREATELOGSCREEN:", currentProjectId);
+
       // Get user role first
       const role = await getUserRole();
       console.log("CreatLogScreen - User Role:", role);
@@ -100,47 +126,114 @@ function CreatLogScreen({ navigation, route }) {
       // Get data based on user role
       let response;
       if (role === "Manager") {
-        // For Manager role, get today's tasks
-        console.log("CreatLogScreen - Calling getTodaysTask for Manager");
-        response = await getTodaysTask();
-        console.log("CreatLogScreen - Manager today's tasks response:", response);
+        // Console log the project ID from params
+        console.log("CreatLogScreen - Manager Role - Project ID from params:", currentProjectId);
+        
+        // For managers, use getTaskByProjectId service with the projectId
+        if (currentProjectId) {
+          console.log("CreatLogScreen - Calling getTaskByProjectId for Manager with projectId:", currentProjectId);
+          console.log("🚀 MAKING API CALL: getTaskByProjectId(" + currentProjectId + ")");
+          response = await getTaskByProjectId(currentProjectId);
+          console.log("CreatLogScreen - Manager getTaskByProjectId response:", response);
+          console.log("✅ API CALL COMPLETED for projectId:", currentProjectId);
+        } else {
+          console.log("❌ NO PROJECT ID FOUND - Manager cannot load tasks");
+        }
       } else if (role === "Employee") {
-        // For employees, get today's tasks
-        console.log("CreatLogScreen - Calling getTodaysTask for Employee");
-        response = await getTodaysTask();
-        console.log("CreatLogScreen - Employee today's tasks response:", response);
+        // For employees, use getProjectById if Employee projectId is available
+        if (employeeProjectId) {
+          console.log("CreatLogScreen - Calling getProjectById for Employee with projectId:", employeeProjectId);
+          response = await getProjectById(employeeProjectId);
+          console.log("CreatLogScreen - Employee project response:", response);
+        } else {
+          // Disabled: Fallback to getTodaysTask if no projectId
+          // console.log("CreatLogScreen - Calling getTodaysTask for Employee (no projectId)");
+          // response = await getTodaysTask();
+          // console.log("CreatLogScreen - Employee today's tasks response:", response);
+        }
       }
-      
+
       // Convert data to logs format for display
       let logsData = [];
-      
+
+      console.log("🔍 DEBUGGING RESPONSE PROCESSING:");
+      console.log("- Response exists:", !!response);
+      console.log("- Response type:", typeof response);
+      console.log("- Response.tasks exists:", !!response?.tasks);
+      console.log("- Response.tasks type:", typeof response?.tasks);
+      console.log("- Response.tasks length:", response?.tasks?.length);
+      console.log("- Full response structure:", response);
+
       if (response) {
-        // Handle getTodaysTask response structure for both Employee and Manager
-        console.log("CreatLogScreen - Processing today's tasks response for role:", role);
-        logsData = response.map(task => ({
-          id: task.id,
-          title: task.title,
-          description: task.description,
-          startTime: task.startTime,
-          endTime: task.endTime,
-          assignedTo: task.assignedTo,
-          priority: task.priority,
-          status: task.status,
-          projectName: task.project?.name || "Today's Tasks",
-          createdBy: task.assignedTo ? `${task.assignedTo.first_name || ""} ${task.assignedTo.last_name || ""}`.trim() : "Unassigned",
-          date: task.startTime ? new Date(task.startTime).toLocaleDateString() : "N/A",
-          // --- Log Status Information ---
-          hasLog: task.log !== null,
-          logId: task.log?.id || null,
-          logNote: task.log?.note || null,
-          logCreatedAt: task.log?.createdAt || null
-        }));
+        // Handle different response structures for Manager role
+        let tasksArray = null;
+        let projectInfo = null;
         
-        console.log("CreatLogScreen - Processed today's tasks for", role + ":", logsData.length);
+        if (role === "Manager" && currentProjectId) {
+          // Check multiple possible response structures
+          if (response.tasks && Array.isArray(response.tasks)) {
+            tasksArray = response.tasks;
+            projectInfo = response.project || response;
+            console.log("✅ Found tasks in response.tasks");
+          } else if (Array.isArray(response)) {
+            tasksArray = response;
+            console.log("✅ Response is directly an array of tasks");
+          } else {
+            console.log("❌ Unexpected response structure for Manager");
+          }
+        } else if (role === "Employee" && employeeProjectId && response.tasks) {
+          tasksArray = response.tasks;
+          projectInfo = response;
+        }
+        
+        if (tasksArray && tasksArray.length > 0) {
+          console.log("✅ PROCESSING TASKS - Role:", role, "Tasks count:", tasksArray.length);
+          console.log("📋 TASKS TO PROCESS:", tasksArray);
+          logsData = tasksArray.map(task => ({
+            id: task.id,
+            title: task.title,
+            description: task.description,
+            startTime: task.startTime,
+            endTime: task.endTime,
+            assignedTo: task.assignedTo,
+            priority: task.priority,
+            status: task.status,
+            projectName: projectInfo?.name || "Project Tasks",
+            createdBy: task.assignedTo ? `${task.assignedTo.first_name || ""} ${task.assignedTo.last_name || ""}`.trim() : "Unassigned",
+            date: task.startTime ? new Date(task.startTime).toLocaleDateString() : "N/A",
+            // --- Log Status Information ---
+            hasLog: task.log !== null,
+            logId: task.log?.id || null,
+            logNote: task.log?.note || null,
+            logCreatedAt: task.log?.createdAt || null
+          }));
+        } else if (tasksArray && tasksArray.length === 0) {
+          console.log("⚠️ TASKS ARRAY IS EMPTY - No tasks found for this project");
+        } else {
+          console.log("❌ NO TASKS FOUND - Unable to extract tasks from response");
+          console.log("- Role:", role);
+          console.log("- TasksArray:", tasksArray);
+          console.log("- Response structure doesn't match expected format");
+        }
+
+        console.log("CreatLogScreen - Processed tasks for", role + ":", logsData.length);
+      } else {
+        console.log("❌ NO RESPONSE OR NO TASKS FOUND");
+        console.log("- Role:", role);
+        console.log("- Response exists:", !!response);
+        console.log("- Response.tasks exists:", !!response?.tasks);
+        console.log("- CurrentProjectId:", currentProjectId);
+        console.log("- EmployeeProjectId:", employeeProjectId);
       }
+
+      console.log("🎯 FINAL LOGS DATA:");
+      console.log("- LogsData length:", logsData.length);
+      console.log("- LogsData content:", logsData);
 
       setLogs(logsData);
       setFilteredLogs(logsData);
+      
+      console.log("📊 STATE UPDATED - Logs set to:", logsData.length, "items");
     } catch (err) {
       console.error("CreatLogScreen - Error loading log data:", err);
       setError("Failed to load log data");
@@ -217,13 +310,13 @@ function CreatLogScreen({ navigation, route }) {
 
 
 
-    const handleSubmitLog = async () => {
+  const handleSubmitLog = async () => {
     // --- Validation ---
     if (!logNote.trim()) {
       Alert.alert("Error", "Please enter a note for the log");
       return;
     }
-    
+
     if (checkedTasks.size === 0) {
       Alert.alert("Error", "Please select at least one task to create a log.");
       return;
@@ -231,18 +324,18 @@ function CreatLogScreen({ navigation, route }) {
 
     try {
       setIsSubmittingLog(true);
-      
+
       // --- Step 1: Create Log ---
       const response = await createLog({
         task_id: Array.from(checkedTasks),
         note: logNote,
       });
-      
+
       // --- Step 2: Upload Images (if any) ---
       if (selectedImages.length > 0 && response?.log?.id) {
         await uploadImages(response.log.id);
       }
-      
+
       Alert.alert('Success', 'Log created successfully!');
       loadLogData();
 
@@ -263,10 +356,10 @@ function CreatLogScreen({ navigation, route }) {
   // --- Helper Function for Image Upload ---
   const uploadImages = async (logId) => {
     setIsUploadingImages(true);
-    
+
     try {
       const formData = new FormData();
-      
+
       // Add all images at once to the 'images' field
       selectedImages.forEach(image => {
         formData.append('images', {
@@ -275,25 +368,25 @@ function CreatLogScreen({ navigation, route }) {
           name: image.name,
         });
       });
-      
+
       formData.append('logId', logId);
-      
+
       console.log(`CreatLogScreen - Uploading ${selectedImages.length} images at once`);
-      
+
       const uploadResponse = await uploadImage(formData);
-      
+
       // Handle response from backend
       if (uploadResponse.images?.length > 0) {
         const successful = uploadResponse.images.filter(img => !img.error);
         const failed = uploadResponse.images.filter(img => img.error);
-        
+
         console.log(`CreatLogScreen - Upload result: ${successful.length} successful, ${failed.length} failed`);
-        
+
         if (failed.length > 0) {
           Alert.alert("Partial Success", `Uploaded ${successful.length} image(s), ${failed.length} failed.`);
         }
       }
-      
+
     } catch (error) {
       console.error("CreatLogScreen - Image upload error:", error);
       Alert.alert("Warning", "Log created but image upload failed.");
@@ -394,7 +487,7 @@ function CreatLogScreen({ navigation, route }) {
     const isChecked = checkedTasks.has(log.id);
     const hasLog = log.hasLog;
     console.log('Rendering log card:', log.id, 'isChecked:', isChecked, 'hasLog:', hasLog);
-    
+
     return (
       <View style={{ marginBottom: Math.min(16, screenHeight * 0.02) }}>
         {/* Task Card */}
@@ -448,7 +541,7 @@ function CreatLogScreen({ navigation, route }) {
                   {log.title}
                 </Text>
               </View>
-              
+
               {/* Checkbox or Log Status at the end */}
               {hasLog ? (
                 // --- Simple "Log Created" text for tasks with logs ---
@@ -495,14 +588,20 @@ function CreatLogScreen({ navigation, route }) {
     );
   }, [userRole, navigation, checkedTasks, logs]);
 
-  const renderContent = () => (
-    <FlatList
-      data={filteredLogs}
-      keyExtractor={(item) => String(item.id)}
-      contentContainerStyle={{ 
-        paddingHorizontal: Math.min(20, screenWidth * 0.05), 
-        paddingTop: Math.min(20, screenHeight * 0.025), 
-        paddingBottom: Math.min(100, screenHeight * 0.125) 
+  const renderContent = () => {
+    console.log("🖥️ RENDERING CONTENT:");
+    console.log("- filteredLogs length:", filteredLogs.length);
+    console.log("- logs length:", logs.length);
+    console.log("- filteredLogs data:", filteredLogs);
+    
+    return (
+      <FlatList
+        data={filteredLogs}
+        keyExtractor={(item) => String(item.id)}
+        contentContainerStyle={{
+        paddingHorizontal: Math.min(20, screenWidth * 0.05),
+        paddingTop: Math.min(20, screenHeight * 0.025),
+        paddingBottom: Math.min(100, screenHeight * 0.125)
       }}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
@@ -529,13 +628,13 @@ function CreatLogScreen({ navigation, route }) {
           </View>
         ) : null
       )}
- 
+
 
       ListFooterComponent={() => (
         logs.length > 0 ? (
-          <View style={{ 
-            paddingHorizontal: Math.min(20, screenWidth * 0.05), 
-            paddingVertical: Math.min(16, screenHeight * 0.02) 
+          <View style={{
+            paddingHorizontal: Math.min(20, screenWidth * 0.05),
+            paddingVertical: Math.min(16, screenHeight * 0.02)
           }}>
             <TouchableOpacity
               style={{
@@ -613,10 +712,10 @@ function CreatLogScreen({ navigation, route }) {
             </>
           ) : (
             <>
-              <Ionicons 
-                name="document-text-outline" 
-                size={Math.min(64, screenWidth * 0.16)} 
-                color="#ccc" 
+              <Ionicons
+                name="document-text-outline"
+                size={Math.min(64, screenWidth * 0.16)}
+                color="#ccc"
                 style={{ marginBottom: Math.min(16, screenHeight * 0.02) }}
               />
               <Text style={{
@@ -642,7 +741,8 @@ function CreatLogScreen({ navigation, route }) {
       )}
       renderItem={({ item, index }) => renderLogCard(item, index)}
     />
-  );
+    );
+  };
 
   return (
     <View className="flex-1 bg-white">
@@ -700,7 +800,7 @@ function CreatLogScreen({ navigation, route }) {
             </TouchableOpacity>
           </View>
 
-                    <View className="p-6">
+          <View className="p-6">
             {/* --- Note Section (First) --- */}
             <View className="mb-6">
               <Text className="text-[16px] font-semibold text-[#333] mb-2">Note</Text>
@@ -719,7 +819,7 @@ function CreatLogScreen({ navigation, route }) {
             {/* --- Image Selection Section (Second) --- */}
             <View className="mb-6">
               <Text className="text-[16px] font-semibold text-[#333] mb-2">Images *</Text>
-              
+
               {/* Image Picker Button */}
               <TouchableOpacity
                 className="border-2 border-dashed border-[#e1e8ed] rounded-lg p-4 items-center justify-center mb-3"
@@ -728,7 +828,7 @@ function CreatLogScreen({ navigation, route }) {
               >
                 <Ionicons name="camera-outline" size={24} color="#666" style={{ marginBottom: 8 }} />
                 <Text className="text-[14px] text-[#666] text-center">
-                  {selectedImages.length > 0 
+                  {selectedImages.length > 0
                     ? `Add More Images (${selectedImages.length} selected)`
                     : 'Select Images'
                   }
@@ -739,8 +839,8 @@ function CreatLogScreen({ navigation, route }) {
               {selectedImages.length > 0 && (
                 <View className="mb-3 mt-6">
                   <Text className="text-[14px] text-[#666] mb-2">Selected Images:</Text>
-                  <ScrollView 
-                    horizontal 
+                  <ScrollView
+                    horizontal
                     showsHorizontalScrollIndicator={false}
                     className="flex-row"
                   >
@@ -757,7 +857,7 @@ function CreatLogScreen({ navigation, route }) {
                           <TouchableOpacity
                             onPress={() => removeImage(image.id)}
                             className="absolute top-1 right-1 bg-red-500 rounded-full w-6 h-6 items-center justify-center"
-                            style={{ 
+                            style={{
                               shadowColor: '#000',
                               shadowOffset: { width: 0, height: 2 },
                               shadowOpacity: 0.25,

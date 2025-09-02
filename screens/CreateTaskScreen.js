@@ -19,7 +19,6 @@ import { getEmployeesToAssignTask } from '../services/employees/getEmployeesOfTh
 function CreateTaskScreen({ navigation, route }) {
   // Get projectId from route params if available
   const projectId = route?.params?.projectId;
-  
   const [taskData, setTaskData] = useState({
     title: '',
     description: '',
@@ -28,6 +27,7 @@ function CreateTaskScreen({ navigation, route }) {
   });
   const [startDateTime, setStartDateTime] = useState(new Date());
   const [endDateTime, setEndDateTime] = useState(null);
+  const [minStartTime] = useState(new Date()); // Capture current time when draft is opened
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
@@ -115,11 +115,11 @@ function CreateTaskScreen({ navigation, route }) {
   const openDropdown = (dropdownType) => {
     // Close keyboard when opening any dropdown
     Keyboard.dismiss();
-    
+
     // Close all other dropdowns
     setShowAssignedDropdown(false);
     setPriorityOpen(false);
-    
+
     // Open the selected dropdown
     if (dropdownType === 'priority') {
       setPriorityOpen(true);
@@ -151,7 +151,7 @@ function CreateTaskScreen({ navigation, route }) {
       newDate.setMinutes(startDateTime.getMinutes());
       newDate.setSeconds(startDateTime.getSeconds());
       setStartDateTime(newDate);
-      
+
       // Only update end date if it's before the new start date
       // This prevents automatic end date changes when start date is selected
       if (endDateTime && newDate > endDateTime) {
@@ -173,7 +173,7 @@ function CreateTaskScreen({ navigation, route }) {
       newDate.setSeconds(0);
       newDate.setMilliseconds(0);
       setStartDateTime(newDate);
-      
+
       // Only update end date if it's before the new start date
       // This prevents automatic end date changes when start time is selected
       if (endDateTime && newDate > endDateTime) {
@@ -230,19 +230,13 @@ function CreateTaskScreen({ navigation, route }) {
       return;
     }
 
-    // Validate dates - Allow tasks to be created for today and future dates
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Start of today
-    
-    // Allow tasks for today or future dates, but not past dates
-    if (startDateTime < today) {
-      Alert.alert('Error', 'Start date cannot be in the past');
+    // Validate startTime is not before the captured minStartTime (draft-friendly validation)
+    if (startDateTime < minStartTime) {
+      Alert.alert('Error', 'Start time cannot be before the draft start time');
       return;
     }
 
-    // Allow tasks to be created on the same date (today) with any time
-    // This enables users to create tasks for today even if the current time has passed
-
+    // Only validate that endTime is after startTime
     if (endDateTime && endDateTime <= startDateTime) {
       Alert.alert('Error', 'End date and time must be after start date and time');
       return;
@@ -255,7 +249,7 @@ function CreateTaskScreen({ navigation, route }) {
     }
 
     setIsLoading(true);
-    
+
     try {
       // Prepare the data for API call
       const taskPayload = {
@@ -264,12 +258,13 @@ function CreateTaskScreen({ navigation, route }) {
         assignedToUserId: taskData.assignedTo?.id || null,
         priority: taskData.priority || null,
         startTime: startDateTime.toISOString(),
+        minStartTime: minStartTime.toISOString(), // Send captured time for backend validation
         endTime: endDateTime ? endDateTime.toISOString() : null,
         projectId: projectId,
       };
 
       const response = await createTask(taskPayload);
-      
+
       Alert.alert(
         'Success',
         'Task created successfully!',
@@ -282,9 +277,9 @@ function CreateTaskScreen({ navigation, route }) {
       );
     } catch (error) {
       console.error('Error creating task:', error);
-      
+
       let errorMessage = 'Failed to create task. Please try again.';
-      
+
       // Handle different types of error responses
       if (error.response?.data?.message) {
         // If message is an array, join it, otherwise use as string
@@ -296,8 +291,8 @@ function CreateTaskScreen({ navigation, route }) {
       } else if (error.message) {
         errorMessage = String(error.message);
       }
-      
-      Alert.alert('Error', errorMessage);332
+
+      Alert.alert('Error', errorMessage); 332
     } finally {
       setIsLoading(false);
     }
@@ -330,211 +325,208 @@ function CreateTaskScreen({ navigation, route }) {
         <FlatList
           className="flex-1 w-full max-w-md"
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ 
-            paddingBottom: keyboardVisible ? keyboardHeight + 120 : 20 
+          contentContainerStyle={{
+            paddingBottom: keyboardVisible ? keyboardHeight + 120 : 20
           }}
           keyboardShouldPersistTaps="handled"
           scrollEnabled={!isDropdownInteracting}
           data={[{ key: 'form' }]}
           renderItem={() => (
-              <View>
-                <View className="mb-8 items-center">
-                  <Text className="text-[16px] text-[#666] text-center">Fill in the details below to create your task</Text>
+            <View>
+              <View className="mb-8 items-center">
+                <Text className="text-[16px] text-[#666] text-center">Fill in the details below to create your task</Text>
+              </View>
+
+              <View className="mb-5">
+                {/* Task Title */}
+                <View className="mb-5">
+                  <View className="flex-row items-center mb-2">
+                    <Ionicons name="document-text" size={16} color="#374151" style={{ marginRight: 6 }} />
+                    <Text className="text-[16px] font-semibold text-[#333]">Task Title *</Text>
+                  </View>
+                  <TextInput
+                    className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333]"
+                    placeholder="Enter task title"
+                    value={taskData.title}
+                    onChangeText={(value) => handleInputChange('title', value)}
+                    placeholderTextColor="#999"
+                    returnKeyType="next"
+                  />
                 </View>
 
+                {/* Task Description */}
                 <View className="mb-5">
-                  {/* Task Title */}
-                  <View className="mb-5">
-                    <View className="flex-row items-center mb-2">
-                      <Ionicons name="document-text" size={16} color="#374151" style={{ marginRight: 6 }} />
-                      <Text className="text-[16px] font-semibold text-[#333]">Task Title *</Text>
-                    </View>
-                    <TextInput
-                      className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333]"
-                      placeholder="Enter task title"
-                      value={taskData.title}
-                      onChangeText={(value) => handleInputChange('title', value)}
-                      placeholderTextColor="#999"
-                      returnKeyType="next"
+                  <View className="flex-row items-center mb-2">
+                    <Ionicons name="chatbubble-ellipses" size={16} color="#374151" style={{ marginRight: 6 }} />
+                    <Text className="text-[16px] font-semibold text-[#333]">Description *</Text>
+                  </View>
+                  <TextInput
+                    className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333] h-24"
+                    placeholder="Describe your task"
+                    value={taskData.description}
+                    onChangeText={(value) => handleInputChange('description', value)}
+                    multiline
+                    numberOfLines={4}
+                    placeholderTextColor="#999"
+                    returnKeyType="next"
+                    style={{ textAlignVertical: 'top' }}
+                  />
+                </View>
+
+                {/* Priority Dropdown */}
+                <View className="mb-5">
+                  <View className="flex-row items-center mb-2">
+                    <Ionicons name="flag" size={16} color="#374151" style={{ marginRight: 6 }} />
+                    <Text className="text-[16px] font-semibold text-[#333]">Priority</Text>
+                  </View>
+                  <View style={{ zIndex: 9999 }}>
+                    <DropDownPicker
+                      open={priorityOpen}
+                      value={taskData.priority || null}
+                      items={priorityOptions.map((priority) => ({
+                        label: priority.label,
+                        value: priority.id,
+                        icon: () => (
+                          <View
+                            className="w-3 h-3 rounded-full ml-1"
+                            style={{ backgroundColor: priority.color }}
+                          />
+                        ),
+                      }))}
+                      setOpen={(open) => {
+                        if (open) {
+                          openDropdown('priority');
+                        } else {
+                          setPriorityOpen(false);
+                          setIsDropdownInteracting(false);
+                        }
+                      }}
+                      setValue={(callback) => {
+                        const newValue = callback(taskData.priority || null);
+                        handleInputChange('priority', newValue);
+                      }}
+                      placeholder="Select Priority"
+                      placeholderStyle={{
+                        color: "#9ca3af",
+                        fontSize: 16,
+                        fontWeight: "400",
+                      }}
+                      style={{
+                        backgroundColor: "#f8f9fa",
+                        borderColor: "#e1e8ed",
+                        borderRadius: 8,
+                        minHeight: 0,
+                        paddingVertical: 12,
+                        paddingHorizontal: 12,
+                      }}
+                      textStyle={{
+                        fontSize: 16,
+                        color: taskData.priority ? "#333" : "#9ca3af",
+                        fontWeight: "400",
+                      }}
+                      dropDownContainerStyle={{
+                        backgroundColor: "white",
+                        borderColor: "#e5e7eb",
+                        borderRadius: 8,
+                        shadowColor: "#000",
+                        shadowOpacity: 0.15,
+                        shadowRadius: 6,
+                        shadowOffset: { width: 0, height: 3 },
+                        elevation: 999999,
+                        maxHeight: 160,
+                        zIndex: 999999,
+                      }}
+                      listItemContainerStyle={{
+                        height: 40,
+                        paddingHorizontal: 12,
+                      }}
+                      listItemLabelStyle={{
+                        fontSize: 14,
+                        fontWeight: "500",
+                        color: "#333",
+                      }}
+                      arrowIconStyle={{
+                        width: 16,
+                        height: 16,
+                        tintColor: "#6b7280",
+                      }}
+                      showArrowIcon={true}
                     />
                   </View>
+                </View>
 
-                  {/* Task Description */}
-                  <View className="mb-5">
-                    <View className="flex-row items-center mb-2">
-                      <Ionicons name="chatbubble-ellipses" size={16} color="#374151" style={{ marginRight: 6 }} />
-                      <Text className="text-[16px] font-semibold text-[#333]">Description *</Text>
-                    </View>
-                    <TextInput
-                      className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333] h-24"
-                      placeholder="Describe your task"
-                      value={taskData.description}
-                      onChangeText={(value) => handleInputChange('description', value)}
-                      multiline
-                      numberOfLines={4}
-                      placeholderTextColor="#999"
-                      returnKeyType="next"
-                      style={{ textAlignVertical: 'top' }}
-                    />
+
+
+                {/* Start Date & Time */}
+                <View className="mb-5">
+                  <View className="flex-row items-center mb-2">
+                    <Ionicons name="time" size={16} color="#374151" style={{ marginRight: 6 }} />
+                    <Text className="text-[16px] font-semibold text-[#333]">Start Date & Time *</Text>
                   </View>
-
-                  {/* Priority Dropdown */}
-                  <View className="mb-5">
-                    <View className="flex-row items-center mb-2">
-                      <Ionicons name="flag" size={16} color="#374151" style={{ marginRight: 6 }} />
-                      <Text className="text-[16px] font-semibold text-[#333]">Priority</Text>
-                    </View>
-                    <View style={{ zIndex: 9999 }}>
-                      <DropDownPicker
-                        open={priorityOpen}
-                        value={taskData.priority || null}
-                        items={priorityOptions.map((priority) => ({
-                          label: priority.label,
-                          value: priority.id,
-                          icon: () => (
-                            <View
-                              className="w-3 h-3 rounded-full ml-1"
-                              style={{ backgroundColor: priority.color }}
-                            />
-                          ),
-                        }))}
-                        setOpen={(open) => {
-                          if (open) {
-                            openDropdown('priority');
-                          } else {
-                            setPriorityOpen(false);
-                            setIsDropdownInteracting(false);
-                          }
-                        }}
-                        setValue={(callback) => {
-                          const newValue = callback(taskData.priority || null);
-                          handleInputChange('priority', newValue);
-                        }}
-                        placeholder="Select Priority"
-                        placeholderStyle={{
-                          color: "#9ca3af",
-                          fontSize: 16,
-                          fontWeight: "400",
-                        }}
-                        style={{
-                          backgroundColor: "#f8f9fa",
-                          borderColor: "#e1e8ed",
-                          borderRadius: 8,
-                          minHeight: 0,
-                          paddingVertical: 12,
-                          paddingHorizontal: 12,
-                        }}
-                        textStyle={{
-                          fontSize: 16,
-                          color: taskData.priority ? "#333" : "#9ca3af",
-                          fontWeight: "400",
-                        }}
-                        dropDownContainerStyle={{
-                          backgroundColor: "white",
-                          borderColor: "#e5e7eb",
-                          borderRadius: 8,
-                          shadowColor: "#000",
-                          shadowOpacity: 0.15,
-                          shadowRadius: 6,
-                          shadowOffset: { width: 0, height: 3 },
-                          elevation: 999999,
-                          maxHeight: 160,
-                          zIndex: 999999,
-                        }}
-                        listItemContainerStyle={{
-                          height: 40,
-                          paddingHorizontal: 12,
-                        }}
-                        listItemLabelStyle={{
-                          fontSize: 14,
-                          fontWeight: "500",
-                          color: "#333",
-                        }}
-                        arrowIconStyle={{
-                          width: 16,
-                          height: 16,
-                          tintColor: "#6b7280",
-                        }}
-                        showArrowIcon={true}
-                      />
-                    </View>
-                  </View>
-
-
-
-                  {/* Start Date & Time */}
-                  <View className="mb-5">
-                    <View className="flex-row items-center mb-2">
-                      <Ionicons name="time" size={16} color="#374151" style={{ marginRight: 6 }} />
-                      <Text className="text-[16px] font-semibold text-[#333]">Start Date & Time *</Text>
-                    </View>
-                    <View className="flex-row gap-2">
-                      <TouchableOpacity
-                        className="flex-[2] flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                        onPress={() => setShowStartDatePicker(true)}
-                      >
-                        <Text className="text-[16px] text-[#333] font-medium">
-                          {startDateTime.toLocaleDateString()}
-                        </Text>
-                        <Ionicons name="calendar-outline" size={16} color="#666" />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        className={`flex-1 flex-row items-center justify-between border rounded-lg p-3 ${
-                          startDateTime ? 'border-[#e1e8ed] bg-[#f8f9fa]' : 'border-[#d1d5db] bg-[#f3f4f6]'
+                  <View className="flex-row gap-2">
+                    <TouchableOpacity
+                      className="flex-[2] flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                      onPress={() => setShowStartDatePicker(true)}
+                    >
+                      <Text className="text-[16px] text-[#333] font-medium">
+                        {startDateTime.toLocaleDateString()}
+                      </Text>
+                      <Ionicons name="calendar-outline" size={16} color="#666" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      className={`flex-1 flex-row items-center justify-between border rounded-lg p-3 ${startDateTime ? 'border-[#e1e8ed] bg-[#f8f9fa]' : 'border-[#d1d5db] bg-[#f3f4f6]'
                         }`}
-                        onPress={() => startDateTime && setShowStartTimePicker(true)}
-                        disabled={!startDateTime}
-                        activeOpacity={startDateTime ? 0.8 : 1}
-                      >
-                        <Text className={`text-[16px] font-medium ${
-                          startDateTime ? 'text-[#333]' : 'text-[#9ca3af]'
+                      onPress={() => startDateTime && setShowStartTimePicker(true)}
+                      disabled={!startDateTime}
+                      activeOpacity={startDateTime ? 0.8 : 1}
+                    >
+                      <Text className={`text-[16px] font-medium ${startDateTime ? 'text-[#333]' : 'text-[#9ca3af]'
                         }`}>
-                          {startDateTime ? startDateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "Select time"}
-                        </Text>
-                        <Ionicons name="time-outline" size={16} color={startDateTime ? "#666" : "#9ca3af"} />
-                      </TouchableOpacity>
-                    </View>
+                        {startDateTime ? startDateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "Select time"}
+                      </Text>
+                      <Ionicons name="time-outline" size={16} color={startDateTime ? "#666" : "#9ca3af"} />
+                    </TouchableOpacity>
                   </View>
+                </View>
 
-                  {/* End Date & Time */}
-                  <View className="mb-5">
-                    <View className="flex-row items-center mb-2">
-                      <Ionicons name="calendar" size={16} color="#374151" style={{ marginRight: 6 }} />
-                      <Text className="text-[16px] font-semibold text-[#333]">End Date & Time *</Text>
-                    </View>
-                    <View className="flex-row gap-2">
-                                             <TouchableOpacity
-                         className="flex-[2] flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                         onPress={() => setShowEndDatePicker(true)}
-                       >
-                         <Text className="text-[16px] text-[#333] font-medium">
-                           {endDateTime ? endDateTime.toLocaleDateString() : "No end date selected"}
-                         </Text>
-                         <Ionicons name="calendar-outline" size={16} color="#666" />
-                       </TouchableOpacity>
-                       <TouchableOpacity
-                         className="flex-1 flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                         onPress={() => setShowEndTimePicker(true)}
-                       >
-                                                   <Text className="text-[16px] text-[#333] font-medium">
-                            {endDateTime ? endDateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "No time"}
-                          </Text>
-                         <Ionicons name="time-outline" size={16} color="#666" />
-                       </TouchableOpacity>
-                    </View>
+                {/* End Date & Time */}
+                <View className="mb-5">
+                  <View className="flex-row items-center mb-2">
+                    <Ionicons name="calendar" size={16} color="#374151" style={{ marginRight: 6 }} />
+                    <Text className="text-[16px] font-semibold text-[#333]">End Date & Time *</Text>
+                  </View>
+                  <View className="flex-row gap-2">
+                    <TouchableOpacity
+                      className="flex-[2] flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                      onPress={() => setShowEndDatePicker(true)}
+                    >
+                      <Text className="text-[16px] text-[#333] font-medium">
+                        {endDateTime ? endDateTime.toLocaleDateString() : "No end date selected"}
+                      </Text>
+                      <Ionicons name="calendar-outline" size={16} color="#666" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      className="flex-1 flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                      onPress={() => setShowEndTimePicker(true)}
+                    >
+                      <Text className="text-[16px] text-[#333] font-medium">
+                        {endDateTime ? endDateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "No time"}
+                      </Text>
+                      <Ionicons name="time-outline" size={16} color="#666" />
+                    </TouchableOpacity>
                   </View>
                 </View>
               </View>
-                         )}
-             keyExtractor={(item) => item.key}
-           />
-         </View>
+            </View>
+          )}
+          keyExtractor={(item) => item.key}
+        />
+      </View>
 
       {/* Fixed Action Button - Positioned at bottom when keyboard is closed, at top of keyboard when open */}
-      <View 
-        className={`absolute left-0 right-0 px-5 pt-5 pb-5 bg-transparent items-center ${
-          keyboardVisible ? 'bottom-0' : 'bottom-0'
-        }`}
+      <View
+        className={`absolute left-0 right-0 px-5 pt-5 pb-5 bg-transparent items-center ${keyboardVisible ? 'bottom-0' : 'bottom-0'
+          }`}
         style={{
           bottom: keyboardVisible ? keyboardHeight + 10 : 0,
         }}
@@ -561,7 +553,6 @@ function CreateTaskScreen({ navigation, route }) {
           value={startDateTime}
           mode="date"
           onChange={handleStartDateChange}
-          minimumDate={new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())}
         />
       )}
 
