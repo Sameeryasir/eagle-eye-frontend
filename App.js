@@ -13,6 +13,8 @@ import { Ionicons } from "@expo/vector-icons";
 import React, { useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MenuProvider } from "react-native-popup-menu";
+import Toast from 'react-native-toast-message';
+import toastConfig from './config/toastConfig';
 import SignIn from "./screens/SignInScreen";
 import LogIn from "./screens/LogInScreen";
 import Code from "./screens/OtpScreen";
@@ -364,6 +366,8 @@ const AppNavigator = () => {
               onNavigate={handleSidebarNavigate}
               navigation={navigationRef}
             />
+            {/* Toast component for app-wide toast messages with custom styling */}
+            <Toast config={toastConfig} />
           </NavigationContainer>
         </SafeAreaProvider>
       </MenuProvider>

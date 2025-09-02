@@ -15,7 +15,8 @@ import {
   Modal,
   Dimensions,
   Image,
-} from "react-native"; 76
+} from "react-native";
+import Toast from 'react-native-toast-message'; 76
 
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
@@ -29,6 +30,7 @@ import getTodaysTask from "../services/tasks/getTodayTask";
 import { getProjectById } from "../services/projects/getProject";
 import { getTaskByProjectId } from "../services/tasks/getTaskByProjectId";
 import getTasksByloginId from "../services/tasks/getTasksByloginId";
+import { getTaskAssignedToManager } from "../services/projects/getTaskAssingedToManager";
 
 import { createLog } from "../services/log/createLog";
 import Loader from "../services/utils/loader";
@@ -129,12 +131,12 @@ function CreatLogScreen({ navigation, route }) {
         // Console log the project ID from params
         console.log("CreatLogScreen - Manager Role - Project ID from params:", currentProjectId);
         
-        // For managers, use getTaskByProjectId service with the projectId
+        // For managers, use getTaskAssignedToManager service with the projectId
         if (currentProjectId) {
-          console.log("CreatLogScreen - Calling getTaskByProjectId for Manager with projectId:", currentProjectId);
-          console.log("🚀 MAKING API CALL: getTaskByProjectId(" + currentProjectId + ")");
-          response = await getTaskByProjectId(currentProjectId);
-          console.log("CreatLogScreen - Manager getTaskByProjectId response:", response);
+          console.log("CreatLogScreen - Calling getTaskAssignedToManager for Manager with projectId:", currentProjectId);
+          console.log("🚀 MAKING API CALL: getTaskAssignedToManager(" + currentProjectId + ")");
+          response = await getTaskAssignedToManager(currentProjectId);
+          console.log("CreatLogScreen - Manager getTaskAssignedToManager response:", response);
           console.log("✅ API CALL COMPLETED for projectId:", currentProjectId);
         } else {
           console.log("❌ NO PROJECT ID FOUND - Manager cannot load tasks");
@@ -246,7 +248,16 @@ function CreatLogScreen({ navigation, route }) {
     // --- Prevent selection of tasks that already have logs ---
     const task = logs.find(log => log.id === taskId);
     if (task && task.hasLog) {
-      Alert.alert("Log Already Created", "This task already has a log created. You cannot select it again.");
+      // --- Show Error Toast Message ---
+      // Display error message using custom toast config when trying to select task with existing log
+      Toast.show({
+        type: 'error',
+        text1: 'Log Already Created',
+        text2: 'This task already has a log created. You cannot select it again.',
+        visibilityTime: 4000, // 4 seconds for error messages
+        autoHide: true,
+        topOffset: 80, // Positioning from top
+      });
       return;
     }
 
@@ -318,7 +329,16 @@ function CreatLogScreen({ navigation, route }) {
     }
 
     if (checkedTasks.size === 0) {
-      Alert.alert("Error", "Please select at least one task to create a log.");
+      // --- Show Error Toast Message ---
+      // Display error message when no tasks are selected
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Please select at least one task to create a log.',
+        visibilityTime: 4000, // 4 seconds for error messages
+        autoHide: true,
+        topOffset: 80, // Positioning from top
+      });
       return;
     }
 

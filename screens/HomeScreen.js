@@ -13,6 +13,7 @@ import {
   TouchableWithoutFeedback,
   Modal,
   RefreshControl,
+  ToastAndroid,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -65,7 +66,7 @@ const SearchBarHeader = React.memo(function SearchBarHeader({
   );
 });
 
-function HomeScreen({ navigation }) {
+function HomeScreen({ navigation, route }) {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [projects, setProjects] = useState([]);
   const [filteredProjects, setFilteredProjects] = useState([]);
@@ -93,6 +94,9 @@ function HomeScreen({ navigation }) {
   useEffect(() => {
     fetchProjects({ silent: false });
   }, []);
+
+  // NOTE: OTP verification success messages are now handled directly 
+  // in OtpScreen using react-native-toast-message for consistent cross-platform experience
 
   // Get user role and disable swipe back for admin/owner
   useEffect(() => {

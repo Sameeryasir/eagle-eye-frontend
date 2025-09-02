@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,8 +6,13 @@ import {
   Modal,
   ScrollView,
   Dimensions,
+  ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { filterTask } from '../../services/tasks/filterTask';
+import { getEmployeesToAssignTask } from '../../services/employees/getEmployeesOfTheCompany';
+
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -18,26 +23,115 @@ const FilterModal = ({
   setSelectedFilters,
   onApplyFilters,
   userRole,
+  projectId,
 }) => {
+  // --- Loading State for Apply Filters Button ---
+  const [isApplyingFilters, setIsApplyingFilters] = useState(false);
+  
+  // --- State for Dropdown Management ---
+  const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
+  const [employees, setEmployees] = useState([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+
+
+  // --- Function to Fetch Employees (Same as TaskDetailsScreen) ---
+  const fetchEmployees = async () => {
+    try {
+      setLoadingEmployees(true);
+      const data = await getEmployeesToAssignTask();
+      console.log('📋 Fetched employees:', data);
+      setEmployees(data || []);
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+      setEmployees([]);
+    } finally {
+      setLoadingEmployees(false);
+    }
+  };
+
+  // --- Search and Filter Functions (Same as TaskDetailsScreen) ---
+  const filteredEmployees = employees.filter(employee => {
+    if (!searchQuery.trim()) return true;
+
+    const query = searchQuery.toLowerCase();
+    const firstName = employee.first_name?.toLowerCase() || '';
+    const lastName = employee.last_name?.toLowerCase() || '';
+    const email = employee.email?.toLowerCase() || '';
+    const fullName = `${firstName} ${lastName}`.trim();
+
+    return firstName.includes(query) ||
+      lastName.includes(query) ||
+      fullName.includes(query) ||
+      email.includes(query);
+  });
+
+  // --- Function to Handle Employee Selection ---
+  const handleEmployeeSelect = (employee) => {
+    console.log('🎯 Employee selected:', employee);
+    console.log('🎯 Employee email:', employee.email);
+    
+    setSelectedEmployee(employee);
+    setShowEmployeeDropdown(false);
+    // Update the selected filters to include the specific employee
+    setSelectedFilters((prev) => ({ 
+      ...prev, 
+      assignedTo: 'assigned-to-others',
+      selectedEmployeeId: employee.id,
+      selectedEmployeeName: employee.first_name && employee.last_name
+        ? `${employee.first_name} ${employee.last_name}`
+        : employee.email || 'Unknown Employee',
+      email: employee.email // Pass employee email to service
+    }));
+  };
+
   const handleClearFilters = () => {
     setSelectedFilters({
       createdAt: 'created-at',
       assignedTo: 'all',
       upcoming: 'all',
+      email: null, // Clear employee email
     });
+    // --- Reset Dropdown State ---
+    setShowEmployeeDropdown(false);
+    setSelectedEmployee(null);
+    setSearchQuery('');
   };
 
-  const handleApplyFilters = () => {
+
+
+  const handleApplyFilters = async () => {
     console.log('Applying filters:', selectedFilters);
-    // Handle different sorting options
-    if (selectedFilters.createdAt === 'created-at') {
-      console.log('Sorting tasks by creation date (createdAt)');
-    } else if (selectedFilters.createdAt === 'start-date') {
-      console.log('Sorting tasks by start date (startTime)');
-    } else if (selectedFilters.createdAt === 'due-date') {
-      console.log('Sorting tasks by due date (endTime)');
+    
+    // --- Show Loading Indicator While Processing ---
+    setIsApplyingFilters(true);
+    
+    try {
+      // --- Call filterTask Service Directly from FilterModal ---
+      // Business Rule: Filter tasks using backend service when filters are applied
+      if (projectId) {
+        console.log('Calling filterTask service with filters:', selectedFilters);
+        const filteredTasks = await filterTask(selectedFilters, projectId);
+        console.log('Filtered tasks received:', filteredTasks);
+        
+        // Pass filtered tasks back to parent component
+        onApplyFilters(selectedFilters, filteredTasks);
+      } else {
+        console.error('FilterModal - No projectId available for filtering');
+        // Fallback to original behavior if no projectId
+        onApplyFilters(selectedFilters);
+      }
+    } catch (error) {
+      console.error('FilterModal - Error calling filterTask service:', error);
+      // Fallback to original behavior on error
+      onApplyFilters(selectedFilters);
+    } finally {
+      // --- Hide Loading Indicator ---
+      setIsApplyingFilters(false);
     }
-    onApplyFilters(selectedFilters);
+    
     onClose();
   };
 
@@ -112,9 +206,16 @@ const FilterModal = ({
                   borderRadius: Math.min(8, screenWidth * 0.02),
                   marginBottom: Math.min(8, screenHeight * 0.01),
                 }}
-                onPress={() =>
-                  setSelectedFilters((prev) => ({ ...prev, createdAt }))
-                }
+                onPress={() => {
+                  if (createdAt === 'created-at') {
+                    console.log('createdAt');
+                  } else if (createdAt === 'start-date') {
+                    console.log('startTime');
+                  } else if (createdAt === 'due-date') {
+                    console.log('endTime');
+                  }
+                  setSelectedFilters((prev) => ({ ...prev, createdAt }));
+                }}
               >
                 <View
                   style={{
@@ -176,184 +277,261 @@ const FilterModal = ({
               ? ['all', 'assigned-to-me', 'assigned-to-others', 'unassigned']
               : ['all', 'assigned-to-me', 'unassigned']
             ).map((assignedTo) => (
-              <TouchableOpacity
-                key={assignedTo}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingVertical: Math.min(12, screenHeight * 0.015),
-                  paddingHorizontal: Math.min(16, screenWidth * 0.04),
-                  backgroundColor:
-                    selectedFilters.assignedTo === assignedTo
-                      ? '#F3F4F6'
-                      : 'transparent',
-                  borderRadius: Math.min(8, screenWidth * 0.02),
-                  marginBottom: Math.min(8, screenHeight * 0.01),
-                }}
-                onPress={() =>
-                  setSelectedFilters((prev) => ({ ...prev, assignedTo }))
-                }
-              >
-                <View
+              <View key={assignedTo}>
+                <TouchableOpacity
                   style={{
-                    width: Math.min(20, screenWidth * 0.05),
-                    height: Math.min(20, screenWidth * 0.05),
-                    borderRadius: Math.min(10, screenWidth * 0.025),
-                    borderWidth: 2,
-                    borderColor:
-                      selectedFilters.assignedTo === assignedTo
-                        ? '#000'
-                        : '#D1D5DB',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: Math.min(12, screenHeight * 0.015),
+                    paddingHorizontal: Math.min(16, screenWidth * 0.04),
                     backgroundColor:
                       selectedFilters.assignedTo === assignedTo
-                        ? '#000'
+                        ? '#F3F4F6'
                         : 'transparent',
-                    marginRight: Math.min(12, screenWidth * 0.03),
-                    alignItems: 'center',
-                    justifyContent: 'center',
+                    borderRadius: Math.min(8, screenWidth * 0.02),
+                    marginBottom: Math.min(8, screenHeight * 0.01),
+                  }}
+                  onPress={async () => {
+                    if (assignedTo === 'assigned-to-me') {
+                      console.log('assignedTo = me');
+                      setSelectedFilters((prev) => ({ ...prev, assignedTo }));
+                      setShowEmployeeDropdown(false);
+                    } else if (assignedTo === 'assigned-to-others') {
+                      console.log('🎯 assignedTo = others - showing dropdown');
+                      setSelectedFilters((prev) => ({ ...prev, assignedTo }));
+                      // --- Toggle Dropdown and Fetch Employees ---
+                      if (employees.length === 0) {
+                        await fetchEmployees();
+                      }
+                      setShowEmployeeDropdown(!showEmployeeDropdown);
+                    } else if (assignedTo === 'unassigned') {
+                      console.log('unassigned = true');
+                      setSelectedFilters((prev) => ({ ...prev, assignedTo }));
+                      setShowEmployeeDropdown(false);
+                    } else {
+                      setSelectedFilters((prev) => ({ ...prev, assignedTo }));
+                      setShowEmployeeDropdown(false);
+                    }
                   }}
                 >
-                  {selectedFilters.assignedTo === assignedTo && (
+                  <View
+                    style={{
+                      width: Math.min(20, screenWidth * 0.05),
+                      height: Math.min(20, screenWidth * 0.05),
+                      borderRadius: Math.min(10, screenWidth * 0.025),
+                      borderWidth: 2,
+                      borderColor:
+                        selectedFilters.assignedTo === assignedTo
+                          ? '#000'
+                          : '#D1D5DB',
+                      backgroundColor:
+                        selectedFilters.assignedTo === assignedTo
+                          ? '#000'
+                          : 'transparent',
+                      marginRight: Math.min(12, screenWidth * 0.03),
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {selectedFilters.assignedTo === assignedTo && (
+                      <Ionicons
+                        name="checkmark"
+                        size={Math.min(12, screenWidth * 0.03)}
+                        color="white"
+                      />
+                    )}
+                  </View>
+                  <Text
+                    style={{
+                      fontSize: Math.min(15, screenWidth * 0.038),
+                      color: '#374151',
+                      textTransform: 'capitalize',
+                      flex: 1,
+                    }}
+                  >
+                    {assignedTo === 'all'
+                      ? 'All Tasks'
+                      : assignedTo === 'assigned-to-me'
+                        ? 'Assigned to Me'
+                        : assignedTo === 'assigned-to-others'
+                          ? selectedEmployee 
+                            ? `Assigned to ${selectedEmployee.first_name && selectedEmployee.last_name
+                                ? `${selectedEmployee.first_name} ${selectedEmployee.last_name}`
+                                : selectedEmployee.email || 'Unknown Employee'}`
+                            : 'Assigned to Others'
+                          : 'Unassigned'}
+                  </Text>
+                  
+                  {/* --- Dropdown Arrow for Assigned to Others --- */}
+                  {assignedTo === 'assigned-to-others' && (
                     <Ionicons
-                      name="checkmark"
-                      size={Math.min(12, screenWidth * 0.03)}
-                      color="white"
+                      name={showEmployeeDropdown ? 'chevron-up' : 'chevron-down'}
+                      size={Math.min(16, screenWidth * 0.04)}
+                      color="#374151"
                     />
                   )}
-                </View>
-                <Text
-                  style={{
-                    fontSize: Math.min(15, screenWidth * 0.038),
-                    color: '#374151',
-                    textTransform: 'capitalize',
-                  }}
-                >
-                  {assignedTo === 'all'
-                    ? 'All Users'
-                    : assignedTo === 'assigned-to-me'
-                      ? 'Assigned to Me'
-                      : assignedTo === 'assigned-to-others'
-                        ? 'Assigned to Others'
-                        : 'Unassigned'}
-                </Text>
-              </TouchableOpacity>
+                </TouchableOpacity>
+
+
+              </View>
             ))}
           </View>
 
-          {/* Upcoming Tasks Filter */}
-          <View style={{ marginBottom: Math.min(24, screenHeight * 0.03) }}>
-            <Text
-              style={{
-                fontSize: Math.min(16, screenWidth * 0.04),
-                fontWeight: '600',
-                color: '#374151',
-                marginBottom: Math.min(12, screenHeight * 0.015),
-              }}
-            >
-              Upcoming Tasks
-            </Text>
-            {['all', 'upcoming'].map((upcoming) => (
-              <TouchableOpacity
-                key={upcoming}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingVertical: Math.min(12, screenHeight * 0.015),
-                  paddingHorizontal: Math.min(16, screenWidth * 0.04),
-                  backgroundColor:
-                    selectedFilters.upcoming === upcoming
-                      ? '#F3F4F6'
-                      : 'transparent',
-                  borderRadius: Math.min(8, screenWidth * 0.02),
-                  marginBottom: Math.min(8, screenHeight * 0.01),
-                }}
-                onPress={() =>
-                  setSelectedFilters((prev) => ({ ...prev, upcoming }))
-                }
-              >
-                <View
-                  style={{
-                    width: Math.min(20, screenWidth * 0.05),
-                    height: Math.min(20, screenWidth * 0.05),
-                    borderRadius: Math.min(10, screenWidth * 0.025),
-                    borderWidth: 2,
-                    borderColor:
-                      selectedFilters.upcoming === upcoming
-                        ? '#000'
-                        : '#D1D5DB',
-                    backgroundColor:
-                      selectedFilters.upcoming === upcoming
-                        ? '#000'
-                        : 'transparent',
-                    marginRight: Math.min(12, screenWidth * 0.03),
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  {selectedFilters.upcoming === upcoming && (
-                    <Ionicons
-                      name="checkmark"
-                      size={Math.min(12, screenWidth * 0.03)}
-                      color="white"
-                    />
-                  )}
-                </View>
-                <Text
-                  style={{
-                    fontSize: Math.min(15, screenWidth * 0.038),
-                    color: '#374151',
-                    textTransform: 'capitalize',
-                  }}
-                >
-                  {upcoming === 'all' ? 'All Tasks' : 'Upcoming Tasks'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+
         </ScrollView>
+
+        {/* Employee Dropdown Overlay - Positioned over content */}
+        {showEmployeeDropdown && (
+          <View style={{
+            position: 'absolute',
+            top: 480 + (screenHeight * 0.02), // Position slightly lower (2% more down)
+            left: Math.min(40, screenWidth * 0.1), // Smaller width with more margins
+            right: Math.min(40, screenWidth * 0.1),
+            backgroundColor: 'white',
+            borderRadius: 12,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.15,
+            shadowRadius: 8,
+            elevation: 8,
+            zIndex: 1000,
+            maxHeight: 250,
+            borderWidth: 1,
+            borderColor: '#E5E7EB'
+          }}>
+            {/* Search Bar */}
+            <View style={{
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderBottomWidth: 1,
+              borderBottomColor: '#E5E7EB'
+            }}>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#F9FAFB',
+                borderRadius: 8,
+                paddingHorizontal: 12,
+                paddingVertical: 8
+              }}>
+                <Ionicons name="search" size={16} color="#6B7280" style={{ marginRight: 8 }} />
+                <TextInput
+                  placeholder="Search employees..."
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  style={{
+                    flex: 1,
+                    fontSize: 12, // Reduced from 14 to 12
+                    color: '#1F2937'
+                  }}
+                  placeholderTextColor="#9CA3AF"
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery('')}>
+                    <Ionicons name="close-circle" size={16} color="#6B7280" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            <ScrollView style={{ maxHeight: 160 }}>
+              {loadingEmployees ? (
+                <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+                  <ActivityIndicator size="small" color="#374151" />
+                  <Text style={{ color: '#6B7280', marginTop: 8, fontSize: 12 }}>Loading employees...</Text>
+                </View>
+              ) : filteredEmployees.length === 0 ? (
+                <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+                  <Text style={{ color: '#6B7280', fontSize: 12 }}>
+                    {searchQuery ? 'No employees match your search' : 'No employees found'}
+                  </Text>
+                </View>
+              ) : (
+                filteredEmployees.map((employee, index) => (
+                  <TouchableOpacity
+                    key={employee.id || index}
+                    onPress={() => handleEmployeeSelect(employee)}
+                    style={{
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      borderBottomWidth: index < filteredEmployees.length - 1 ? 1 : 0,
+                      borderBottomColor: '#F3F4F6',
+                      backgroundColor: selectedEmployee?.id === employee.id ? '#F3F4F6' : 'transparent'
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 16,
+                        backgroundColor: '#DBEAFE',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: 12
+                      }}>
+                        <Text style={{
+                          fontSize: 12, // Reduced from 14 to 12
+                          fontWeight: '600',
+                          color: '#1D4ED8'
+                        }}>
+                          {employee.first_name?.charAt(0)?.toUpperCase() || employee.email?.charAt(0)?.toUpperCase() || 'U'}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{
+                          fontSize: 14, // Reduced from 16 to 14
+                          fontWeight: '500',
+                          color: '#111827'
+                        }}>
+                          {employee.first_name && employee.last_name
+                            ? `${employee.first_name} ${employee.last_name}`
+                            : employee.email || 'Unknown Employee'
+                          }
+                        </Text>
+                        {employee.email && employee.first_name && (
+                          <Text style={{
+                            fontSize: 12, // Reduced from 14 to 12
+                            color: '#6B7280'
+                          }}>{employee.email}</Text>
+                        )}
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        )}
 
         {/* Footer Actions */}
         <View
           style={{
-            flexDirection: 'row',
             padding: Math.min(20, screenWidth * 0.05),
-            backgroundColor: '#F9FAFB',
-            borderTopWidth: 1,
-            borderTopColor: '#E5E7EB',
+            backgroundColor: 'white',
+    
+            alignItems: 'center', // Center the button
           }}
         >
           <TouchableOpacity
             style={{
-              flex: 1,
-              backgroundColor: '#F3F4F6',
+              backgroundColor: isApplyingFilters ? '#666' : '#000',
               paddingVertical: Math.min(12, screenHeight * 0.015),
+              paddingHorizontal: Math.min(40, screenWidth * 0.1), // Add horizontal padding for better button size
               borderRadius: Math.min(8, screenWidth * 0.02),
               alignItems: 'center',
-              marginRight: Math.min(10, screenWidth * 0.025),
-            }}
-            onPress={handleClearFilters}
-          >
-            <Text
-              style={{
-                color: '#374151',
-                fontSize: Math.min(16, screenWidth * 0.04),
-                fontWeight: '600',
-              }}
-            >
-              Clear
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={{
-              flex: 1,
-              backgroundColor: '#000',
-              paddingVertical: Math.min(12, screenHeight * 0.015),
-              borderRadius: Math.min(8, screenWidth * 0.02),
-              alignItems: 'center',
-              marginLeft: Math.min(10, screenWidth * 0.025),
+              flexDirection: 'row',
+              justifyContent: 'center',
             }}
             onPress={handleApplyFilters}
+            disabled={isApplyingFilters}
           >
+            {isApplyingFilters && (
+              <ActivityIndicator
+                size="small"
+                color="white"
+                style={{ marginRight: Math.min(8, screenWidth * 0.02) }}
+              />
+            )}
             <Text
               style={{
                 color: 'white',
@@ -361,7 +539,7 @@ const FilterModal = ({
                 fontWeight: '600',
               }}
             >
-              Apply Filters
+              {isApplyingFilters ? 'Applying...' : 'Apply Filters'}
             </Text>
           </TouchableOpacity>
         </View>

@@ -13,8 +13,10 @@ import {
   Keyboard,
   Dimensions,
   AppState,
+  ToastAndroid,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import Toast from 'react-native-toast-message';
 import { verifyOtp } from '../services/auth/VerifyOtp';
 import { useAuth } from '../context/AuthContext';
 import Logo from "../assets/Logo.svg"; // Import the SVG logo
@@ -77,13 +79,34 @@ const Code = () => {
 
       console.log('Navigating to screen:', targetScreen);
 
-      Alert.alert("Success", "OTP verified successfully!", [
-        { text: "OK", onPress: () => navigation.navigate(targetScreen) }
-      ]);
+      // --- Show Success Toast Message ---
+      // Display success message using custom toast config with beautiful styling
+      Toast.show({
+        type: 'success',
+        text1: 'OTP Verified Successfully!',
+        text2: data.message || 'Welcome to Eagle Eye!',
+        visibilityTime: 3000, // 3 seconds
+        autoHide: true,
+        topOffset: 80, // Positioning from top
+      });
+
+      // ✅ Navigate to HomeScreen without parameters (Toast handles the success message)
+      navigation.navigate(targetScreen);
 
     } catch (error) {
       setLoading(false);
-      Alert.alert("Error", error.message || "Failed to verify OTP");
+      console.log('Verify OTP Error:', error);
+      
+      // --- Show Error Toast Message ---
+      // Display error message using custom toast config with automatic text wrapping
+      Toast.show({
+        type: 'error',
+        text1: 'OTP Verification Failed',
+        text2: error.message || 'Please check your code and try again',
+        visibilityTime: 4000, // 4 seconds for error messages
+        autoHide: true,
+        topOffset: 80, // Positioning from top
+      });
     }
   };
 

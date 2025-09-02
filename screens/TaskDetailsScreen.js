@@ -10,9 +10,11 @@ import {
   useWindowDimensions,
   TextInput,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import Toast from 'react-native-toast-message';
 import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
 import UpdateTaskModal from "./components/UpdateTaskModal";
@@ -213,11 +215,15 @@ function TaskDetailsScreen({ navigation, route }) {
       setEmployees(data || []);
     } catch (error) {
       console.error('Error fetching employees:', error);
-      Alert.alert(
-        "Error",
-        "Failed to load employees. Please try again.",
-        [{ text: "OK" }]
-      );
+      // --- Show Error Toast Message ---
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to load employees. Please try again.',
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
     } finally {
       setLoadingEmployees(false);
     }
@@ -246,14 +252,78 @@ function TaskDetailsScreen({ navigation, route }) {
   };
 
   const handleAssignTask = async () => {
-    if (!selectedEmployee || !currentTask?.id) return;
+    // --- Debug Task ID Issue ---
+    console.log('=== TASK ASSIGNMENT DEBUG ===');
+    console.log('selectedEmployee:', selectedEmployee);
+    console.log('currentTask:', currentTask);
+    console.log('currentTask?.id:', currentTask?.id);
+    console.log('taskId from route:', taskId);
+    console.log('route params:', route.params);
+    console.log('==============================');
+
+    if (!selectedEmployee) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Please select an employee first.',
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
+      return;
+    }
+
+    // --- Check for Task ID ---
+    const taskIdToUse = currentTask?.id || taskId;
+    
+    // --- Enhanced Task Object Analysis ---
+    console.log('🔍 DETAILED TASK ANALYSIS:');
+    console.log('- currentTask exists:', !!currentTask);
+    console.log('- currentTask.id:', currentTask?.id, typeof currentTask?.id);
+    console.log('- taskId from route:', taskId, typeof taskId);
+    console.log('- taskIdToUse:', taskIdToUse, typeof taskIdToUse);
+    console.log('- Full currentTask keys:', currentTask ? Object.keys(currentTask) : 'no currentTask');
+    console.log('- Full currentTask object:', JSON.stringify(currentTask, null, 2));
+    
+    if (!taskIdToUse) {
+      console.error('❌ TASK ID NOT FOUND');
+      
+      Toast.show({
+        type: 'error',
+        text1: 'Task ID Not Found',
+        text2: 'Unable to find task ID. Please try refreshing the screen.',
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
+      return;
+    }
 
     try {
       setAssigningTask(true);
 
-      // Use the new assignTaskToUser service
-      // Get task ID from currentTask and employee ID from selectedEmployee
-      const result = await assignTaskToUser(currentTask.id, selectedEmployee.id);
+      console.log('🚀 Making assignment API call:');
+      console.log('- Task ID:', taskIdToUse);
+      console.log('- Employee ID:', selectedEmployee.id);
+      console.log('- Employee Name:', `${selectedEmployee.first_name} ${selectedEmployee.last_name}`);
+
+      // --- Verify Task Exists Before Assignment ---
+      console.log('🔍 Verifying task exists before assignment...');
+      try {
+        const taskVerification = await getTaskById(taskIdToUse);
+        console.log('✅ Task verification successful:', {
+          id: taskVerification.id,
+          title: taskVerification.title,
+          currentAssignment: taskVerification.assigned_to || taskVerification.assignedTo
+        });
+      } catch (verifyError) {
+        console.error('❌ Task verification failed:', verifyError.message);
+        throw new Error(`Task verification failed: ${verifyError.message}`);
+      }
+
+      // Use the assignTaskToUser service
+      const result = await assignTaskToUser(taskIdToUse, selectedEmployee.id);
+      console.log('✅ Assignment successful:', result);
 
       // Update local state to reflect the change
       setCurrentTask({
@@ -267,18 +337,29 @@ function TaskDetailsScreen({ navigation, route }) {
       setSelectedEmployee(null);
       setSearchQuery('');
 
-      Alert.alert(
-        "Success",
-        `Task assigned to ${selectedEmployee.first_name} ${selectedEmployee.last_name} successfully!`,
-        [{ text: "OK" }]
-      );
+      // --- Show Success Toast Message ---
+      Toast.show({
+        type: 'success',
+        text1: 'Task Assigned Successfully!',
+        text2: `Task assigned to ${selectedEmployee.first_name} ${selectedEmployee.last_name}`,
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
     } catch (error) {
-      console.error('Error assigning task:', error);
-      Alert.alert(
-        "Error",
-        error.message || "Failed to assign task. Please try again.",
-        [{ text: "OK" }]
-      );
+      console.error('❌ Error assigning task:', error);
+      console.error('- Error message:', error.message);
+      console.error('- Error response:', error.response?.data);
+      
+      // --- Show Error Toast Message ---
+      Toast.show({
+        type: 'error',
+        text1: 'Assignment Failed',
+        text2: error.message || 'Failed to assign task. Please try again.',
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
     } finally {
       setAssigningTask(false);
     }
@@ -331,7 +412,19 @@ function TaskDetailsScreen({ navigation, route }) {
       <View className="flex-1 bg-gray-50">
         <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
 
-        <View className="flex-1" style={{ paddingBottom: bottomSpacing, paddingTop: 20 }}>
+        <ScrollView 
+          className="flex-1" 
+          style={{ paddingTop: 20 }}
+          contentContainerStyle={{ paddingBottom: bottomSpacing }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#3155A1"]}
+              tintColor="#3155A1"
+            />
+          }
+        >
           {/* Task Title Card */}
           <View style={{ marginHorizontal: 24, marginBottom: cardSpacing }}>
             <View style={{
@@ -566,7 +659,7 @@ function TaskDetailsScreen({ navigation, route }) {
                       <Text className="text-sm font-medium text-gray-600">End Date</Text>
                     </View>
                     <Text className="text-sm font-semibold text-gray-900">
-                      {formatDateTime(currentTask.endTime)}
+                      {currentTask.endTime ? formatDateTime(currentTask.endTime) : "Not selected"}
                     </Text>
                   </View>
 
@@ -587,7 +680,7 @@ function TaskDetailsScreen({ navigation, route }) {
 
           {/* Bottom Spacing */}
           <View style={{ height: bottomSpacing }} />
-        </View>
+        </ScrollView>
 
         {/* Assignment Dropdown Overlay */}
         {showAssignmentDropdown && (

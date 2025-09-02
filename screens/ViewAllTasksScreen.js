@@ -27,6 +27,7 @@ import { getTaskByProjectId } from "../services/tasks/getTaskByProjectId";
 import { createTask } from "../services/tasks/createTask";
 import { getTasksAssignedToEmployees } from "../services/tasks/getTasksAssignedToEmployees";
 import { getEmployeesToAssignTask } from "../services/employees/getEmployeesOfTheCompany";
+import { filterTask, applyClientSideFilters } from "../services/tasks/filterTask";
 import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
 import DropDownPicker from "react-native-dropdown-picker";
@@ -384,11 +385,7 @@ function ViewAllTasksScreen({ navigation, route }) {
       return;
     }
 
-    // Validate that end time is provided
-    if (!draftTask.endTime) {
-      Alert.alert("Error", "End date and time is required");
-      return;
-    }
+    // End time is optional - no validation needed
 
     // --- Validation: Dates & Times (MCP Context 7) ---
     // Business Rule: Validate startTime >= minStartTime (when draft was created) and endTime > startTime
@@ -402,29 +399,32 @@ function ViewAllTasksScreen({ navigation, route }) {
       return;
     }
 
-    // Ensure end time is after start time
-    if (draftTask.endTime <= draftTask.startTime) {
-      Alert.alert(
-        "Error",
-        "End date and time must be after start date and time"
-      );
-      return;
-    }
+    // Only validate end time if it's provided (optional field)
+    if (draftTask.endTime) {
+      // Ensure end time is after start time
+      if (draftTask.endTime <= draftTask.startTime) {
+        Alert.alert(
+          "Error",
+          "End date and time must be after start date and time"
+        );
+        return;
+      }
 
-    // Additional validation for reasonable time ranges
-    const timeDifference =
-      draftTask.endTime.getTime() - draftTask.startTime.getTime();
-    const minDuration = 15 * 60 * 1000; // 15 minutes in milliseconds
-    const maxDuration = 365 * 24 * 60 * 60 * 1000; // 1 year in milliseconds
+      // Additional validation for reasonable time ranges
+      const timeDifference =
+        draftTask.endTime.getTime() - draftTask.startTime.getTime();
+      const minDuration = 15 * 60 * 1000; // 15 minutes in milliseconds
+      const maxDuration = 365 * 24 * 60 * 60 * 1000; // 1 year in milliseconds
 
-    if (timeDifference < minDuration) {
-      Alert.alert("Error", "Task duration must be at least 15 minutes");
-      return;
-    }
+      if (timeDifference < minDuration) {
+        Alert.alert("Error", "Task duration must be at least 15 minutes");
+        return;
+      }
 
-    if (timeDifference > maxDuration) {
-      Alert.alert("Error", "Task duration cannot exceed 1 year");
-      return;
+      if (timeDifference > maxDuration) {
+        Alert.alert("Error", "Task duration cannot exceed 1 year");
+        return;
+      }
     }
 
     setCreatingTaskId(draftTask.id);
@@ -436,7 +436,7 @@ function ViewAllTasksScreen({ navigation, route }) {
         description: draftTask.description.trim(),
         startTime: draftTask.startTime.toISOString(),
         minStartTime: draftTask.minStartTime.toISOString(), // Include minStartTime for backend validation
-        endTime: draftTask.endTime.toISOString(),
+        endTime: draftTask.endTime ? draftTask.endTime.toISOString() : null, // Make endTime optional
         projectId: projectId,
         assignedToUserId: draftTask.assignedToUserId || null,
         priority: draftTask.priority || null,
@@ -713,10 +713,54 @@ function ViewAllTasksScreen({ navigation, route }) {
     setSelectedTask(null);
   };
 
-  const handleApplyFilters = (filters) => {
+  const handleApplyFilters = async (filters, preFilteredTasks = null) => {
     console.log('Applied filters:', filters);
-    // TODO: Implement actual filtering logic
-    // Apply filters to the tasks list based on selected criteria
+    
+    try {
+      setInitialLoading(true);
+      setError(null);
+
+      // --- Apply Filters Based on User Role (MCP Context 7) ---
+      // Business Rule: Different filtering logic for Employees vs other roles
+      if (userRole === "Employee") {
+        // For employees, get all assigned tasks first, then apply client-side filtering
+        const allAssignedTasks = await getTasksAssignedToEmployees();
+        const filteredTasks = applyClientSideFilters(allAssignedTasks || [], filters);
+        setTasks(filteredTasks);
+        setFilteredTasks(filteredTasks);
+      } else {
+        // Check if FilterModal already provided filtered tasks
+        if (preFilteredTasks) {
+          // Use pre-filtered tasks from FilterModal
+          console.log('Using pre-filtered tasks from FilterModal');
+          const fullyFilteredTasks = applyClientSideFilters(preFilteredTasks, filters);
+          setTasks(fullyFilteredTasks);
+          setFilteredTasks(fullyFilteredTasks);
+        } else {
+          // Fallback: Call backend filter service directly
+          if (!projectId) {
+            console.error('ViewAllTasksScreen - No projectId available for filtering');
+            setError('Project ID is required for filtering');
+            return;
+          }
+
+          const backendFilteredTasks = await filterTask(filters, projectId);
+          const fullyFilteredTasks = applyClientSideFilters(backendFilteredTasks || [], filters);
+          
+          setTasks(fullyFilteredTasks);
+          setFilteredTasks(fullyFilteredTasks);
+        }
+      }
+
+      // Clear search term when applying filters
+      setSearchTerm("");
+      
+    } catch (err) {
+      console.error('ViewAllTasksScreen - Error applying filters:', err);
+      setError('Failed to apply filters. Please try again.');
+    } finally {
+      setInitialLoading(false);
+    }
   };
 
   const renderTaskCard = React.useCallback((task) => {
@@ -1403,6 +1447,7 @@ function ViewAllTasksScreen({ navigation, route }) {
         setSelectedFilters={setSelectedFilters}
         onApplyFilters={handleApplyFilters}
         userRole={userRole}
+        projectId={projectId}
       />
     </View>
   );

@@ -32,7 +32,7 @@ export default function UpdateTaskModal({
     priority: null,
   });
   const [startDateTime, setStartDateTime] = useState(new Date());
-  const [endDateTime, setEndDateTime] = useState(new Date());
+  const [endDateTime, setEndDateTime] = useState(null); // Start as null like CreateTaskScreen
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
@@ -80,6 +80,8 @@ export default function UpdateTaskModal({
       
       if (task.endTime) {
         setEndDateTime(new Date(task.endTime));
+      } else {
+        setEndDateTime(null); // Set to null when no end time, like CreateTaskScreen
       }
     }
 
@@ -196,20 +198,35 @@ export default function UpdateTaskModal({
 
   const handleEndDateChange = (event, selectedDate) => {
     setShowEndDatePicker(false);
-    if (selectedDate) {
+    // Only update if user selected a date (not cancelled) - matching CreateTaskScreen
+    if (event.type === 'set' && selectedDate) {
       const newDate = new Date(selectedDate);
-      newDate.setHours(endDateTime.getHours());
-      newDate.setMinutes(endDateTime.getMinutes());
+      // If endDateTime exists, preserve the time, otherwise set default time to 23:59
+      if (endDateTime) {
+        newDate.setHours(endDateTime.getHours());
+        newDate.setMinutes(endDateTime.getMinutes());
+        newDate.setSeconds(endDateTime.getSeconds());
+      } else {
+        newDate.setHours(23);
+        newDate.setMinutes(59);
+        newDate.setSeconds(0);
+      }
       setEndDateTime(newDate);
     }
   };
 
   const handleEndTimeChange = (event, selectedDate) => {
     setShowEndTimePicker(false);
-    if (selectedDate) {
-      const newDate = new Date(endDateTime);
+    // Only update if user selected a time (not cancelled) - matching CreateTaskScreen
+    if (event.type === 'set' && selectedDate) {
+      // If endDateTime exists, update the time on the existing date
+      // If not, create a new date with current date and selected time
+      const newDate = endDateTime ? new Date(endDateTime) : new Date();
+      // Only update the time components, preserve the date
       newDate.setHours(selectedDate.getHours());
       newDate.setMinutes(selectedDate.getMinutes());
+      newDate.setSeconds(0);
+      newDate.setMilliseconds(0);
       setEndDateTime(newDate);
     }
   };
@@ -239,7 +256,7 @@ export default function UpdateTaskModal({
       assignedTo: task.assignedTo || null,
       priority: task.priority || null,
       startTime: task.startTime ? new Date(task.startTime) : new Date(),
-      endTime: task.endTime ? new Date(task.endTime) : new Date(),
+      endTime: task.endTime ? new Date(task.endTime) : null,
     };
 
     const currentTask = {
@@ -248,7 +265,7 @@ export default function UpdateTaskModal({
       assignedTo: taskData.assignedTo,
       priority: taskData.priority,
       startTime: startDateTime,
-      endTime: endDateTime,
+      endTime: endDateTime, // Use endDateTime directly (null if not set)
     };
 
     // Build payload with only changed fields
@@ -279,9 +296,12 @@ export default function UpdateTaskModal({
       taskPayload.startTime = currentTask.startTime.toISOString();
     }
 
-    // Check endTime changes
-    if (originalTask.endTime.getTime() !== currentTask.endTime.getTime()) {
-      taskPayload.endTime = currentTask.endTime.toISOString();
+    // Check endTime changes - matching CreateTaskScreen logic
+    const originalEndTime = originalTask.endTime?.getTime() || null;
+    const currentEndTime = currentTask.endTime?.getTime() || null;
+    
+    if (originalEndTime !== currentEndTime) {
+      taskPayload.endTime = currentTask.endTime ? currentTask.endTime.toISOString() : null;
     }
 
     // Check if any changes were made
@@ -671,7 +691,7 @@ export default function UpdateTaskModal({
                     </View>
                   </View>
 
-                  {/* End Date & Time */}
+                  {/* End Date & Time - Matching CreateTaskScreen */}
                   <View className="mb-5">
                     <View className="flex-row items-center mb-2">
                       <Ionicons name="calendar" size={16} color="#374151" style={{ marginRight: 6 }} />
@@ -683,7 +703,7 @@ export default function UpdateTaskModal({
                         onPress={() => setShowEndDatePicker(true)}
                       >
                         <Text className="text-[16px] text-[#333] font-medium">
-                          {endDateTime.toLocaleDateString()}
+                          {endDateTime ? endDateTime.toLocaleDateString() : "Not selected"}
                         </Text>
                         <Ionicons name="calendar-outline" size={16} color="#666" />
                       </TouchableOpacity>
@@ -692,7 +712,7 @@ export default function UpdateTaskModal({
                         onPress={() => setShowEndTimePicker(true)}
                       >
                         <Text className="text-[16px] text-[#333] font-medium">
-                          {endDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+                          {endDateTime ? endDateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "No time"}
                         </Text>
                         <Ionicons name="time-outline" size={16} color="#666" />
                       </TouchableOpacity>
@@ -746,7 +766,7 @@ export default function UpdateTaskModal({
 
         {showEndDatePicker && (
           <DateTimePicker
-            value={endDateTime}
+            value={endDateTime || new Date()}
             mode="date"
             onChange={handleEndDateChange}
             minimumDate={startDateTime}
@@ -755,7 +775,7 @@ export default function UpdateTaskModal({
 
         {showEndTimePicker && (
           <DateTimePicker
-            value={endDateTime}
+            value={endDateTime || new Date()}
             mode="time"
             onChange={handleEndTimeChange}
           />
