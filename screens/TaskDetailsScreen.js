@@ -133,13 +133,32 @@ function TaskDetailsScreen({ navigation, route }) {
   };
 
   const onRefresh = async () => {
-    if (!currentTask?.id) return;
+    // --- Enhanced Refresh Logic with Better Error Handling ---
+    // Business Rule: Allow refresh for all users to get latest task data
+    console.log('🔄 Refresh triggered - currentTask:', currentTask?.id);
+    console.log('🔄 TaskId from route:', taskId);
+    
+    const taskIdToRefresh = currentTask?.id || taskId;
+    
+    if (!taskIdToRefresh) {
+      console.log('❌ No task ID available for refresh');
+      return;
+    }
+    
     setRefreshing(true);
     try {
-      const updated = await getTaskById(currentTask.id);
+      console.log('🔄 Fetching updated task data for ID:', taskIdToRefresh);
+      const updated = await getTaskById(taskIdToRefresh);
+      console.log('✅ Refresh successful - updated task:', updated?.title);
       setCurrentTask(updated);
     } catch (err) {
-      console.error('TaskDetailsScreen - Refresh failed:', err);
+      console.error('❌ TaskDetailsScreen - Refresh failed:', err);
+      // --- Show user-friendly error message ---
+      Alert.alert(
+        "Refresh Failed",
+        "Unable to refresh task data. Please try again.",
+        [{ text: "OK" }]
+      );
     } finally {
       setRefreshing(false);
     }
@@ -200,11 +219,13 @@ function TaskDetailsScreen({ navigation, route }) {
   const handleAssignmentPress = async () => {
     // Only show dropdown if task is not assigned and user has permission
     if (getAssignedToName(currentTask.assigned_to || currentTask.assignedTo) === "Unassigned" && userRole !== 'Employee') {
-      if (employees.length === 0) {
-        // Fetch employees first time
-        await fetchEmployees();
-      }
+      // Show dropdown immediately
       setShowAssignmentDropdown(!showAssignmentDropdown);
+      
+      // Fetch employees if not already loaded
+      if (employees.length === 0 && !loadingEmployees) {
+        fetchEmployees();
+      }
     }
   };
 
@@ -367,15 +388,17 @@ function TaskDetailsScreen({ navigation, route }) {
 
 
 
-  if (loading) {
+  // --- Only show loading screen if we have no task data at all ---
+  // Business Rule: Show task details immediately if available, even during API calls
+  if (loading && !currentTask) {
     return (
       <View className="flex-1 bg-white">
         <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
         <View className="flex-1 justify-center items-center">
           <Text className="text-[16px] text-[#666]">Loading Task details...</Text>
         </View>
-        {/* Show CustomBottomNav during loading */}
-        <CustomBottomNav navigation={navigation} />
+        {/* Show CustomBottomNav during loading - Hide if modal is visible */}
+        {!showUpdateModal && <CustomBottomNav navigation={navigation} />}
       </View>
     );
   }
@@ -409,24 +432,36 @@ function TaskDetailsScreen({ navigation, route }) {
       setSelectedEmployee(null);
       setSearchQuery('');
     }}>
-      <View className="flex-1 bg-gray-50">
+      <View className="flex-1 bg-gray-100">
         <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
+        
+
 
         <ScrollView 
           className="flex-1" 
           style={{ paddingTop: 20 }}
           contentContainerStyle={{ paddingBottom: bottomSpacing }}
+          showsVerticalScrollIndicator={true}
+          bounces={true}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={["#3155A1"]}
+              colors={["#3155A1", "#007AFF"]}
               tintColor="#3155A1"
+              progressBackgroundColor="#ffffff"
+              size="default"
+              title="Pull to refresh"
+              titleColor="#666666"
             />
           }
         >
           {/* Task Title Card */}
-          <View style={{ marginHorizontal: 24, marginBottom: cardSpacing }}>
+          <View 
+            style={{ marginHorizontal: 24, marginBottom: cardSpacing }}
+            onStartShouldSetResponder={() => true}
+            onMoveShouldSetResponder={() => true}
+          >
             <View style={{
               backgroundColor: 'white',
               borderRadius: 16,
@@ -437,8 +472,30 @@ function TaskDetailsScreen({ navigation, route }) {
               shadowRadius: 2,
               elevation: 2,
               borderWidth: 1,
-              borderColor: '#f3f4f6'
+              borderColor: '#f3f4f6',
+              position: 'relative'
             }}>
+              {/* --- Loading Indicator on Card --- */}
+              {loading && currentTask && (
+                <View style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 4,
+                  backgroundColor: '#E5E7EB',
+                  borderTopLeftRadius: 16,
+                  borderTopRightRadius: 16,
+                  overflow: 'hidden'
+                }}>
+                  <View style={{
+                    height: '100%',
+                    backgroundColor: '#3155A1',
+                    width: '60%',
+                    borderRadius: 2,
+                  }} />
+                </View>
+              )}
               <View className="flex-row items-center mb-4">
                 <View className="w-12 h-12 rounded-xl bg-blue-100 items-center justify-center mr-4">
                   <Ionicons name="document-text" size={24} color="#3B82F6" />
@@ -520,7 +577,11 @@ function TaskDetailsScreen({ navigation, route }) {
           </View>
 
           {/* Task Details Grid */}
-          <View style={{ marginHorizontal: 24, marginBottom: cardSpacing }}>
+          <View 
+            style={{ marginHorizontal: 24, marginBottom: cardSpacing }}
+            onStartShouldSetResponder={() => true}
+            onMoveShouldSetResponder={() => true}
+          >
             <View style={{
               backgroundColor: 'white',
               borderRadius: 16,
@@ -582,27 +643,42 @@ function TaskDetailsScreen({ navigation, route }) {
                     <View className="flex-1">
                       <Text className="text-sm font-medium text-gray-600 mb-1">ASSIGNED TO</Text>
                       <View className="flex-row items-center justify-between">
-                        <Text className="text-lg font-semibold text-gray-900 flex-1">
-                          {assigningTask ? "Assigning..." :
-                            selectedEmployee ?
-                              `${selectedEmployee.first_name} ${selectedEmployee.last_name}`.trim() || selectedEmployee.email :
-                              getAssignedToName(currentTask.assigned_to || currentTask.assignedTo)
-                          }
-                        </Text>
+                        <View className="flex-row items-center flex-1">
+                          <Text 
+                            className="text-lg font-semibold text-gray-900"
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
+                            style={{ flex: 1, marginRight: 8 }}
+                          >
+                            {assigningTask ? "Assigning..." :
+                              selectedEmployee ?
+                                `${selectedEmployee.first_name} ${selectedEmployee.last_name}`.trim() || selectedEmployee.email :
+                                getAssignedToName(currentTask.assigned_to || currentTask.assignedTo)
+                            }
+                          </Text>
+                          {getAssignedToName(currentTask.assigned_to || currentTask.assignedTo) === "Unassigned" && userRole !== 'Employee' && (
+                            <Ionicons 
+                              name={showAssignmentDropdown ? "chevron-up" : "chevron-down"} 
+                              size={16} 
+                              color="#6B7280" 
+                              style={{ marginLeft: 8 }} 
+                            />
+                          )}
+                        </View>
                         {selectedEmployee && (
                           <TouchableOpacity
                             onPress={handleAssignTask}
                             disabled={assigningTask}
                             style={{
-                              backgroundColor: assigningTask ? '#9CA3AF' : '#000000',
-                              paddingVertical: 6,
+                              backgroundColor: assigningTask ? '#6B7280' : '#000000',
+                              paddingVertical: 4,
                               paddingHorizontal: 16,
                               borderRadius: 6,
                               marginLeft: 12,
                               flexDirection: 'row',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              minWidth: 60
+                              minWidth: 70,
                             }}
                           >
                             {assigningTask ? (
@@ -613,7 +689,7 @@ function TaskDetailsScreen({ navigation, route }) {
                             ) : (
                               <Text style={{
                                 color: 'white',
-                                fontSize: 12,
+                                fontSize: 13,
                                 fontWeight: '600'
                               }}>
                                 Assign
@@ -830,8 +906,8 @@ function TaskDetailsScreen({ navigation, route }) {
         {/* Sidebar */}
         <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} navigation={navigation} />
 
-        {/* Bottom Navigation */}
-        <CustomBottomNav navigation={navigation} />
+        {/* Bottom Navigation - Hide if UpdateTaskModal is visible */}
+        {!showUpdateModal && <CustomBottomNav navigation={navigation} />}
       </View>
     </TouchableWithoutFeedback>
   );

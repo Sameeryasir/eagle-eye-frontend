@@ -416,6 +416,7 @@ function ViewAllTasksScreen({ navigation, route }) {
       const minDuration = 15 * 60 * 1000; // 15 minutes in milliseconds
       const maxDuration = 365 * 24 * 60 * 60 * 1000; // 1 year in milliseconds
 
+      // Ensure end time is at least 15 minutes after start time
       if (timeDifference < minDuration) {
         Alert.alert("Error", "Task duration must be at least 15 minutes");
         return;
@@ -1371,7 +1372,8 @@ function ViewAllTasksScreen({ navigation, route }) {
         </TouchableWithoutFeedback>
       )}
 
-      <CustomBottomNav onAddPress={handleFabPress} />
+      {/* Hide CustomBottomNav when UpdateTaskModal is visible */}
+      {!updateTaskModalVisible && <CustomBottomNav onAddPress={handleFabPress} />}
 
       <Sidebar
         isVisible={sidebarVisible}
@@ -1385,6 +1387,7 @@ function ViewAllTasksScreen({ navigation, route }) {
           value={datePickerValue}
           mode="date"
           onChange={handleStartDateChange}
+          minimumDate={new Date()}
         />
       )}
 
@@ -1406,12 +1409,7 @@ function ViewAllTasksScreen({ navigation, route }) {
           value={datePickerValue}
           mode="date"
           onChange={handleEndDateChange}
-          minimumDate={
-            activeDraftId
-              ? draftTasks.find((draft) => draft.id === activeDraftId)
-                ?.startTime || new Date()
-              : new Date()
-          }
+          minimumDate={new Date()}
         />
       )}
 

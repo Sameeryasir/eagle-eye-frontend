@@ -52,15 +52,29 @@ function CreatLogScreen({ navigation, route }) {
   const regularProjectId = route.params?.projectId || null;
 
   console.log("=== CreateLogScreen - Parameter Debug ===");
+  console.log("🔍 NAVIGATION SOURCE: ViewAllLogScreen or WidgetScreen");
   console.log("CreatLogScreen - All route params:", route.params);
   console.log("CreatLogScreen - route.params type:", typeof route.params);
   console.log("CreatLogScreen - route.params keys:", route.params ? Object.keys(route.params) : 'no params');
+  
+  // Check if this is coming from an unexpected source
+  if (!route.params || Object.keys(route.params || {}).length === 0) {
+    console.log("🚨 WARNING: CreatLogScreen received NO PARAMETERS!");
+    console.log("🚨 This suggests navigation from a source that doesn't pass project ID");
+    console.log("🚨 Check: HomeScreen, direct navigation, or other unexpected sources");
+  } else {
+    console.log("✅ CreatLogScreen received parameters - checking project ID availability...");
+  }
   console.log("CreatLogScreen - route.params?.projectId:", route.params?.projectId);
   console.log("CreatLogScreen - PROJECT ID FOR MANAGER:", route.params?.projectId);
   console.log("CreatLogScreen - Received Employee projectId:", employeeProjectId);
   console.log("CreatLogScreen - Received Manager projectId:", managerProjectId);
   console.log("CreatLogScreen - Received regular projectId:", regularProjectId);
   console.log("CreatLogScreen - route.params?.id:", route.params?.id);
+  console.log("🧩 PARAMETER EXTRACTION BREAKDOWN:");
+  console.log("- employeeProjectId = route.params?.['Employee projectId']:", route.params?.["Employee projectId"]);
+  console.log("- managerProjectId = route.params?.['Manager projectId'] || route.params?.id:", route.params?.["Manager projectId"], "||", route.params?.id);
+  console.log("- regularProjectId = route.params?.projectId:", route.params?.projectId);
   console.log("========================================");
 
   const [sidebarVisible, setSidebarVisible] = useState(false);
@@ -78,6 +92,8 @@ function CreatLogScreen({ navigation, route }) {
   // --- Image Upload State ---
   const [selectedImages, setSelectedImages] = useState([]);
   const [isUploadingImages, setIsUploadingImages] = useState(false);
+  // --- Service Error State ---
+  const [serviceError, setServiceError] = useState(null);
 
 
   useFocusEffect(
@@ -137,21 +153,53 @@ function CreatLogScreen({ navigation, route }) {
           console.log("🚀 MAKING API CALL: getTaskAssignedToManager(" + currentProjectId + ")");
           response = await getTaskAssignedToManager(currentProjectId);
           console.log("CreatLogScreen - Manager getTaskAssignedToManager response:", response);
+          console.log("📊 MANAGER RESPONSE DETAILS:");
+          console.log("- Response Type:", typeof response);
+          console.log("- Response Keys:", response ? Object.keys(response) : 'No response');
+          console.log("- Response JSON:", JSON.stringify(response, null, 2));
+          if (response?.tasks) {
+            console.log("- Tasks Count:", response.tasks.length);
+            console.log("- First Task:", response.tasks[0]);
+          }
           console.log("✅ API CALL COMPLETED for projectId:", currentProjectId);
         } else {
           console.log("❌ NO PROJECT ID FOUND - Manager cannot load tasks");
         }
       } else if (role === "Employee") {
-        // For employees, use getProjectById if Employee projectId is available
-        if (employeeProjectId) {
-          console.log("CreatLogScreen - Calling getProjectById for Employee with projectId:", employeeProjectId);
-          response = await getProjectById(employeeProjectId);
-          console.log("CreatLogScreen - Employee project response:", response);
+        // For employees, use getTaskAssignedToManager with projectId
+        console.log("🔍 EMPLOYEE PROJECT ID DEBUG:");
+        console.log("- employeeProjectId:", employeeProjectId);
+        console.log("- currentProjectId:", currentProjectId);
+        console.log("- regularProjectId:", regularProjectId);
+        console.log("- route.params?.id:", route.params?.id);
+        console.log("- All possible IDs:", {
+          employeeProjectId,
+          currentProjectId,
+          regularProjectId,
+          routeParamsId: route.params?.id,
+          managerProjectId
+        });
+        
+        const employeeProjectIdToUse = employeeProjectId || currentProjectId || regularProjectId || route.params?.id;
+        console.log("- Final employeeProjectIdToUse:", employeeProjectIdToUse);
+        
+        if (employeeProjectIdToUse) {
+          console.log("CreatLogScreen - Calling getTaskAssignedToManager for Employee with projectId:", employeeProjectIdToUse);
+          console.log("🚀 MAKING API CALL: getTaskAssignedToManager(" + employeeProjectIdToUse + ") for Employee");
+          response = await getTaskAssignedToManager(employeeProjectIdToUse);
+          console.log("CreatLogScreen - Employee getTaskAssignedToManager response:", response);
+          console.log("📊 EMPLOYEE RESPONSE DETAILS:");
+          console.log("- Response Type:", typeof response);
+          console.log("- Response Keys:", response ? Object.keys(response) : 'No response');
+          console.log("- Response JSON:", JSON.stringify(response, null, 2));
+          if (response?.tasks) {
+            console.log("- Tasks Count:", response.tasks.length);
+            console.log("- First Task:", response.tasks[0]);
+          }
+          console.log("✅ API CALL COMPLETED for Employee with projectId:", employeeProjectIdToUse);
         } else {
-          // Disabled: Fallback to getTodaysTask if no projectId
-          // console.log("CreatLogScreen - Calling getTodaysTask for Employee (no projectId)");
-          // response = await getTodaysTask();
-          // console.log("CreatLogScreen - Employee today's tasks response:", response);
+          console.log("❌ NO PROJECT ID FOUND - Employee cannot load tasks");
+          console.log("❌ All projectId sources are null/undefined");
         }
       }
 
@@ -171,21 +219,19 @@ function CreatLogScreen({ navigation, route }) {
         let tasksArray = null;
         let projectInfo = null;
         
-        if (role === "Manager" && currentProjectId) {
+        if ((role === "Manager" && currentProjectId) || (role === "Employee" && (employeeProjectId || currentProjectId))) {
+          // Both Manager and Employee use getTaskAssignedToManager service
           // Check multiple possible response structures
           if (response.tasks && Array.isArray(response.tasks)) {
             tasksArray = response.tasks;
             projectInfo = response.project || response;
-            console.log("✅ Found tasks in response.tasks");
+            console.log("✅ Found tasks in response.tasks for", role);
           } else if (Array.isArray(response)) {
             tasksArray = response;
-            console.log("✅ Response is directly an array of tasks");
+            console.log("✅ Response is directly an array of tasks for", role);
           } else {
-            console.log("❌ Unexpected response structure for Manager");
+            console.log("❌ Unexpected response structure for", role);
           }
-        } else if (role === "Employee" && employeeProjectId && response.tasks) {
-          tasksArray = response.tasks;
-          projectInfo = response;
         }
         
         if (tasksArray && tasksArray.length > 0) {
@@ -238,7 +284,9 @@ function CreatLogScreen({ navigation, route }) {
       console.log("📊 STATE UPDATED - Logs set to:", logsData.length, "items");
     } catch (err) {
       console.error("CreatLogScreen - Error loading log data:", err);
-      setError("Failed to load log data");
+      // --- Show actual backend error message instead of generic text ---
+      const errorMessage = err.response?.data?.message || err.message || "Failed to load log data";
+      setError(errorMessage);
     } finally {
       setInitialLoading(false);
     }
@@ -314,6 +362,7 @@ function CreatLogScreen({ navigation, route }) {
     setSelectedTaskForLog(task);
     setLogNote("");
     setSelectedImages([]); // Reset images when opening modal
+    setServiceError(null); // Clear any previous service errors
     setCreateLogModalVisible(true);
   };
 
@@ -346,9 +395,14 @@ function CreatLogScreen({ navigation, route }) {
       setIsSubmittingLog(true);
 
       // --- Step 1: Create Log ---
+      // Extract project ID from route params to send to service
+      const projectIdForLog = route.params?.projectId || employeeProjectId || managerProjectId || regularProjectId || route.params?.id;
+      console.log("🔗 SENDING PROJECT ID TO CREATE LOG SERVICE:", projectIdForLog);
+      
       const response = await createLog({
         task_id: Array.from(checkedTasks),
         note: logNote,
+        project_id: projectIdForLog,
       });
 
       // --- Step 2: Upload Images (if any) ---
@@ -356,13 +410,14 @@ function CreatLogScreen({ navigation, route }) {
         await uploadImages(response.log.id);
       }
 
+      setServiceError(null); // Clear any previous errors
       Alert.alert('Success', 'Log created successfully!');
       loadLogData();
 
     } catch (err) {
       console.error("CreatLogScreen - Error creating log:", err);
       const errorMessage = err.response?.data?.message || err.message || "Failed to create log. Please try again.";
-      Alert.alert("Error", errorMessage);
+      setServiceError(errorMessage);
     } finally {
       setIsSubmittingLog(false);
       setCreateLogModalVisible(false);
@@ -409,7 +464,8 @@ function CreatLogScreen({ navigation, route }) {
 
     } catch (error) {
       console.error("CreatLogScreen - Image upload error:", error);
-      Alert.alert("Warning", "Log created but image upload failed.");
+      const errorMessage = error.response?.data?.message || error.message || "Log created but image upload failed.";
+      setServiceError(errorMessage);
     } finally {
       setIsUploadingImages(false);
     }
@@ -509,7 +565,7 @@ function CreatLogScreen({ navigation, route }) {
     console.log('Rendering log card:', log.id, 'isChecked:', isChecked, 'hasLog:', hasLog);
 
     return (
-      <View style={{ marginBottom: Math.min(16, screenHeight * 0.02) }}>
+      <View>
         {/* Task Card */}
         <View
           className="rounded-[8px] border shadow-sm"
@@ -615,152 +671,246 @@ function CreatLogScreen({ navigation, route }) {
     console.log("- filteredLogs data:", filteredLogs);
     
     return (
-      <FlatList
-        data={filteredLogs}
-        keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={{
-        paddingHorizontal: Math.min(20, screenWidth * 0.05),
-        paddingTop: Math.min(20, screenHeight * 0.025),
-        paddingBottom: Math.min(100, screenHeight * 0.125)
-      }}
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode="on-drag"
-      scrollEnabled={true}
-      removeClippedSubviews={true}
-      maxToRenderPerBatch={10}
-      windowSize={10}
-      initialNumToRender={5}
-      ListHeaderComponent={() => (
-        logs.length > 0 ? (
-          <View style={{
-            marginBottom: Math.min(24, screenHeight * 0.03),
-            paddingBottom: Math.min(16, screenHeight * 0.02),
-          }}>
-            <Text style={{
-              fontSize: Math.min(24, screenWidth * 0.06),
-              fontWeight: '700',
-              color: '#111827',
-              marginBottom: Math.min(8, screenHeight * 0.01),
-              textAlign: 'center',
-            }}>
-              Select Tasks
-            </Text>
-          </View>
-        ) : null
-      )}
+            <View style={{ flex: 1 }}>
 
 
-      ListFooterComponent={() => (
-        logs.length > 0 ? (
-          <View style={{
-            paddingHorizontal: Math.min(20, screenWidth * 0.05),
-            paddingVertical: Math.min(16, screenHeight * 0.02)
-          }}>
-            <TouchableOpacity
-              style={{
-                minWidth: Math.max(200, screenWidth * 0.5),
-                backgroundColor: checkedTasks.size > 0 ? 'black' : '#D1D5DB',
-                borderRadius: Math.min(12, screenWidth * 0.03),
-                paddingVertical: Math.min(12, screenHeight * 0.015),
-                paddingHorizontal: Math.min(24, screenWidth * 0.06),
-                alignItems: 'center',
-                justifyContent: 'center',
-                alignSelf: 'center',
-                opacity: checkedTasks.size > 0 ? 1 : 0.6,
-              }}
-              onPress={() => {
-                if (checkedTasks.size > 0) {
-                  // Get the first selected task to open the modal
-                  const selectedTaskId = Array.from(checkedTasks)[0];
-                  const selectedTask = logs.find(log => log.id === selectedTaskId);
-                  if (selectedTask) {
-                    handleCreateLog(selectedTask);
-                  }
-                }
-              }}
-              disabled={checkedTasks.size === 0}
-              activeOpacity={checkedTasks.size > 0 ? 0.8 : 1}
-            >
-              <Text style={{
-                color: checkedTasks.size > 0 ? 'white' : '#6B7280',
-                fontSize: Math.min(16, screenWidth * 0.04),
-                fontWeight: '600',
-              }}>
-                Create Log {checkedTasks.size > 1 ? `(${checkedTasks.size} selected)` : ''}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ) : null
-      )}
-      ListEmptyComponent={() => (
-        <View style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          padding: Math.min(20, screenWidth * 0.05),
-          minHeight: Math.min(400, screenHeight * 0.5),
-          marginTop: Math.min(100, screenHeight * 0.125), // Shift downward
-        }}>
-          {error ? (
-            <>
-              <Text style={{
-                fontSize: Math.min(16, screenWidth * 0.04),
-                color: "#dc3545",
-                textAlign: "center",
-                marginBottom: Math.min(16, screenHeight * 0.02),
-                fontWeight: "500",
-              }}>
-                {error}
-              </Text>
-              <TouchableOpacity
-                style={{
-                  backgroundColor: "#007AFF",
-                  paddingVertical: Math.min(12, screenHeight * 0.015),
-                  paddingHorizontal: Math.min(24, screenWidth * 0.06),
-                  borderRadius: Math.min(12, screenWidth * 0.03),
-                }}
-                onPress={loadLogData}
-              >
-                <Text style={{
-                  color: "white",
-                  fontSize: Math.min(16, screenWidth * 0.04),
-                  fontWeight: "600",
+        {/* --- Tasks List Section --- */}
+        {filteredLogs.length > 0 ? (
+          <>
+            <FlatList
+              data={filteredLogs}
+              keyExtractor={(item, index) => `task-${item.id}-${index}`}
+              renderItem={({ item, index }) => (
+                <View style={{ 
+                  marginBottom: Math.min(16, screenHeight * 0.02),
+                  paddingHorizontal: Math.min(20, screenWidth * 0.05),
                 }}>
-                  {error.includes("Authentication failed") || error.includes("Session expired") ? "Login Again" : "Retry"}
+                  {renderLogCard(item, index)}
+                </View>
+              )}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+              removeClippedSubviews={true}
+              scrollEventThrottle={16}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              maxToRenderPerBatch={10}
+              windowSize={10}
+              initialNumToRender={5}
+              contentContainerStyle={{
+                paddingBottom: Math.min(140, screenHeight * 0.175), // Padding to clear CustomBottomNav
+              }}
+              ListHeaderComponent={() => (
+                /* --- Select Tasks Header --- */
+                <View style={{
+                  marginBottom: Math.min(24, screenHeight * 0.03),
+                  paddingBottom: Math.min(16, screenHeight * 0.02),
+                  paddingHorizontal: Math.min(20, screenWidth * 0.05),
+                  paddingTop: Math.min(20, screenHeight * 0.025),
+                }}>
+                  <Text style={{
+                    fontSize: Math.min(24, screenWidth * 0.06),
+                    fontWeight: '700',
+                    color: '#111827',
+                    marginBottom: Math.min(8, screenHeight * 0.01),
+                    textAlign: 'center',
+                  }}>
+                    Select Tasks
+                  </Text>
+                </View>
+              )}
+              ListFooterComponent={() => (
+                /* --- Create Log Button Section --- */
+                <View style={{
+                  paddingVertical: Math.min(16, screenHeight * 0.02),
+                  marginTop: Math.min(16, screenHeight * 0.02),
+                  marginBottom: Math.min(20, screenHeight * 0.025),
+                }}>
+                  <TouchableOpacity
+                    style={{
+                      minWidth: Math.max(200, screenWidth * 0.5),
+                      backgroundColor: checkedTasks.size > 0 ? 'black' : '#E5E7EB',
+                      borderRadius: Math.min(12, screenWidth * 0.03),
+                      paddingVertical: Math.min(16, screenHeight * 0.02),
+                      paddingHorizontal: Math.min(24, screenWidth * 0.06),
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      alignSelf: 'center',
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: checkedTasks.size > 0 ? 0.1 : 0.05,
+                      shadowRadius: 4,
+                      elevation: checkedTasks.size > 0 ? 3 : 1,
+                    }}
+                    onPress={() => {
+                      if (checkedTasks.size > 0) {
+                        const selectedTaskId = Array.from(checkedTasks)[0];
+                        const selectedTask = logs.find(log => log.id === selectedTaskId);
+                        if (selectedTask) {
+                          handleCreateLog(selectedTask);
+                        }
+                      }
+                    }}
+                    disabled={checkedTasks.size === 0}
+                    activeOpacity={checkedTasks.size > 0 ? 0.8 : 1}
+                  >
+                    <Text style={{
+                      color: checkedTasks.size > 0 ? 'white' : '#9CA3AF',
+                      fontSize: Math.min(16, screenWidth * 0.04),
+                      fontWeight: '600',
+                    }}>
+                      Create Log {checkedTasks.size > 1 ? `(${checkedTasks.size} selected)` : ''}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              ListEmptyComponent={() => (
+                /* --- Empty State Section --- */
+                <View style={{
+                  flex: 1,
+                  justifyContent: "flex-start",
+                  alignItems: "center",
+                  padding: Math.min(20, screenWidth * 0.05),
+                  minHeight: Math.min(400, screenHeight * 0.5),
+                  paddingTop: Math.min(100, screenHeight * 0.15),
+                }}>
+                  {error ? (
+                    <>
+                      {/* Check if it's the "log already exists" error */}
+                      {error.includes("You can only create one log per day") || error.includes("A log already exists for today") ? (
+                        <>
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={Math.min(64, screenWidth * 0.16)}
+                            color="#10B981"
+                            style={{ marginBottom: Math.min(16, screenHeight * 0.02) }}
+                          />
+                          <Text style={{
+                            fontSize: Math.min(18, screenWidth * 0.045),
+                            color: "#10B981",
+                            textAlign: "center",
+                            fontWeight: "600",
+                            marginBottom: Math.min(8, screenHeight * 0.01),
+                          }}>
+                            Log Already Created
+                          </Text>
+                          <Text style={{
+                            fontSize: Math.min(14, screenWidth * 0.035),
+                            color: "#6B7280",
+                            textAlign: "center",
+                            fontWeight: "400",
+                          }}>
+                            You have already created a log for today
+                          </Text>
+                        </>
+                      ) : (
+                        <>
+                          <Ionicons
+                            name="alert-circle-outline"
+                            size={Math.min(64, screenWidth * 0.16)}
+                            color="#dc3545"
+                            style={{ marginBottom: Math.min(16, screenHeight * 0.02) }}
+                          />
+                          <Text style={{
+                            fontSize: Math.min(16, screenWidth * 0.04),
+                            color: "#dc3545",
+                            textAlign: "center",
+                            fontWeight: "500",
+                            marginBottom: Math.min(16, screenHeight * 0.02),
+                          }}>
+                            {error}
+                          </Text>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <Ionicons
+                        name="document-text-outline"
+                        size={Math.min(64, screenWidth * 0.16)}
+                        color="#ccc"
+                        style={{ marginBottom: Math.min(16, screenHeight * 0.02) }}
+                      />
+                      <Text style={{
+                        fontSize: Math.min(18, screenWidth * 0.045),
+                        color: "#666",
+                        textAlign: "center",
+                        fontWeight: "600",
+                        marginBottom: Math.min(8, screenHeight * 0.01),
+                      }}>
+                        No tasks for today
+                      </Text>
+                      <Text style={{
+                        fontSize: Math.min(14, screenWidth * 0.035),
+                        color: "#999",
+                        textAlign: "center",
+                        fontWeight: "400",
+                      }}>
+                        Tasks will appear here once assigned
+                      </Text>
+                    </>
+                  )}
+                </View>
+              )}
+            />
+          </>
+        ) : (
+          /* --- Empty State Section --- */
+          <View style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            padding: Math.min(20, screenWidth * 0.05),
+            minHeight: Math.min(400, screenHeight * 0.5),
+          }}>
+            {error ? (
+              <>
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={Math.min(64, screenWidth * 0.16)}
+                  color="#dc3545"
+                  style={{ marginBottom: Math.min(16, screenHeight * 0.02) }}
+                />
+                <Text style={{
+                  fontSize: Math.min(16, screenWidth * 0.04),
+                  color: "#dc3545",
+                  textAlign: "center",
+                  fontWeight: "500",
+                  marginBottom: Math.min(16, screenHeight * 0.02),
+                }}>
+                  {error}
                 </Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <Ionicons
-                name="document-text-outline"
-                size={Math.min(64, screenWidth * 0.16)}
-                color="#ccc"
-                style={{ marginBottom: Math.min(16, screenHeight * 0.02) }}
-              />
-              <Text style={{
-                fontSize: Math.min(18, screenWidth * 0.045),
-                color: "#666",
-                textAlign: "center",
-                fontWeight: "600",
-                marginBottom: Math.min(8, screenHeight * 0.01),
-              }}>
-                No tasks for today
-              </Text>
-              <Text style={{
-                fontSize: Math.min(14, screenWidth * 0.035),
-                color: "#999",
-                textAlign: "center",
-                fontWeight: "400",
-              }}>
-                Tasks will appear here once assigned
-              </Text>
-            </>
-          )}
-        </View>
-      )}
-      renderItem={({ item, index }) => renderLogCard(item, index)}
-    />
+              </>
+            ) : (
+              <>
+                <Ionicons
+                  name="document-text-outline"
+                  size={Math.min(64, screenWidth * 0.16)}
+                  color="#ccc"
+                  style={{ marginBottom: Math.min(16, screenHeight * 0.02) }}
+                />
+                <Text style={{
+                  fontSize: Math.min(18, screenWidth * 0.045),
+                  color: "#666",
+                  textAlign: "center",
+                  fontWeight: "600",
+                  marginBottom: Math.min(8, screenHeight * 0.01),
+                }}>
+                  No tasks for today
+                </Text>
+                <Text style={{
+                  fontSize: Math.min(14, screenWidth * 0.035),
+                  color: "#999",
+                  textAlign: "center",
+                  fontWeight: "400",
+                }}>
+                  Tasks will appear here once assigned
+                </Text>
+              </>
+            )}
+          </View>
+        )}
+      </View>
     );
   };
 
@@ -813,7 +963,10 @@ function CreatLogScreen({ navigation, route }) {
           <View className="bg-black px-4 py-3 flex-row items-center justify-between">
             <Text className="text-black text-[18px] font-semibold">Create Log</Text>
             <TouchableOpacity
-              onPress={() => setCreateLogModalVisible(false)}
+              onPress={() => {
+                setCreateLogModalVisible(false);
+                setServiceError(null); // Clear service errors when closing modal
+              }}
               className="p-2"
             >
               <Ionicons name="close" size={24} color="white" />
@@ -823,10 +976,10 @@ function CreatLogScreen({ navigation, route }) {
           <View className="p-6">
             {/* --- Note Section (First) --- */}
             <View className="mb-6">
-              <Text className="text-[16px] font-semibold text-[#333] mb-2">Note</Text>
+              <Text className="text-[16px] font-semibold text-[#333] mb-2">Note *</Text>
               <TextInput
                 className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333] h-24"
-                placeholder="Enter note for the selected tasks..."
+                placeholder="Enter note "
                 value={logNote}
                 onChangeText={setLogNote}
                 multiline
@@ -838,7 +991,7 @@ function CreatLogScreen({ navigation, route }) {
 
             {/* --- Image Selection Section (Second) --- */}
             <View className="mb-6">
-              <Text className="text-[16px] font-semibold text-[#333] mb-2">Images *</Text>
+              <Text className="text-[16px] font-semibold text-[#333] mb-2">Images</Text>
 
               {/* Image Picker Button */}
               <TouchableOpacity
@@ -898,26 +1051,41 @@ function CreatLogScreen({ navigation, route }) {
               )}
             </View>
 
-
-
+            {/* --- Service Error Display Section --- */}
+            {serviceError && (
+              <View className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <View className="flex-row items-center">
+                  <Ionicons name="alert-circle" size={20} color="#dc2626" style={{ marginRight: 8 }} />
+                  <Text className="text-red-700 text-[14px] font-medium flex-1">
+                    {serviceError}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setServiceError(null)}
+                  className="mt-2 self-end"
+                >
+                  <Text className="text-red-600 text-[12px] font-medium">Dismiss</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
           </View>
 
           {/* Fixed Action Button - Always positioned at bottom */}
           <View className="absolute bottom-0 left-0 right-0 px-6 pt-5 pb-5 bg-white items-center">
             <TouchableOpacity
-              className="w-[280px] bg-black rounded-xl py-4 items-center justify-center"
+              className="w-[280px] rounded-xl py-4 items-center justify-center"
               onPress={handleSubmitLog}
-              disabled={isSubmittingLog || isUploadingImages}
-              style={{ opacity: (isSubmittingLog || isUploadingImages) ? 0.6 : 1 }}
+              disabled={isSubmittingLog || isUploadingImages || !logNote.trim()}
+              style={{ 
+                backgroundColor: (!logNote.trim() || isSubmittingLog || isUploadingImages) ? '#D1D5DB' : '#000000',
+                opacity: (isSubmittingLog || isUploadingImages || !logNote.trim()) ? 0.6 : 1 
+              }}
             >
               {(isSubmittingLog || isUploadingImages) ? (
-                <View className="flex-row items-center">
-                  <ActivityIndicator size="small" color="white" style={{ marginRight: 8 }} />
-                  <Text className="text-white text-[16px] font-semibold">Saving Log...</Text>
-                </View>
+                <Text className="text-white text-[16px] font-semibold">Saving</Text>
               ) : (
-                <Text className="text-white text-[16px] font-semibold">Save Log</Text>
+                <Text className="text-white text-[16px] font-semibold">Save</Text>
               )}
             </TouchableOpacity>
           </View>

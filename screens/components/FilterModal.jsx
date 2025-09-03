@@ -34,6 +34,16 @@ const FilterModal = ({
   const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // --- Clear Selected Employee When Modal Opens ---
+  // Business Rule: Reset employee selection when modal becomes visible to avoid confusion
+  useEffect(() => {
+    if (visible) {
+      setSelectedEmployee(null);
+      setSearchQuery('');
+      setShowEmployeeDropdown(false);
+    }
+  }, [visible]);
   
 
 

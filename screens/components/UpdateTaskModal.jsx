@@ -766,16 +766,16 @@ export default function UpdateTaskModal({
 
         {showEndDatePicker && (
           <DateTimePicker
-            value={endDateTime || new Date()}
+            value={endDateTime || startDateTime}
             mode="date"
             onChange={handleEndDateChange}
-            minimumDate={startDateTime}
+            minimumDate={new Date()}
           />
         )}
 
         {showEndTimePicker && (
           <DateTimePicker
-            value={endDateTime || new Date()}
+            value={endDateTime || startDateTime}
             mode="time"
             onChange={handleEndTimeChange}
           />

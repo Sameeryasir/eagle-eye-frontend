@@ -37,7 +37,10 @@ export default function CustomBottomNav({
       // Default behavior - check user role and navigate accordingly
       const userRole = await getUserRole();
       if (userRole === "Employee") {
-        navigation.navigate("CreatLog");
+        console.log("🚨 CustomBottomNav: Employee FAB pressed without project context!");
+        console.log("🚨 This should not happen - Employee needs project ID to create logs");
+        // Don't navigate without project ID - this will cause the undefined error
+        // navigation.navigate("CreatLog");
       } else if (userRole === "Manager" || userRole === "Owner" || userRole === "Admin") {
         // For other roles, you can add default behavior here
         // For now, we'll just do nothing or you can navigate to a default screen

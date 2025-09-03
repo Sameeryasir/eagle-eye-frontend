@@ -38,6 +38,15 @@ const searchBarClasses = `flex-row items-center rounded-2xl px-4 py-3 bg-[#F8FAF
 const ViewAllLogScreen = ({ route, navigation }) => {
   const { logs } = route.params || [];
 
+  // Debug: Log the received parameters from navigation
+  console.log("=== ViewAllLogScreen - Navigation Parameters Debug ===");
+  console.log("ViewAllLogScreen - All route params:", route.params);
+  console.log("ViewAllLogScreen - route.params keys:", route.params ? Object.keys(route.params) : 'no params');
+  console.log("ViewAllLogScreen - logs length:", logs ? logs.length : 'no logs');
+  console.log("ViewAllLogScreen - managerProjectId:", route.params?.managerProjectId);
+  console.log("ViewAllLogScreen - projectId:", route.params?.projectId);
+  console.log("======================================================");
+
   // Debug: Log the received logs data to check createdAt field
   console.log("ViewAllLogScreen - Received logs from route.params:", logs);
 
@@ -1702,10 +1711,14 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       <CustomBottomNav
         keyboardVisible={keyboardVisible}
         onAddPress={() => {
-          // For Employee role, navigate to CreatLog with Employee projectId
+          // For Employee role, navigate to CreatLog with projectId
           if (userRole === "Employee") {
-            const employeeProjectId = route.params?.["Employee projectId"] || null;
-            const navigationParams = employeeProjectId ? { "Employee projectId": employeeProjectId } : {};
+            // Employee should use the same project ID that was used to load the logs
+            // This could come from managerProjectId or any other project context
+            const projectId = route.params?.managerProjectId || route.params?.projectId || null;
+            console.log("ViewAllLogScreen - Employee FAB pressed, projectId:", projectId);
+            const navigationParams = projectId ? { projectId: projectId } : {};
+            console.log("ViewAllLogScreen - Employee navigating to CreatLog with params:", navigationParams);
             navigation.navigate("CreatLog", navigationParams);
             return;
           }

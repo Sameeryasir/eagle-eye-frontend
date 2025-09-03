@@ -609,7 +609,7 @@ function WidgetScreen({ navigation, route }) {
                       color: "#666",
                       fontWeight: "500",
                     }}>
-                      {formatDate(task.endTime)}
+                      {task.endTime ? formatDate(task.endTime) : "No End Date"}
                     </Text>
                   </View>
                 </View>
@@ -699,10 +699,11 @@ function WidgetScreen({ navigation, route }) {
           onPress={() => {
             if (logs.length > 0) {
               console.log("WidgetScreen - Navigating to ViewAllLogScreen with logs:", logs);
-              // Pass Manager project ID when user role is Manager
+              // Pass project ID for all user roles
               const navigationParams = { 
                 logs: logs,
-                managerProjectId: userRole === "Manager" ? (managerProjectId || projectId) : null
+                managerProjectId: userRole === "Manager" ? (managerProjectId || projectId) : null,
+                projectId: projectId  // Pass projectId for Employee and other roles
               };
               navigation.navigate("ViewAllLogScreen", navigationParams);
             }
@@ -900,23 +901,26 @@ function WidgetScreen({ navigation, route }) {
 
       <CustomBottomNav
         onAddPress={() => {
-          // Check if there are no logs and navigate to CreatLog (for Employee only)
-          if (logs.length === 0 && userRole === "Employee") {
-            navigation.navigate("CreatLog");
-            return;
-          }
-
-          // For Manager role, check if both widgets are empty and navigate to CreateTaskScreen
-          if (userRole === "Manager" && tasks.length === 0 && logs.length === 0) {
-            const navigationParams = { projectId: managerProjectId };
-            navigation.navigate("CreateTask", navigationParams);
-            return;
-          }
-
-          // If tasks are present but logs are empty, navigate to CreateLogScreen with project ID
-          if (tasks.length > 0 && logs.length === 0) {
-            const navigationParams = userRole === "Manager" ? { projectId: managerProjectId } : { projectId: projectId };
+          // --- FAB Navigation Logic Based on User Role and Widget States ---
+          
+          // For Employee role: If logs widget is empty, navigate to CreateLogScreen with projectId from params
+          if (userRole === "Employee" && logs.length === 0) {
+            const navigationParams = { projectId: projectId }; // Use projectId from route params
             navigation.navigate("CreatLog", navigationParams);
+            return;
+          }
+
+          // For Manager role: If logs widget is empty, navigate to CreateLogScreen with projectId from params
+          if (userRole === "Manager" && logs.length === 0) {
+            const navigationParams = { projectId: projectId }; // Use projectId from route params (not managerProjectId)
+            navigation.navigate("CreatLog", navigationParams);
+            return;
+          }
+
+          // For Manager role: If both widgets are empty, prioritize CreateTaskScreen
+          if (userRole === "Manager" && tasks.length === 0 && logs.length === 0) {
+            const navigationParams = { projectId: projectId }; // Use projectId from route params
+            navigation.navigate("CreateTask", navigationParams);
             return;
           }
 
