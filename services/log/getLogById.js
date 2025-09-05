@@ -16,21 +16,44 @@ export async function getLogById(logId) {
   }
 
   try {
-    const response = await axios.get(`${API_URL}/log/${logId}`, {
+    const apiUrl = `${API_URL}/log/singleLog/${logId}`;
+    console.log(`getLogById - Calling API: ${apiUrl}`);
+    const response = await axios.get(apiUrl, {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       }
     });
+    console.log(`getLogById - Response status: ${response.status}`);
+    console.log(`getLogById - Response data:`, response.data);
+    console.log(`getLogById - Response data type:`, typeof response.data);
+    console.log(`getLogById - Response data is array:`, Array.isArray(response.data));
+    
+    if (!response.data) {
+      throw new Error('No data received from server');
+    }
+    
+    // Handle case where API returns array instead of single object
+    if (Array.isArray(response.data)) {
+      if (response.data.length === 0) {
+        throw new Error('Log not found');
+      }
+      // Return the first log if it's an array
+      console.log(`getLogById - Returning first log from array:`, response.data[0]);
+      return response.data[0];
+    }
+    
     return response.data;
   } catch (err) {
     // Handle token refresh for 401 errors
     if (axios.isAxiosError(err) && err.response?.status === 401 && refreshTokenValue) {
       try {
         const newToken = await refreshToken(refreshTokenValue);
-        const retryResponse = await axios.get(`${API_URL}/log/${logId}`, {
+        const retryResponse = await axios.get(`${API_URL}/log/singleLog/${logId}`, {
           headers: { Authorization: `Bearer ${newToken}` },
         });
+        console.log(`getLogById - Retry response status: ${retryResponse.status}`);
+        console.log(`getLogById - Retry response data:`, retryResponse.data);
         return retryResponse.data;
       } catch (refreshErr) {
         // If refresh token also fails, throw the original error details

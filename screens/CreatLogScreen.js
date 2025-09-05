@@ -125,6 +125,7 @@ function CreatLogScreen({ navigation, route }) {
     };
   }, []);
 
+
   const loadLogData = async () => {
     try {
       setInitialLoading(true);
@@ -284,9 +285,21 @@ function CreatLogScreen({ navigation, route }) {
       console.log("📊 STATE UPDATED - Logs set to:", logsData.length, "items");
     } catch (err) {
       console.error("CreatLogScreen - Error loading log data:", err);
-      // --- Show actual backend error message instead of generic text ---
-      const errorMessage = err.response?.data?.message || err.message || "Failed to load log data";
-      setError(errorMessage);
+      console.error("CreatLogScreen - Error response:", err.response);
+      console.error("CreatLogScreen - Error response data:", err.response?.data);
+      
+      // --- Handle 400 Error for No Tasks ---
+      // Business Rule: If error status is 400, show specific message about log creation limits
+      if (err.statusCode === 400 || err.response?.status === 400) {
+        const errorMessage = err.message || err.response?.data?.message || "You can create one log per project in one day.";
+        console.error("CreatLogScreen - Setting 400 error message:", errorMessage);
+        setError(errorMessage);
+      } else {
+        // Use the actual error message from the backend for other errors
+        const errorMessage = err.response?.data?.message || err.message || "Failed to load log data";
+        console.error("CreatLogScreen - Setting error message:", errorMessage);
+        setError(errorMessage);
+      }
     } finally {
       setInitialLoading(false);
     }
@@ -326,7 +339,15 @@ function CreatLogScreen({ navigation, route }) {
       // Request permissions
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Please grant camera roll permissions to select images.');
+        // --- Show Error Toast Message ---
+        Toast.show({
+          type: 'error',
+          text1: 'Permission Required',
+          text2: 'Please grant camera roll permissions to select images',
+          visibilityTime: 4000,
+          autoHide: true,
+          topOffset: 80,
+        });  
         return;
       }
 
@@ -346,16 +367,44 @@ function CreatLogScreen({ navigation, route }) {
           name: asset.fileName || `image_${Date.now()}.jpg`,
         }));
         setSelectedImages(prev => [...prev, ...newImages]);
+        
+        // --- Show Success Toast Message ---
+        Toast.show({
+          type: 'success',
+          text1: 'Images Selected',
+          text2: `${newImages.length} image(s) added successfully`,
+          visibilityTime: 2000,
+          autoHide: true,
+          topOffset: 80,
+        });
       }
     } catch (error) {
       console.error('Error picking images:', error);
-      Alert.alert('Error', 'Failed to pick images. Please try again.');
+      // --- Show Error Toast Message ---
+      Toast.show({
+        type: 'error',
+        text1: 'Image Selection Failed',
+        text2: 'Failed to pick images. Please try again.',
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
     }
   };
 
   // --- Remove Image Function ---
   const removeImage = (imageId) => {
     setSelectedImages(prev => prev.filter(img => img.id !== imageId));
+    
+    // --- Show Info Toast Message ---
+    Toast.show({
+      type: 'info',
+      text1: 'Image Removed',
+      text2: 'Image has been removed from selection',
+      visibilityTime: 2000,
+      autoHide: true,
+      topOffset: 80,
+    });
   };
 
   const handleCreateLog = (task) => {
@@ -364,6 +413,16 @@ function CreatLogScreen({ navigation, route }) {
     setSelectedImages([]); // Reset images when opening modal
     setServiceError(null); // Clear any previous service errors
     setCreateLogModalVisible(true);
+    
+    // --- Show Info Toast Message ---
+    Toast.show({
+      type: 'info',
+      text1: 'Create Log',
+      text2: 'Fill in the details to create your log',
+      visibilityTime: 2000,
+      autoHide: true,
+      topOffset: 80,
+    });
   };
 
 
@@ -373,7 +432,15 @@ function CreatLogScreen({ navigation, route }) {
   const handleSubmitLog = async () => {
     // --- Validation ---
     if (!logNote.trim()) {
-      Alert.alert("Error", "Please enter a note for the log");
+      // --- Show Error Toast Message ---
+      Toast.show({
+        type: 'error',
+        text1: 'Validation Error',
+        text2: 'Please enter a note for the log',
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
       return;
     }
 
@@ -411,7 +478,17 @@ function CreatLogScreen({ navigation, route }) {
       }
 
       setServiceError(null); // Clear any previous errors
-      Alert.alert('Success', 'Log created successfully!');
+      
+      // --- Show Success Toast Message ---
+      Toast.show({
+        type: 'success',
+        text1: 'Log Created Successfully!',
+        text2: 'Your log has been saved and is now available',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
+      
       loadLogData();
 
     } catch (err) {
@@ -458,7 +535,15 @@ function CreatLogScreen({ navigation, route }) {
         console.log(`CreatLogScreen - Upload result: ${successful.length} successful, ${failed.length} failed`);
 
         if (failed.length > 0) {
-          Alert.alert("Partial Success", `Uploaded ${successful.length} image(s), ${failed.length} failed.`);
+          // --- Show Warning Toast Message ---
+          Toast.show({
+            type: 'warning',
+            text1: 'Partial Upload Success',
+            text2: `Uploaded ${successful.length} image(s), ${failed.length} failed.`,
+            visibilityTime: 4000,
+            autoHide: true,
+            topOffset: 80,
+          });
         }
       }
 
@@ -466,6 +551,16 @@ function CreatLogScreen({ navigation, route }) {
       console.error("CreatLogScreen - Image upload error:", error);
       const errorMessage = error.response?.data?.message || error.message || "Log created but image upload failed.";
       setServiceError(errorMessage);
+      
+      // --- Show Error Toast Message ---
+      Toast.show({
+        type: 'error',
+        text1: 'Image Upload Failed',
+        text2: 'Log created but images could not be uploaded',
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
     } finally {
       setIsUploadingImages(false);
     }
@@ -497,18 +592,42 @@ function CreatLogScreen({ navigation, route }) {
   const handleUpdate = (log) => {
     // Only allow updating logs if user is not an Employee
     if (userRole === "Employee") {
-      Alert.alert("Access Denied", "Employees cannot update logs.");
+      // --- Show Error Toast Message ---
+      Toast.show({
+        type: 'error',
+        text1: 'Access Denied',
+        text2: 'Employees cannot update logs',
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
       return;
     }
 
     // TODO: Implement log update functionality
-    Alert.alert("Update Log", "Log update functionality will be implemented soon.");
+    // --- Show Info Toast Message ---
+    Toast.show({
+      type: 'info',
+      text1: 'Coming Soon',
+      text2: 'Log update functionality will be implemented soon',
+      visibilityTime: 3000,
+      autoHide: true,
+      topOffset: 80,
+    });
   };
 
   const handleDelete = (log) => {
     // Only allow deleting logs if user is not an Employee
     if (userRole === "Employee") {
-      Alert.alert("Access Denied", "Employees cannot delete logs.");
+      // --- Show Error Toast Message ---
+      Toast.show({
+        type: 'error',
+        text1: 'Access Denied',
+        text2: 'Employees cannot delete logs',
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
       return;
     }
 
@@ -540,9 +659,15 @@ function CreatLogScreen({ navigation, route }) {
               setLogs(updatedLogs);
               setFilteredLogs(updatedFilteredLogs);
 
-              Alert.alert("Success", "Log deleted successfully!", [
-                { text: "OK" },
-              ]);
+              // --- Show Success Toast Message ---
+              Toast.show({
+                type: 'success',
+                text1: 'Log Deleted Successfully!',
+                text2: 'The log has been permanently removed',
+                visibilityTime: 3000,
+                autoHide: true,
+                topOffset: 80,
+              });
             } catch (error) {
               let errorMessage = "Failed to delete log. Please try again.";
               if (error.response?.data?.message) {
@@ -551,7 +676,15 @@ function CreatLogScreen({ navigation, route }) {
                 errorMessage = error.message;
               }
 
-              Alert.alert("Error", errorMessage, [{ text: "OK" }]);
+              // --- Show Error Toast Message ---
+              Toast.show({
+                type: 'error',
+                text1: 'Delete Failed',
+                text2: errorMessage,
+                visibilityTime: 4000,
+                autoHide: true,
+                topOffset: 80,
+              });
             }
           },
         },
@@ -559,10 +692,9 @@ function CreatLogScreen({ navigation, route }) {
     );
   };
 
-  const renderLogCard = React.useCallback((log, index) => {
+  const renderLogCard = (log, index) => {
     const isChecked = checkedTasks.has(log.id);
     const hasLog = log.hasLog;
-    console.log('Rendering log card:', log.id, 'isChecked:', isChecked, 'hasLog:', hasLog);
 
     return (
       <View>
@@ -573,26 +705,26 @@ function CreatLogScreen({ navigation, route }) {
             backgroundColor: hasLog ? '#e5e7eb' : (isChecked ? '#e5e7eb' : '#f8f9fa'),
             borderColor: '#e9ecef',
             borderWidth: 1,
-            padding: Math.min(16, screenWidth * 0.04),
-            borderRadius: Math.min(8, screenWidth * 0.02),
+            padding: 16,
+            borderRadius: 8,
             opacity: hasLog ? 0.6 : 1,
           }}
         >
           <View>
             <View className="flex-row justify-between items-center">
               <View className="flex-row items-center flex-1">
-                <View className="flex-row items-center mr-2" style={{ minWidth: Math.max(70, screenWidth * 0.17) }}>
+                <View className="flex-row items-center mr-2" style={{ minWidth: 70 }}>
                   <View style={{
                     backgroundColor: '#000000',
-                    borderRadius: Math.min(16, screenWidth * 0.04),
-                    width: Math.max(20, screenWidth * 0.05),
-                    height: Math.max(20, screenWidth * 0.05),
-                    marginRight: Math.min(8, screenWidth * 0.02),
+                    borderRadius: 16,
+                    width: 20,
+                    height: 20,
+                    marginRight: 8,
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}>
                     <Text style={{
-                      fontSize: Math.min(12, screenWidth * 0.03),
+                      fontSize: 12,
                       color: "white",
                       fontWeight: "700",
                     }}>
@@ -600,7 +732,7 @@ function CreatLogScreen({ navigation, route }) {
                     </Text>
                   </View>
                   <Text style={{
-                    fontSize: Math.min(15, screenWidth * 0.038),
+                    fontSize: 15,
                     color: "black",
                     fontWeight: "600",
                     letterSpacing: 0.3,
@@ -610,9 +742,9 @@ function CreatLogScreen({ navigation, route }) {
                 </View>
                 <Text style={{
                   flex: 1,
-                  fontSize: Math.min(15, screenWidth * 0.038),
+                  fontSize: 15,
                   color: "#333",
-                  lineHeight: Math.min(24, screenHeight * 0.03),
+                  lineHeight: 24,
                 }}>
                   {log.title}
                 </Text>
@@ -624,10 +756,10 @@ function CreatLogScreen({ navigation, route }) {
                 <Text
                   className="ml-3 text-center"
                   style={{
-                    fontSize: Math.min(12, screenWidth * 0.03),
+                    fontSize: 12,
                     color: '#6b7280',
                     fontWeight: '500',
-                    minWidth: Math.max(60, screenWidth * 0.15),
+                    minWidth: 60,
                   }}
                 >
                   Log Created
@@ -641,16 +773,16 @@ function CreatLogScreen({ navigation, route }) {
                     backgroundColor: isChecked ? '#000000' : 'white',
                     borderColor: isChecked ? '#000000' : '#6B7280',
                     borderWidth: 2,
-                    minWidth: Math.max(20, screenWidth * 0.05),
-                    minHeight: Math.max(20, screenWidth * 0.05),
-                    width: Math.max(20, screenWidth * 0.05),
-                    height: Math.max(20, screenWidth * 0.05),
+                    minWidth: 20,
+                    minHeight: 20,
+                    width: 20,
+                    height: 20,
                   }}
                 >
                   {isChecked && (
                     <Ionicons
                       name="checkmark"
-                      size={Math.min(16, screenWidth * 0.04)}
+                      size={16}
                       color="white"
                       style={{ fontWeight: 'bold' }}
                     />
@@ -662,7 +794,7 @@ function CreatLogScreen({ navigation, route }) {
         </View>
       </View>
     );
-  }, [userRole, navigation, checkedTasks, logs]);
+  };
 
   const renderContent = () => {
     console.log("🖥️ RENDERING CONTENT:");
@@ -679,60 +811,52 @@ function CreatLogScreen({ navigation, route }) {
           <>
             <FlatList
               data={filteredLogs}
-              keyExtractor={(item, index) => `task-${item.id}-${index}`}
+              keyExtractor={(item) => String(item.id)}
               renderItem={({ item, index }) => (
                 <View style={{ 
-                  marginBottom: Math.min(16, screenHeight * 0.02),
-                  paddingHorizontal: Math.min(20, screenWidth * 0.05),
+                  marginBottom: 16,
                 }}>
                   {renderLogCard(item, index)}
                 </View>
               )}
-              showsVerticalScrollIndicator={false}
-              bounces={false}
-              removeClippedSubviews={true}
-              scrollEventThrottle={16}
+              contentContainerStyle={{ 
+                paddingHorizontal: 20, 
+                paddingBottom: 140 
+              }}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
-              maxToRenderPerBatch={10}
-              windowSize={10}
-              initialNumToRender={5}
-              contentContainerStyle={{
-                paddingBottom: Math.min(140, screenHeight * 0.175), // Padding to clear CustomBottomNav
-              }}
               ListHeaderComponent={() => (
                 /* --- Select Tasks Header --- */
                 <View style={{
-                  marginBottom: Math.min(24, screenHeight * 0.03),
-                  paddingBottom: Math.min(16, screenHeight * 0.02),
-                  paddingHorizontal: Math.min(20, screenWidth * 0.05),
-                  paddingTop: Math.min(20, screenHeight * 0.025),
+                  marginBottom: 24,
+                  paddingBottom: 16,
+                  paddingTop: 20,
                 }}>
                   <Text style={{
-                    fontSize: Math.min(24, screenWidth * 0.06),
+                    fontSize: 24,
                     fontWeight: '700',
                     color: '#111827',
-                    marginBottom: Math.min(8, screenHeight * 0.01),
+                    marginBottom: 8,
                     textAlign: 'center',
                   }}>
-                    Select Tasks
+                    Select Tasks ({filteredLogs.length})
                   </Text>
                 </View>
               )}
               ListFooterComponent={() => (
                 /* --- Create Log Button Section --- */
                 <View style={{
-                  paddingVertical: Math.min(16, screenHeight * 0.02),
-                  marginTop: Math.min(16, screenHeight * 0.02),
-                  marginBottom: Math.min(20, screenHeight * 0.025),
+                  paddingVertical: 16,
+                  marginTop: 16,
+                  marginBottom: 20,
                 }}>
                   <TouchableOpacity
                     style={{
-                      minWidth: Math.max(200, screenWidth * 0.5),
+                      minWidth: 200,
                       backgroundColor: checkedTasks.size > 0 ? 'black' : '#E5E7EB',
-                      borderRadius: Math.min(12, screenWidth * 0.03),
-                      paddingVertical: Math.min(16, screenHeight * 0.02),
-                      paddingHorizontal: Math.min(24, screenWidth * 0.06),
+                      borderRadius: 12,
+                      paddingVertical: 16,
+                      paddingHorizontal: 24,
                       alignItems: 'center',
                       justifyContent: 'center',
                       alignSelf: 'center',
@@ -756,7 +880,7 @@ function CreatLogScreen({ navigation, route }) {
                   >
                     <Text style={{
                       color: checkedTasks.size > 0 ? 'white' : '#9CA3AF',
-                      fontSize: Math.min(16, screenWidth * 0.04),
+                      fontSize: 16,
                       fontWeight: '600',
                     }}>
                       Create Log {checkedTasks.size > 1 ? `(${checkedTasks.size} selected)` : ''}
@@ -764,150 +888,40 @@ function CreatLogScreen({ navigation, route }) {
                   </TouchableOpacity>
                 </View>
               )}
-              ListEmptyComponent={() => (
-                /* --- Empty State Section --- */
-                <View style={{
-                  flex: 1,
-                  justifyContent: "flex-start",
-                  alignItems: "center",
-                  padding: Math.min(20, screenWidth * 0.05),
-                  minHeight: Math.min(400, screenHeight * 0.5),
-                  paddingTop: Math.min(100, screenHeight * 0.15),
-                }}>
-                  {error ? (
-                    <>
-                      {/* Check if it's the "log already exists" error */}
-                      {error.includes("You can only create one log per day") || error.includes("A log already exists for today") ? (
-                        <>
-                          <Ionicons
-                            name="checkmark-circle"
-                            size={Math.min(64, screenWidth * 0.16)}
-                            color="#10B981"
-                            style={{ marginBottom: Math.min(16, screenHeight * 0.02) }}
-                          />
-                          <Text style={{
-                            fontSize: Math.min(18, screenWidth * 0.045),
-                            color: "#10B981",
-                            textAlign: "center",
-                            fontWeight: "600",
-                            marginBottom: Math.min(8, screenHeight * 0.01),
-                          }}>
-                            Log Already Created
-                          </Text>
-                          <Text style={{
-                            fontSize: Math.min(14, screenWidth * 0.035),
-                            color: "#6B7280",
-                            textAlign: "center",
-                            fontWeight: "400",
-                          }}>
-                            You have already created a log for today
-                          </Text>
-                        </>
-                      ) : (
-                        <>
-                          <Ionicons
-                            name="alert-circle-outline"
-                            size={Math.min(64, screenWidth * 0.16)}
-                            color="#dc3545"
-                            style={{ marginBottom: Math.min(16, screenHeight * 0.02) }}
-                          />
-                          <Text style={{
-                            fontSize: Math.min(16, screenWidth * 0.04),
-                            color: "#dc3545",
-                            textAlign: "center",
-                            fontWeight: "500",
-                            marginBottom: Math.min(16, screenHeight * 0.02),
-                          }}>
-                            {error}
-                          </Text>
-                        </>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <Ionicons
-                        name="document-text-outline"
-                        size={Math.min(64, screenWidth * 0.16)}
-                        color="#ccc"
-                        style={{ marginBottom: Math.min(16, screenHeight * 0.02) }}
-                      />
-                      <Text style={{
-                        fontSize: Math.min(18, screenWidth * 0.045),
-                        color: "#666",
-                        textAlign: "center",
-                        fontWeight: "600",
-                        marginBottom: Math.min(8, screenHeight * 0.01),
-                      }}>
-                        No tasks for today
-                      </Text>
-                      <Text style={{
-                        fontSize: Math.min(14, screenWidth * 0.035),
-                        color: "#999",
-                        textAlign: "center",
-                        fontWeight: "400",
-                      }}>
-                        Tasks will appear here once assigned
-                      </Text>
-                    </>
-                  )}
-                </View>
-              )}
             />
           </>
         ) : (
-          /* --- Empty State Section --- */
+          /* --- Empty State Section - Show when task length is 0 --- */
           <View style={{
             flex: 1,
-            justifyContent: "center",
+            justifyContent: "flex-start",
             alignItems: "center",
             padding: Math.min(20, screenWidth * 0.05),
-            minHeight: Math.min(400, screenHeight * 0.5),
+            paddingTop: Math.min(120, screenHeight * 0.15),
           }}>
-            {error ? (
-              <>
-                <Ionicons
-                  name="alert-circle-outline"
-                  size={Math.min(64, screenWidth * 0.16)}
-                  color="#dc3545"
-                  style={{ marginBottom: Math.min(16, screenHeight * 0.02) }}
-                />
-                <Text style={{
-                  fontSize: Math.min(16, screenWidth * 0.04),
-                  color: "#dc3545",
-                  textAlign: "center",
-                  fontWeight: "500",
-                  marginBottom: Math.min(16, screenHeight * 0.02),
-                }}>
-                  {error}
-                </Text>
-              </>
-            ) : (
-              <>
-                <Ionicons
-                  name="document-text-outline"
-                  size={Math.min(64, screenWidth * 0.16)}
-                  color="#ccc"
-                  style={{ marginBottom: Math.min(16, screenHeight * 0.02) }}
-                />
-                <Text style={{
-                  fontSize: Math.min(18, screenWidth * 0.045),
-                  color: "#666",
-                  textAlign: "center",
-                  fontWeight: "600",
-                  marginBottom: Math.min(8, screenHeight * 0.01),
-                }}>
-                  No tasks for today
-                </Text>
-                <Text style={{
-                  fontSize: Math.min(14, screenWidth * 0.035),
-                  color: "#999",
-                  textAlign: "center",
-                  fontWeight: "400",
-                }}>
-                  Tasks will appear here once assigned
-                </Text>
-              </>
-            )}
+            <Ionicons
+              name="document-text-outline"
+              size={Math.min(64, screenWidth * 0.16)}
+              color="#ccc"
+              style={{ marginBottom: Math.min(16, screenHeight * 0.02) }}
+            />
+            <Text style={{
+              fontSize: Math.min(18, screenWidth * 0.045),
+              color: "#666",
+              textAlign: "center",
+              fontWeight: "600",
+              marginBottom: Math.min(8, screenHeight * 0.01),
+            }}>
+              {error ? "Log Creation Limit" : "No tasks for today"}
+            </Text>
+            <Text style={{
+              fontSize: Math.min(14, screenWidth * 0.035),
+              color: "#999",
+              textAlign: "center",
+              fontWeight: "400",
+            }}>
+              {error || "Tasks will appear here once assigned"}
+            </Text>
           </View>
         )}
       </View>

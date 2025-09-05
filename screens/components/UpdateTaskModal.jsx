@@ -12,6 +12,7 @@ import {
   TouchableWithoutFeedback,
   FlatList,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import DropDownPicker from "react-native-dropdown-picker";
@@ -234,18 +235,39 @@ export default function UpdateTaskModal({
   const handleUpdateTask = async () => {
     // Validate required fields
     if (!taskData.title.trim()) {
-      Alert.alert('Error', 'Task title is required');
+      Toast.show({
+        type: 'error',
+        text1: 'Validation Error',
+        text2: 'Task title is required',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
       return;
     }
 
     if (!taskData.description.trim()) {
-      Alert.alert('Error', 'Task description is required');
+      Toast.show({
+        type: 'error',
+        text1: 'Validation Error',
+        text2: 'Task description is required',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
       return;
     }
 
     // Validate that task ID is available
     if (!task?.id) {
-      Alert.alert('Error', 'Task ID is required to update a task');
+      Toast.show({
+        type: 'error',
+        text1: 'Validation Error',
+        text2: 'Task ID is required to update a task',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
       return;
     }
 
@@ -308,7 +330,14 @@ export default function UpdateTaskModal({
     const hasChanges = Object.keys(taskPayload).length > 0;
 
     if (!hasChanges) {
-      Alert.alert('No Changes', 'No changes were made to the task.');
+      Toast.show({
+        type: 'info',
+        text1: 'No Changes',
+        text2: 'No changes were made to the task',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
       return;
     }
 
@@ -320,19 +349,21 @@ export default function UpdateTaskModal({
     try {
       const response = await updateTask(task.id, taskPayload);
       
-      Alert.alert(
-        'Success',
-        'Task updated successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              onClose();
-              if (onSuccess) onSuccess();
-            }
-          }
-        ]
-      );
+      // --- Show Success Toast Message ---
+      Toast.show({
+        type: 'success',
+        text1: 'Task Updated Successfully!',
+        text2: 'Your task changes have been saved',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
+      
+      // Close modal after a short delay to allow toast to be visible
+      setTimeout(() => {
+        onClose();
+        if (onSuccess) onSuccess();
+      }, 1000);
     } catch (error) {
       console.error('Error updating task:', error);
       
@@ -350,27 +381,24 @@ export default function UpdateTaskModal({
         errorMessage = String(error.message);
       }
       
-      Alert.alert('Error', errorMessage);
+      // --- Show Error Toast Message ---
+      Toast.show({
+        type: 'error',
+        text1: 'Update Failed',
+        text2: errorMessage,
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleCancel = () => {
-    Alert.alert(
-      'Cancel',
-      'Are you sure you want to cancel? All changes will be lost.',
-      [
-        {
-          text: 'No',
-          style: 'cancel'
-        },
-        {
-          text: 'Yes',
-          onPress: () => onClose()
-        }
-      ]
-    );
+    // Simply close the modal without confirmation dialog
+    // Users can use the X button if they want to cancel
+    onClose();
   };
 
   const dismissKeyboard = () => {

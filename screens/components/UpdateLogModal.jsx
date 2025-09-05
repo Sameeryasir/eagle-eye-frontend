@@ -14,6 +14,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
 } from "react-native";
+import Toast from 'react-native-toast-message';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 import { Ionicons } from "@expo/vector-icons";
@@ -48,6 +49,7 @@ const UpdateLogModal = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingImages, setIsUploadingImages] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [noChangesDialogVisible, setNoChangesDialogVisible] = useState(false);
 
   // --- Initialize Modal Data ---
   useEffect(() => {
@@ -67,11 +69,24 @@ const UpdateLogModal = ({
 
     if (visible && log) {
       console.log("UpdateLogModal - Initializing with log:", log);
+      console.log("UpdateLogModal - log.description:", log.description);
+      console.log("UpdateLogModal - log.note:", log.note);
+      console.log("UpdateLogModal - log.images:", log.images);
+      
       // Pre-fill existing data
-      setLogNote(log.description || log.note || "");
+      const noteText = log.description || log.note || "";
+      console.log("UpdateLogModal - Setting logNote to:", noteText);
+      setLogNote(noteText);
       setExistingImages(log.images || []);
       setSelectedImage(null); // Reset selected image when modal opens
       setRemovedImageId(null); // Reset removed image ID when modal opens
+    } else if (!visible) {
+      // Reset form when modal is closed
+      console.log("UpdateLogModal - Modal closed, resetting form");
+      setLogNote("");
+      setExistingImages([]);
+      setSelectedImage(null);
+      setRemovedImageId(null);
     }
 
     // Cleanup listeners
@@ -87,7 +102,14 @@ const UpdateLogModal = ({
       // Request permissions
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Please grant camera roll permissions to select images.');
+        Toast.show({
+          type: 'error',
+          text1: 'Permission Needed',
+          text2: 'Please grant camera roll permissions to select images',
+          visibilityTime: 3000,
+          autoHide: true,
+          topOffset: 80,
+        });
         return;
       }
 
@@ -111,7 +133,14 @@ const UpdateLogModal = ({
       }
     } catch (error) {
       console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image. Please try again.');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to pick image. Please try again.',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
     }
   };
 
@@ -133,7 +162,14 @@ const UpdateLogModal = ({
   const handleUpdateLog = async () => {
     // --- Validation Step ---
     if (!logNote.trim()) {
-      Alert.alert("Error", "Please enter a note for the log");
+      Toast.show({
+        type: 'error',
+        text1: 'Validation Error',
+        text2: 'Please enter a note for the log',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
       return;
     }
 
@@ -146,9 +182,9 @@ const UpdateLogModal = ({
       const hasNoteChange = currentNote !== newNote;
       const hasNewImage = selectedImage !== null;
       
-      // If no changes detected, show message and stay in modal
+      // If no changes detected, show custom dialog and stay in modal
       if (!hasNoteChange && !hasNewImage && !removedImageId) {
-        Alert.alert("Info", "No changes detected");
+        setNoChangesDialogVisible(true);
         return;
       }
       
@@ -177,13 +213,34 @@ const UpdateLogModal = ({
       
 
       
-      Alert.alert('Success', 'Log updated successfully!');
-      onClose();
+      // --- Show Success Toast Message ---
+      Toast.show({
+        type: 'success',
+        text1: 'Log Updated Successfully!',
+        text2: 'Your log changes have been saved',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
+      
+      // Close modal after a short delay to allow toast to be visible
+      setTimeout(() => {
+        onClose();
+      }, 1000);
 
     } catch (err) {
       console.error("UpdateLogModal - Error updating log:", err);
       const errorMessage = err.response?.data?.message || err.message || "Failed to update log. Please try again.";
-      Alert.alert("Error", errorMessage);
+      
+      // --- Show Error Toast Message ---
+      Toast.show({
+        type: 'error',
+        text1: 'Update Failed',
+        text2: errorMessage,
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -213,10 +270,24 @@ const UpdateLogModal = ({
         try {
           const response = await updateImageById(removedImageId, formData);
           console.log(`UpdateLogModal - Successfully updated image ${removedImageId}:`, response);
-          Alert.alert("Success", "Image replaced successfully!");
+          Toast.show({
+            type: 'success',
+            text1: 'Image Replaced Successfully!',
+            text2: 'The image has been updated',
+            visibilityTime: 3000,
+            autoHide: true,
+            topOffset: 80,
+          });
         } catch (error) {
           console.error(`UpdateLogModal - Failed to update image ${removedImageId}:`, error);
-          Alert.alert("Error", "Failed to replace image. Please try again.");
+          Toast.show({
+            type: 'error',
+            text1: 'Image Replace Failed',
+            text2: 'Failed to replace image. Please try again.',
+            visibilityTime: 4000,
+            autoHide: true,
+            topOffset: 80,
+          });
         }
         
       } else if (selectedImage) {
@@ -245,7 +316,14 @@ const UpdateLogModal = ({
           console.log(`UpdateLogModal - Upload result: ${successful.length} successful, ${failed.length} failed`);
           
           if (failed.length > 0) {
-            Alert.alert("Partial Success", `Uploaded ${successful.length} image(s), ${failed.length} failed.`);
+            Toast.show({
+              type: 'warning',
+              text1: 'Partial Success',
+              text2: `Uploaded ${successful.length} image(s), ${failed.length} failed.`,
+              visibilityTime: 4000,
+              autoHide: true,
+              topOffset: 80,
+            });
           } else {
             console.log("UpdateLogModal - Image uploaded successfully");
           }
@@ -254,7 +332,14 @@ const UpdateLogModal = ({
       
     } catch (error) {
       console.error("UpdateLogModal - Image upload error:", error);
-      Alert.alert("Warning", "Log updated but new image upload failed.");
+      Toast.show({
+        type: 'warning',
+        text1: 'Warning',
+        text2: 'Log updated but new image upload failed.',
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
     } finally {
       setIsUploadingImages(false);
     }
@@ -313,10 +398,17 @@ const UpdateLogModal = ({
     Keyboard.dismiss();
   };
 
+  // --- Close No Changes Dialog ---
+  const closeNoChangesDialog = () => {
+    setNoChangesDialogVisible(false);
+  };
+
   // Debug logging
   console.log("UpdateLogModal render - visible:", visible);
   console.log("UpdateLogModal render - log:", log);
   console.log("UpdateLogModal render - userRole:", userRole);
+  console.log("UpdateLogModal render - logNote state:", logNote);
+  console.log("UpdateLogModal render - existingImages state:", existingImages);
   
   if (!log) {
     console.log("UpdateLogModal - no log provided, returning null");
@@ -466,6 +558,93 @@ const UpdateLogModal = ({
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* --- No Changes Dialog --- */}
+      <Modal
+        visible={noChangesDialogVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeNoChangesDialog}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingHorizontal: 20,
+        }}>
+          <View style={{
+            backgroundColor: 'white',
+            borderRadius: 16,
+            padding: 24,
+            alignItems: 'center',
+            maxWidth: 320,
+            width: '100%',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 8,
+            elevation: 8,
+          }}>
+            {/* Icon */}
+            <View style={{
+              width: 60,
+              height: 60,
+              borderRadius: 30,
+              backgroundColor: '#FEF3C7',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 16,
+            }}>
+              <Ionicons name="information-circle" size={32} color="#F59E0B" />
+            </View>
+
+            {/* Title */}
+            <Text style={{
+              fontSize: 20,
+              fontWeight: '600',
+              color: '#1F2937',
+              marginBottom: 8,
+              textAlign: 'center',
+            }}>
+              No Changes Made
+            </Text>
+
+            {/* Message */}
+            <Text style={{
+              fontSize: 16,
+              color: '#6B7280',
+              textAlign: 'center',
+              lineHeight: 22,
+              marginBottom: 24,
+            }}>
+              No changes were made to the log. Please make some changes before updating.
+            </Text>
+
+            {/* OK Button */}
+            <TouchableOpacity
+              onPress={closeNoChangesDialog}
+              style={{
+                backgroundColor: '#000000',
+                paddingHorizontal: 32,
+                paddingVertical: 12,
+                borderRadius: 8,
+                minWidth: 120,
+                alignItems: 'center',
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={{
+                color: 'white',
+                fontSize: 16,
+                fontWeight: '600',
+              }}>
+                OK
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 };

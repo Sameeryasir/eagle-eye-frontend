@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { updateTask } from '../services/tasks/updateTaskById';
+import Toast from 'react-native-toast-message';
 
 function UpdateTaskScreen({ navigation, route }) {
   const [taskData, setTaskData] = useState({

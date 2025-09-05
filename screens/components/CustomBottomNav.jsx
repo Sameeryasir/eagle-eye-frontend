@@ -53,10 +53,10 @@ export default function CustomBottomNav({
     setActiveTab("home");
     const userRole = await getUserRole();
 
-    if (userRole === "Owner" || userRole === "Admin") {
+    if (userRole === "Owner" || userRole === "Admin" || userRole === "Manager" || userRole === "Employee") {
       navigation.navigate("HomeScreen");
     } else {
-      // For Manager and Employee roles
+      // For any other roles
       navigation.navigate("WidgetScreen");
     }
   };

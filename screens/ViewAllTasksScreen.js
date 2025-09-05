@@ -14,7 +14,9 @@ import {
   ScrollView,
   RefreshControl,
   Dimensions,
+  Modal,
 } from "react-native";
+import Toast from 'react-native-toast-message';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -154,6 +156,8 @@ function ViewAllTasksScreen({ navigation, route }) {
   ]);
   const [userRole, setUserRole] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState(null);
 
   // Filter Modal State
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -451,7 +455,15 @@ function ViewAllTasksScreen({ navigation, route }) {
       // Reload the tasks to show the newly created task
       await loadProjectData();
 
-      Alert.alert("Success", "Task created successfully!", [{ text: "OK" }]);
+      // --- Show Success Toast Message ---
+      Toast.show({
+        type: 'success',
+        text1: 'Task Created Successfully!',
+        text2: 'Your new task has been added to the project',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
     } catch (error) {
       console.error("Error creating task:", error);
 
@@ -469,7 +481,15 @@ function ViewAllTasksScreen({ navigation, route }) {
         errorMessage = String(error.message);
       }
 
-      Alert.alert("Error", errorMessage);
+      // --- Show Error Toast Message ---
+      Toast.show({
+        type: 'error',
+        text1: 'Task Creation Failed',
+        text2: errorMessage,
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
     } finally {
       setCreatingTaskId(null);
     }
@@ -490,15 +510,38 @@ function ViewAllTasksScreen({ navigation, route }) {
       let response;
 
       if (role === "Employee") {
-        // For employees, get tasks assigned to them
+        // For employees, get tasks by project ID (same as other roles)
         console.log(
-          "ViewAllTasksScreen - Calling getTasksAssignedToEmployees for Employee"
+          "ViewAllTasksScreen - Calling getTaskByProjectId for Employee with projectId:",
+          projectId
         );
-        response = await getTasksAssignedToEmployees();
+        
+        // Validate projectId before making API call
+        if (!projectId) {
+          console.error("ViewAllTasksScreen - No projectId provided for Employee");
+          setError("Project ID is required");
+          return;
+        }
+        
+        response = await getTaskByProjectId(projectId);
         console.log("ViewAllTasksScreen - Employee tasks response:", response);
-        setProject({ name: "My Tasks" });
-        setTasks(response || []);
-        setFilteredTasks(response || []);
+        
+        if (response && response.project) {
+          setProject(response.project);
+        } else if (response) {
+          setProject(response);
+        }
+        
+        if (response && response.tasks) {
+          setTasks(response.tasks);
+          setFilteredTasks(response.tasks);
+        } else if (response && Array.isArray(response)) {
+          setTasks(response);
+          setFilteredTasks(response);
+        } else {
+          setTasks([]);
+          setFilteredTasks([]);
+        }
       } else {
         // For other roles, get tasks by project ID
         console.log(
@@ -653,7 +696,15 @@ function ViewAllTasksScreen({ navigation, route }) {
   const handleDelete = (task) => {
     // Only allow deleting tasks if user is not an Employee
     if (userRole === "Employee") {
-      Alert.alert("Access Denied", "Employees cannot delete tasks.");
+      // --- Show Access Denied Toast Message ---
+      Toast.show({
+        type: 'error',
+        text1: 'Access Denied',
+        text2: 'Employees cannot delete tasks',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
       return;
     }
 
@@ -664,43 +715,64 @@ function ViewAllTasksScreen({ navigation, route }) {
       return;
     }
 
-    Alert.alert(
-      "Delete Task",
-      `Are you sure you want to delete "${taskTitle}" permanently? This action is not reversible.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteTaskById(taskId);
+    // Show beautiful custom dialog instead of Alert
+    setTaskToDelete(task);
+    setDeleteDialogVisible(true);
+  };
 
-              const updatedTasks = tasks.filter((task) => task.id !== taskId);
-              const updatedFilteredTasks = filteredTasks.filter(
-                (task) => task.id !== taskId
-              );
+  const confirmDelete = async () => {
+    if (!taskToDelete) return;
 
-              setTasks(updatedTasks);
-              setFilteredTasks(updatedFilteredTasks);
+    const taskId = taskToDelete.id;
+    const taskTitle = taskToDelete.title;
 
-              Alert.alert("Success", "Task deleted successfully!", [
-                { text: "OK" },
-              ]);
-            } catch (error) {
-              let errorMessage = "Failed to delete task. Please try again.";
-              if (error.response?.data?.message) {
-                errorMessage = error.response.data.message;
-              } else if (error.message) {
-                errorMessage = error.message;
-              }
+    // Close dialog immediately when delete button is tapped
+    setDeleteDialogVisible(false);
+    setTaskToDelete(null);
 
-              Alert.alert("Error", errorMessage, [{ text: "OK" }]);
-            }
-          },
-        },
-      ]
-    );
+    try {
+      await deleteTaskById(taskId);
+
+      const updatedTasks = tasks.filter((task) => task.id !== taskId);
+      const updatedFilteredTasks = filteredTasks.filter(
+        (task) => task.id !== taskId
+      );
+
+      setTasks(updatedTasks);
+      setFilteredTasks(updatedFilteredTasks);
+
+      // --- Show Success Toast Message ---
+      Toast.show({
+        type: 'success',
+        text1: 'Task Deleted Successfully!',
+        text2: 'The task has been permanently removed',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
+    } catch (error) {
+      let errorMessage = "Failed to delete task. Please try again.";
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      // --- Show Error Toast Message ---
+      Toast.show({
+        type: 'error',
+        text1: 'Delete Failed',
+        text2: errorMessage,
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
+    }
+  };
+
+  const cancelDelete = () => {
+    setDeleteDialogVisible(false);
+    setTaskToDelete(null);
   };
 
   const handleUpdateTaskSuccess = () => {
@@ -722,13 +794,20 @@ function ViewAllTasksScreen({ navigation, route }) {
       setError(null);
 
       // --- Apply Filters Based on User Role (MCP Context 7) ---
-      // Business Rule: Different filtering logic for Employees vs other roles
+      // Business Rule: All roles now use the same filtering logic with projectId
       if (userRole === "Employee") {
-        // For employees, get all assigned tasks first, then apply client-side filtering
-        const allAssignedTasks = await getTasksAssignedToEmployees();
-        const filteredTasks = applyClientSideFilters(allAssignedTasks || [], filters);
-        setTasks(filteredTasks);
-        setFilteredTasks(filteredTasks);
+        // For employees, use the same filtering logic as other roles with projectId
+        if (!projectId) {
+          console.error('ViewAllTasksScreen - No projectId available for Employee filtering');
+          setError('Project ID is required for filtering');
+          return;
+        }
+        
+        const backendFilteredTasks = await filterTask(filters, projectId);
+        const fullyFilteredTasks = applyClientSideFilters(backendFilteredTasks || [], filters);
+        
+        setTasks(fullyFilteredTasks);
+        setFilteredTasks(fullyFilteredTasks);
       } else {
         // Check if FilterModal already provided filtered tasks
         if (preFilteredTasks) {
@@ -1447,6 +1526,133 @@ function ViewAllTasksScreen({ navigation, route }) {
         userRole={userRole}
         projectId={projectId}
       />
+
+      {/* Beautiful Delete Confirmation Dialog */}
+      <Modal
+        visible={deleteDialogVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={cancelDelete}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingHorizontal: 20,
+        }}>
+          <View style={{
+            backgroundColor: 'white',
+            borderRadius: 16,
+            padding: 20,
+            width: '100%',
+            maxWidth: 320,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.2,
+            shadowRadius: 16,
+            elevation: 8,
+          }}>
+            {/* Warning Icon */}
+            <View style={{
+              alignItems: 'center',
+              marginBottom: 16,
+            }}>
+              <View style={{
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor: '#FEF2F2',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 12,
+              }}>
+                <Ionicons name="warning" size={24} color="#EF4444" />
+              </View>
+              <Text style={{
+                fontSize: 18,
+                fontWeight: 'bold',
+                color: '#1F2937',
+                textAlign: 'center',
+                marginBottom: 4,
+              }}>
+                Delete Task
+              </Text>
+            </View>
+
+            {/* Message */}
+            <Text style={{
+              fontSize: 15,
+              color: '#6B7280',
+              textAlign: 'center',
+              lineHeight: 22,
+              marginBottom: 16,
+            }}>
+              Are you sure you want to delete{' '}
+              <Text style={{ fontWeight: '600', color: '#1F2937' }}>
+                "{taskToDelete?.title}"
+              </Text>
+              {' '}permanently?
+            </Text>
+            
+            <Text style={{
+              fontSize: 13,
+              color: '#EF4444',
+              textAlign: 'center',
+              fontWeight: '500',
+              marginBottom: 20,
+            }}>
+              This action cannot be undone.
+            </Text>
+
+            {/* Action Buttons */}
+            <View style={{
+              flexDirection: 'row',
+              gap: 10,
+            }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  backgroundColor: '#F3F4F6',
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                }}
+                onPress={cancelDelete}
+                activeOpacity={0.8}
+              >
+                <Text style={{
+                  fontSize: 15,
+                  fontWeight: '600',
+                  color: '#374151',
+                }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  backgroundColor: '#EF4444',
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                }}
+                onPress={confirmDelete}
+                activeOpacity={0.8}
+              >
+                <Text style={{
+                  fontSize: 15,
+                  fontWeight: '600',
+                  color: 'white',
+                }}>
+                  Delete
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

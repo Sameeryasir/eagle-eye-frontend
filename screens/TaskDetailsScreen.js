@@ -11,6 +11,7 @@ import {
   TextInput,
   ActivityIndicator,
   RefreshControl,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -46,6 +47,8 @@ function TaskDetailsScreen({ navigation, route }) {
   const [assigningTask, setAssigningTask] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState(null);
 
   // Responsive spacing calculations
   const isLargeScreen = screenHeight > 800;
@@ -165,54 +168,65 @@ function TaskDetailsScreen({ navigation, route }) {
   };
 
   const handleDelete = () => {
-    Alert.alert(
-      "Delete Task",
-      "Are you sure you want to delete this task?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              if (!currentTask?.id) return;
-              await deleteTaskById(currentTask.id);
-              Alert.alert(
-                "Success",
-                "Task deleted successfully!",
-                [
-                  {
-                    text: "OK",
-                    onPress: () => {
-                      // Get projectId from current task or route param
-                      const projId = currentTask?.project?.id || currentTask?.projectId || projectId;
+    // Show beautiful custom dialog instead of Alert
+    setTaskToDelete(currentTask);
+    setDeleteDialogVisible(true);
+  };
 
-                      if (projId) {
-                        // Navigate back to ViewAllTasksScreen with projectId
-                        navigation.navigate('ViewAllTasksScreen', { projectId: projId });
-                      } else {
-                        // Fallback: go back to previous screen
-                        navigation.goBack();
-                      }
-                    }
-                  }
-                ]
-              );
-            } catch (error) {
-              console.error('Error deleting task:', error);
-              Alert.alert(
-                "Error",
-                "Failed to delete task. Please try again.",
-                [{ text: "OK" }]
-              );
-            }
-          }
+  const confirmDelete = async () => {
+    if (!taskToDelete) return;
+
+    const taskId = taskToDelete.id;
+    const taskTitle = taskToDelete.title;
+
+    // Close dialog immediately when delete button is tapped
+    setDeleteDialogVisible(false);
+    setTaskToDelete(null);
+
+    try {
+      await deleteTaskById(taskId);
+      
+      // --- Show Success Toast Message ---
+      Toast.show({
+        type: 'success',
+        text1: 'Task Deleted Successfully!',
+        text2: `"${taskTitle}" has been permanently deleted`,
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
+
+      // Navigate back after a short delay to allow toast to be visible
+      setTimeout(() => {
+        // Get projectId from current task or route param
+        const projId = taskToDelete?.project?.id || taskToDelete?.projectId || projectId;
+
+        if (projId) {
+          // Navigate back to ViewAllTasksScreen with projectId
+          navigation.navigate('ViewAllTasksScreen', { projectId: projId });
+        } else {
+          // Fallback: go back to previous screen
+          navigation.goBack();
         }
-      ]
-    );
+      }, 1000);
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      
+      // --- Show Error Toast Message ---
+      Toast.show({
+        type: 'error',
+        text1: 'Delete Failed',
+        text2: 'Failed to delete task. Please try again.',
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
+    }
+  };
+
+  const cancelDelete = () => {
+    setDeleteDialogVisible(false);
+    setTaskToDelete(null);
   };
 
   // --- Assignment Dropdown Functions ---
@@ -397,8 +411,8 @@ function TaskDetailsScreen({ navigation, route }) {
         <View className="flex-1 justify-center items-center">
           <Text className="text-[16px] text-[#666]">Loading Task details...</Text>
         </View>
-        {/* Show CustomBottomNav during loading - Hide if modal is visible */}
-        {!showUpdateModal && <CustomBottomNav navigation={navigation} />}
+        {/* Show CustomBottomNav during loading */}
+        <CustomBottomNav navigation={navigation} />
       </View>
     );
   }
@@ -434,8 +448,6 @@ function TaskDetailsScreen({ navigation, route }) {
     }}>
       <View className="flex-1 bg-gray-100">
         <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
-        
-
 
         <ScrollView 
           className="flex-1" 
@@ -457,11 +469,7 @@ function TaskDetailsScreen({ navigation, route }) {
           }
         >
           {/* Task Title Card */}
-          <View 
-            style={{ marginHorizontal: 24, marginBottom: cardSpacing }}
-            onStartShouldSetResponder={() => true}
-            onMoveShouldSetResponder={() => true}
-          >
+          <View style={{ marginHorizontal: 24, marginBottom: cardSpacing }}>
             <View style={{
               backgroundColor: 'white',
               borderRadius: 16,
@@ -472,30 +480,8 @@ function TaskDetailsScreen({ navigation, route }) {
               shadowRadius: 2,
               elevation: 2,
               borderWidth: 1,
-              borderColor: '#f3f4f6',
-              position: 'relative'
+              borderColor: '#f3f4f6'
             }}>
-              {/* --- Loading Indicator on Card --- */}
-              {loading && currentTask && (
-                <View style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: 4,
-                  backgroundColor: '#E5E7EB',
-                  borderTopLeftRadius: 16,
-                  borderTopRightRadius: 16,
-                  overflow: 'hidden'
-                }}>
-                  <View style={{
-                    height: '100%',
-                    backgroundColor: '#3155A1',
-                    width: '60%',
-                    borderRadius: 2,
-                  }} />
-                </View>
-              )}
               <View className="flex-row items-center mb-4">
                 <View className="w-12 h-12 rounded-xl bg-blue-100 items-center justify-center mr-4">
                   <Ionicons name="document-text" size={24} color="#3B82F6" />
@@ -577,11 +563,7 @@ function TaskDetailsScreen({ navigation, route }) {
           </View>
 
           {/* Task Details Grid */}
-          <View 
-            style={{ marginHorizontal: 24, marginBottom: cardSpacing }}
-            onStartShouldSetResponder={() => true}
-            onMoveShouldSetResponder={() => true}
-          >
+          <View style={{ marginHorizontal: 24, marginBottom: cardSpacing }}>
             <View style={{
               backgroundColor: 'white',
               borderRadius: 16,
@@ -903,11 +885,138 @@ function TaskDetailsScreen({ navigation, route }) {
           onSuccess={handleUpdateSuccess}
         />
 
+        {/* Beautiful Delete Confirmation Dialog */}
+        <Modal
+          visible={deleteDialogVisible}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={cancelDelete}
+        >
+          <View style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingHorizontal: 20,
+          }}>
+            <View style={{
+              backgroundColor: 'white',
+              borderRadius: 16,
+              padding: 20,
+              width: '100%',
+              maxWidth: 320,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.2,
+              shadowRadius: 16,
+              elevation: 8,
+            }}>
+              {/* Warning Icon */}
+              <View style={{
+                alignItems: 'center',
+                marginBottom: 16,
+              }}>
+                <View style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: '#FEF2F2',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginBottom: 12,
+                }}>
+                  <Ionicons name="warning" size={24} color="#EF4444" />
+                </View>
+                <Text style={{
+                  fontSize: 18,
+                  fontWeight: 'bold',
+                  color: '#1F2937',
+                  textAlign: 'center',
+                  marginBottom: 4,
+                }}>
+                  Delete Task
+                </Text>
+              </View>
+
+              {/* Message */}
+              <Text style={{
+                fontSize: 15,
+                color: '#6B7280',
+                textAlign: 'center',
+                lineHeight: 22,
+                marginBottom: 16,
+              }}>
+                Are you sure you want to delete{' '}
+                <Text style={{ fontWeight: '600', color: '#1F2937' }}>
+                  "{taskToDelete?.title}"
+                </Text>
+                {' '}permanently?
+              </Text>
+              
+              <Text style={{
+                fontSize: 13,
+                color: '#EF4444',
+                textAlign: 'center',
+                fontWeight: '500',
+                marginBottom: 20,
+              }}>
+                This action cannot be undone.
+              </Text>
+
+              {/* Action Buttons */}
+              <View style={{
+                flexDirection: 'row',
+                gap: 10,
+              }}>
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#F3F4F6',
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    alignItems: 'center',
+                  }}
+                  onPress={cancelDelete}
+                  activeOpacity={0.8}
+                >
+                  <Text style={{
+                    fontSize: 15,
+                    fontWeight: '600',
+                    color: '#374151',
+                  }}>
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#EF4444',
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    alignItems: 'center',
+                  }}
+                  onPress={confirmDelete}
+                  activeOpacity={0.8}
+                >
+                  <Text style={{
+                    fontSize: 15,
+                    fontWeight: '600',
+                    color: 'white',
+                  }}>
+                    Delete
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         {/* Sidebar */}
         <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} navigation={navigation} />
 
-        {/* Bottom Navigation - Hide if UpdateTaskModal is visible */}
-        {!showUpdateModal && <CustomBottomNav navigation={navigation} />}
+        {/* Bottom Navigation */}
+        <CustomBottomNav navigation={navigation} />
       </View>
     </TouchableWithoutFeedback>
   );

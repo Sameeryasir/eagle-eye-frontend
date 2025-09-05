@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { createProject } from '../services/projects/createProject';
+import Toast from 'react-native-toast-message';
 
 function CreateProjectScreen({ navigation }) {
   const [projectData, setProjectData] = useState({
@@ -123,16 +124,20 @@ function CreateProjectScreen({ navigation }) {
 
       const response = await createProject(projectPayload);
       
-      Alert.alert(
-        'Success',
-        'Project created successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.goBack()
-          }
-        ]
-      );
+      // --- Show Success Toast Message ---
+      Toast.show({
+        type: 'success',
+        text1: 'Project Created Successfully!',
+        text2: 'Your new project has been added to the list',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
+      
+      // Navigate back after a short delay to show the toast
+      setTimeout(() => {
+        navigation.goBack();
+      }, 1000);
     } catch (error) {
       console.error('Error creating project:', error);
       
@@ -150,7 +155,15 @@ function CreateProjectScreen({ navigation }) {
         errorMessage = String(error.message);
       }
       
-      Alert.alert('Error', errorMessage);
+      // --- Show Error Toast Message ---
+      Toast.show({
+        type: 'error',
+        text1: 'Project Creation Failed',
+        text2: errorMessage,
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
     } finally {
       setIsLoading(false);
     }

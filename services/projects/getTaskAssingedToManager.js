@@ -38,6 +38,15 @@ export async function getTaskAssignedToManager(projectId) {
         }
         console.log('================================================');
         
+        // --- Check if no tasks are available for the project ---
+        // Business Rule: If no tasks are assigned to manager for this project, show appropriate message
+        if (response.data?.tasks && response.data.tasks.length === 0) {
+            const error = new Error('No tasks are assigned to you for this project yet.');
+            error.statusCode = 400;
+            error.error = 'Bad Request';
+            throw error;
+        }
+        
         return response.data;
     } catch (err) {
         if (axios.isAxiosError(err) && err.response?.status === 401 && refreshTokenValue) {

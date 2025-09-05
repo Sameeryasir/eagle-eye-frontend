@@ -14,9 +14,9 @@ import {
   ToastAndroid,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import Toast from 'react-native-toast-message';
 import { sendOtp } from "../services/auth/SendOtp";
 import Logo from "../assets/Logo.svg"; // Import the SVG logo
+import Toast from 'react-native-toast-message';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get("window");
 
@@ -59,16 +59,16 @@ const LogIn = () => {
       setLoading(false);
       
       // --- Show Success Toast Message ---
-      // Display success message when OTP is sent successfully using custom toast config
       Toast.show({
         type: 'success',
         text1: 'OTP Sent Successfully!',
-        text2: `Verification code sent to ${input.trim()}`,
-        visibilityTime: 3000, // 3 seconds for success messages
+        text2: 'Please check your email/phone for the verification code',
+        visibilityTime: 3000,
         autoHide: true,
-        topOffset: 80, // Positioning from top
+        topOffset: 80,
       });
       
+      // --- Success - Navigate to OTP screen ---
       navigation.navigate("OtpScreen", { emailOrPhone: input.trim() });
       setInput(""); // Clear the input after successful navigation
       
@@ -77,14 +77,13 @@ const LogIn = () => {
       console.log('Send OTP Error:', error);
       
       // --- Show Error Toast Message ---
-      // Display error message using custom toast config with automatic text wrapping
       Toast.show({
         type: 'error',
         text1: 'Failed to Send OTP',
         text2: error.message || 'Please check your email/phone and try again',
-        visibilityTime: 4000, // 4 seconds for error messages
+        visibilityTime: 4000,
         autoHide: true,
-        topOffset: 80, // Positioning from top
+        topOffset: 80,
       });
     }
   };

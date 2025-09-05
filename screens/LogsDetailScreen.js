@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
 import UpdateLogModal from "./components/UpdateLogModal";
+import DeleteLogModal from "./components/DeleteLogModal";
 import { getUserRole } from "../services/utils/userRole";
 import { deleteLogById } from "../services/log/deleteLogById";
 import { getLogById } from "../services/log/getLogById";
@@ -29,9 +30,12 @@ function LogsDetailScreen({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
 
   // Debug: Log the received logId
   console.log("LogsDetailScreen - Received logId:", logId);
+  console.log("LogsDetailScreen - logId type:", typeof logId);
+  console.log("LogsDetailScreen - logId is valid:", logId && logId !== null && logId !== undefined);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
 
@@ -111,6 +115,13 @@ function LogsDetailScreen({ navigation, route }) {
 
   const handleUpdate = () => {
     // Show the update modal with the current log data
+    console.log("LogsDetailScreen - handleUpdate called with log:", log);
+    console.log("LogsDetailScreen - log.note:", log?.note);
+    console.log("LogsDetailScreen - log.description:", log?.description);
+    console.log("LogsDetailScreen - log.images:", log?.images);
+    console.log("LogsDetailScreen - log.createdAt:", log?.createdAt);
+    console.log("LogsDetailScreen - log.tasks:", log?.tasks);
+    console.log("LogsDetailScreen - log.user:", log?.user);
     setUpdateModalVisible(true);
   };
 
@@ -158,53 +169,47 @@ function LogsDetailScreen({ navigation, route }) {
   }, [logId]);
 
   const handleDelete = () => {
-    Alert.alert(
-      "Delete Log",
-      "Are you sure you want to delete this log?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              // Call the delete log API
-              await deleteLogById(logId);
+    setDeleteModalVisible(true);
+  };
 
-              Alert.alert(
-                "Success",
-                "Log deleted successfully!",
-                [
-                  {
-                    text: "OK",
-                    onPress: () => {
-                      // Navigate back to previous screen
-                      navigation.goBack();
-                    }
-                  }
-                ]
-              );
-            } catch (error) {
-              console.error('Error deleting log:', error);
+  const handleDeleteModalClose = () => {
+    setDeleteModalVisible(false);
+  };
 
-              let errorMessage = "Failed to delete log. Please try again.";
-              if (error.message) {
-                errorMessage = error.message;
-              }
+  const handleDeleteConfirm = async () => {
+    try {
+      // Call the delete log API
+      await deleteLogById(logId);
 
-              Alert.alert(
-                "Error",
-                errorMessage,
-                [{ text: "OK" }]
-              );
+      Alert.alert(
+        "Success",
+        "Log deleted successfully!",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              // Navigate back to previous screen
+              navigation.goBack();
             }
           }
-        }
-      ]
-    );
+        ]
+      );
+    } catch (error) {
+      console.error('Error deleting log:', error);
+
+      let errorMessage = "Failed to delete log. Please try again.";
+      if (error.message) {
+        errorMessage = error.message;
+      }
+
+      Alert.alert(
+        "Error",
+        errorMessage,
+        [{ text: "OK" }]
+      );
+    } finally {
+      setDeleteModalVisible(false);
+    }
   };
 
   // Get actual uploaded images from log
@@ -694,6 +699,14 @@ function LogsDetailScreen({ navigation, route }) {
         log={log}
         onUpdate={handleUpdateSuccess}
         userRole={userRole}
+      />
+
+      {/* Delete Log Modal */}
+      <DeleteLogModal
+        visible={deleteModalVisible}
+        onClose={handleDeleteModalClose}
+        onConfirm={handleDeleteConfirm}
+        logTitle={log?.note || "this log"}
       />
     </View>
   );

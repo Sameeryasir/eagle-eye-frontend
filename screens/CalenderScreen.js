@@ -7,6 +7,7 @@ import {
   Dimensions,
 } from "react-native";
 import { Calendar } from "react-native-calendars";
+import Toast from 'react-native-toast-message';
 
 const { height } = Dimensions.get("window");
 
@@ -182,6 +183,30 @@ const tasks = {
 function CalenderScreen({ navigation }) {
   const onDayPress = (day) => {
     const taskList = tasks[day.dateString] || [];
+    
+    if (taskList.length === 0) {
+      // --- Show Info Toast Message ---
+      Toast.show({
+        type: 'info',
+        text1: 'No Tasks',
+        text2: `No tasks scheduled for ${day.dateString}`,
+        visibilityTime: 2000,
+        autoHide: true,
+        topOffset: 80,
+      });
+      return;
+    }
+    
+    // --- Show Navigation Toast Message ---
+    Toast.show({
+      type: 'success',
+      text1: 'Viewing Tasks',
+      text2: `Found ${taskList.length} task(s) for ${day.dateString}`,
+      visibilityTime: 2000,
+      autoHide: true,
+      topOffset: 80,
+    });
+    
     navigation.navigate("TaskDetail", {
       selectedDate: day.dateString,
       taskList: taskList,

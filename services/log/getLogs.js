@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_URL } from "@env";
 import refreshToken from "../utils/tokenRefresh";
 
-export async function getLogs() {
+export async function getLogs(projectId) {
   const token = await AsyncStorage.getItem("token");
   const refreshTokenValue = await AsyncStorage.getItem("refreshToken");
 
@@ -11,9 +11,13 @@ export async function getLogs() {
     throw new Error("No token found");
   }
 
+  if (!projectId) {
+    throw new Error("Project ID is required");
+  }
+
   try {
-    console.log(`GetLogs Service - Making request to: ${API_URL}/log`);
-    const response = await axios.get(`${API_URL}/log`, {
+    console.log(`GetLogs Service - Making request to: ${API_URL}/log/${projectId}`);
+    const response = await axios.get(`${API_URL}/log/${projectId}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     console.log(`GetLogs Service - Response received:`, response.data);
@@ -22,7 +26,7 @@ export async function getLogs() {
     if (axios.isAxiosError(err) && err.response?.status === 401 && refreshTokenValue) {
       // refresh and retry once
       const newToken = await refreshToken(refreshTokenValue);
-      const retryResponse = await axios.get(`${API_URL}/log`, {
+      const retryResponse = await axios.get(`${API_URL}/log/${projectId}`, {
         headers: { Authorization: `Bearer ${newToken}` },
       });
       return retryResponse.data;

@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { createProject } from '../../services/projects/createProject';
+import Toast from 'react-native-toast-message';
 
 function CreateProject({ navigation, onSuccess, onCancel }) {
   const [projectData, setProjectData] = useState({
@@ -43,12 +44,26 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
   const handleCreateProject = async () => {
     // Validate required fields
     if (!projectData.name.trim()) {
-      Alert.alert('Error', 'Project name is required');
+      Toast.show({
+        type: 'error',
+        text1: 'Validation Error',
+        text2: 'Project name is required',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
       return;
     }
 
     if (!projectData.description.trim()) {
-      Alert.alert('Error', 'Project description is required');
+      Toast.show({
+        type: 'error',
+        text1: 'Validation Error',
+        text2: 'Project description is required',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
       return;
     }
 
@@ -56,9 +71,16 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
     const now = new Date();
     now.setHours(0, 0, 0, 0); // Set to midnight for date-only comparison
     
-    // Allow creating projects on the same date or in the future
+    // Allow creating projects on the same date (today) or in the future
     if (startDate < now) {
-      Alert.alert('Error', 'Start date cannot be in the past');
+      Toast.show({
+        type: 'error',
+        text1: 'Date Error',
+        text2: 'Start date cannot be in the past',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
       return;
     }
 
@@ -76,22 +98,24 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
 
       const response = await createProject(projectPayload);
       
-      Alert.alert(
-        'Success',
-        'Project created successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              if (onSuccess) {
-                onSuccess();
-              } else {
-                navigation.goBack();
-              }
-            }
-          }
-        ]
-      );
+      // --- Show Success Toast Message ---
+      Toast.show({
+        type: 'success',
+        text1: 'Project Created Successfully!',
+        text2: 'Your new project has been added to the list',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
+      
+      // Navigate back after a short delay to show the toast
+      setTimeout(() => {
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          navigation.goBack();
+        }
+      }, 1000);
     } catch (error) {
       console.error('Error creating project:', error);
       
@@ -109,7 +133,15 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
         errorMessage = String(error.message);
       }
       
-      Alert.alert('Error', errorMessage);
+      // --- Show Error Toast Message ---
+      Toast.show({
+        type: 'error',
+        text1: 'Project Creation Failed',
+        text2: errorMessage,
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -251,7 +283,7 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
           value={startDate}
           mode="date"
           onChange={handleStartDateChange}
-          minimumDate={new Date()}
+          minimumDate={new Date(new Date().setHours(0, 0, 0, 0))}
         />
       )}
     </View>

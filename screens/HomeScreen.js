@@ -15,6 +15,7 @@ import {
   RefreshControl,
   ToastAndroid,
 } from "react-native";
+import Toast from 'react-native-toast-message';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
@@ -81,6 +82,8 @@ function HomeScreen({ navigation, route }) {
     useState(false);
   const [userRole, setUserRole] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState(null);
   const { width: screenWidth } = useWindowDimensions();
 
   const numColumns = screenWidth >= 1024 ? 3 : screenWidth >= 768 ? 2 : 1;
@@ -200,34 +203,67 @@ function HomeScreen({ navigation, route }) {
       return;
     }
 
-    Alert.alert(
-      "Delete Project",
-      `Are you sure you want to delete "${projectName}" permanently? This action is not reversible.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteProjectById(projectId);
-              await fetchProjects();
-            } catch (error) {
-              console.error("Error deleting project:", error);
-              Alert.alert(
-                "Error",
-                "Failed to delete project. Please try again.",
-                [{ text: "OK" }]
-              );
-            }
-          },
-        },
-      ]
-    );
+    // Show beautiful custom dialog instead of Alert
+    setProjectToDelete(project);
+    setDeleteDialogVisible(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!projectToDelete) return;
+
+    const projectId = projectToDelete.id;
+    const projectName = projectToDelete.name;
+
+    // Close dialog immediately when delete button is tapped
+    setDeleteDialogVisible(false);
+    setProjectToDelete(null);
+
+    try {
+      await deleteProjectById(projectId);
+      await fetchProjects();
+      
+      // --- Show Success Toast Message ---
+      Toast.show({
+        type: 'success',
+        text1: 'Project Deleted Successfully!',
+        text2: `"${projectName}" has been permanently deleted`,
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
+    } catch (error) {
+      console.error("Error deleting project:", error);
+      
+      // --- Show Error Toast Message ---
+      Toast.show({
+        type: 'error',
+        text1: 'Delete Failed',
+        text2: 'Failed to delete project. Please try again.',
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
+    }
+  };
+
+  const cancelDelete = () => {
+    setDeleteDialogVisible(false);
+    setProjectToDelete(null);
   };
 
   const handleCreateProjectSuccess = () => {
     setCreateProjectModalVisible(false);
+    
+    // --- Show Success Toast Message ---
+    Toast.show({
+      type: 'success',
+      text1: 'Project Created Successfully!',
+      text2: 'Your new project has been added to the list',
+      visibilityTime: 3000,
+      autoHide: true,
+      topOffset: 80,
+    });
+    
     // Force refresh projects with a slight delay to ensure API has updated
     setTimeout(() => {
       fetchProjects({ silent: false });
@@ -241,6 +277,17 @@ function HomeScreen({ navigation, route }) {
   const handleUpdateProjectSuccess = () => {
     setUpdateProjectModalVisible(false);
     setSelectedProject(null);
+    
+    // --- Show Success Toast Message ---
+    Toast.show({
+      type: 'success',
+      text1: 'Project Updated Successfully!',
+      text2: 'Your project changes have been saved',
+      visibilityTime: 3000,
+      autoHide: true,
+      topOffset: 80,
+    });
+    
     fetchProjects(); // Refresh the projects list
   };
 
@@ -459,6 +506,133 @@ function HomeScreen({ navigation, route }) {
         onClose={handleUpdateProjectClose}
         onSuccess={handleUpdateProjectSuccess}
       />
+
+      {/* Beautiful Delete Confirmation Dialog */}
+      <Modal
+        visible={deleteDialogVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={cancelDelete}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingHorizontal: 20,
+        }}>
+          <View style={{
+            backgroundColor: 'white',
+            borderRadius: 16,
+            padding: 20,
+            width: '100%',
+            maxWidth: 320,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.2,
+            shadowRadius: 16,
+            elevation: 8,
+          }}>
+            {/* Warning Icon */}
+            <View style={{
+              alignItems: 'center',
+              marginBottom: 16,
+            }}>
+              <View style={{
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor: '#FEF2F2',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 12,
+              }}>
+                <Ionicons name="warning" size={24} color="#EF4444" />
+              </View>
+              <Text style={{
+                fontSize: 18,
+                fontWeight: 'bold',
+                color: '#1F2937',
+                textAlign: 'center',
+                marginBottom: 4,
+              }}>
+                Delete Project
+              </Text>
+            </View>
+
+            {/* Message */}
+            <Text style={{
+              fontSize: 15,
+              color: '#6B7280',
+              textAlign: 'center',
+              lineHeight: 22,
+              marginBottom: 16,
+            }}>
+              Are you sure you want to delete{' '}
+              <Text style={{ fontWeight: '600', color: '#1F2937' }}>
+                "{projectToDelete?.name}"
+              </Text>
+              {' '}permanently?
+            </Text>
+            
+            <Text style={{
+              fontSize: 13,
+              color: '#EF4444',
+              textAlign: 'center',
+              fontWeight: '500',
+              marginBottom: 20,
+            }}>
+              This action cannot be undone.
+            </Text>
+
+            {/* Action Buttons */}
+            <View style={{
+              flexDirection: 'row',
+              gap: 10,
+            }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  backgroundColor: '#F3F4F6',
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                }}
+                onPress={cancelDelete}
+                activeOpacity={0.8}
+              >
+                <Text style={{
+                  fontSize: 15,
+                  fontWeight: '600',
+                  color: '#374151',
+                }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  backgroundColor: '#EF4444',
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                }}
+                onPress={confirmDelete}
+                activeOpacity={0.8}
+              >
+                <Text style={{
+                  fontSize: 15,
+                  fontWeight: '600',
+                  color: 'white',
+                }}>
+                  Delete
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

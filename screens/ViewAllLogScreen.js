@@ -16,6 +16,7 @@ import {
   Modal,
   RefreshControl,
 } from "react-native";
+import Toast from 'react-native-toast-message';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 import { Image } from "expo-image";
@@ -25,6 +26,7 @@ import { getUserRole } from "../services/utils/userRole";
 import { deleteLogById } from "../services/log/deleteLogById";
 import { updateLogById } from "../services/log/updateLogById";
 import { getMyProjects } from "../services/projects/getProjectsByLoginUserId";
+import { getLogs } from "../services/log/getLogs";
 import UpdateLogModal from "./components/UpdateLogModal";
 import {
   Menu,
@@ -76,10 +78,14 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [userRole, setUserRole] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [loadingProjects, setLoadingProjects] = useState(false);
 
   // --- Update Modal State ---
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
   const [selectedLogForUpdate, setSelectedLogForUpdate] = useState(null);
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const [logToDelete, setLogToDelete] = useState(null);
 
   // Get user role on component mount
   React.useEffect(() => {
@@ -200,9 +206,9 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       return `${year}-${month}-${day}`;
     };
 
-    // If no specific project is selected, generate dates for the last 30 days
-    if (selectedProjectFilter === "All Logs") {
-      console.log("generateDateOptions - Generating dates for All Logs (last 30 days)");
+    // For Manager and Owner roles, always generate dates for the last 30 days since project filtering is limited
+    if (userRole === "Manager" || userRole === "Owner" || selectedProjectFilter === "All Logs") {
+      console.log("generateDateOptions - Generating dates for Manager/Owner/All Logs (last 30 days)");
 
       // Generate daily slots for the last 30 days
       for (let i = 29; i >= 0; i--) {
@@ -223,7 +229,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         });
       }
 
-      console.log(`generateDateOptions - Generated ${dateOptions.length} date options for All Logs`);
+      console.log(`generateDateOptions - Generated ${dateOptions.length} date options for Manager/All Logs`);
       console.log(`generateDateOptions - Today's date string: ${getDateString(today)}`);
       return dateOptions;
     }
@@ -293,59 +299,120 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   const timeFilterOptions = React.useMemo(() => generateDateOptions(), [selectedProjectFilter, projectsData]);
 
   // Generate unique projects from logs
-  // Get logs for a specific project
-  const getLogsForProject = (projectName) => {
+  // Get logs for a specific project using getLogs service with project ID
+  const getLogsForProject = async (projectName) => {
     if (!projectName || projectName === "All Logs") {
-      // Use logs from route params (which get refreshed during onRefresh)
-      const currentLogs = route.params?.logs || logs || [];
-      console.log("getLogsForProject - Returning logs from route params (All Logs selected):", currentLogs.length);
-      if (currentLogs && currentLogs.length > 0) {
-        console.log("getLogsForProject - Sample log from route params:", {
-          id: currentLogs[0].id,
-          createdAt: currentLogs[0].createdAt,
-          date: currentLogs[0].date
-        });
+      // For "All Logs", we need to get logs from all projects
+      // Since getLogs requires a projectId, we'll collect logs from all projects
+      console.log("getLogsForProject - Getting logs from all projects (All Logs selected)");
+      
+      if (!projectsData || projectsData.length === 0) {
+        console.log("getLogsForProject - No projects data available for All Logs");
+        return [];
       }
-      return currentLogs;
+
+      const allLogs = [];
+      
+      // Get logs from each project
+      for (const project of projectsData) {
+        try {
+          console.log(`getLogsForProject - Getting logs for project: ${project.name} (ID: ${project.id})`);
+          const logsResponse = await getLogs(project.id);
+          
+          // Check if response has logs array or if it's directly an array
+          let logsArray = [];
+          if (logsResponse?.logs && Array.isArray(logsResponse.logs)) {
+            logsArray = logsResponse.logs;
+          } else if (Array.isArray(logsResponse)) {
+            logsArray = logsResponse;
+          }
+
+          // Transform logs data to match the expected format
+          const transformedLogs = logsArray.map(log => ({
+            id: log.id,
+            createdBy: log.user ? `${log.user.first_name || ''} ${log.user.last_name || ''}`.trim() : 'Unknown User',
+            date: log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'N/A',
+            createdAt: log.createdAt,
+            description: log.note || 'No description',
+            images: log.images || [],
+            image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : require("../assets/robot.png"),
+            projectName: project.name,
+          }));
+
+          allLogs.push(...transformedLogs);
+          console.log(`getLogsForProject - Added ${transformedLogs.length} logs from project: ${project.name}`);
+        } catch (error) {
+          console.error(`getLogsForProject - Error fetching logs for project ${project.name}:`, error);
+          // Continue with other projects even if one fails
+        }
+      }
+
+      // Sort all logs by date (newest first)
+      const sortedLogs = allLogs.sort((a, b) => {
+        const dateA = new Date(a.createdAt);
+        const dateB = new Date(b.createdAt);
+        return dateB - dateA;
+      });
+
+      console.log(`getLogsForProject - Total logs from all projects: ${sortedLogs.length}`);
+      return sortedLogs;
     }
 
-    // Find the project by name
+    // Find the project by name in projectsData to get its actual ID
     const project = projectsData.find(p => p.name === projectName);
-    if (!project || !project.tasks) {
-      console.log(`getLogsForProject - Project "${projectName}" not found or has no tasks`);
+    if (!project) {
+      console.log(`getLogsForProject - Project "${projectName}" not found in projectsData`);
       return [];
     }
 
-    // Extract logs from all tasks in the project
-    const projectLogs = [];
-    project.tasks.forEach(task => {
-      if (task.log) {
-        console.log(`getLogsForProject - Processing task ${task.id}, log createdAt: ${task.log.createdAt}`);
+    const projectId = project.id;
+    console.log(`getLogsForProject - Found project "${projectName}" with ID: ${projectId}`);
 
-        // Transform the log to match the expected format
-        const transformedLog = {
-          id: task.log.id,
-          createdBy: task.assignedTo ? `${task.assignedTo.first_name || ''} ${task.assignedTo.last_name || ''}`.trim() : 'Unknown User',
-          date: task.log.createdAt ? new Date(task.log.createdAt).toLocaleDateString() : 'N/A',
-          createdAt: task.log.createdAt, // Keep original createdAt for filtering (format: "2025-08-28T10:44:55.453Z")
-          description: task.log.note || 'No description',
-          images: task.log.images || [],
-          image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
-          projectName: project.name, // Add project name for reference
-        };
-        projectLogs.push(transformedLog);
+    try {
+      // Use the getLogs service with the actual project ID
+      const logsResponse = await getLogs(projectId);
+      console.log(`getLogsForProject - API response for projectId ${projectId}:`, logsResponse);
+
+      // Check if response has logs array or if it's directly an array
+      let logsArray = [];
+      if (logsResponse?.logs && Array.isArray(logsResponse.logs)) {
+        logsArray = logsResponse.logs;
+      } else if (Array.isArray(logsResponse)) {
+        logsArray = logsResponse;
+      } else {
+        console.log(`getLogsForProject - No logs found in API response for projectId ${projectId}:`, logsResponse);
+        logsArray = [];
       }
-    });
 
-    console.log(`getLogsForProject - Found ${projectLogs.length} logs for project: ${projectName}`);
-    if (projectLogs.length > 0) {
-      console.log(`getLogsForProject - Sample log createdAt: ${projectLogs[0].createdAt}`);
+      // Transform logs data to match the expected format
+      const transformedLogs = logsArray.map(log => ({
+        id: log.id,
+        createdBy: log.user ? `${log.user.first_name || ''} ${log.user.last_name || ''}`.trim() : 'Unknown User',
+        date: log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'N/A',
+        createdAt: log.createdAt, // Preserve original createdAt for filtering (format: "2025-08-28T10:44:55.453Z")
+        description: log.note || 'No description',
+        images: log.images || [], // Keep all images for the log
+        image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : require("../assets/robot.png"),
+        projectName: projectName, // Use the project name from the filter
+      }));
+
+      console.log(`getLogsForProject - Transformed ${transformedLogs.length} logs for projectId: ${projectId}`);
+      if (transformedLogs.length > 0) {
+        console.log(`getLogsForProject - Sample log createdAt: ${transformedLogs[0].createdAt}`);
+        console.log(`getLogsForProject - Sample log description: ${transformedLogs[0].description}`);
+      }
+      return transformedLogs;
+
+    } catch (error) {
+      console.error(`getLogsForProject - Error fetching logs for projectId ${projectId}:`, error);
+      // Return empty array if API call fails
+      return [];
     }
-    return projectLogs;
   };
 
   const generateProjectOptions = async () => {
     console.log("generateProjectOptions - Starting to fetch projects...");
+    setLoadingProjects(true);
 
     try {
       const projects = await getMyProjects();
@@ -402,21 +469,23 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         }))],
         projects: []
       };
+    } finally {
+      setLoadingProjects(false);
     }
   };
 
-  const handleSearch = (query) => {
+  const handleSearch = async (query) => {
     setSearchQuery(query);
-    applyFilters(query, selectedTimeFilter, selectedProjectFilter);
+    await applyFilters(query, selectedTimeFilter, selectedProjectFilter);
   };
 
-  const handleTimeFilterChange = (filter) => {
+  const handleTimeFilterChange = async (filter) => {
     setSelectedTimeFilter(filter);
     setShowTimeDropdown(false);
-    applyFilters(searchQuery, filter, selectedProjectFilter);
+    await applyFilters(searchQuery, filter, selectedProjectFilter);
   };
 
-  const handleProjectFilterChange = (filter) => {
+  const handleProjectFilterChange = async (filter) => {
     console.log(`handleProjectFilterChange - Selected project: ${filter}`);
     setSelectedProjectFilter(filter);
     setShowProjectDropdown(false);
@@ -425,9 +494,9 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     if (filter === "All Logs") {
       setSelectedTimeFilter("All Time");
       setShowTimeDropdown(false);
-      applyFilters(searchQuery, "All Time", filter);
+      await applyFilters(searchQuery, "All Time", filter);
     } else {
-      applyFilters(searchQuery, selectedTimeFilter, filter);
+      await applyFilters(searchQuery, selectedTimeFilter, filter);
     }
   };
 
@@ -441,9 +510,9 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     setSelectedImage(null);
   };
 
-  const applyFilters = (query, timeFilter, projectFilter) => {
+  const applyFilters = async (query, timeFilter, projectFilter) => {
     // First, get logs based on project filter
-    let filtered = getLogsForProject(projectFilter);
+    let filtered = await getLogsForProject(projectFilter);
     console.log(`applyFilters - Initial logs for project '${projectFilter}':`, filtered.length);
     console.log(`applyFilters - Time filter: '${timeFilter}'`);
     console.log(`applyFilters - Search query: '${query}'`);
@@ -484,24 +553,29 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       console.log("Filtering by time:", timeFilter);
       console.log("Available logs before time filtering:", filtered.length);
 
-      // Normalize to device-locale date and compare
-      const toLocalDateString = (value) => {
-        try {
-          const d = new Date(value);
-          if (isNaN(d.getTime())) return null;
-          return d.toLocaleDateString();
-        } catch {
-          return null;
-        }
+      // Fix: Use local date comparison to avoid timezone issues
+      // Helper function to get local date string in YYYY-MM-DD format
+      const getLocalDateString = (dateString) => {
+        const date = new Date(dateString);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
       };
 
-      const filterLocal = toLocalDateString(timeFilter);
+      // The timeFilter is already in YYYY-MM-DD format, so we can use it directly
+      const filterDateString = timeFilter; // e.g., "2025-09-04"
 
       filtered = filtered.filter((log) => {
-        const raw = log.createdAt || log.date;
-        if (!raw) return false;
-        const logLocal = toLocalDateString(raw);
-        const matches = Boolean(filterLocal && logLocal && logLocal === filterLocal);
+        const logCreatedAt = log.createdAt;
+        if (!logCreatedAt) return false;
+        
+        // Convert log createdAt to local date string (YYYY-MM-DD format)
+        const logDateString = getLocalDateString(logCreatedAt);
+        
+        const matches = logDateString === filterDateString;
+        console.log(`applyFilters - Comparing: ${logDateString} === ${filterDateString} = ${matches}`);
+        console.log(`applyFilters - Log createdAt: ${logCreatedAt}, Local date: ${logDateString}`);
         return matches;
       });
 
@@ -514,7 +588,8 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         (log) =>
           log.createdBy.toLowerCase().includes(query.toLowerCase()) ||
           log.description.toLowerCase().includes(query.toLowerCase()) ||
-          log.date.includes(query)
+          log.date.toLowerCase().includes(query.toLowerCase()) ||
+          (log.projectName && log.projectName.toLowerCase().includes(query.toLowerCase()))
       );
     }
 
@@ -608,6 +683,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
 
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
+    setLoadingLogs(true);
     try {
       console.log("ViewAllLogScreen - Starting refresh for user role:", userRole);
 
@@ -643,173 +719,130 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       console.log("ViewAllLogScreen - Extracted logs from projects:", allLogs.length);
       setAllLogsFromProjects(allLogs);
 
-      // Refresh logs from API for "All Logs" section (Employee, Manager, Admin, Owner roles)
+      // Refresh logs from API based on current filter selection
       if (userRole === "Employee" || userRole === "Manager" || userRole === "Admin" || userRole === "Owner") {
         console.log("ViewAllLogScreen - Refreshing logs from API for role:", userRole);
+        console.log("ViewAllLogScreen - Current project filter:", selectedProjectFilter);
         try {
           let sortedLogs = [];
 
-          if (userRole === "Owner") {
-            // Owner role: Extract logs from tasks within projects (same as WidgetScreen logic)
-            console.log("ViewAllLogScreen - Owner role: Extracting logs from tasks");
+          // Use the current filter selection to determine how to refresh logs
+          if (selectedProjectFilter === "All Logs") {
+            // For "All Logs", get logs from all projects
+            console.log("ViewAllLogScreen - Refreshing logs from all projects");
+            const allLogs = [];
+            
+            for (const project of projects) {
+              try {
+                const { getLogs } = require("../services/log/getLogs");
+                const logsResponse = await getLogs(project.id);
+                
+                let logsArray = [];
+                if (logsResponse?.logs && Array.isArray(logsResponse.logs)) {
+                  logsArray = logsResponse.logs;
+                } else if (Array.isArray(logsResponse)) {
+                  logsArray = logsResponse;
+                }
 
-            // Get tasks for the current project (if projectId is available)
-            const projectId = route.params?.projectId;
-            if (projectId) {
-              const { getTaskByProjectId } = require("../services/tasks/getTaskByProjectId");
-              const response = await getTaskByProjectId(projectId);
-
-              if (response && response.tasks) {
-                // Extract logs from tasks
-                const tasksWithLogs = response.tasks.filter(task => task.log && task.log !== null);
-                console.log("ViewAllLogScreen - Owner: Tasks with logs:", tasksWithLogs.length);
-
-                const extractedLogs = tasksWithLogs.map(task => ({
-                  id: task.log.id,
-                  createdBy: task.assignedTo ? `${task.assignedTo.first_name || ''} ${task.assignedTo.last_name || ''}`.trim() : 'Unknown User',
-                  date: task.log.createdAt ? new Date(task.log.createdAt).toLocaleDateString() : 'N/A',
-                  createdAt: task.log.createdAt,
-                  description: task.log.note || 'No description',
-                  images: task.log.images || [],
-                  image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
-                  taskTitle: task.title,
+                const transformedLogs = logsArray.map(log => ({
+                  id: log.id,
+                  createdBy: log.user ? `${log.user.first_name || ''} ${log.user.last_name || ''}`.trim() : 'Unknown User',
+                  date: log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'N/A',
+                  createdAt: log.createdAt,
+                  description: log.note || 'No description',
+                  images: log.images || [],
+                  image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : require("../assets/robot.png"),
+                  projectName: project.name,
                 }));
 
-                // Sort logs by date (newest first)
-                sortedLogs = extractedLogs.sort((a, b) => {
-                  const dateA = new Date(a.createdAt);
-                  const dateB = new Date(b.createdAt);
-                  return dateB - dateA;
-                });
-
-                console.log("ViewAllLogScreen - Owner: Extracted and sorted logs:", sortedLogs.length);
+                allLogs.push(...transformedLogs);
+              } catch (error) {
+                console.error(`ViewAllLogScreen - Error refreshing logs for project ${project.name}:`, error);
               }
-            } else {
-              // If no projectId, extract logs from all projects
-              console.log("ViewAllLogScreen - Owner: No projectId, extracting from all projects");
-              const allLogsFromAllProjects = [];
+            }
 
-              projects.forEach(project => {
-                if (project.tasks && Array.isArray(project.tasks)) {
-                  project.tasks.forEach(task => {
-                    if (task.log && task.log !== null) {
-                      const transformedLog = {
-                        id: task.log.id,
-                        createdBy: task.assignedTo ? `${task.assignedTo.first_name || ''} ${task.assignedTo.last_name || ''}`.trim() : 'Unknown User',
-                        date: task.log.createdAt ? new Date(task.log.createdAt).toLocaleDateString() : 'N/A',
-                        createdAt: task.log.createdAt,
-                        description: task.log.note || 'No description',
-                        images: task.log.images || [],
-                        image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
-                        projectName: project.name,
-                      };
-                      allLogsFromAllProjects.push(transformedLog);
-                    }
-                  });
-                }
-              });
+            sortedLogs = allLogs.sort((a, b) => {
+              const dateA = new Date(a.createdAt);
+              const dateB = new Date(b.createdAt);
+              return dateB - dateA;
+            });
+          } else {
+            // For specific project, get logs for that project
+            const selectedProject = projects.find(p => p.name === selectedProjectFilter);
+            if (selectedProject) {
+              console.log(`ViewAllLogScreen - Refreshing logs for project: ${selectedProject.name} (ID: ${selectedProject.id})`);
+              const { getLogs } = require("../services/log/getLogs");
+              const logsResponse = await getLogs(selectedProject.id);
+              
+              let logsArray = [];
+              if (logsResponse?.logs && Array.isArray(logsResponse.logs)) {
+                logsArray = logsResponse.logs;
+              } else if (Array.isArray(logsResponse)) {
+                logsArray = logsResponse;
+              }
 
-              // Sort logs by date (newest first)
-              sortedLogs = allLogsFromAllProjects.sort((a, b) => {
+              const transformedLogs = logsArray.map(log => ({
+                id: log.id,
+                createdBy: log.user ? `${log.user.first_name || ''} ${log.user.last_name || ''}`.trim() : 'Unknown User',
+                date: log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'N/A',
+                createdAt: log.createdAt,
+                description: log.note || 'No description',
+                images: log.images || [],
+                image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : require("../assets/robot.png"),
+                projectName: selectedProject.name,
+              }));
+
+              sortedLogs = transformedLogs.sort((a, b) => {
                 const dateA = new Date(a.createdAt);
                 const dateB = new Date(b.createdAt);
                 return dateB - dateA;
               });
-
-              console.log("ViewAllLogScreen - Owner: Extracted logs from all projects:", sortedLogs.length);
             }
-          } else if (userRole === "Manager") {
-            // Manager role: Use getLogs API (same as WidgetScreen behavior)
-            console.log("ViewAllLogScreen - Manager role: Using getLogs API");
-
-            const { getLogs } = require("../services/log/getLogs");
-            const logsResponse = await getLogs();
-
-            console.log("ViewAllLogScreen - Manager API logs response:", logsResponse);
-
-            // Check if response has logs array or if it's directly an array
-            let logsArray = [];
-            if (logsResponse?.logs && Array.isArray(logsResponse.logs)) {
-              logsArray = logsResponse.logs;
-            } else if (Array.isArray(logsResponse)) {
-              logsArray = logsResponse;
-            } else {
-              console.log("ViewAllLogScreen - Manager: No logs found in API response:", logsResponse);
-              logsArray = [];
-            }
-
-            // Transform logs data to match the expected format
-            const transformedLogs = logsArray.map(log => ({
-              id: log.id,
-              createdBy: log.user ? `${log.user.first_name || ''} ${log.user.last_name || ''}`.trim() : 'Unknown User',
-              date: log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'N/A',
-              createdAt: log.createdAt, // Preserve original createdAt for filtering
-              description: log.note || 'No description',
-              images: log.images || [], // Keep all images for the log
-              image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : require("../assets/robot.png"),
-            }));
-
-            // Sort logs by date (newest first)
-            sortedLogs = transformedLogs.sort((a, b) => {
-              const dateA = new Date(a.createdAt);
-              const dateB = new Date(b.createdAt);
-              return dateB - dateA;
-            });
-
-            console.log("ViewAllLogScreen - Manager: Updated logs from API:", sortedLogs.length);
-          } else {
-            // Employee, Admin roles: Use getLogs API
-            const { getLogs } = require("../services/log/getLogs");
-            const logsResponse = await getLogs();
-
-            console.log("ViewAllLogScreen - API logs response:", logsResponse);
-
-            // Check if response has logs array or if it's directly an array
-            let logsArray = [];
-            if (logsResponse?.logs && Array.isArray(logsResponse.logs)) {
-              logsArray = logsResponse.logs;
-            } else if (Array.isArray(logsResponse)) {
-              logsArray = logsResponse;
-            } else {
-              console.log("ViewAllLogScreen - No logs found in API response:", logsResponse);
-              logsArray = [];
-            }
-
-            // Transform logs data to match the expected format
-            const transformedLogs = logsArray.map(log => ({
-              id: log.id,
-              createdBy: log.user ? `${log.user.first_name || ''} ${log.user.last_name || ''}`.trim() : 'Unknown User',
-              date: log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'N/A',
-              createdAt: log.createdAt, // Preserve original createdAt for filtering
-              description: log.note || 'No description',
-              images: log.images || [], // Keep all images for the log
-              image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : require("../assets/robot.png"),
-            }));
-
-            // Sort logs by date (newest first)
-            sortedLogs = transformedLogs.sort((a, b) => {
-              const dateA = new Date(a.createdAt);
-              const dateB = new Date(b.createdAt);
-              return dateB - dateA;
-            });
-
-            console.log("ViewAllLogScreen - Updated logs from API:", sortedLogs.length);
           }
+
+          // The logs are already fetched above based on current filter selection
+          console.log("ViewAllLogScreen - Refreshed logs from API:", sortedLogs.length);
 
           // Update the logs in route params so "All Logs" section gets refreshed
           if (route.params) {
             route.params.logs = sortedLogs;
           }
 
-          // Update the local logs state
-          setFilteredLogs(prevFilteredLogs => {
-            // If "All Logs" is selected, update with new logs
-            if (selectedProjectFilter === "All Logs") {
-              return sortedLogs;
-            }
-            // Otherwise keep the current filtered logs
-            return prevFilteredLogs;
-          });
+          // Apply time and search filters to the fresh logs
+          let finalFilteredLogs = sortedLogs;
+
+          // Apply time filter if not "All Time"
+          if (selectedTimeFilter && selectedTimeFilter !== "All Time") {
+            const getLocalDateString = (dateString) => {
+              const date = new Date(dateString);
+              const year = date.getFullYear();
+              const month = String(date.getMonth() + 1).padStart(2, '0');
+              const day = String(date.getDate()).padStart(2, '0');
+              return `${year}-${month}-${day}`;
+            };
+
+            const filterDateString = selectedTimeFilter;
+            finalFilteredLogs = finalFilteredLogs.filter((log) => {
+              const logCreatedAt = log.createdAt;
+              if (!logCreatedAt) return false;
+              const logDateString = getLocalDateString(logCreatedAt);
+              return logDateString === filterDateString;
+            });
+          }
+
+          // Apply search filter if there's a search query
+          if (searchQuery && searchQuery.trim() !== "") {
+            finalFilteredLogs = finalFilteredLogs.filter(
+              (log) =>
+                log.createdBy.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                log.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                log.date.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (log.projectName && log.projectName.toLowerCase().includes(searchQuery.toLowerCase()))
+            );
+          }
+
+          // Update the local logs state with filtered fresh logs
+          setFilteredLogs(finalFilteredLogs);
 
         } catch (apiError) {
           console.error("ViewAllLogScreen - Error refreshing logs from API:", apiError);
@@ -817,41 +850,12 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         }
       }
 
-      // If a specific project is selected, re-fetch that project's tasks to ensure latest log updates
-      if (selectedProjectFilter !== "All Logs") {
-        try {
-          const selectedProject = projects.find(p => p.name === selectedProjectFilter);
-          if (selectedProject?.id) {
-            const { getTaskByProjectId } = require("../services/tasks/getTaskByProjectId");
-            const projResponse = await getTaskByProjectId(selectedProject.id);
-            const projTasks = projResponse?.tasks || [];
-            const projLogs = projTasks
-              .filter(t => t.log)
-              .map(t => ({
-                id: t.log.id,
-                createdBy: t.assignedTo ? `${t.assignedTo.first_name || ''} ${t.assignedTo.last_name || ''}`.trim() : 'Unknown User',
-                date: t.log.createdAt ? new Date(t.log.createdAt).toLocaleDateString() : 'N/A',
-                createdAt: t.log.createdAt,
-                description: t.log.note || 'No description',
-                images: t.log.images || [],
-                image: t.log.images && t.log.images.length > 0 ? { uri: t.log.images[0].imageUrl } : require("../assets/robot.png"),
-                projectName: selectedProject.name,
-              }));
-            setFilteredLogs(projLogs);
-          }
-        } catch (projErr) {
-          console.error("ViewAllLogScreen - Error refreshing selected project logs:", projErr);
-        }
-      } else {
-        // Re-apply filters with current settings when showing All Logs
-        applyFilters(searchQuery, selectedTimeFilter, selectedProjectFilter);
-      }
-
       console.log("ViewAllLogScreen - Refresh completed successfully for role:", userRole);
     } catch (error) {
       console.error("ViewAllLogScreen - Error refreshing data:", error);
     } finally {
       setRefreshing(false);
+      setLoadingLogs(false);
     }
   }, [searchQuery, selectedTimeFilter, selectedProjectFilter, userRole, selectedProjectFilter]);
 
@@ -866,55 +870,81 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       return;
     }
 
-    Alert.alert(
-      "Delete Log",
-      `Are you sure you want to delete "${logTitle}" permanently? This action is not reversible.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteLogById(logId);
+    // Show beautiful custom dialog instead of Alert
+    setLogToDelete(log);
+    setDeleteDialogVisible(true);
+  };
 
-              // Get current logs from route params or fallback to logs state
-              const currentLogs = route.params?.logs || logs || [];
-              const updatedLogs = currentLogs.filter((log) => log.id !== logId);
-              const updatedFilteredLogs = filteredLogs.filter(
-                (log) => log.id !== logId
-              );
+  const confirmDelete = async () => {
+    if (!logToDelete) return;
 
-              // Update the logs in route params
-              if (route.params) {
-                route.params.logs = updatedLogs;
-              }
+    const logId = logToDelete.id;
+    const logTitle = logToDelete.description || "this log";
 
-              setFilteredLogs(updatedFilteredLogs);
+    // Close dialog immediately when delete button is tapped
+    setDeleteDialogVisible(false);
+    setLogToDelete(null);
 
-              Alert.alert("Success", "Log deleted successfully!", [
-                { text: "OK" },
-              ]);
-            } catch (error) {
-              let errorMessage = "Failed to delete log. Please try again.";
-              if (error.response?.data?.message) {
-                errorMessage = error.response.data.message;
-              } else if (error.message) {
-                errorMessage = error.message;
-              }
+    try {
+      await deleteLogById(logId);
 
-              Alert.alert("Error", errorMessage, [{ text: "OK" }]);
-            }
-          },
-        },
-      ]
-    );
+      // Get current logs from route params or fallback to logs state
+      const currentLogs = route.params?.logs || logs || [];
+      const updatedLogs = currentLogs.filter((log) => log.id !== logId);
+      const updatedFilteredLogs = filteredLogs.filter(
+        (log) => log.id !== logId
+      );
+
+      // Update the logs in route params
+      if (route.params) {
+        route.params.logs = updatedLogs;
+      }
+
+      setFilteredLogs(updatedFilteredLogs);
+
+      // --- Show Success Toast Message ---
+      Toast.show({
+        type: 'success',
+        text1: 'Log Deleted Successfully!',
+        text2: `"${logTitle}" has been permanently deleted`,
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
+    } catch (error) {
+      let errorMessage = "Failed to delete log. Please try again.";
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      // --- Show Error Toast Message ---
+      Toast.show({
+        type: 'error',
+        text1: 'Delete Failed',
+        text2: errorMessage,
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
+    }
+  };
+
+  const cancelDelete = () => {
+    setDeleteDialogVisible(false);
+    setLogToDelete(null);
   };
 
   // Separate Manager Card Component
   const ManagerLogCard = ({ log }) => (
     <TouchableOpacity
-      onPress={() => navigation.navigate('LogsDetail', { logId: log.id })}
+      onPress={() => {
+        console.log("ManagerLogCard - Log tapped:", log);
+        console.log("ManagerLogCard - Log ID:", log.id);
+        console.log("ManagerLogCard - Navigating to LogsDetail with logId:", log.id);
+        navigation.navigate('LogsDetail', { logId: log.id });
+      }}
       style={{
         backgroundColor: "#f8f9fa",
         borderRadius: Math.min(8, screenWidth * 0.02),
@@ -1141,7 +1171,12 @@ const ViewAllLogScreen = ({ route, navigation }) => {
 
   const LogCard = ({ log }) => (
     <TouchableOpacity
-      onPress={() => navigation.navigate('LogsDetail', { logId: log.id })}
+      onPress={() => {
+        console.log("LogCard - Log tapped:", log);
+        console.log("LogCard - Log ID:", log.id);
+        console.log("LogCard - Navigating to LogsDetail with logId:", log.id);
+        navigation.navigate('LogsDetail', { logId: log.id });
+      }}
       style={{
         backgroundColor: "#f8f9fa",
         borderRadius: Math.min(8, screenWidth * 0.02),
@@ -1383,9 +1418,12 @@ const ViewAllLogScreen = ({ route, navigation }) => {
           <View style={{ flex: 1, position: "relative" }}>
             <TouchableOpacity
               onPress={() => {
-                setShowProjectDropdown(!showProjectDropdown);
-                setShowTimeDropdown(false);
+                if (!loadingProjects) {
+                  setShowProjectDropdown(!showProjectDropdown);
+                  setShowTimeDropdown(false);
+                }
               }}
+              disabled={loadingProjects}
               style={{
                 flexDirection: "row",
                 alignItems: "center",
@@ -1416,9 +1454,9 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                   numberOfLines={1}
                   ellipsizeMode="tail"
                 >
-                  {projectFilterOptions.find(
+                  {loadingProjects ? "Loading projects..." : (projectFilterOptions.find(
                     (option) => option.value === selectedProjectFilter
-                  )?.label || "All Logs"}
+                  )?.label || "All Logs")}
                 </Text>
               </View>
               <Ionicons
@@ -1660,7 +1698,23 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       </View>
 
       {/* Logs Section */}
-      {filteredLogs.length === 0 ? (
+      {loadingLogs ? (
+        <View style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          padding: 20,
+          paddingTop: 200,
+        }}>
+          <Text style={{
+            fontSize: 18,
+            color: "#000000",
+            fontWeight: "600",
+          }}>
+            Loading...
+          </Text>
+        </View>
+      ) : filteredLogs.length === 0 ? (
         <View style={{
           flex: 1,
           justifyContent: "center",
@@ -1815,6 +1869,133 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         onUpdate={handleUpdateLog}
         userRole={userRole}
       />
+
+      {/* Beautiful Delete Confirmation Dialog */}
+      <Modal
+        visible={deleteDialogVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={cancelDelete}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingHorizontal: 20,
+        }}>
+          <View style={{
+            backgroundColor: 'white',
+            borderRadius: 16,
+            padding: 20,
+            width: '100%',
+            maxWidth: 320,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.2,
+            shadowRadius: 16,
+            elevation: 8,
+          }}>
+            {/* Warning Icon */}
+            <View style={{
+              alignItems: 'center',
+              marginBottom: 16,
+            }}>
+              <View style={{
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor: '#FEF2F2',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 12,
+              }}>
+                <Ionicons name="warning" size={24} color="#EF4444" />
+              </View>
+              <Text style={{
+                fontSize: 18,
+                fontWeight: 'bold',
+                color: '#1F2937',
+                textAlign: 'center',
+                marginBottom: 4,
+              }}>
+                Delete Log
+              </Text>
+            </View>
+
+            {/* Message */}
+            <Text style={{
+              fontSize: 15,
+              color: '#6B7280',
+              textAlign: 'center',
+              lineHeight: 22,
+              marginBottom: 16,
+            }}>
+              Are you sure you want to delete{' '}
+              <Text style={{ fontWeight: '600', color: '#1F2937' }}>
+                "{logToDelete?.description || 'this log'}"
+              </Text>
+              {' '}permanently?
+            </Text>
+            
+            <Text style={{
+              fontSize: 13,
+              color: '#EF4444',
+              textAlign: 'center',
+              fontWeight: '500',
+              marginBottom: 20,
+            }}>
+              This action cannot be undone.
+            </Text>
+
+            {/* Action Buttons */}
+            <View style={{
+              flexDirection: 'row',
+              gap: 10,
+            }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  backgroundColor: '#F3F4F6',
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                }}
+                onPress={cancelDelete}
+                activeOpacity={0.8}
+              >
+                <Text style={{
+                  fontSize: 15,
+                  fontWeight: '600',
+                  color: '#374151',
+                }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  backgroundColor: '#EF4444',
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                }}
+                onPress={confirmDelete}
+                activeOpacity={0.8}
+              >
+                <Text style={{
+                  fontSize: 15,
+                  fontWeight: '600',
+                  color: 'white',
+                }}>
+                  Delete
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };

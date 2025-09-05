@@ -10,6 +10,7 @@ import {
   Dimensions,
   RefreshControl,
 } from "react-native";
+import Toast from 'react-native-toast-message';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
@@ -25,6 +26,7 @@ import getTasksByloginId from "../services/tasks/getTasksByloginId";
 import { deleteTaskById } from "../services/tasks/deleteTaskById";
 import { getMyProjects } from "../services/projects/getProjectsByLoginUserId";
 import { getLogs } from "../services/log/getLogs";
+import { getLogsForOwnerRecent } from "../services/log/getLogsForOwnerRecent";
 import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
 import {
@@ -50,12 +52,12 @@ function WidgetScreen({ navigation, route }) {
   const { projectId } = route.params || {};
 
   // Load logs function
-  const loadLogs = async () => {
+  const loadLogs = async (projectId) => {
     try {
       setLogsLoading(true);
-      console.log("WidgetScreen - Starting to load logs...");
+      console.log("WidgetScreen - Starting to load logs with projectId:", projectId);
 
-      const logsResponse = await getLogs();
+      const logsResponse = await getLogs(projectId);
       console.log("WidgetScreen - Logs response:", logsResponse);
       console.log("WidgetScreen - Logs response type:", typeof logsResponse);
       console.log("WidgetScreen - Is logs response array?", Array.isArray(logsResponse));
@@ -123,6 +125,9 @@ function WidgetScreen({ navigation, route }) {
       let response;
 
       if (role === "Employee") {
+        // --- Load logs for Employee role using getLogs service ---
+        await loadLogs(projectId);
+        
         // Check if projectId is provided in route params
         if (projectId) {
           // Use getProjectById when projectId is provided
@@ -144,35 +149,9 @@ function WidgetScreen({ navigation, route }) {
             const projectTasks = response.tasks || [];
             console.log("WidgetScreen - Employee: Project tasks:", projectTasks);
             setTasks(projectTasks);
-
-            // Extract and map logs from tasks for Employee role (don't use getLogs)
-            const tasksWithLogs = projectTasks.filter(task => task.log && task.log !== null);
-            console.log("WidgetScreen - Employee: Tasks with logs:", tasksWithLogs.length);
-
-            const extractedLogs = tasksWithLogs.map(task => ({
-              id: task.log.id,
-              createdBy: task.assignedTo ? `${task.assignedTo.first_name || ''} ${task.assignedTo.last_name || ''}`.trim() : 'Unknown User',
-              date: task.log.createdAt ? new Date(task.log.createdAt).toLocaleDateString() : 'N/A',
-              createdAt: task.log.createdAt,
-              description: task.log.note || 'No description',
-              images: task.log.images || [],
-              image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
-              taskTitle: task.title,
-            }));
-
-            // Sort logs by date (newest first)
-            const sortedLogs = extractedLogs.sort((a, b) => {
-              const dateA = new Date(a.createdAt);
-              const dateB = new Date(b.createdAt);
-              return dateB - dateA;
-            });
-
-            console.log("WidgetScreen - Employee: Extracted and sorted logs:", sortedLogs);
-            setLogs(sortedLogs);
           } else {
             setProject({ name: "Project" });
             setTasks([]);
-            setLogs([]);
           }
         } else {
           // Fallback to getTasksByloginId when no projectId is provided
@@ -186,12 +165,10 @@ function WidgetScreen({ navigation, route }) {
           } else {
             setTasks([]);
           }
-          // Set empty logs when no projectId
-          setLogs([]);
         }
       } else if (role === "Manager") {
-        // Disabled: Load logs for Manager role (use getProjectById response instead)
-        // await loadLogs();
+        // --- Load logs for Manager role using getLogs service ---
+        await loadLogs(projectId);
 
         // Check if projectId is provided from HomeScreen (when Manager taps on project card)
         if (projectId) {
@@ -216,38 +193,6 @@ function WidgetScreen({ navigation, route }) {
           } else {
             setProject({ name: "Project" });
             setTasks([]);
-          }
-
-          // Extract and map logs from getProjectById response for Manager role
-          if (response) {
-            const projectTasks = response.tasks || [];
-
-            // Extract logs from tasks (same logic as Employee role)
-            const tasksWithLogs = projectTasks.filter(task => task.log && task.log !== null);
-            console.log("WidgetScreen - Manager: Tasks with logs:", tasksWithLogs.length);
-
-            const extractedLogs = tasksWithLogs.map(task => ({
-              id: task.log.id,
-              createdBy: task.assignedTo ? `${task.assignedTo.first_name || ''} ${task.assignedTo.last_name || ''}`.trim() : 'Unknown User',
-              date: task.log.createdAt ? new Date(task.log.createdAt).toLocaleDateString() : 'N/A',
-              createdAt: task.log.createdAt,
-              description: task.log.note || 'No description',
-              images: task.log.images || [],
-              image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
-              taskTitle: task.title,
-            }));
-
-            // Sort logs by date (newest first)
-            const sortedLogs = extractedLogs.sort((a, b) => {
-              const dateA = new Date(a.createdAt);
-              const dateB = new Date(b.createdAt);
-              return dateB - dateA;
-            });
-
-            console.log("WidgetScreen - Manager: Extracted and sorted logs:", sortedLogs);
-            setLogs(sortedLogs);
-          } else {
-            setLogs([]);
           }
         } else {
           // Fallback: Get manager's projects if no projectId provided
@@ -275,42 +220,14 @@ function WidgetScreen({ navigation, route }) {
               setProject({ name: "Project" });
               setTasks([]);
             }
-
-            // Extract logs from fallback getProjectById response
-            if (response) {
-              const projectTasks = response.tasks || [];
-              const tasksWithLogs = projectTasks.filter(task => task.log && task.log !== null);
-              
-              const extractedLogs = tasksWithLogs.map(task => ({
-                id: task.log.id,
-                createdBy: task.assignedTo ? `${task.assignedTo.first_name || ''} ${task.assignedTo.last_name || ''}`.trim() : 'Unknown User',
-                date: task.log.createdAt ? new Date(task.log.createdAt).toLocaleDateString() : 'N/A',
-                createdAt: task.log.createdAt,
-                description: task.log.note || 'No description',
-                images: task.log.images || [],
-                image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
-                taskTitle: task.title,
-              }));
-
-              const sortedLogs = extractedLogs.sort((a, b) => {
-                const dateA = new Date(a.createdAt);
-                const dateB = new Date(b.createdAt);
-                return dateB - dateA;
-              });
-
-              setLogs(sortedLogs);
-            } else {
-              setLogs([]);
-            }
           } else {
             setProject({ name: "No Projects" });
             setTasks([]);
-            setLogs([]);
           }
         }
       } else if (role === "Admin") {
         // Load logs for Admin role
-        await loadLogs();
+        await loadLogs(projectId);
 
         console.log("WidgetScreen - Calling getTaskByProjectId for role:", role, "with projectId:", projectId);
         response = await getTaskByProjectId(projectId);
@@ -339,79 +256,58 @@ function WidgetScreen({ navigation, route }) {
           setTasks([]);
         }
       } else if (role === "Owner") {
-        // For Owner role, get tasks and extract logs from them
-        console.log("WidgetScreen - Calling getTaskByProjectId for role:", role, "with projectId:", projectId);
+        // --- Load recent logs for Owner role using getLogsForOwnerRecent service ---
+        console.log("WidgetScreen - Owner: Loading recent logs using getLogsForOwnerRecent service with projectId:", projectId);
+        const ownerLogsResponse = await getLogsForOwnerRecent(projectId);
+        console.log("WidgetScreen - Owner: getLogsForOwnerRecent response:", ownerLogsResponse);
+
+        // Map the owner logs response to the expected format
+        if (ownerLogsResponse && Array.isArray(ownerLogsResponse)) {
+          const mappedLogs = ownerLogsResponse.map(log => ({
+            id: log.id,
+            createdBy: log.user ? `${log.user.first_name || ''} ${log.user.last_name || ''}`.trim() : 'Unknown User',
+            date: log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'N/A',
+            createdAt: log.createdAt,
+            description: log.note || 'No description',
+            images: log.images || [],
+            image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : require("../assets/robot.png"),
+          }));
+
+          // Sort logs by date (newest first)
+          const sortedLogs = mappedLogs.sort((a, b) => {
+            const dateA = new Date(a.createdAt);
+            const dateB = new Date(b.createdAt);
+            return dateB - dateA;
+          });
+
+          console.log("WidgetScreen - Owner: Mapped and sorted logs:", sortedLogs);
+          setLogs(sortedLogs);
+        } else {
+          console.log("WidgetScreen - Owner: No logs found in response");
+          setLogs([]);
+        }
+
+        // --- Load tasks for Owner role using getTaskByProjectId ---
+        console.log("WidgetScreen - Owner: Calling getTaskByProjectId for tasks with projectId:", projectId);
         response = await getTaskByProjectId(projectId);
-        console.log("WidgetScreen - getTaskByProjectId response:", response);
+        console.log("WidgetScreen - Owner: getTaskByProjectId response:", response);
 
         if (response && response.tasks) {
           console.log("WidgetScreen - Owner: Response has tasks property, tasks count:", response.tasks.length);
           setProject(response);
           setTasks(response.tasks || []);
-
-          // Extract logs from tasks for Owner role
-          const tasksWithLogs = response.tasks.filter(task => task.log && task.log !== null);
-          console.log("WidgetScreen - Owner: Tasks with logs:", tasksWithLogs.length);
-
-          const extractedLogs = tasksWithLogs.map(task => ({
-            id: task.log.id,
-            createdBy: task.assignedTo ? `${task.assignedTo.first_name || ''} ${task.assignedTo.last_name || ''}`.trim() : 'Unknown User',
-            date: task.log.createdAt ? new Date(task.log.createdAt).toLocaleDateString() : 'N/A',
-            createdAt: task.log.createdAt,
-            description: task.log.note || 'No description',
-            images: task.log.images || [],
-            image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
-            taskTitle: task.title,
-          }));
-
-          // Sort logs by date (newest first)
-          const sortedLogs = extractedLogs.sort((a, b) => {
-            const dateA = new Date(a.createdAt);
-            const dateB = new Date(b.createdAt);
-            return dateB - dateA;
-          });
-
-          console.log("WidgetScreen - Owner: Extracted and sorted logs:", sortedLogs);
-          setLogs(sortedLogs);
         } else if (response && Array.isArray(response)) {
           console.log("WidgetScreen - Owner: Response is an array of tasks, length:", response.length);
           setProject({ name: "Project" });
           setTasks(response);
-
-          // Extract logs from tasks for Owner role
-          const tasksWithLogs = response.filter(task => task.log && task.log !== null);
-          console.log("WidgetScreen - Owner: Tasks with logs:", tasksWithLogs.length);
-
-          const extractedLogs = tasksWithLogs.map(task => ({
-            id: task.log.id,
-            createdBy: task.assignedTo ? `${task.assignedTo.first_name || ''} ${task.assignedTo.last_name || ''}`.trim() : 'Unknown User',
-            date: task.log.createdAt ? new Date(task.log.createdAt).toLocaleDateString() : 'N/A',
-            createdAt: task.log.createdAt,
-            description: task.log.note || 'No description',
-            images: task.log.images || [],
-            image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
-            taskTitle: task.title,
-          }));
-
-          // Sort logs by date (newest first)
-          const sortedLogs = extractedLogs.sort((a, b) => {
-            const dateA = new Date(a.createdAt);
-            const dateB = new Date(b.createdAt);
-            return dateB - dateA;
-          });
-
-          console.log("WidgetScreen - Owner: Extracted and sorted logs:", sortedLogs);
-          setLogs(sortedLogs);
         } else if (response) {
           console.log("WidgetScreen - Owner: Response exists but no expected structure");
           setProject(response);
           setTasks([]);
-          setLogs([]);
         } else {
           console.log("WidgetScreen - Owner: No response received");
           setProject({ name: "Project" });
           setTasks([]);
-          setLogs([]);
         }
       }
     } catch (err) {
@@ -459,7 +355,15 @@ function WidgetScreen({ navigation, route }) {
   const handleDelete = (task) => {
     // Only allow deleting tasks if user is not an Employee
     if (userRole === "Employee") {
-      Alert.alert("Access Denied", "Employees cannot delete tasks.");
+      // --- Show Access Denied Toast Message ---
+      Toast.show({
+        type: 'error',
+        text1: 'Access Denied',
+        text2: 'Employees cannot delete tasks',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
       return;
     }
 
@@ -489,9 +393,15 @@ function WidgetScreen({ navigation, route }) {
               // Refresh the data
               await loadData(true);
 
-              Alert.alert("Success", "Task deleted successfully!", [
-                { text: "OK" },
-              ]);
+              // --- Show Success Toast Message ---
+              Toast.show({
+                type: 'success',
+                text1: 'Task Deleted Successfully!',
+                text2: `"${taskTitle}" has been permanently deleted`,
+                visibilityTime: 3000,
+                autoHide: true,
+                topOffset: 80,
+              });
             } catch (error) {
               let errorMessage = "Failed to delete task. Please try again.";
               if (error.response?.data?.message) {
@@ -500,7 +410,15 @@ function WidgetScreen({ navigation, route }) {
                 errorMessage = error.message;
               }
 
-              Alert.alert("Error", errorMessage, [{ text: "OK" }]);
+              // --- Show Error Toast Message ---
+              Toast.show({
+                type: 'error',
+                text1: 'Delete Failed',
+                text2: errorMessage,
+                visibilityTime: 4000,
+                autoHide: true,
+                topOffset: 80,
+              });
             }
           },
         },
@@ -543,13 +461,9 @@ function WidgetScreen({ navigation, route }) {
             opacity: tasks.length === 0 ? 0.7 : 1,
           }}
           onPress={() => {
-            const navigationParams =
-              userRole === "Employee"
-                ? {}
-                : {
-                  projectId:
-                    userRole === "Manager" ? managerProjectId : projectId,
-                };
+            const navigationParams = {
+              projectId: userRole === "Manager" ? managerProjectId : projectId,
+            };
             navigation.navigate("ViewAllTasksScreen", navigationParams);
           }}
           disabled={tasks.length === 0}
@@ -903,6 +817,13 @@ function WidgetScreen({ navigation, route }) {
         onAddPress={() => {
           // --- FAB Navigation Logic Based on User Role and Widget States ---
           
+          // For Manager role: If tasks widget is empty, navigate to CreateTaskScreen
+          if (userRole === "Manager" && tasks.length === 0) {
+            const navigationParams = { projectId: projectId }; // Use projectId from route params
+            navigation.navigate("CreateTask", navigationParams);
+            return;
+          }
+          
           // For Employee role: If logs widget is empty, navigate to CreateLogScreen with projectId from params
           if (userRole === "Employee" && logs.length === 0) {
             const navigationParams = { projectId: projectId }; // Use projectId from route params
@@ -910,17 +831,10 @@ function WidgetScreen({ navigation, route }) {
             return;
           }
 
-          // For Manager role: If logs widget is empty, navigate to CreateLogScreen with projectId from params
+          // For Manager role: If logs widget is empty (and tasks exist), navigate to CreateLogScreen
           if (userRole === "Manager" && logs.length === 0) {
             const navigationParams = { projectId: projectId }; // Use projectId from route params (not managerProjectId)
             navigation.navigate("CreatLog", navigationParams);
-            return;
-          }
-
-          // For Manager role: If both widgets are empty, prioritize CreateTaskScreen
-          if (userRole === "Manager" && tasks.length === 0 && logs.length === 0) {
-            const navigationParams = { projectId: projectId }; // Use projectId from route params
-            navigation.navigate("CreateTask", navigationParams);
             return;
           }
 
