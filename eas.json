@@ -8,7 +8,11 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "ENV_FILE": "https://64737c85d906.ngrok-free.app"
+        "NODE_ENV": "development",
+        "ENV_FILE": "https://f1a90137820a.ngrok-free.app"
+      },
+      "android": {
+        "buildType": "apk"
       }
     },
     "preview": {
@@ -17,13 +21,15 @@
         "buildType": "apk"
       },
       "env": {
-        "ENV_FILE": "https://64737c85d906.ngrok-free.app"
+        "NODE_ENV": "production",
+        "ENV_FILE": "https://your-production-backend-url.com"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "ENV_FILE": "https://64737c85d906.ngrok-free.app"
+        "NODE_ENV": "production",
+        "ENV_FILE": "https://your-production-backend-url.com"
       }
     }
   },

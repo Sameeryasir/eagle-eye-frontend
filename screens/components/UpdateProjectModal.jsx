@@ -145,15 +145,9 @@ export default function UpdateProjectModal({
     try {
       const response = await updateProjectById(project.id, projectPayload);
 
-      Alert.alert("Success", "Project updated successfully!", [
-        {
-          text: "OK",
-          onPress: () => {
-            onClose();
-            if (onSuccess) onSuccess();
-          },
-        },
-      ]);
+      // Close modal and trigger success callback without showing alert
+      onClose();
+      if (onSuccess) onSuccess();
     } catch (error) {
       console.error("Error updating project:", error);
 

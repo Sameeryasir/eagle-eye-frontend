@@ -22,7 +22,8 @@ export async function filterTask(filters, projectId) {
     };
 
     // Map date sorting options to backend sortBy field
-    if (filters.createdAt) {
+    // Business Rule: Don't apply date-based startTime filters when closedTask is true (backend conflict)
+    if (filters.createdAt && !filters.closedTask) {
         switch (filters.createdAt) {
             case 'created-at':
                 filterData.sortBy = 'createdAt';
@@ -34,6 +35,10 @@ export async function filterTask(filters, projectId) {
                 filterData.sortBy = 'endTime';
                 break;
         }
+    } else if (filters.closedTask) {
+        // When closedTask is true, use createdAt sorting to avoid backend conflict
+        filterData.sortBy = 'createdAt';
+        console.log('🔒 Closed task filter active - using createdAt sorting to avoid backend conflict');
     }
 
     // Map assignment filter to backend assignedTo field
@@ -52,7 +57,14 @@ export async function filterTask(filters, projectId) {
             console.warn('⚠️ assigned-to-others selected but no email or ID provided');
         }
     }
-    // Note: Backend supports 'me', 'unassigned', and specific employee email options, other filters handled client-side
+    
+    // Map closedTask filter to backend closedTask field
+    if (filters.closedTask !== undefined) {
+        filterData.closedTask = filters.closedTask;
+        console.log('🔒 Using closedTask filter:', filters.closedTask);
+    }
+    
+    // Note: Backend supports 'me', 'unassigned', specific employee email options, and closedTask boolean
     
     // --- Validation and Debugging ---
     console.log('📊 Input filters received:', JSON.stringify(filters, null, 2));

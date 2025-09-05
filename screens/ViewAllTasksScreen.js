@@ -1392,7 +1392,7 @@ function ViewAllTasksScreen({ navigation, route }) {
       }
       ListHeaderComponentStyle={{ marginHorizontal: -20 }}
       ListEmptyComponent={() => (
-        <View className="flex-1 justify-center items-center p-5 min-h-[300px]">
+        <View className="flex-1 justify-center items-center p-5 min-h-[400px]">
           {error ? (
             <>
               <Text className="text-[16px] text-[#dc3545] text-center mb-4 font-medium">
@@ -1408,11 +1408,13 @@ function ViewAllTasksScreen({ navigation, route }) {
               </TouchableOpacity>
             </>
           ) : (
-            <Text className="text-[16px] text-[#666] text-center font-medium">
-              {searchTerm.trim() !== ""
-                ? "No tasks match your search"
-                : "No tasks found"}
-            </Text>
+            <View style={{ marginTop: 60 }}>
+              <Text className="text-[16px] text-[#666] text-center font-medium">
+                {searchTerm.trim() !== ""
+                  ? "No tasks match your search"
+                  : "No tasks found"}
+              </Text>
+            </View>
           )}
         </View>
       )}

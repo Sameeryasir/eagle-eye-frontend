@@ -102,6 +102,7 @@ const FilterModal = ({
       createdAt: 'created-at',
       assignedTo: 'all',
       upcoming: 'all',
+      status: 'all', // Default to all tasks (not closed)
       email: null, // Clear employee email
     });
     // --- Reset Dropdown State ---
@@ -122,12 +123,26 @@ const FilterModal = ({
       // --- Call filterTask Service Directly from FilterModal ---
       // Business Rule: Filter tasks using backend service when filters are applied
       if (projectId) {
-        console.log('Calling filterTask service with filters:', selectedFilters);
-        const filteredTasks = await filterTask(selectedFilters, projectId);
+        // --- Prepare filters with closedTask parameter ---
+        const filtersWithClosedTask = {
+          ...selectedFilters,
+          closedTask: selectedFilters.status === 'closed' ? true : false
+        };
+        
+        // --- Fix Backend Conflict: Remove date filters when closedTask is true ---
+        // Business Rule: Backend has conflicting logic between closedTask and date filters
+        if (filtersWithClosedTask.closedTask === true) {
+          // Reset date filter to avoid conflict with closedTask filter
+          filtersWithClosedTask.createdAt = 'created-at'; // Default to created-at
+          console.log('🔒 Closed task selected - resetting date filter to avoid backend conflict');
+        }
+        
+        console.log('Calling filterTask service with filters:', filtersWithClosedTask);
+        const filteredTasks = await filterTask(filtersWithClosedTask, projectId);
         console.log('Filtered tasks received:', filteredTasks);
         
         // Pass filtered tasks back to parent component
-        onApplyFilters(selectedFilters, filteredTasks);
+        onApplyFilters(filtersWithClosedTask, filteredTasks);
       } else {
         console.error('FilterModal - No projectId available for filtering');
         // Fallback to original behavior if no projectId
@@ -387,6 +402,76 @@ const FilterModal = ({
             ))}
           </View>
 
+          {/* Task Status Filter */}
+          <View style={{ marginBottom: Math.min(24, screenHeight * 0.03) }}>
+            <Text
+              style={{
+                fontSize: Math.min(16, screenWidth * 0.04),
+                fontWeight: '600',
+                color: '#374151',
+                marginBottom: Math.min(12, screenHeight * 0.015),
+              }}
+            >
+              Task Status
+            </Text>
+            {['closed'].map((status) => (
+              <TouchableOpacity
+                key={status}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingVertical: Math.min(12, screenHeight * 0.015),
+                  paddingHorizontal: Math.min(16, screenWidth * 0.04),
+                  backgroundColor:
+                    selectedFilters.status === status
+                      ? '#F3F4F6'
+                      : 'transparent',
+                  borderRadius: Math.min(8, screenWidth * 0.02),
+                  marginBottom: Math.min(8, screenHeight * 0.01),
+                }}
+                onPress={() => {
+                  setSelectedFilters((prev) => ({ ...prev, status }));
+                }}
+              >
+                <View
+                  style={{
+                    width: Math.min(20, screenWidth * 0.05),
+                    height: Math.min(20, screenWidth * 0.05),
+                    borderRadius: Math.min(10, screenWidth * 0.025),
+                    borderWidth: 2,
+                    borderColor:
+                      selectedFilters.status === status
+                        ? '#000'
+                        : '#D1D5DB',
+                    backgroundColor:
+                      selectedFilters.status === status
+                        ? '#000'
+                        : 'transparent',
+                    marginRight: Math.min(12, screenWidth * 0.03),
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {selectedFilters.status === status && (
+                    <Ionicons
+                      name="checkmark"
+                      size={Math.min(12, screenWidth * 0.03)}
+                      color="white"
+                    />
+                  )}
+                </View>
+                <Text
+                  style={{
+                    fontSize: Math.min(15, screenWidth * 0.038),
+                    color: '#374151',
+                    textTransform: 'capitalize',
+                  }}
+                >
+                  Closed Tasks
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
         </ScrollView>
 

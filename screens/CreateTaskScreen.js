@@ -28,7 +28,18 @@ function CreateTaskScreen({ navigation, route }) {
   });
   const [startDateTime, setStartDateTime] = useState(new Date());
   const [endDateTime, setEndDateTime] = useState(null);
-  const [minStartTime] = useState(new Date()); // Capture current time when draft is opened
+  const [minStartTime] = useState(() => {
+    // --- Set minimum start time to current time rounded down to the minute ---
+    // Business Rule: Allow tasks to start at the current minute or later
+    const now = new Date();
+    now.setSeconds(0, 0); // Round down to the minute (remove seconds and milliseconds)
+    return now;
+  });
+  
+  // --- Draft Task State Management ---
+  // Business Rule: Create draft tasks that can be saved and edited later, just like ViewAllTasksScreen
+  const [isDraftMode, setIsDraftMode] = useState(false);
+  const [draftTaskId, setDraftTaskId] = useState(null);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
@@ -86,6 +97,39 @@ function CreateTaskScreen({ navigation, route }) {
     } catch (error) {
       console.error("Error loading employees:", error);
     }
+  };
+
+  // --- Draft Task Management Functions ---
+  // Business Rule: Create and manage draft tasks like ViewAllTasksScreen
+  const createDraftTask = () => {
+    const now = new Date();
+    now.setSeconds(0, 0); // Round down to the minute
+    const newDraftTask = {
+      id: Math.floor(Math.random() * 1000000) + 1, // Integer ID
+      title: taskData.title || "",
+      description: taskData.description || "",
+      startTime: startDateTime,
+      minStartTime: minStartTime, // Capture when draft was created for backend validation
+      endTime: endDateTime, // Let user manually select end time
+      assignedToUserId: taskData.assignedTo?.id || null,
+      priority: taskData.priority || "low",
+      isDraft: true,
+    };
+    
+    setDraftTaskId(newDraftTask.id);
+    setIsDraftMode(true);
+    
+    // --- Show Success Toast Message ---
+    Toast.show({
+      type: 'success',
+      text1: 'Draft Saved!',
+      text2: 'Your task has been saved as a draft',
+      visibilityTime: 3000,
+      autoHide: true,
+      topOffset: 80,
+    });
+    
+    return newDraftTask;
   };
 
   const handleEmployeeSearch = (text) => {
@@ -231,16 +275,46 @@ function CreateTaskScreen({ navigation, route }) {
       return;
     }
 
-    // Validate startTime is not before the captured minStartTime (draft-friendly validation)
-    if (startDateTime < minStartTime) {
-      Alert.alert('Error', 'Start time cannot be before the draft start time');
+    // --- Validation: Dates & Times (MCP Context 7) ---
+    // Business Rule: Validate startTime >= minStartTime (when draft was created) and endTime > startTime
+
+    // Ensure start time is not before the minimum start time (when draft was created)
+    // Allow start time to be equal to minStartTime (same minute) with small buffer
+    if (minStartTime && startDateTime < minStartTime) {
+      Alert.alert(
+        "Error",
+        "Start time cannot be before the draft creation time"
+      );
       return;
     }
 
-    // Only validate that endTime is after startTime
-    if (endDateTime && endDateTime <= startDateTime) {
-      Alert.alert('Error', 'End date and time must be after start date and time');
-      return;
+    // Only validate end time if it's provided (optional field)
+    if (endDateTime) {
+      // Ensure end time is after start time
+      if (endDateTime <= startDateTime) {
+        Alert.alert(
+          "Error",
+          "End date and time must be after start date and time"
+        );
+        return;
+      }
+
+      // Additional validation for reasonable time ranges
+      const timeDifference =
+        endDateTime.getTime() - startDateTime.getTime();
+      const minDuration = 15 * 60 * 1000; // 15 minutes in milliseconds
+      const maxDuration = 365 * 24 * 60 * 60 * 1000; // 1 year in milliseconds
+
+      // Ensure end time is at least 15 minutes after start time
+      if (timeDifference < minDuration) {
+        Alert.alert("Error", "Task duration must be at least 15 minutes");
+        return;
+      }
+
+      if (timeDifference > maxDuration) {
+        Alert.alert("Error", "Task duration cannot exceed 1 year");
+        return;
+      }
     }
 
     // Validate that projectId is available
@@ -266,16 +340,20 @@ function CreateTaskScreen({ navigation, route }) {
 
       const response = await createTask(taskPayload);
 
-      Alert.alert(
-        'Success',
-        'Task created successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.goBack()
-          }
-        ]
-      );
+      // --- Show Success Toast Message ---
+      Toast.show({
+        type: 'success',
+        text1: 'Task Created Successfully!',
+        text2: 'Your task has been created and saved',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
+
+      // Navigate back after a short delay to show the toast
+      setTimeout(() => {
+        navigation.goBack();
+      }, 1500);
     } catch (error) {
       console.error('Error creating task:', error);
 

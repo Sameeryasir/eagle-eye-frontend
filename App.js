@@ -7,6 +7,7 @@ import {
   TextInput,
   StatusBar,
   Image,
+  Text,
 } from "react-native";
 import { SafeAreaView, SafeAreaProvider } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,6 +15,36 @@ import React, { useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MenuProvider } from "react-native-popup-menu";
 import Toast from 'react-native-toast-message';
+
+// Error Boundary Component
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('App Error Boundary caught an error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffffff' }}>
+          <Text style={{ fontSize: 18, color: '#333', textAlign: 'center', margin: 20 }}>
+            Something went wrong. Please restart the app.
+          </Text>
+        </SafeAreaView>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 import SignIn from "./screens/SignInScreen";
 import LogIn from "./screens/LogInScreen";
 import Code from "./screens/OtpScreen";
@@ -77,10 +108,29 @@ const AppNavigator = () => {
   const { isAuthenticated, isLoading, initialRoute } = useAuth();
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [navigationRef, setNavigationRef] = useState(null);
+  const [splashTimeout, setSplashTimeout] = useState(false);
+
+  // Fallback timeout for splash screen (15 seconds)
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      console.log('Splash screen timeout reached, forcing app to continue');
+      setSplashTimeout(true);
+    }, 15000);
+
+    return () => clearTimeout(timeout);
+  }, []);
 
   // Show loading screen while checking authentication
-  if (isLoading) {
-    return null; // or a loading component
+  if (isLoading && !splashTimeout) {
+    return (
+      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffffff' }}>
+        <Image 
+          source={require('./assets/icons/splash-icon.png')} 
+          style={{ width: 200, height: 200 }}
+          resizeMode="contain"
+        />
+      </SafeAreaView>
+    );
   }
 
   const handleMenuPress = () => {
@@ -117,266 +167,266 @@ const AppNavigator = () => {
   };
 
   return (
-    <AuthProvider>
-      <MenuProvider>
-        <SafeAreaProvider>
-          <NavigationContainer ref={setNavigationRef}>
-            <Stack.Navigator initialRouteName={initialRoute}>
-              <Stack.Screen
-                name="SignIn"
-                component={SignIn}
-                options={{
-                  headerShown: false,
-                }}
-              />
-              <Stack.Screen
-                name="LogIn"
-                component={LogIn}
-                options={{
-                  headerShown: false,
-                }}
-              />
-              <Stack.Screen
-                name="OtpScreen"
-                component={Code}
-                options={{
-                  headerShown: false,
-                }}
-              />
-              <Stack.Screen
-                name="HomeScreen"
-                component={HomeScreen}
-                options={{
-                  headerShown: true,
-                  header: () => <CustomHeader onMenuPress={handleMenuPress} />,
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                }}
-              />
-
-              <Stack.Screen
-                name="WidgetScreen"
-                component={WidgetScreen}
-                options={{
-                  headerShown: true,
-                  header: () => (
-                    <CustomHeaderForScreens
-                      onMenuPress={handleMenuPress}
-                      title=" Dashboard"
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                }}
-              />
-              <Stack.Screen
-                name="CalenderScreen"
-                component={CalenderScreen}
-                options={{
-                  headerShown: true,
-                  header: () => (
-                    <CustomHeaderForScreens
-                      onMenuPress={handleMenuPress}
-                      title="Calendar"
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                }}
-              />
-
-              <Stack.Screen
-                name="ViewAllTasksScreen"
-                component={ViewAllTasksScreen}
-                options={{
-                  headerShown: true,
-                  header: () => (
-                    <CustomHeaderForScreens
-                      onMenuPress={handleMenuPress}
-                      title="All Tasks"
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                }}
-              />
-              <Stack.Screen
-                name="ViewAllLogScreen"
-                component={ViewAllLogScreen}
-                options={{
-                  headerShown: true,
-                  header: () => (
-                    <CustomHeaderForScreens
-                      onMenuPress={handleMenuPress}
-                      title="All Logs"
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                }}
-              />
-              <Stack.Screen
-                name="CreateProject"
-                component={CreateProjectScreen}
-                options={{
-                  headerShown: true,
-                  header: () => (
-                    <CustomHeaderForScreens
-                      onMenuPress={handleMenuPress}
-                      title="Create Project"
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                }}
-              />
-              <Stack.Screen
-                name="CreateTask"
-                component={CreateTaskScreen}
-                options={{
-                  headerShown: true,
-                  header: () => (
-                    <CustomHeaderForScreens
-                      onMenuPress={handleMenuPress}
-                      title="Create Task"
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                }}
-              />
-              <Stack.Screen
-                name="UpdateTask"
-                component={UpdateTaskScreen}
-                options={{
-                  headerShown: true,
-                  header: () => (
-                    <CustomHeaderForScreens
-                      onMenuPress={handleMenuPress}
-                      title="Update Task"
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                }}
-              />
-              <Stack.Screen
-                name="UpdateProject"
-                component={UpdateProjectScreen}
-                options={{
-                  headerShown: true,
-                  header: () => (
-                    <CustomHeaderForScreens
-                      onMenuPress={handleMenuPress}
-                      title="Update Project"
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                }}
-              />
-              <Stack.Screen
-                name="TaskDetails"
-                component={TaskDetailsScreen}
-                options={{
-                  headerShown: true,
-                  header: () => (
-                    <CustomHeaderForScreens
-                      onMenuPress={handleMenuPress}
-                      title="Task Details"
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                }}
-              />
-              <Stack.Screen
-                name="LogsDetail"
-                component={LogsDetailScreen}
-                options={{
-                  headerShown: true,
-                  header: () => (
-                    <CustomHeaderForScreens
-                      onMenuPress={handleMenuPress}
-                      title="Log Details"
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                }}
-              />
-              <Stack.Screen
-                name="CreatLog"
-                component={CreatLogScreen}
-                options={{
-                  headerShown: true,
-                  header: () => (
-                    <CustomHeaderForScreens
-                      onMenuPress={handleMenuPress}
-                      title="Create Logs"
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                }}
-              />
-            </Stack.Navigator>
-
-            {/* Sidebar - rendered at app level for proper overlay */}
-            <Sidebar
-              isVisible={sidebarVisible}
-              onClose={handleSidebarClose}
-              onNavigate={handleSidebarNavigate}
-              navigation={navigationRef}
+    <MenuProvider>
+      <SafeAreaProvider>
+        <NavigationContainer ref={setNavigationRef}>
+          <Stack.Navigator initialRouteName={initialRoute}>
+            <Stack.Screen
+              name="SignIn"
+              component={SignIn}
+              options={{
+                headerShown: false,
+              }}
             />
-          </NavigationContainer>
-          <Toast />
-        </SafeAreaProvider>
-      </MenuProvider>
-    </AuthProvider>
+            <Stack.Screen
+              name="LogIn"
+              component={LogIn}
+              options={{
+                headerShown: false,
+              }}
+            />
+            <Stack.Screen
+              name="OtpScreen"
+              component={Code}
+              options={{
+                headerShown: false,
+              }}
+            />
+            <Stack.Screen
+              name="HomeScreen"
+              component={HomeScreen}
+              options={{
+                headerShown: true,
+                header: () => <CustomHeader onMenuPress={handleMenuPress} />,
+                headerBackTitleVisible: false,
+                headerStyle: {
+                  backgroundColor: "white",
+                },
+                headerShadowVisible: false,
+              }}
+            />
+
+            <Stack.Screen
+              name="WidgetScreen"
+              component={WidgetScreen}
+              options={{
+                headerShown: true,
+                header: () => (
+                  <CustomHeaderForScreens
+                    onMenuPress={handleMenuPress}
+                    title=" Dashboard"
+                  />
+                ),
+                headerBackTitleVisible: false,
+                headerStyle: {
+                  backgroundColor: "white",
+                },
+                headerShadowVisible: false,
+              }}
+            />
+            <Stack.Screen
+              name="CalenderScreen"
+              component={CalenderScreen}
+              options={{
+                headerShown: true,
+                header: () => (
+                  <CustomHeaderForScreens
+                    onMenuPress={handleMenuPress}
+                    title="Calendar"
+                  />
+                ),
+                headerBackTitleVisible: false,
+                headerStyle: {
+                  backgroundColor: "white",
+                },
+                headerShadowVisible: false,
+              }}
+            />
+
+            <Stack.Screen
+              name="ViewAllTasksScreen"
+              component={ViewAllTasksScreen}
+              options={{
+                headerShown: true,
+                header: () => (
+                  <CustomHeaderForScreens
+                    onMenuPress={handleMenuPress}
+                    title="All Tasks"
+                  />
+                ),
+                headerBackTitleVisible: false,
+                headerStyle: {
+                  backgroundColor: "white",
+                },
+                headerShadowVisible: false,
+              }}
+            />
+            <Stack.Screen
+              name="ViewAllLogScreen"
+              component={ViewAllLogScreen}
+              options={{
+                headerShown: true,
+                header: () => (
+                  <CustomHeaderForScreens
+                    onMenuPress={handleMenuPress}
+                    title="All Logs"
+                  />
+                ),
+                headerBackTitleVisible: false,
+                headerStyle: {
+                  backgroundColor: "white",
+                },
+                headerShadowVisible: false,
+              }}
+            />
+            <Stack.Screen
+              name="CreateProject"
+              component={CreateProjectScreen}
+              options={{
+                headerShown: true,
+                header: () => (
+                  <CustomHeaderForScreens
+                    onMenuPress={handleMenuPress}
+                    title="Create Project"
+                  />
+                ),
+                headerBackTitleVisible: false,
+                headerStyle: {
+                  backgroundColor: "white",
+                },
+                headerShadowVisible: false,
+              }}
+            />
+            <Stack.Screen
+              name="CreateTask"
+              component={CreateTaskScreen}
+              options={{
+                headerShown: true,
+                header: () => (
+                  <CustomHeaderForScreens
+                    onMenuPress={handleMenuPress}
+                    title="Create Task"
+                  />
+                ),
+                headerBackTitleVisible: false,
+                headerStyle: {
+                  backgroundColor: "white",
+                },
+                headerShadowVisible: false,
+              }}
+            />
+            <Stack.Screen
+              name="UpdateTask"
+              component={UpdateTaskScreen}
+              options={{
+                headerShown: true,
+                header: () => (
+                  <CustomHeaderForScreens
+                    onMenuPress={handleMenuPress}
+                    title="Update Task"
+                  />
+                ),
+                headerBackTitleVisible: false,
+                headerStyle: {
+                  backgroundColor: "white",
+                },
+                headerShadowVisible: false,
+              }}
+            />
+            <Stack.Screen
+              name="UpdateProject"
+              component={UpdateProjectScreen}
+              options={{
+                headerShown: true,
+                header: () => (
+                  <CustomHeaderForScreens
+                    onMenuPress={handleMenuPress}
+                    title="Update Project"
+                  />
+                ),
+                headerBackTitleVisible: false,
+                headerStyle: {
+                  backgroundColor: "white",
+                },
+                headerShadowVisible: false,
+              }}
+            />
+            <Stack.Screen
+              name="TaskDetails"
+              component={TaskDetailsScreen}
+              options={{
+                headerShown: true,
+                header: () => (
+                  <CustomHeaderForScreens
+                    onMenuPress={handleMenuPress}
+                    title="Task Details"
+                  />
+                ),
+                headerBackTitleVisible: false,
+                headerStyle: {
+                  backgroundColor: "white",
+                },
+                headerShadowVisible: false,
+              }}
+            />
+            <Stack.Screen
+              name="LogsDetail"
+              component={LogsDetailScreen}
+              options={{
+                headerShown: true,
+                header: () => (
+                  <CustomHeaderForScreens
+                    onMenuPress={handleMenuPress}
+                    title="Log Details"
+                  />
+                ),
+                headerBackTitleVisible: false,
+                headerStyle: {
+                  backgroundColor: "white",
+                },
+                headerShadowVisible: false,
+              }}
+            />
+            <Stack.Screen
+              name="CreatLog"
+              component={CreatLogScreen}
+              options={{
+                headerShown: true,
+                header: () => (
+                  <CustomHeaderForScreens
+                    onMenuPress={handleMenuPress}
+                    title="Create Logs"
+                  />
+                ),
+                headerBackTitleVisible: false,
+                headerStyle: {
+                  backgroundColor: "white",
+                },
+                headerShadowVisible: false,
+              }}
+            />
+          </Stack.Navigator>
+
+          {/* Sidebar - rendered at app level for proper overlay */}
+          <Sidebar
+            isVisible={sidebarVisible}
+            onClose={handleSidebarClose}
+            onNavigate={handleSidebarNavigate}
+            navigation={navigationRef}
+          />
+        </NavigationContainer>
+        <Toast />
+      </SafeAreaProvider>
+    </MenuProvider>
   );
 };
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppNavigator />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppNavigator />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

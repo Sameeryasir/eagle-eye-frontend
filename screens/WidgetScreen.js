@@ -458,7 +458,6 @@ function WidgetScreen({ navigation, route }) {
           style={{
             flexDirection: "row",
             alignItems: "center",
-            opacity: tasks.length === 0 ? 0.7 : 1,
           }}
           onPress={() => {
             const navigationParams = {
@@ -466,14 +465,13 @@ function WidgetScreen({ navigation, route }) {
             };
             navigation.navigate("ViewAllTasksScreen", navigationParams);
           }}
-          disabled={tasks.length === 0}
         >
           <Text
             style={{
               fontSize: Math.min(14, screenWidth * 0.035),
               fontWeight: "bold",
               marginRight: 4,
-              color: tasks.length === 0 ? "#ccc" : "black",
+              color: "black",
             }}
           >
             View All
@@ -481,7 +479,7 @@ function WidgetScreen({ navigation, route }) {
           <Ionicons
             name="chevron-forward"
             size={Math.min(16, screenWidth * 0.04)}
-            color={tasks.length === 0 ? "#ccc" : "black"}
+            color="black"
           />
         </TouchableOpacity>
       </View>
