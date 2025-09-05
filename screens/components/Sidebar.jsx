@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Animated, Dimensions, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, Animated, Dimensions, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getUserRole } from '../../services/utils/userRole';
@@ -14,6 +14,7 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
     role: ''
   });
   const [userRole, setUserRole] = React.useState(null);
+  const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
   const navigation = useNavigation();
 
   React.useEffect(() => {
@@ -76,46 +77,40 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
     onClose();
   };
 
-  const handleLogout = async () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              // Clear all stored tokens and user data
-              await AsyncStorage.multiRemove([
-                'token',
-                'refreshToken',
-                'userRole',
-                'userFirstName',
-                'userLastName',
-                'userId'
-              ]);
-              
-              // Close sidebar
-              onClose();
-              
-              // Navigate to SignIn screen
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'SignIn' }],
-              });
-            } catch (error) {
-              console.error('Error during logout:', error);
-              Alert.alert('Error', 'Failed to logout. Please try again.');
-            }
-          },
-        },
-      ]
-    );
+  const handleLogout = () => {
+    setShowLogoutDialog(true);
+  };
+
+  const confirmLogout = async () => {
+    try {
+      // Clear all stored tokens and user data
+      await AsyncStorage.multiRemove([
+        'token',
+        'refreshToken',
+        'userRole',
+        'userFirstName',
+        'userLastName',
+        'userId'
+      ]);
+      
+      // Close dialog and sidebar
+      setShowLogoutDialog(false);
+      onClose();
+      
+      // Navigate to SignIn screen
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'SignIn' }],
+      });
+    } catch (error) {
+      console.error('Error during logout:', error);
+      setShowLogoutDialog(false);
+      // You can add a toast message here if needed
+    }
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutDialog(false);
   };
 
   return (
@@ -200,6 +195,55 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
           </TouchableOpacity>
         </View>
       </Animated.View>
+
+      {/* Custom Logout Dialog */}
+      <Modal
+        visible={showLogoutDialog}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={cancelLogout}
+      >
+        <View className="flex-1 justify-center items-center bg-black/50">
+          <View className="bg-white rounded-2xl mx-8 p-6 shadow-2xl" style={{ width: width * 0.85 }}>
+            {/* Dialog Header */}
+            <View className="items-center mb-6">
+              <View className="w-16 h-16 rounded-full bg-red-100 items-center justify-center mb-4">
+                <Ionicons name="log-out" size={32} color="#ef4444" />
+              </View>
+              <Text className="text-2xl font-bold text-gray-900 mb-2">Logout</Text>
+              <Text className="text-gray-600 text-center leading-6">
+                Are you sure you want to logout? You'll need to sign in again to access your account.
+              </Text>
+            </View>
+
+            {/* Action Buttons */}
+            <View className="flex-row gap-3">
+              <TouchableOpacity
+                className="flex-1 bg-gray-100 rounded-xl py-4 items-center"
+                onPress={cancelLogout}
+                activeOpacity={0.8}
+              >
+                <Text className="text-gray-700 text-lg font-semibold">Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                className="flex-1 bg-red-500 rounded-xl py-4 items-center"
+                onPress={confirmLogout}
+                activeOpacity={0.8}
+                style={{
+                  shadowColor: '#ef4444',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 4,
+                }}
+              >
+                <Text className="text-white text-lg font-semibold">Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 };

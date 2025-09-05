@@ -80,6 +80,8 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(false);
+  const [loadingProjectLogs, setLoadingProjectLogs] = useState(false);
+  const [loadingTimeFilter, setLoadingTimeFilter] = useState(false);
 
   // --- Update Modal State ---
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
@@ -206,9 +208,9 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       return `${year}-${month}-${day}`;
     };
 
-    // For Manager and Owner roles, always generate dates for the last 30 days since project filtering is limited
-    if (userRole === "Manager" || userRole === "Owner" || selectedProjectFilter === "All Logs") {
-      console.log("generateDateOptions - Generating dates for Manager/Owner/All Logs (last 30 days)");
+    // If "All Logs" is selected, generate dates for the last 30 days
+    if (selectedProjectFilter === "All Logs") {
+      console.log("generateDateOptions - Generating dates for All Logs (last 30 days)");
 
       // Generate daily slots for the last 30 days
       for (let i = 29; i >= 0; i--) {
@@ -229,12 +231,12 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         });
       }
 
-      console.log(`generateDateOptions - Generated ${dateOptions.length} date options for Manager/All Logs`);
+      console.log(`generateDateOptions - Generated ${dateOptions.length} date options for All Logs`);
       console.log(`generateDateOptions - Today's date string: ${getDateString(today)}`);
       return dateOptions;
     }
 
-    // Find the selected project
+    // For specific project selection, get the project's start date and generate dates till today
     const selectedProject = projectsData.find(p => p.name === selectedProjectFilter);
     if (!selectedProject) {
       console.log("generateDateOptions - Selected project not found");
@@ -249,10 +251,11 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     // Generate daily slots from project start date to today
     const startDate = new Date(selectedProject.startDate);
 
+    console.log(`generateDateOptions - Selected project: ${selectedProject.name}`);
     console.log(`generateDateOptions - Project start date: ${startDate.toLocaleDateString()}`);
     console.log(`generateDateOptions - Today: ${today.toLocaleDateString()}`);
 
-    // Generate daily slots
+    // Generate daily slots from project start date to today
     const currentDate = new Date(startDate);
     const days = [
       "Sunday",
@@ -283,6 +286,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     }
 
     console.log(`generateDateOptions - Generated ${dateOptions.length} date options for project: ${selectedProjectFilter}`);
+    console.log(`generateDateOptions - Date range: ${startDate.toLocaleDateString()} to ${today.toLocaleDateString()}`);
     return dateOptions;
   };
 
@@ -482,7 +486,12 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   const handleTimeFilterChange = async (filter) => {
     setSelectedTimeFilter(filter);
     setShowTimeDropdown(false);
-    await applyFilters(searchQuery, filter, selectedProjectFilter);
+    
+    try {
+      await applyFilters(searchQuery, filter, selectedProjectFilter);
+    } catch (error) {
+      console.error("Error applying time filter:", error);
+    }
   };
 
   const handleProjectFilterChange = async (filter) => {
@@ -490,13 +499,23 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     setSelectedProjectFilter(filter);
     setShowProjectDropdown(false);
 
-    // Reset time filter to "All Time" when "All Logs" is selected
-    if (filter === "All Logs") {
-      setSelectedTimeFilter("All Time");
-      setShowTimeDropdown(false);
-      await applyFilters(searchQuery, "All Time", filter);
-    } else {
-      await applyFilters(searchQuery, selectedTimeFilter, filter);
+    // Show loading state when fetching logs for a specific project
+    if (filter !== "All Logs") {
+      setLoadingProjectLogs(true);
+    }
+
+    try {
+      // Reset time filter to "All Time" when "All Logs" is selected
+      if (filter === "All Logs") {
+        setSelectedTimeFilter("All Time");
+        setShowTimeDropdown(false);
+        await applyFilters(searchQuery, "All Time", filter);
+      } else {
+        await applyFilters(searchQuery, selectedTimeFilter, filter);
+      }
+    } finally {
+      // Hide loading state after filters are applied
+      setLoadingProjectLogs(false);
     }
   };
 
@@ -1427,7 +1446,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                justifyContent: "space-between",
                 backgroundColor: "#F8FAFC",
                 borderWidth: 1,
                 borderColor: "#EAECF0",
@@ -1437,7 +1455,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                 width: "100%",
               }}
             >
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
                 <Ionicons
                   name="folder"
                   size={Math.min(18, screenWidth * 0.045)}
@@ -1449,7 +1467,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                     fontSize: Math.min(15, screenWidth * 0.038),
                     color: "#111827",
                     fontWeight: "500",
-                    flexShrink: 1,
+                    flex: 1,
                   }}
                   numberOfLines={1}
                   ellipsizeMode="tail"
@@ -1463,7 +1481,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                 name={showProjectDropdown ? "chevron-up" : "chevron-down"}
                 size={Math.min(16, screenWidth * 0.04)}
                 color="#6B7280"
-                style={{ marginLeft: 1, flexShrink: 0 }}
+                style={{ marginLeft: 8, flexShrink: 0 }}
               />
             </TouchableOpacity>
 
@@ -1501,6 +1519,25 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                       // Prevent main scroll when touching dropdown
                     }}
                   >
+                    {/* Scroll indicator at top for project dropdown */}
+                    {projectFilterOptions.length > 3 && (
+                      <View style={{
+                        alignItems: 'center',
+                        paddingVertical: 4,
+                        borderBottomWidth: 1,
+                        borderBottomColor: "#F1F5F9",
+                      }}>
+                        <Ionicons name="chevron-up" size={12} color="#9CA3AF" />
+                        <Text style={{
+                          fontSize: 10,
+                          color: "#9CA3AF",
+                          fontWeight: "500",
+                          marginTop: 2,
+                        }}>
+                          Scroll for more
+                        </Text>
+                      </View>
+                    )}
                     {projectFilterOptions.map((option) => (
                       <TouchableOpacity
                         key={option.value}
@@ -1545,7 +1582,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                justifyContent: "space-between",
                 backgroundColor: "#F8FAFC",
                 borderWidth: 1,
                 borderColor: "#EAECF0",
@@ -1584,7 +1620,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                 name={showTimeDropdown ? "chevron-up" : "chevron-down"}
                 size={Math.min(16, screenWidth * 0.04)}
                 color={selectedProjectFilter === "All Logs" ? "#9CA3AF" : "#6B7280"}
-                style={{ marginLeft: 12, flexShrink: 0 }}
+                style={{ marginLeft: 8, flexShrink: 0 }}
               />
             </TouchableOpacity>
 
@@ -1622,6 +1658,25 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                       // Prevent main scroll when touching dropdown
                     }}
                   >
+                    {/* Scroll indicator at top for time dropdown */}
+                    {timeFilterOptions.length > 3 && (
+                      <View style={{
+                        alignItems: 'center',
+                        paddingVertical: 4,
+                        borderBottomWidth: 1,
+                        borderBottomColor: "#F1F5F9",
+                      }}>
+                        <Ionicons name="chevron-up" size={12} color="#9CA3AF" />
+                        <Text style={{
+                          fontSize: 10,
+                          color: "#9CA3AF",
+                          fontWeight: "500",
+                          marginTop: 2,
+                        }}>
+                          Scroll for more
+                        </Text>
+                      </View>
+                    )}
                     {timeFilterOptions.map((option) => (
                       <TouchableOpacity
                         key={option.value}
@@ -1698,7 +1753,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       </View>
 
       {/* Logs Section */}
-      {loadingLogs ? (
+      {loadingLogs || loadingProjectLogs ? (
         <View style={{
           flex: 1,
           justifyContent: "center",

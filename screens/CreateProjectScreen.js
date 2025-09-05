@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Alert,
   ActivityIndicator,
   Keyboard,
 } from 'react-native';
@@ -83,12 +82,26 @@ function CreateProjectScreen({ navigation }) {
   const handleCreateProject = async () => {
     // Validate required fields
     if (!projectData.name.trim()) {
-      Alert.alert('Error', 'Project name is required');
+      Toast.show({
+        type: 'error',
+        text1: 'Validation Error',
+        text2: 'Project name is required',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
       return;
     }
 
     if (!projectData.description.trim()) {
-      Alert.alert('Error', 'Project description is required');
+      Toast.show({
+        type: 'error',
+        text1: 'Validation Error',
+        text2: 'Project description is required',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
       return;
     }
 
@@ -98,13 +111,27 @@ function CreateProjectScreen({ navigation }) {
     
     // Ensure start date is not in the past
     if (startDate <= now) {
-      Alert.alert('Error', 'Start date must be in the future');
+      Toast.show({
+        type: 'error',
+        text1: 'Validation Error',
+        text2: 'Start date must be in the future',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
       return;
     }
 
     // Ensure end date is after start date
     if (endDate <= startDate) {
-      Alert.alert('Error', 'End date must be after start date');
+      Toast.show({
+        type: 'error',
+        text1: 'Validation Error',
+        text2: 'End date must be after start date',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
       return;
     }
 
@@ -170,20 +197,20 @@ function CreateProjectScreen({ navigation }) {
   };
 
   const handleCancel = () => {
-    Alert.alert(
-      'Cancel',
-      'Are you sure you want to cancel? All data will be lost.',
-      [
-        {
-          text: 'No',
-          style: 'cancel'
-        },
-        {
-          text: 'Yes',
-          onPress: () => navigation.goBack()
-        }
-      ]
-    );
+    // Show toast message and navigate back after a short delay
+    Toast.show({
+      type: 'info',
+      text1: 'Cancelled',
+      text2: 'Project creation cancelled',
+      visibilityTime: 2000,
+      autoHide: true,
+      topOffset: 80,
+    });
+    
+    // Navigate back after showing the toast
+    setTimeout(() => {
+      navigation.goBack();
+    }, 1000);
   };
 
   const dismissKeyboard = () => {
