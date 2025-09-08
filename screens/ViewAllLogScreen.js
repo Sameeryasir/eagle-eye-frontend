@@ -15,6 +15,7 @@ import {
   Alert,
   Modal,
   RefreshControl,
+  ActivityIndicator,
 } from "react-native";
 import Toast from 'react-native-toast-message';
 
@@ -208,11 +209,51 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       return `${year}-${month}-${day}`;
     };
 
-    // If "All Logs" is selected, generate dates for the last 30 days
+    // If "All Logs" is selected, generate dates based on current project context
     if (selectedProjectFilter === "All Logs") {
-      console.log("generateDateOptions - Generating dates for All Logs (last 30 days)");
+      // Get the current project ID from route parameters
+      const currentProjectId = route.params?.managerProjectId || route.params?.projectId;
+      
+      if (currentProjectId) {
+        // Find the current project to get its start date
+        const currentProject = projectsData.find(p => p.id === currentProjectId);
+        
+        if (currentProject && currentProject.startDate) {
+          console.log(`generateDateOptions - Generating dates for All Logs based on current project: ${currentProject.name}`);
+          
+          // Generate daily slots from project start date to today
+          const startDate = new Date(currentProject.startDate);
+          const currentDate = new Date(startDate);
+          
+          while (currentDate <= today) {
+            const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
+            const day = currentDate.getDate();
+            const month = currentDate.toLocaleDateString('en-US', { month: 'short' });
+            const year = currentDate.getFullYear();
 
-      // Generate daily slots for the last 30 days
+            // Use consistent date format (YYYY-MM-DD) to match your createdAt format
+            const dateString = getDateString(currentDate);
+
+            dateOptions.push({
+              label: `${dayName}, ${month} ${day}, ${year}`,
+              value: dateString, // This will be "2025-08-28" format
+            });
+
+            // Move to next day
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+          
+          console.log(`generateDateOptions - Generated ${dateOptions.length} date options for All Logs based on project start date`);
+          console.log(`generateDateOptions - Project start date: ${startDate.toLocaleDateString()}, Today: ${today.toLocaleDateString()}`);
+          return dateOptions;
+        } else {
+          console.log("generateDateOptions - Current project not found or has no start date, using last 30 days");
+        }
+      } else {
+        console.log("generateDateOptions - No current project ID found, using last 30 days");
+      }
+
+      // Fallback: Generate daily slots for the last 30 days if no project context
       for (let i = 29; i >= 0; i--) {
         const currentDate = new Date(today);
         currentDate.setDate(today.getDate() - i);
@@ -231,7 +272,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         });
       }
 
-      console.log(`generateDateOptions - Generated ${dateOptions.length} date options for All Logs`);
+      console.log(`generateDateOptions - Generated ${dateOptions.length} date options for All Logs (fallback: last 30 days)`);
       console.log(`generateDateOptions - Today's date string: ${getDateString(today)}`);
       return dateOptions;
     }
@@ -306,60 +347,66 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   // Get logs for a specific project using getLogs service with project ID
   const getLogsForProject = async (projectName) => {
     if (!projectName || projectName === "All Logs") {
-      // For "All Logs", we need to get logs from all projects
-      // Since getLogs requires a projectId, we'll collect logs from all projects
-      console.log("getLogsForProject - Getting logs from all projects (All Logs selected)");
+      // For "All Logs", we should show logs from the current project context
+      // Get the project ID from route parameters (managerProjectId or projectId)
+      const currentProjectId = route.params?.managerProjectId || route.params?.projectId;
       
-      if (!projectsData || projectsData.length === 0) {
-        console.log("getLogsForProject - No projects data available for All Logs");
+      if (!currentProjectId) {
+        console.log("getLogsForProject - No current project ID found for All Logs");
         return [];
       }
 
-      const allLogs = [];
+      console.log(`getLogsForProject - Getting logs for current project context (ID: ${currentProjectId})`);
       
-      // Get logs from each project
-      for (const project of projectsData) {
-        try {
-          console.log(`getLogsForProject - Getting logs for project: ${project.name} (ID: ${project.id})`);
-          const logsResponse = await getLogs(project.id);
-          
-          // Check if response has logs array or if it's directly an array
-          let logsArray = [];
-          if (logsResponse?.logs && Array.isArray(logsResponse.logs)) {
-            logsArray = logsResponse.logs;
-          } else if (Array.isArray(logsResponse)) {
-            logsArray = logsResponse;
-          }
-
-          // Transform logs data to match the expected format
-          const transformedLogs = logsArray.map(log => ({
-            id: log.id,
-            createdBy: log.user ? `${log.user.first_name || ''} ${log.user.last_name || ''}`.trim() : 'Unknown User',
-            date: log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'N/A',
-            createdAt: log.createdAt,
-            description: log.note || 'No description',
-            images: log.images || [],
-            image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : require("../assets/robot.png"),
-            projectName: project.name,
-          }));
-
-          allLogs.push(...transformedLogs);
-          console.log(`getLogsForProject - Added ${transformedLogs.length} logs from project: ${project.name}`);
-        } catch (error) {
-          console.error(`getLogsForProject - Error fetching logs for project ${project.name}:`, error);
-          // Continue with other projects even if one fails
+      try {
+        const logsResponse = await getLogs(currentProjectId);
+        console.log(`getLogsForProject - API response for current project:`, logsResponse);
+        
+        // Check if response has logs array or if it's directly an array
+        let logsArray = [];
+        if (logsResponse?.logs && Array.isArray(logsResponse.logs)) {
+          logsArray = logsResponse.logs;
+        } else if (Array.isArray(logsResponse)) {
+          logsArray = logsResponse;
+        } else {
+          console.log(`getLogsForProject - No logs found in API response for current project:`, logsResponse);
+          logsArray = [];
         }
+
+        // Find the project name from projectsData
+        const currentProject = projectsData.find(p => p.id === currentProjectId);
+        const projectName = currentProject ? currentProject.name : 'Current Project';
+
+        // Transform logs data to match the expected format
+        const transformedLogs = logsArray.map(log => ({
+          id: log.id,
+          createdBy: log.user ? `${log.user.first_name || ''} ${log.user.last_name || ''}`.trim() : 'Unknown User',
+          date: log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'N/A',
+          createdAt: log.createdAt,
+          description: log.note || 'No description',
+          images: log.images || [],
+          image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : require("../assets/robot.png"),
+          projectName: projectName,
+        }));
+
+        // Sort logs by date (newest first)
+        const sortedLogs = transformedLogs.sort((a, b) => {
+          const dateA = new Date(a.createdAt);
+          const dateB = new Date(b.createdAt);
+          return dateB - dateA;
+        });
+
+        console.log(`getLogsForProject - Transformed ${sortedLogs.length} logs for current project context`);
+        if (sortedLogs.length > 0) {
+          console.log(`getLogsForProject - Sample log createdAt: ${sortedLogs[0].createdAt}`);
+          console.log(`getLogsForProject - Sample log description: ${sortedLogs[0].description}`);
+        }
+        return sortedLogs;
+
+      } catch (error) {
+        console.error(`getLogsForProject - Error fetching logs for current project:`, error);
+        return [];
       }
-
-      // Sort all logs by date (newest first)
-      const sortedLogs = allLogs.sort((a, b) => {
-        const dateA = new Date(a.createdAt);
-        const dateB = new Date(b.createdAt);
-        return dateB - dateA;
-      });
-
-      console.log(`getLogsForProject - Total logs from all projects: ${sortedLogs.length}`);
-      return sortedLogs;
     }
 
     // Find the project by name in projectsData to get its actual ID
@@ -486,11 +533,15 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   const handleTimeFilterChange = async (filter) => {
     setSelectedTimeFilter(filter);
     setShowTimeDropdown(false);
+    setLoadingTimeFilter(true);
+    
+    // Clear current logs to show loading state
+    setFilteredLogs([]);
     
     try {
       await applyFilters(searchQuery, filter, selectedProjectFilter);
-    } catch (error) {
-      console.error("Error applying time filter:", error);
+    } finally {
+      setLoadingTimeFilter(false);
     }
   };
 
@@ -747,14 +798,14 @@ const ViewAllLogScreen = ({ route, navigation }) => {
 
           // Use the current filter selection to determine how to refresh logs
           if (selectedProjectFilter === "All Logs") {
-            // For "All Logs", get logs from all projects
-            console.log("ViewAllLogScreen - Refreshing logs from all projects");
-            const allLogs = [];
+            // For "All Logs", get logs from the current project context
+            const currentProjectId = route.params?.managerProjectId || route.params?.projectId;
             
-            for (const project of projects) {
+            if (currentProjectId) {
+              console.log(`ViewAllLogScreen - Refreshing logs for current project context (ID: ${currentProjectId})`);
               try {
                 const { getLogs } = require("../services/log/getLogs");
-                const logsResponse = await getLogs(project.id);
+                const logsResponse = await getLogs(currentProjectId);
                 
                 let logsArray = [];
                 if (logsResponse?.logs && Array.isArray(logsResponse.logs)) {
@@ -762,6 +813,10 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                 } else if (Array.isArray(logsResponse)) {
                   logsArray = logsResponse;
                 }
+
+                // Find the project name from projects
+                const currentProject = projects.find(p => p.id === currentProjectId);
+                const projectName = currentProject ? currentProject.name : 'Current Project';
 
                 const transformedLogs = logsArray.map(log => ({
                   id: log.id,
@@ -771,20 +826,22 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                   description: log.note || 'No description',
                   images: log.images || [],
                   image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : require("../assets/robot.png"),
-                  projectName: project.name,
+                  projectName: projectName,
                 }));
 
-                allLogs.push(...transformedLogs);
+                sortedLogs = transformedLogs.sort((a, b) => {
+                  const dateA = new Date(a.createdAt);
+                  const dateB = new Date(b.createdAt);
+                  return dateB - dateA;
+                });
               } catch (error) {
-                console.error(`ViewAllLogScreen - Error refreshing logs for project ${project.name}:`, error);
+                console.error(`ViewAllLogScreen - Error refreshing logs for current project:`, error);
+                sortedLogs = [];
               }
+            } else {
+              console.log("ViewAllLogScreen - No current project ID found for All Logs refresh");
+              sortedLogs = [];
             }
-
-            sortedLogs = allLogs.sort((a, b) => {
-              const dateA = new Date(a.createdAt);
-              const dateB = new Date(b.createdAt);
-              return dateB - dateA;
-            });
           } else {
             // For specific project, get logs for that project
             const selectedProject = projects.find(p => p.name === selectedProjectFilter);
@@ -1421,6 +1478,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
           onRefresh={onRefresh}
           colors={["#3155A1"]}
           tintColor="#3155A1"
+          enabled={!(showTimeDropdown || showProjectDropdown)}
         />
       }
     >
@@ -1507,8 +1565,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                 >
                   <ScrollView
                     style={{ maxHeight: Math.min(150, screenHeight * 0.2) }}
-                    showsVerticalScrollIndicator={true}
-                    indicatorStyle="black"
+                    showsVerticalScrollIndicator={false}
                     bounces={false}
                     nestedScrollEnabled={true}
                     scrollEventThrottle={16}
@@ -1579,6 +1636,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                 setShowTimeDropdown(!showTimeDropdown);
                 setShowProjectDropdown(false);
               }}
+              disabled={false}
               style={{
                 flexDirection: "row",
                 alignItems: "center",
@@ -1646,8 +1704,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                 >
                   <ScrollView
                     style={{ maxHeight: Math.min(150, screenHeight * 0.2) }}
-                    showsVerticalScrollIndicator={true}
-                    indicatorStyle="black"
+                    showsVerticalScrollIndicator={false}
                     bounces={false}
                     nestedScrollEnabled={true}
                     scrollEventThrottle={16}
@@ -1717,17 +1774,17 @@ const ViewAllLogScreen = ({ route, navigation }) => {
             borderRadius: Math.min(16, screenWidth * 0.04),
             paddingHorizontal: Math.min(16, screenWidth * 0.04),
             paddingVertical: Math.min(12, screenHeight * 0.015),
-            backgroundColor: selectedProjectFilter === "All Logs" ? "#F1F5F9" : "#F8FAFC",
+            backgroundColor: "#F8FAFC",
             borderWidth: 1,
-            borderColor: selectedProjectFilter === "All Logs" ? "#D1D5DB" : "#EAECF0",
+            borderColor: "#EAECF0",
             width: "100%",
-            opacity: (showTimeDropdown || showProjectDropdown) ? 0.5 : (selectedProjectFilter === "All Logs" ? 0.6 : 1),
+            opacity: (showTimeDropdown || showProjectDropdown) ? 0.5 : 1,
           }}
         >
           <Ionicons
             name="search"
             size={Math.min(18, screenWidth * 0.045)}
-            color={selectedProjectFilter === "All Logs" ? "#9CA3AF" : "#6B7280"}
+            color="#6B7280"
             style={{ marginRight: 8 }}
           />
           <TextInput
@@ -1753,7 +1810,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       </View>
 
       {/* Logs Section */}
-      {loadingLogs || loadingProjectLogs ? (
+      {loadingLogs || loadingProjectLogs || loadingTimeFilter ? (
         <View style={{
           flex: 1,
           justifyContent: "center",

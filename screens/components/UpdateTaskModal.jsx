@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,10 @@ import {
   Modal,
   TouchableWithoutFeedback,
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Animated,
+  Easing,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,11 +44,14 @@ export default function UpdateTaskModal({
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [employees, setEmployees] = useState([]);
   const [filteredEmployees, setFilteredEmployees] = useState([]);
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [showAssignedDropdown, setShowAssignedDropdown] = useState(false);
   const [isDropdownInteracting, setIsDropdownInteracting] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [priorityOptions] = useState([
     { id: 'low', label: 'Low', color: '#10B981' },
     { id: 'medium', label: 'Medium', color: '#F59E0B' },
@@ -53,17 +60,19 @@ export default function UpdateTaskModal({
   ]);
 
   useEffect(() => {
-    // Add keyboard listeners
+    // Add keyboard listeners with height tracking
     const keyboardDidShowListener = Keyboard.addListener(
       'keyboardDidShow',
-      () => {
+      (event) => {
         setKeyboardVisible(true);
+        setKeyboardHeight(event.endCoordinates.height);
       }
     );
     const keyboardDidHideListener = Keyboard.addListener(
       'keyboardDidHide',
       () => {
         setKeyboardVisible(false);
+        setKeyboardHeight(0);
       }
     );
 
@@ -113,6 +122,8 @@ export default function UpdateTaskModal({
   };
 
   const handleEmployeeSearch = (text) => {
+    setSearchQuery(text);
+    
     if (text.trim() === "") {
       setFilteredEmployees(employees);
     } else {
@@ -138,9 +149,6 @@ export default function UpdateTaskModal({
 
   // Function to handle dropdown opening
   const openDropdown = (dropdownType) => {
-    // Close keyboard when opening any dropdown
-    Keyboard.dismiss();
-    
     // Close all other dropdowns
     setShowAssignedDropdown(false);
     setPriorityOpen(false);
@@ -158,6 +166,7 @@ export default function UpdateTaskModal({
     setShowAssignedDropdown(false);
     setPriorityOpen(false);
     setIsDropdownInteracting(false);
+    setIsSearching(false);
   };
 
   const handleInputChange = (field, value) => {
@@ -429,7 +438,7 @@ export default function UpdateTaskModal({
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: 20 }}
               keyboardShouldPersistTaps="handled"
-              scrollEnabled={!isDropdownInteracting}
+              scrollEnabled={!isDropdownInteracting || isSearching}
               data={[{ key: 'form' }]}
               renderItem={() => (
               <View>
@@ -471,6 +480,158 @@ export default function UpdateTaskModal({
                       placeholderTextColor="#999"
                       returnKeyType="next"
                       style={{ textAlignVertical: 'top' }}
+                    />
+                  </View>
+
+                  {/* Assigned Employee Dropdown */}
+                  <View className="mb-5">
+                    <View className="flex-row items-center mb-2">
+                      <Ionicons name="person" size={16} color="#374151" style={{ marginRight: 6 }} />
+                      <Text className="text-[16px] font-semibold text-[#333]">Assigned To</Text>
+                    </View>
+                    <DropDownPicker
+                      open={showAssignedDropdown}
+                      value={taskData.assignedTo?.id || null}
+                      items={filteredEmployees.map((employee) => {
+                        const fullName = `${employee.first_name || ""} ${employee.last_name || ""}`.trim();
+                        let displayName = fullName ? `${fullName} - ${employee.email}` : employee.email;
+                        
+                        // Truncate if too long (max 40 characters)
+                        if (displayName.length > 40) {
+                          displayName = displayName.substring(0, 37) + "...";
+                        }
+                        
+                        return {
+                          label: displayName,
+                          value: employee.id,
+                        };
+                      })}
+                      setOpen={(open) => {
+                        if (open) {
+                          // Close priority dropdown if open
+                          setPriorityOpen(false);
+                          setIsDropdownInteracting(true);
+                          setIsSearching(false);
+                          // Don't dismiss keyboard when opening - let user search
+                        } else {
+                          setIsDropdownInteracting(false);
+                          setIsSearching(false);
+                        }
+                        setShowAssignedDropdown(open);
+                      }}
+                      setValue={(callback) => {
+                        const newValue = callback(taskData.assignedTo?.id || null);
+                        const selectedEmployee = employees.find(emp => emp.id === newValue);
+                        handleInputChange('assignedTo', selectedEmployee || null);
+                      }}
+                      placeholder="Select Employee"
+                      placeholderStyle={{
+                        color: "#9ca3af",
+                        fontSize: 16,
+                        fontWeight: "400",
+                      }}
+                      style={{
+                        backgroundColor: "#f8f9fa",
+                        borderColor: "#e1e8ed",
+                        borderRadius: 8,
+                        minHeight: 0,
+                        paddingVertical: 12,
+                        paddingHorizontal: 12,
+                      }}
+                      textStyle={{
+                        fontSize: 16,
+                        color: taskData.assignedTo ? "#333" : "#9ca3af",
+                        fontWeight: "400",
+                      }}
+                      labelProps={{
+                        numberOfLines: 1,
+                      }}
+                      customItemContainerStyle={{
+                        height: 40,
+                      }}
+                      customItemLabelStyle={{
+                        fontSize: 14,
+                        fontWeight: "500",
+                        color: "#333",
+                      }}
+                      dropDownContainerStyle={{
+                        backgroundColor: "white",
+                        borderColor: "#e5e7eb",
+                        borderRadius: 8,
+                        shadowColor: "#000",
+                        shadowOpacity: 0.15,
+                        shadowRadius: 6,
+                        shadowOffset: { width: 0, height: 3 },
+                        elevation: 999999,
+                        maxHeight: 200, // Keep consistent height regardless of keyboard state
+                        zIndex: 999999,
+                        // Position dropdown above keyboard when keyboard is visible
+                        ...(keyboardVisible && {
+                          marginBottom: keyboardHeight - 50, // Adjust position to stay above keyboard
+                        }),
+                      }}
+                      listMode="SCROLLVIEW"
+                      scrollViewProps={{
+                        nestedScrollEnabled: true,
+                        showsVerticalScrollIndicator: true,
+                        onScrollBeginDrag: () => {
+                          setIsDropdownInteracting(true);
+                        },
+                        onScrollEndDrag: () => {
+                          if (showAssignedDropdown) {
+                            setIsDropdownInteracting(true);
+                          }
+                        },
+                        scrollEventThrottle: 16,
+                        onTouchStart: () => {
+                          setIsDropdownInteracting(true);
+                        },
+                        onTouchEnd: () => {
+                          if (!showAssignedDropdown) {
+                            setIsDropdownInteracting(false);
+                          }
+                        },
+                      }}
+                      listItemContainerStyle={{
+                        height: 40,
+                        paddingHorizontal: 12,
+                      }}
+                      listItemLabelStyle={{
+                        fontSize: 14,
+                        fontWeight: "500",
+                        color: "#333",
+                      }}
+                      arrowIconStyle={{
+                        width: 16,
+                        height: 16,
+                        tintColor: "#6b7280",
+                      }}
+                      showArrowIcon={true}
+                      searchable={true}
+                      searchPlaceholder="Search employees..."
+                      searchTextInputStyle={{
+                        borderColor: "#e5e7eb",
+                        borderRadius: 6,
+                        fontSize: 14,
+                        paddingHorizontal: 8,
+                        paddingVertical: 6,
+                      }}
+                      searchTextInputProps={{
+                        placeholderTextColor: "#9ca3af",
+                        returnKeyType: "search",
+                        blurOnSubmit: false, // Keep focus for better UX
+                        autoCorrect: false,
+                        autoCapitalize: "none",
+                        onFocus: () => {
+                          setIsSearching(true);
+                        },
+                        onBlur: () => {
+                          setIsSearching(false);
+                        },
+                      }}
+                      onSearch={(text) => {
+                        handleEmployeeSearch(text);
+                      }}
                     />
                   </View>
 
@@ -527,15 +688,16 @@ export default function UpdateTaskModal({
                         }}
                         dropDownContainerStyle={{
                           backgroundColor: "white",
-                          borderColor: "#e5e7eb",
-                          borderRadius: 8,
+                          borderColor: "#E5E7EB",
+                          borderRadius: 12,
                           shadowColor: "#000",
+                          shadowOffset: { width: 0, height: 4 },
                           shadowOpacity: 0.15,
-                          shadowRadius: 6,
-                          shadowOffset: { width: 0, height: 3 },
-                          elevation: 999999,
-                          maxHeight: 160,
-                          zIndex: 999999,
+                          shadowRadius: 8,
+                          elevation: 8,
+                          maxHeight: 250,
+                          zIndex: 1000,
+                          borderWidth: 1,
                         }}
                         listItemContainerStyle={{
                           height: 40,
@@ -554,141 +716,6 @@ export default function UpdateTaskModal({
                         showArrowIcon={true}
                       />
                     </View>
-                  </View>
-
-                  {/* Assigned Employee Dropdown */}
-                  <View className="mb-5">
-                    <View className="flex-row items-center mb-2">
-                      <Ionicons name="person" size={16} color="#374151" style={{ marginRight: 6 }} />
-                      <Text className="text-[16px] font-semibold text-[#333]">Assigned To</Text>
-                    </View>
-                    <DropDownPicker
-                      open={showAssignedDropdown}
-                      value={taskData.assignedTo?.id || null}
-                      items={filteredEmployees.map((employee) => {
-                        const fullName = `${employee.first_name || ""} ${employee.last_name || ""}`.trim();
-                        let displayName = fullName ? `${fullName} - ${employee.email}` : employee.email;
-                        
-                        // Truncate if too long (max 40 characters)
-                        if (displayName.length > 40) {
-                          displayName = displayName.substring(0, 37) + "...";
-                        }
-                        
-                        return {
-                          label: displayName,
-                          value: employee.id,
-                        };
-                      })}
-                      setOpen={(open) => {
-                        if (open) {
-                          // Close priority dropdown if open
-                          setPriorityOpen(false);
-                          setIsDropdownInteracting(true);
-                          // Dismiss keyboard when dropdown opens
-                          Keyboard.dismiss();
-                        } else {
-                          setIsDropdownInteracting(false);
-                        }
-                        setShowAssignedDropdown(open);
-                      }}
-                      setValue={(callback) => {
-                        const newValue = callback(taskData.assignedTo?.id || null);
-                        const selectedEmployee = employees.find(emp => emp.id === newValue);
-                        handleInputChange('assignedTo', selectedEmployee || null);
-                      }}
-                      placeholder="Select Employee"
-                      placeholderStyle={{
-                        color: "#9ca3af",
-                        fontSize: 16,
-                        fontWeight: "400",
-                      }}
-                      style={{
-                        backgroundColor: "#f8f9fa",
-                        borderColor: "#e1e8ed",
-                        borderRadius: 8,
-                        minHeight: 0,
-                        paddingVertical: 12,
-                        paddingHorizontal: 12,
-                      }}
-                      textStyle={{
-                        fontSize: 16,
-                        color: taskData.assignedTo ? "#333" : "#9ca3af",
-                        fontWeight: "400",
-                      }}
-                      labelProps={{
-                        numberOfLines: 1,
-                      }}
-                      customItemContainerStyle={{
-                        height: 40,
-                      }}
-                      customItemLabelStyle={{
-                        fontSize: 14,
-                        fontWeight: "500",
-                        color: "#333",
-                      }}
-                      dropDownContainerStyle={{
-                        backgroundColor: "white",
-                        borderColor: "#e5e7eb",
-                        borderRadius: 8,
-                        shadowColor: "#000",
-                        shadowOpacity: 0.15,
-                        shadowRadius: 6,
-                        shadowOffset: { width: 0, height: 3 },
-                        elevation: 999999,
-                        maxHeight: 200,
-                        zIndex: 999999,
-                      }}
-                      listMode="SCROLLVIEW"
-                      scrollViewProps={{
-                        nestedScrollEnabled: true,
-                        showsVerticalScrollIndicator: true,
-                        onScrollBeginDrag: () => {
-                          setIsDropdownInteracting(true);
-                        },
-                        onScrollEndDrag: () => {
-                          if (showAssignedDropdown) {
-                            setIsDropdownInteracting(true);
-                          }
-                        },
-                        scrollEventThrottle: 16,
-                        onTouchStart: () => {
-                          setIsDropdownInteracting(true);
-                        },
-                        onTouchEnd: () => {
-                          if (!showAssignedDropdown) {
-                            setIsDropdownInteracting(false);
-                          }
-                        },
-                      }}
-                      listItemContainerStyle={{
-                        height: 40,
-                        paddingHorizontal: 12,
-                      }}
-                      listItemLabelStyle={{
-                        fontSize: 14,
-                        fontWeight: "500",
-                        color: "#333",
-                      }}
-                      arrowIconStyle={{
-                        width: 16,
-                        height: 16,
-                        tintColor: "#6b7280",
-                      }}
-                      showArrowIcon={true}
-                      searchable={true}
-                      searchPlaceholder="Search employees..."
-                      searchTextInputStyle={{
-                        borderColor: "#e5e7eb",
-                        borderRadius: 6,
-                        fontSize: 14,
-                      }}
-                      searchTextInputProps={{
-                        placeholderTextColor: "#9ca3af",
-                      }}
-                      onSearch={(text) => {
-                        handleEmployeeSearch(text);
-                      }}
-                    />
                   </View>
 
                   {/* Start Date & Time */}

@@ -162,12 +162,14 @@ function ViewAllTasksScreen({ navigation, route }) {
   // Filter Modal State
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState({
-    createdAt: 'created-at',
-    assignedTo: 'all',
-    upcoming: 'all'
+    createdAt: null, // No default selection
+    assignedTo: null, // No default selection
+    upcoming: null, // No default selection
+    status: null // No default selection
   });
+  const [filtersApplied, setFiltersApplied] = useState(false); // Track if filters are currently applied
 
-  const { projectId, createDraft } = route.params || {};
+  const { projectId, createDraft, showUpcomingTasks } = route.params || {};
 
   useEffect(() => {
     // Load data on initial mount
@@ -580,6 +582,16 @@ function ViewAllTasksScreen({ navigation, route }) {
       }
 
       setSearchTerm("");
+      
+      // --- Reset Filter State (MCP Context 7) ---
+      // Business Rule: When loading all tasks, reset filter state to show all tasks
+      setFiltersApplied(false);
+      setSelectedFilters({
+        createdAt: null, // No default selection
+        assignedTo: null, // No default selection
+        upcoming: null, // No default selection
+        status: null // No default selection
+      });
     } catch (err) {
       console.error("ViewAllTasksScreen - Error loading project data:", err);
       console.error("ViewAllTasksScreen - Error details:", {
@@ -606,7 +618,23 @@ function ViewAllTasksScreen({ navigation, route }) {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadProjectData(true);
+    
+    try {
+      // --- Smart Refresh Logic (MCP Context 7) ---
+      // Business Rule: If filters are applied, refresh with those filters. Otherwise, load all tasks.
+      if (filtersApplied) {
+        console.log('ViewAllTasksScreen - Refreshing with applied filters:', selectedFilters);
+        await handleApplyFilters(selectedFilters);
+      } else {
+        console.log('ViewAllTasksScreen - Refreshing with getTaskByProjectId (no filters applied)');
+        await loadProjectData(true);
+      }
+    } catch (error) {
+      console.error('ViewAllTasksScreen - Error during refresh:', error);
+      // Fallback to loading all data if filter refresh fails
+      await loadProjectData(true);
+    }
+    
     setRefreshing(false);
   };
 
@@ -786,6 +814,20 @@ function ViewAllTasksScreen({ navigation, route }) {
     setSelectedTask(null);
   };
 
+  // --- Clear Filters Function (MCP Context 7) ---
+  // Business Rule: Reset to show all tasks and clear filter state
+  const handleClearFilters = async () => {
+    console.log('ViewAllTasksScreen - Clearing all filters');
+    setFiltersApplied(false);
+    setSelectedFilters({
+      createdAt: null, // No default selection
+      assignedTo: null, // No default selection
+      upcoming: null, // No default selection
+      status: null // No default selection
+    });
+    await loadProjectData();
+  };
+
   const handleApplyFilters = async (filters, preFilteredTasks = null) => {
     console.log('Applied filters:', filters);
     
@@ -831,6 +873,11 @@ function ViewAllTasksScreen({ navigation, route }) {
           setFilteredTasks(fullyFilteredTasks);
         }
       }
+
+      // --- Update Filter State (MCP Context 7) ---
+      // Business Rule: Track if filters are applied to maintain them during refresh
+      setFiltersApplied(true);
+      setSelectedFilters(filters);
 
       // Clear search term when applying filters
       setSearchTerm("");
@@ -1525,6 +1572,7 @@ function ViewAllTasksScreen({ navigation, route }) {
         selectedFilters={selectedFilters}
         setSelectedFilters={setSelectedFilters}
         onApplyFilters={handleApplyFilters}
+        onClearFilters={handleClearFilters}
         userRole={userRole}
         projectId={projectId}
       />

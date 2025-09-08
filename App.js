@@ -6,7 +6,6 @@ import {
   View,
   TextInput,
   StatusBar,
-  Image,
   Text,
 } from "react-native";
 import { SafeAreaView, SafeAreaProvider } from "react-native-safe-area-context";
@@ -55,6 +54,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import HomeScreen from "./screens/HomeScreen";
 import WidgetScreen from "./screens/WidgetScreen";
 import CalenderScreen from "./screens/CalenderScreen";
+import CalenderDetailScreen from "./screens/CalenderDetailScreen";
 import ViewAllTasksScreen from "./screens/ViewAllTasksScreen";
 import ViewAllLogScreen from "./screens/ViewAllLogScreen";
 import CreateProjectScreen from "./screens/CreateProjectScreen";
@@ -108,30 +108,7 @@ const AppNavigator = () => {
   const { isAuthenticated, isLoading, initialRoute } = useAuth();
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [navigationRef, setNavigationRef] = useState(null);
-  const [splashTimeout, setSplashTimeout] = useState(false);
-
-  // Fallback timeout for splash screen (15 seconds)
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      console.log('Splash screen timeout reached, forcing app to continue');
-      setSplashTimeout(true);
-    }, 15000);
-
-    return () => clearTimeout(timeout);
-  }, []);
-
-  // Show loading screen while checking authentication
-  if (isLoading && !splashTimeout) {
-    return (
-      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffffff' }}>
-        <Image 
-          source={require('./assets/icons/splash-icon.png')} 
-          style={{ width: 200, height: 200 }}
-          resizeMode="contain"
-        />
-      </SafeAreaView>
-    );
-  }
+  // Authentication check completed - proceed with navigation
 
   const handleMenuPress = () => {
     setSidebarVisible(true);
@@ -233,6 +210,24 @@ const AppNavigator = () => {
                   <CustomHeaderForScreens
                     onMenuPress={handleMenuPress}
                     title="Calendar"
+                  />
+                ),
+                headerBackTitleVisible: false,
+                headerStyle: {
+                  backgroundColor: "white",
+                },
+                headerShadowVisible: false,
+              }}
+            />
+            <Stack.Screen
+              name="CalenderDetailScreen"
+              component={CalenderDetailScreen}
+              options={{
+                headerShown: true,
+                header: () => (
+                  <CustomHeaderForScreens
+                    onMenuPress={handleMenuPress}
+                    title="Calendar Details"
                   />
                 ),
                 headerBackTitleVisible: false,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Keyboard,
   FlatList,
   TouchableWithoutFeedback,
+  Animated,
+  Easing,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -53,6 +55,11 @@ function CreateTaskScreen({ navigation, route }) {
   const [showAssignedDropdown, setShowAssignedDropdown] = useState(false);
   const [isDropdownInteracting, setIsDropdownInteracting] = useState(false);
   const [flatListRef, setFlatListRef] = useState(null);
+  
+  // --- Smooth Animation References ---
+  // Business Rule: Provide smooth UI transitions for better user experience
+  const buttonPositionAnim = useRef(new Animated.Value(0)).current;
+  const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
   const [priorityOptions] = useState([
     { id: 'low', label: 'Low', color: '#10B981' },
     { id: 'medium', label: 'Medium', color: '#F59E0B' },
@@ -61,19 +68,53 @@ function CreateTaskScreen({ navigation, route }) {
   ]);
 
   useEffect(() => {
-    // Add keyboard listeners
+    // --- Smooth Keyboard Animation Setup ---
+    // Business Rule: Provide smooth transitions when keyboard shows/hides
     const keyboardDidShowListener = Keyboard.addListener(
       'keyboardDidShow',
       (event) => {
         setKeyboardVisible(true);
         setKeyboardHeight(event.endCoordinates.height);
+        
+        // Animate button position smoothly
+        Animated.parallel([
+          Animated.timing(buttonPositionAnim, {
+            toValue: event.endCoordinates.height + 10,
+            duration: 250,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: false,
+          }),
+          Animated.timing(keyboardHeightAnim, {
+            toValue: event.endCoordinates.height,
+            duration: 250,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: false,
+          })
+        ]).start();
       }
     );
+    
     const keyboardDidHideListener = Keyboard.addListener(
       'keyboardDidHide',
       () => {
         setKeyboardVisible(false);
         setKeyboardHeight(0);
+        
+        // Animate button back to original position
+        Animated.parallel([
+          Animated.timing(buttonPositionAnim, {
+            toValue: 0,
+            duration: 250,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: false,
+          }),
+          Animated.timing(keyboardHeightAnim, {
+            toValue: 0,
+            duration: 250,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: false,
+          })
+        ]).start();
       }
     );
 
@@ -156,10 +197,14 @@ function CreateTaskScreen({ navigation, route }) {
     }
   };
 
-  // Function to handle dropdown opening
+  // --- Smooth Dropdown Opening Function ---
+  // Business Rule: Smoothly dismiss keyboard when opening dropdowns
   const openDropdown = (dropdownType) => {
-    // Close keyboard when opening any dropdown
+    // Smoothly dismiss keyboard with animation
     Keyboard.dismiss();
+    
+    // Set dropdown interaction state to prevent scrolling conflicts
+    setIsDropdownInteracting(true);
 
     // Close all other dropdowns
     setShowAssignedDropdown(false);
@@ -474,7 +519,10 @@ function CreateTaskScreen({ navigation, route }) {
                       }))}
                       setOpen={(open) => {
                         if (open) {
-                          openDropdown('priority');
+                          // Smoothly dismiss keyboard when dropdown opens
+                          Keyboard.dismiss();
+                          setIsDropdownInteracting(true);
+                          setPriorityOpen(true);
                         } else {
                           setPriorityOpen(false);
                           setIsDropdownInteracting(false);
@@ -602,12 +650,11 @@ function CreateTaskScreen({ navigation, route }) {
         />
       </View>
 
-      {/* Fixed Action Button - Positioned at bottom when keyboard is closed, at top of keyboard when open */}
-      <View
-        className={`absolute left-0 right-0 px-5 pt-5 pb-5 bg-transparent items-center ${keyboardVisible ? 'bottom-0' : 'bottom-0'
-          }`}
+      {/* Fixed Action Button - Smoothly animated position based on keyboard state */}
+      <Animated.View
+        className="absolute left-0 right-0 px-5 pt-5 pb-5 bg-transparent items-center"
         style={{
-          bottom: keyboardVisible ? keyboardHeight + 10 : 0,
+          bottom: buttonPositionAnim,
         }}
       >
         <TouchableOpacity
@@ -624,7 +671,7 @@ function CreateTaskScreen({ navigation, route }) {
             <Text className="text-white text-[16px] font-semibold">Create Task</Text>
           )}
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
       {/* Date and Time Pickers */}
       {showStartDatePicker && (

@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   Keyboard,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -15,6 +16,10 @@ import { createProject } from '../../services/projects/createProject';
 import Toast from 'react-native-toast-message';
 
 function CreateProject({ navigation, onSuccess, onCancel }) {
+  // --- Get screen dimensions for responsive design ---
+  const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+  const isSmallScreen = screenWidth < 375 || screenHeight < 667; // iPhone SE and smaller
+  
   const [projectData, setProjectData] = useState({
     name: '',
     description: '',
@@ -190,22 +195,25 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
         </TouchableOpacity>
       </View>
       
-      <View className="flex-1 p-5 items-center">
+      <View className="flex-1 px-5 items-center" style={{ paddingBottom: isSmallScreen ? 0 : 20 }}>
         <ScrollView
           className="flex-1 w-full max-w-md"
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 20 }}
+          contentContainerStyle={{ 
+            paddingBottom: isSmallScreen ? 100 : 20,
+            paddingTop: 0
+          }}
           keyboardShouldPersistTaps="handled"
           onScrollBeginDrag={dismissKeyboard}
         >
-          <View className="mb-8 items-center">
+          <View className={`${isSmallScreen ? 'mb-4' : 'mb-8'} items-center`}>
             <Text className="text-[28px] font-bold text-[#333]">Create New Project</Text>
             <Text className="text-[16px] text-[#666] text-center">Fill in the details below to create your project</Text>
           </View>
 
-          <View className="mb-5">
+          <View className={`${isSmallScreen ? 'mb-3' : 'mb-5'}`}>
             {/* Project Name */}
-            <View className="mb-5">
+            <View className={`${isSmallScreen ? 'mb-3' : 'mb-5'}`}>
               <View className="flex-row items-center mb-2">
                 <Ionicons name="folder" size={20} color="black" style={{ marginRight: 8 }} />
                 <Text className="text-[16px] font-semibold text-[#333]">Project Name *</Text>
@@ -221,7 +229,7 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
             </View>
 
             {/* Project Description */}
-            <View className="mb-5">
+            <View className={`${isSmallScreen ? 'mb-3' : 'mb-5'}`}>
               <View className="flex-row items-center mb-2">
                 <Ionicons name="document-text" size={20} color="black" style={{ marginRight: 8 }} />
                 <Text className="text-[16px] font-semibold text-[#333]">Description *</Text>
@@ -260,21 +268,23 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
       </View>
 
       {/* Fixed Action Button - Always positioned at bottom */}
-      <View className="absolute bottom-0 left-0 right-0 px-5 pt-5 pb-5 bg-white items-center">
-        <TouchableOpacity
-          className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
-          onPress={handleCreateProject}
-          disabled={isLoading}
-          activeOpacity={0.8}
-        >
-          {isLoading ? (
-            <View className="flex-row items-center">
-              <ActivityIndicator color="#ffffff" size="small" />
-            </View>
-          ) : (
-            <Text className="text-white text-[16px] font-semibold">Create Project</Text>
-          )}
-        </TouchableOpacity>
+      <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200">
+        <View className={`px-5 pt-4 items-center ${isSmallScreen ? 'pb-4' : 'pb-6'}`}>
+          <TouchableOpacity
+            className="w-full max-w-[280px] bg-black rounded-lg p-4 items-center justify-center"
+            onPress={handleCreateProject}
+            disabled={isLoading}
+            activeOpacity={0.8}
+          >
+            {isLoading ? (
+              <View className="flex-row items-center">
+                <ActivityIndicator color="#ffffff" size="small" />
+              </View>
+            ) : (
+              <Text className="text-white text-[16px] font-semibold">Create Project</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Date Picker */}

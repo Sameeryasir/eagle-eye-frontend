@@ -49,6 +49,7 @@ function TaskDetailsScreen({ navigation, route }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
+  
 
   // Responsive spacing calculations
   const isLargeScreen = screenHeight > 800;
@@ -67,6 +68,7 @@ function TaskDetailsScreen({ navigation, route }) {
     };
     loadUserRole();
   }, []);
+
 
   useEffect(() => {
     const fetchTask = async () => {
@@ -233,9 +235,6 @@ function TaskDetailsScreen({ navigation, route }) {
   const handleAssignmentPress = async () => {
     // Only show dropdown if task is not assigned and user has permission
     if (getAssignedToName(currentTask.assigned_to || currentTask.assignedTo) === "Unassigned" && userRole !== 'Employee') {
-      // Show dropdown immediately
-      setShowAssignmentDropdown(!showAssignmentDropdown);
-      
       // Fetch employees if not already loaded
       if (employees.length === 0 && !loadingEmployees) {
         fetchEmployees();
@@ -441,33 +440,29 @@ function TaskDetailsScreen({ navigation, route }) {
   }
 
   return (
-    <TouchableWithoutFeedback onPress={() => {
-      setShowAssignmentDropdown(false);
-      setSelectedEmployee(null);
-      setSearchQuery('');
-    }}>
-      <View className="flex-1 bg-gray-100">
-        <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
+    <View className="flex-1 bg-gray-100">
+      <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
 
-        <ScrollView 
-          className="flex-1" 
-          style={{ paddingTop: 20 }}
-          contentContainerStyle={{ paddingBottom: bottomSpacing }}
-          showsVerticalScrollIndicator={true}
-          bounces={true}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={["#3155A1", "#007AFF"]}
-              tintColor="#3155A1"
-              progressBackgroundColor="#ffffff"
-              size="default"
-              title="Pull to refresh"
-              titleColor="#666666"
-            />
-          }
-        >
+      <ScrollView 
+        className="flex-1" 
+        style={{ paddingTop: 20 }}
+        contentContainerStyle={{ paddingBottom: bottomSpacing }}
+        showsVerticalScrollIndicator={true}
+        bounces={true}
+        nestedScrollEnabled={true}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#3155A1", "#007AFF"]}
+            tintColor="#3155A1"
+            progressBackgroundColor="#ffffff"
+            size="default"
+            title="Pull to refresh"
+            titleColor="#666666"
+          />
+        }
+      >
           {/* Task Title Card */}
           <View style={{ marginHorizontal: 24, marginBottom: cardSpacing }}>
             <View style={{
@@ -613,78 +608,239 @@ function TaskDetailsScreen({ navigation, route }) {
                 borderBottomWidth: 1,
                 borderBottomColor: '#f3f4f6'
               }}>
-                <TouchableOpacity
-                  onPress={handleAssignmentPress}
-                  activeOpacity={getAssignedToName(currentTask.assigned_to || currentTask.assignedTo) === "Unassigned" && userRole !== 'Employee' ? 0.7 : 1}
-                  disabled={assigningTask}
-                >
-                  <View className="flex-row items-center">
-                    <View className="w-10 h-10 rounded-lg bg-green-100 items-center justify-center mr-3">
-                      <Ionicons name="person" size={20} color="#10B981" />
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-sm font-medium text-gray-600 mb-1">ASSIGNED TO</Text>
-                      <View className="flex-row items-center justify-between">
-                        <View className="flex-row items-center flex-1">
-                          <Text 
-                            className="text-lg font-semibold text-gray-900"
-                            numberOfLines={1}
-                            ellipsizeMode="tail"
-                            style={{ flex: 1, marginRight: 8 }}
+                <View className="flex-row items-center mb-3">
+                  <View className="w-10 h-10 rounded-lg bg-green-100 items-center justify-center mr-3">
+                    <Ionicons name="person" size={20} color="#10B981" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-sm font-medium text-gray-600 mb-1">ASSIGNED TO</Text>
+                    <View className="flex-row items-center justify-between">
+                      <View className="flex-row items-center flex-1">
+                        <Text 
+                          className="text-lg font-semibold text-gray-900"
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                          style={{ flex: 1, marginRight: 8 }}
+                        >
+                          {assigningTask ? "Assigning..." :
+                            selectedEmployee ?
+                              `${selectedEmployee.first_name} ${selectedEmployee.last_name}`.trim() || selectedEmployee.email :
+                              getAssignedToName(currentTask.assigned_to || currentTask.assignedTo)
+                          }
+                        </Text>
+                        {getAssignedToName(currentTask.assigned_to || currentTask.assignedTo) === "Unassigned" && userRole !== 'Employee' && (
+                          <TouchableOpacity
+                            onPress={() => {
+                              if (employees.length === 0 && !loadingEmployees) {
+                                fetchEmployees();
+                              }
+                              setShowAssignmentDropdown(!showAssignmentDropdown);
+                            }}
+                            style={{ marginLeft: 8 }}
                           >
-                            {assigningTask ? "Assigning..." :
-                              selectedEmployee ?
-                                `${selectedEmployee.first_name} ${selectedEmployee.last_name}`.trim() || selectedEmployee.email :
-                                getAssignedToName(currentTask.assigned_to || currentTask.assignedTo)
-                            }
-                          </Text>
-                          {getAssignedToName(currentTask.assigned_to || currentTask.assignedTo) === "Unassigned" && userRole !== 'Employee' && (
                             <Ionicons 
                               name={showAssignmentDropdown ? "chevron-up" : "chevron-down"} 
                               size={16} 
                               color="#6B7280" 
-                              style={{ marginLeft: 8 }} 
                             />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      {selectedEmployee && (
+                        <TouchableOpacity
+                          onPress={handleAssignTask}
+                          disabled={assigningTask}
+                          style={{
+                            backgroundColor: assigningTask ? '#6B7280' : '#000000',
+                            paddingVertical: 4,
+                            paddingHorizontal: 16,
+                            borderRadius: 6,
+                            marginLeft: 12,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            minWidth: 70,
+                          }}
+                        >
+                          {assigningTask ? (
+                            <ActivityIndicator
+                              size="small"
+                              color="white"
+                            />
+                          ) : (
+                            <Text style={{
+                              color: 'white',
+                              fontSize: 13,
+                              fontWeight: '600'
+                            }}>
+                              Assign
+                            </Text>
                           )}
-                        </View>
-                        {selectedEmployee && (
-                          <TouchableOpacity
-                            onPress={handleAssignTask}
-                            disabled={assigningTask}
-                            style={{
-                              backgroundColor: assigningTask ? '#6B7280' : '#000000',
-                              paddingVertical: 4,
-                              paddingHorizontal: 16,
-                              borderRadius: 6,
-                              marginLeft: 12,
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              minWidth: 70,
-                            }}
-                          >
-                            {assigningTask ? (
-                              <ActivityIndicator
-                                size="small"
-                                color="white"
-                              />
-                            ) : (
-                              <Text style={{
-                                color: 'white',
-                                fontSize: 13,
-                                fontWeight: '600'
-                              }}>
-                                Assign
-                              </Text>
-                            )}
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                </View>
+
+                {/* Employee Assignment Popup - Inline below Assigned To section */}
+                {showAssignmentDropdown && (
+                  <View style={{
+                    marginTop: 16,
+                    backgroundColor: 'white',
+                    borderRadius: 12,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 8,
+                    elevation: 4,
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                    overflow: 'hidden',
+                  }}>
+                    {/* Popup Header */}
+                    <View style={{
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      backgroundColor: '#F8FAFC',
+                      borderBottomWidth: 1,
+                      borderBottomColor: '#E2E8F0',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}>
+                      <Text style={{
+                        fontSize: 14,
+                        fontWeight: '600',
+                        color: '#1E293B'
+                      }}>
+                        Select Employee
+                      </Text>
+                      <TouchableOpacity onPress={() => {
+                        setShowAssignmentDropdown(false);
+                        setSelectedEmployee(null);
+                      }}>
+                        <Ionicons name="close" size={20} color="#64748B" />
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Search Bar */}
+                    <View style={{
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      backgroundColor: 'white'
+                    }}>
+                      <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: '#F1F5F9',
+                        borderRadius: 8,
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0'
+                      }}>
+                        <Ionicons name="search" size={16} color="#64748B" style={{ marginRight: 8 }} />
+                        <TextInput
+                          placeholder="Search employees..."
+                          value={searchQuery}
+                          onChangeText={setSearchQuery}
+                          style={{
+                            flex: 1,
+                            fontSize: 14,
+                            color: '#1E293B',
+                            fontWeight: '500'
+                          }}
+                          placeholderTextColor="#94A3B8"
+                        />
+                        {searchQuery.length > 0 && (
+                          <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 2 }}>
+                            <Ionicons name="close-circle" size={16} color="#64748B" />
                           </TouchableOpacity>
                         )}
                       </View>
                     </View>
+
+                     <ScrollView 
+                       style={{ maxHeight: 150 }} 
+                       showsVerticalScrollIndicator={true}
+                       nestedScrollEnabled={true}
+                       scrollEnabled={true}
+                       bounces={true}
+                       keyboardShouldPersistTaps="handled"
+                     >
+                      {loadingEmployees ? (
+                        <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                          <ActivityIndicator size="small" color="#3B82F6" />
+                          <Text style={{ color: '#64748B', marginTop: 8, fontSize: 14, fontWeight: '500' }}>Loading employees...</Text>
+                        </View>
+                      ) : filteredEmployees.length === 0 ? (
+                        <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                          <Ionicons name="people-outline" size={24} color="#94A3B8" />
+                          <Text style={{ color: '#64748B', fontSize: 14, fontWeight: '500', marginTop: 8, textAlign: 'center' }}>
+                            {searchQuery ? 'No employees match your search' : 'No employees found'}
+                          </Text>
+                        </View>
+                      ) : (
+                        filteredEmployees.map((employee, index) => (
+                          <TouchableOpacity
+                            key={employee.id || index}
+                            onPress={() => handleEmployeeSelect(employee)}
+                            style={{
+                              paddingVertical: 10,
+                              paddingHorizontal: 16,
+                              borderBottomWidth: index < filteredEmployees.length - 1 ? 1 : 0,
+                              borderBottomColor: '#F1F5F9',
+                              backgroundColor: selectedEmployee?.id === employee.id ? '#EFF6FF' : 'transparent',
+                              flexDirection: 'row',
+                              alignItems: 'center'
+                            }}
+                          >
+                            <View style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 16,
+                              backgroundColor: selectedEmployee?.id === employee.id ? '#3B82F6' : '#DBEAFE',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              marginRight: 12
+                            }}>
+                              <Text style={{
+                                fontSize: 14,
+                                fontWeight: '700',
+                                color: selectedEmployee?.id === employee.id ? 'white' : '#1D4ED8'
+                              }}>
+                                {employee.first_name?.charAt(0)?.toUpperCase() || employee.email?.charAt(0)?.toUpperCase() || 'U'}
+                              </Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{
+                                fontSize: 14,
+                                fontWeight: '600',
+                                color: selectedEmployee?.id === employee.id ? '#1E40AF' : '#1E293B',
+                                marginBottom: 2
+                              }}>
+                                {employee.first_name && employee.last_name
+                                  ? `${employee.first_name} ${employee.last_name}`
+                                  : employee.email || 'Unknown Employee'
+                                }
+                              </Text>
+                              {employee.email && employee.first_name && (
+                                <Text style={{
+                                  fontSize: 12,
+                                  color: selectedEmployee?.id === employee.id ? '#3B82F6' : '#64748B',
+                                  fontWeight: '500'
+                                }}>{employee.email}</Text>
+                              )}
+                            </View>
+                            {selectedEmployee?.id === employee.id && (
+                              <Ionicons name="checkmark-circle" size={18} color="#3B82F6" />
+                            )}
+                          </TouchableOpacity>
+                        ))
+                      )}
+                    </ScrollView>
                   </View>
-                </TouchableOpacity>
-
-
+                )}
               </View>
 
 
@@ -740,113 +896,7 @@ function TaskDetailsScreen({ navigation, route }) {
           <View style={{ height: bottomSpacing }} />
         </ScrollView>
 
-        {/* Assignment Dropdown Overlay */}
-        {showAssignmentDropdown && (
-          <View style={{
-            position: 'absolute',
-            top: 390, // Position just under the assigned section
-            left: 24,
-            right: 24,
-            backgroundColor: 'white',
-            borderRadius: 12,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.15,
-            shadowRadius: 8,
-            elevation: 8,
-            zIndex: 1000,
-            maxHeight: 250,
-            borderWidth: 1,
-            borderColor: '#E5E7EB'
-          }}>
-            {/* Search Bar */}
-            <View style={{
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              borderBottomWidth: 1,
-              borderBottomColor: '#E5E7EB'
-            }}>
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                backgroundColor: '#F9FAFB',
-                borderRadius: 8,
-                paddingHorizontal: 12,
-                paddingVertical: 8
-              }}>
-                <Ionicons name="search" size={18} color="#6B7280" style={{ marginRight: 8 }} />
-                <TextInput
-                  placeholder="Search employees..."
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  style={{
-                    flex: 1,
-                    fontSize: 14,
-                    color: '#1F2937'
-                  }}
-                  placeholderTextColor="#9CA3AF"
-                />
-                {searchQuery.length > 0 && (
-                  <TouchableOpacity onPress={() => setSearchQuery('')}>
-                    <Ionicons name="close-circle" size={18} color="#6B7280" />
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
 
-            <ScrollView style={{ maxHeight: 160 }}>
-              {loadingEmployees ? (
-                <View className="py-4 items-center">
-                  <Text className="text-gray-500">Loading employees...</Text>
-                </View>
-              ) : filteredEmployees.length === 0 ? (
-                <View className="py-4 items-center">
-                  <Text className="text-gray-500">
-                    {searchQuery ? 'No employees match your search' : 'No employees found'}
-                  </Text>
-                </View>
-              ) : (
-                filteredEmployees.map((employee, index) => (
-                  <TouchableOpacity
-                    key={employee.id || index}
-                    onPress={() => handleEmployeeSelect(employee)}
-                    style={{
-                      paddingVertical: 10,
-                      paddingHorizontal: 12,
-                      borderBottomWidth: index < filteredEmployees.length - 1 ? 1 : 0,
-                      borderBottomColor: '#F3F4F6',
-                      backgroundColor: selectedEmployee?.id === employee.id ? '#F3F4F6' : 'transparent'
-                    }}
-                  >
-                    <View className="flex-row items-center">
-                      <View className="w-8 h-8 rounded-full bg-blue-100 items-center justify-center mr-3">
-                        <Text className="text-sm font-semibold text-blue-600">
-                          {employee.first_name?.charAt(0)?.toUpperCase() || employee.email?.charAt(0)?.toUpperCase() || 'U'}
-                        </Text>
-                      </View>
-                      <View className="flex-1">
-                        <Text className="text-base font-medium text-gray-900">
-                          {employee.first_name && employee.last_name
-                            ? `${employee.first_name} ${employee.last_name}`
-                            : employee.email || 'Unknown Employee'
-                          }
-                        </Text>
-                        {employee.email && employee.first_name && (
-                          <Text className="text-sm text-gray-500">{employee.email}</Text>
-                        )}
-                      </View>
-                      {selectedEmployee?.id === employee.id && (
-                        <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                ))
-              )}
-            </ScrollView>
-
-
-          </View>
-        )}
 
         {/* Update Task Button - Only show when in update mode */}
         {isUpdateMode && (
@@ -1018,7 +1068,6 @@ function TaskDetailsScreen({ navigation, route }) {
         {/* Bottom Navigation */}
         <CustomBottomNav navigation={navigation} />
       </View>
-    </TouchableWithoutFeedback>
   );
 }
 

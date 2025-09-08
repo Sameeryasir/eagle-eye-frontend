@@ -487,7 +487,7 @@ function HomeScreen({ navigation, route }) {
       <Modal
         visible={createProjectModalVisible}
         animationType="slide"
-        presentationStyle="formSheet" // changed from "pageSheet"
+        presentationStyle="fullScreen"
         onRequestClose={() => setCreateProjectModalVisible(false)}
       >
         <CreateProject

@@ -9,6 +9,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@expo/vector-icons": "^14.1.0",
     "@react-native-async-storage/async-storage": "2.1.2",
     "@react-native-community/datetimepicker": "8.4.1",
     "@react-navigation/native": "^7.1.14",
@@ -30,8 +31,10 @@
     "react": "19.0.0",
     "react-native": "0.79.5",
     "react-native-big-calendar": "^4.18.4",
+    "react-native-calendar-events": "^2.2.0",
     "react-native-calendar-picker": "^8.0.5",
     "react-native-calendars": "^1.1313.0",
+    "react-native-dotenv": "^3.4.11",
     "react-native-dropdown-picker": "^5.4.6",
     "react-native-dropdown-select-list": "^2.0.5",
     "react-native-gesture-handler": "~2.24.0",
@@ -42,16 +45,15 @@
     "react-native-screens": "~4.11.1",
     "react-native-svg": "15.11.2",
     "react-native-svg-transformer": "^1.5.1",
+    "react-native-timeline-flatlist": "^0.8.0",
     "react-native-toast-message": "^2.3.3",
-    "tailwindcss": "^3.4.17",
-    "@expo/vector-icons": "^14.1.0"
+    "tailwindcss": "^3.4.17"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
     "@react-native-community/cli": "^20.0.0",
     "@react-native/metro-config": "^0.80.2",
     "@types/react": "~19.0.10",
-    "react-native-dotenv": "^3.4.11",
     "typescript": "~5.8.3"
   },
   "private": true

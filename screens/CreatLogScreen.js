@@ -489,7 +489,10 @@ function CreatLogScreen({ navigation, route }) {
         topOffset: 80,
       });
       
-      loadLogData();
+      // Set error state to show "Log Creation Limit" message
+      setError("You can create one log per project in one day. A log already exists for this project.");
+      setLogs([]);
+      setFilteredLogs([]);
 
     } catch (err) {
       console.error("CreatLogScreen - Error creating log:", err);
@@ -692,7 +695,7 @@ function CreatLogScreen({ navigation, route }) {
     );
   };
 
-  const renderLogCard = (log, index) => {
+  const renderLogCard = React.useCallback((log, index) => {
     const isChecked = checkedTasks.has(log.id);
     const hasLog = log.hasLog;
 
@@ -794,7 +797,17 @@ function CreatLogScreen({ navigation, route }) {
         </View>
       </View>
     );
-  };
+  }, [checkedTasks]);
+
+  const renderItem = React.useCallback(({ item, index }) => (
+    <View style={{ 
+      marginBottom: 16,
+    }}>
+      {renderLogCard(item, index)}
+    </View>
+  ), [renderLogCard]);
+
+  const keyExtractor = React.useCallback((item) => String(item.id), []);
 
   const renderContent = () => {
     console.log("🖥️ RENDERING CONTENT:");
@@ -812,19 +825,26 @@ function CreatLogScreen({ navigation, route }) {
             <FlatList
               data={filteredLogs}
               keyExtractor={(item) => String(item.id)}
-              renderItem={({ item, index }) => (
-                <View style={{ 
-                  marginBottom: 16,
-                }}>
-                  {renderLogCard(item, index)}
-                </View>
-              )}
+              renderItem={renderItem}
               contentContainerStyle={{ 
                 paddingHorizontal: 20, 
                 paddingBottom: 140 
               }}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
+              showsVerticalScrollIndicator={true}
+              bounces={true}
+              scrollEventThrottle={16}
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={10}
+              updateCellsBatchingPeriod={50}
+              initialNumToRender={10}
+              windowSize={10}
+              getItemLayout={(data, index) => ({
+                length: 100, // Approximate height of each item
+                offset: 100 * index,
+                index,
+              })}
               ListHeaderComponent={() => (
                 /* --- Select Tasks Header --- */
                 <View style={{
@@ -897,7 +917,7 @@ function CreatLogScreen({ navigation, route }) {
             justifyContent: "flex-start",
             alignItems: "center",
             padding: Math.min(20, screenWidth * 0.05),
-            paddingTop: Math.min(120, screenHeight * 0.15),
+            paddingTop: Math.min(200, screenHeight * 0.26),
           }}>
             <Ionicons
               name="document-text-outline"
@@ -941,18 +961,12 @@ function CreatLogScreen({ navigation, route }) {
           padding: Math.min(20, screenWidth * 0.05),
           minHeight: Math.min(300, screenHeight * 0.375),
         }}>
-          <Loader size="large" color="#000000" text="Loading logs..." />
+          <Loader size="large" color="#000000" text="Loading tasks..." />
         </View>
       ) : (
-        <TouchableWithoutFeedback
-          onPress={() => {
-            Keyboard.dismiss();
-          }}
-        >
-          <View className="flex-1 bg-white" style={{ position: "relative" }}>
-            {renderContent()}
-          </View>
-        </TouchableWithoutFeedback>
+        <View className="flex-1 bg-white" style={{ position: "relative" }}>
+          {renderContent()}
+        </View>
       )}
 
 
@@ -1030,6 +1044,9 @@ function CreatLogScreen({ navigation, route }) {
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     className="flex-row"
+                    scrollEventThrottle={16}
+                    bounces={false}
+                    decelerationRate="fast"
                   >
                     {selectedImages.map((image, index) => (
                       <View key={image.id} className="mr-3 relative">

@@ -30,7 +30,6 @@
         {
           "icon": "./assets/icon.png",
           "color": "#000000",
-          "sounds": ["default"],
           "mode": "production"
         }
       ]
@@ -38,8 +37,12 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "UIBackgroundModes": ["remote-notification"]
-      }
+        "UIBackgroundModes": [
+          "remote-notification",
+          "remote-notification"
+        ]
+      },
+      "bundleIdentifier": "com.sameer-yasir.eagleEye"
     },
     "android": {
       "adaptiveIcon": {

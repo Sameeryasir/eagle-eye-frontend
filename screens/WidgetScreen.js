@@ -462,6 +462,7 @@ function WidgetScreen({ navigation, route }) {
           onPress={() => {
             const navigationParams = {
               projectId: userRole === "Manager" ? managerProjectId : projectId,
+              showUpcomingTasks: true, // --- Flag to indicate upcoming tasks view (MCP Context 7) ---
             };
             navigation.navigate("ViewAllTasksScreen", navigationParams);
           }}

@@ -15,9 +15,11 @@ export default function CustomBottomNav({
   project = false,
   onAddPress,
   handleFabPress,
+  isLoading = false,
 }) {
   const navigation = useNavigation();
   const [activeTab, setActiveTab] = React.useState("home"); // Track active tab
+  const insets = useSafeAreaInsets(); // Get safe area insets
 
   const handleAddPress = async () => {
     if (onAddPress) {
@@ -70,6 +72,7 @@ export default function CustomBottomNav({
 
   const navigateToProfile = () => {
     setActiveTab("profile");
+    navigation.navigate("CalenderScreen");
   };
   // Hide the bottom navigation when keyboard is visible
   if (keyboardVisible) {
@@ -86,6 +89,10 @@ export default function CustomBottomNav({
         alignItems: 'center',
         zIndex: 1000,
         backgroundColor: 'transparent',
+        // Ensure consistent positioning regardless of app state
+        marginBottom: 0,
+        paddingBottom: insets.bottom,
+        transform: [{ translateY: 20 }], // Shift the entire nav 20px downward
       }}
     >
       {/* Bottom Nav Bar */}
@@ -100,12 +107,14 @@ export default function CustomBottomNav({
           borderRadius: 35,
           paddingHorizontal: 15,
           paddingBottom: 5,
-          marginBottom: 20,
+          marginBottom: 20, // Keep consistent margin from bottom
           shadowColor: "#000",
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: 0.15,
           shadowRadius: 4,
           elevation: 6,
+          // Ensure consistent positioning
+          position: 'relative',
         }}
       >
         <TouchableOpacity
@@ -160,8 +169,11 @@ export default function CustomBottomNav({
       <View
         style={{
           position: 'absolute',
-          bottom: 45,
+          bottom: 45 + insets.bottom, // Reset FAB position since container is transformed
           zIndex: 1001,
+          // Ensure FAB stays in same position regardless of app state
+          left: '50%',
+          marginLeft: -32.5, // Half of FAB width (65/2) to center it
         }}
       >
         <TouchableOpacity
