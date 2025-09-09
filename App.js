@@ -227,7 +227,7 @@ const AppNavigator = () => {
                 header: () => (
                   <CustomHeaderForScreens
                     onMenuPress={handleMenuPress}
-                    title="Calendar Details"
+                    title="Todays Tasks"
                   />
                 ),
                 headerBackTitleVisible: false,
