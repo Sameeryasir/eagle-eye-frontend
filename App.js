@@ -103,11 +103,43 @@ const CustomHeaderForScreens = ({ onMenuPress, title = "Screen" }) => {
   );
 };
 
+// Loading Screen Component
+const LoadingScreen = () => (
+  <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffffff' }}>
+    <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <Logo width={90} height={90} />
+    <Text style={{ marginTop: 20, fontSize: 16, color: '#666' }}>Loading...</Text>
+  </SafeAreaView>
+);
+
 // Navigation component that handles initial routing
 const AppNavigator = () => {
-  const { isAuthenticated, isLoading, initialRoute } = useAuth();
+  const { isAuthenticated, initialRoute, isLoading } = useAuth();
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [navigationRef, setNavigationRef] = useState(null);
+  
+  // Show loading screen while checking authentication
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+  
+  // Handle navigation when authentication state changes
+  useEffect(() => {
+    if (navigationRef && !isLoading) {
+      if (isAuthenticated) {
+        navigationRef.reset({
+          index: 0,
+          routes: [{ name: 'HomeScreen' }],
+        });
+      } else {
+        navigationRef.reset({
+          index: 0,
+          routes: [{ name: 'SignIn' }],
+        });
+      }
+    }
+  }, [isAuthenticated, navigationRef, isLoading]);
+  
   // Authentication check completed - proceed with navigation
 
   const handleMenuPress = () => {
@@ -142,6 +174,7 @@ const AppNavigator = () => {
     }
     setSidebarVisible(false);
   };
+
 
   return (
     <MenuProvider>
@@ -227,7 +260,7 @@ const AppNavigator = () => {
                 header: () => (
                   <CustomHeaderForScreens
                     onMenuPress={handleMenuPress}
-                    title="Todays Tasks"
+                    title="Task Details"
                   />
                 ),
                 headerBackTitleVisible: false,

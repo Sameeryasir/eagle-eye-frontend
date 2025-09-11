@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SplashScreen from 'expo-splash-screen';
+import { setupNotifications, clearExpoToken } from '../services/notifications/expoTokenService';
+import { saveTokenToServer, removeTokenFromServer } from '../services/notifications/sendTokenToServer';
 
 const AuthContext = createContext();
 
@@ -14,106 +15,96 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [userRole, setUserRole] = useState(null);
   const [userInfo, setUserInfo] = useState(null);
   const [initialRoute, setInitialRoute] = useState('SignIn');
+  const [expoPushToken, setExpoPushToken] = useState(null);
+  const [isLoading, setIsLoading] = useState(true); // Show loading while checking auth
 
   useEffect(() => {
-    // Prevent the splash screen from auto-hiding before app is ready
-    SplashScreen.preventAutoHideAsync();
     checkAuthStatus();
   }, []);
 
   const checkAuthStatus = async () => {
     try {
-      setIsLoading(true);
-      console.log('Starting authentication check...');
-
-      // Check if token exists with longer timeout for development builds
-      const timeoutDuration = __DEV__ ? 10000 : 5000; // 10 seconds for dev, 5 for production
+      // Simple check: get tokens from storage
+      const token = await AsyncStorage.getItem('token');
+      const refreshToken = await AsyncStorage.getItem('refreshToken');
       
-      const token = await Promise.race([
-        AsyncStorage.getItem('token'),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('AsyncStorage timeout')), timeoutDuration))
-      ]);
-      
-      const refreshToken = await Promise.race([
-        AsyncStorage.getItem('refreshToken'),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('AsyncStorage timeout')), timeoutDuration))
-      ]);
-      
-      const storedUserRole = await AsyncStorage.getItem('userRole');
+      // Get user info
+      const userRole = await AsyncStorage.getItem('userRole');
       const firstName = await AsyncStorage.getItem('userFirstName');
       const lastName = await AsyncStorage.getItem('userLastName');
+      const userId = await AsyncStorage.getItem('userId');
+      const expoToken = await AsyncStorage.getItem('expoPushToken');
 
-      console.log('Auth check completed:', { hasToken: !!token, hasRefreshToken: !!refreshToken });
-
+      // If both tokens exist, user is logged in
       if (token && refreshToken) {
-        // Token exists, user is authenticated
         setIsAuthenticated(true);
-        setUserRole(storedUserRole);
+        setUserRole(userRole);
         setUserInfo({
           firstName,
           lastName,
-          role: storedUserRole
+          role: userRole,
+          id: userId
         });
-
-        // Set initial route to HomeScreen for all authenticated users
-        setInitialRoute('HomeScreen');
-        console.log('User authenticated, routing to HomeScreen');
+        setExpoPushToken(expoToken);
+        setInitialRoute('HomeScreen'); // Go directly to HomeScreen
       } else {
-        // No tokens found, user needs to sign in
+        // No tokens, user needs to login
         setIsAuthenticated(false);
         setUserRole(null);
         setUserInfo(null);
+        setExpoPushToken(null);
         setInitialRoute('SignIn');
-        console.log('No tokens found, routing to SignIn');
       }
     } catch (error) {
-      console.error('Error checking auth status:', error);
-      // Fallback to sign in screen on any error
+      console.error('Auth check error:', error);
+      // On error, go to sign in
       setIsAuthenticated(false);
       setUserRole(null);
       setUserInfo(null);
+      setExpoPushToken(null);
       setInitialRoute('SignIn');
-      console.log('Auth check failed, routing to SignIn');
     } finally {
+      // Always stop loading when done
       setIsLoading(false);
-      console.log('Hiding splash screen...');
-      // Hide the splash screen once authentication check is complete
-      try {
-        await SplashScreen.hideAsync();
-        console.log('Splash screen hidden successfully');
-      } catch (splashError) {
-        console.error('Error hiding splash screen:', splashError);
-        // Force hide splash screen if there's an error
-        try {
-          await SplashScreen.hideAsync();
-        } catch (e) {
-          console.error('Failed to force hide splash screen:', e);
-        }
-      }
     }
   };
 
   const login = async (userData) => {
     try {
-      // Store tokens and user data
-      if (userData.access_token) {
-        await AsyncStorage.setItem('token', userData.access_token);
-      }
-      if (userData.refresh_token) {
-        await AsyncStorage.setItem('refreshToken', userData.refresh_token);
-      }
-      if (userData.user?.role?.name) {
-        await AsyncStorage.setItem('userRole', userData.user.role.name);
-      }
-      if (userData.user?.first_name) {
-        await AsyncStorage.setItem('userFirstName', userData.user.first_name);
-      }
-      if (userData.user?.last_name) {
-        await AsyncStorage.setItem('userLastName', userData.user.last_name);
+      // Store tokens
+      await AsyncStorage.setItem('token', userData.access_token);
+      await AsyncStorage.setItem('refreshToken', userData.refresh_token);
+      
+      // Store user info
+      await AsyncStorage.setItem('userRole', userData.user?.role?.name);
+      await AsyncStorage.setItem('userFirstName', userData.user?.first_name);
+      await AsyncStorage.setItem('userLastName', userData.user?.last_name);
+      await AsyncStorage.setItem('userId', userData.user?.id?.toString());
+
+      // Setup notifications (optional)
+      const notificationResult = await setupNotifications();
+      if (notificationResult.success) {
+        setExpoPushToken(notificationResult.token);
+        await AsyncStorage.setItem('expoPushToken', notificationResult.token);
+        console.log('🔔 Expo Push Token:', notificationResult.token);
+        
+        // Send to server and get token ID
+        try {
+          const saveResult = await saveTokenToServer(notificationResult.token);
+          if (saveResult.success && saveResult.data) {
+            const tokenId = saveResult.data.id || saveResult.data.tokenId;
+            console.log('✅ Token saved to server with ID:', tokenId);
+            await AsyncStorage.setItem('expoTokenId', tokenId.toString());
+            console.log('💾 Token ID stored in AsyncStorage:', tokenId);
+          } else {
+            console.error('❌ Failed to save token to server:', saveResult.error);
+          }
+        } catch (error) {
+          console.error('❌ Error saving token to server:', error);
+        }
       }
 
       // Update state
@@ -122,20 +113,31 @@ export const AuthProvider = ({ children }) => {
       setUserInfo({
         firstName: userData.user?.first_name,
         lastName: userData.user?.last_name,
-        role: userData.user?.role?.name
+        role: userData.user?.role?.name,
+        id: userData.user?.id?.toString()
       });
-
-      // Set initial route to HomeScreen for all authenticated users
       setInitialRoute('HomeScreen');
     } catch (error) {
-      console.error('Error during login:', error);
+      console.error('Login error:', error);
       throw error;
     }
   };
 
   const logout = async () => {
     try {
-      console.log('Starting logout process...');
+      // Get token ID and remove from server
+      const expoTokenId = await AsyncStorage.getItem('expoTokenId');
+      if (expoTokenId) {
+        console.log('Removing expo token from server:', expoTokenId);
+        const removeResult = await removeTokenFromServer(expoTokenId);
+        if (removeResult.success) {
+          console.log('Successfully removed expo token from server');
+        } else {
+          console.error('Failed to remove expo token from server:', removeResult.error);
+        }
+      } else {
+        console.log('No expo token ID found to remove');
+      }
 
       // Clear all stored data
       await AsyncStorage.multiRemove([
@@ -145,16 +147,20 @@ export const AuthProvider = ({ children }) => {
         'userFirstName',
         'userLastName',
         'userId',
-        'lastVisitedScreen'
+        'lastVisitedScreen',
+        'expoPushToken',
+        'expoTokenId'
       ]);
-      console.log('Tokens cleared from storage');
+      
+      // Clear Expo token from notification service
+      await clearExpoToken();
 
       // Update state
       setIsAuthenticated(false);
       setUserRole(null);
       setUserInfo(null);
+      setExpoPushToken(null);
       setInitialRoute('SignIn');
-      console.log('Auth state updated');
     } catch (error) {
       console.error('Error during logout:', error);
       throw error;
@@ -165,10 +171,10 @@ export const AuthProvider = ({ children }) => {
 
   const value = {
     isAuthenticated,
-    isLoading,
     userRole,
     userInfo,
     initialRoute,
+    expoPushToken,
     login,
     logout,
     checkAuthStatus

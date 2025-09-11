@@ -158,6 +158,7 @@ function ViewAllTasksScreen({ navigation, route }) {
   const [refreshing, setRefreshing] = useState(false);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
+  const [pastTimeDialogVisible, setPastTimeDialogVisible] = useState(false);
 
   // Filter Modal State
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -225,7 +226,6 @@ function ViewAllTasksScreen({ navigation, route }) {
       title: "",
       description: "",
       startTime: now,
-      minStartTime: now, // Capture when draft was created for backend validation
       endTime: null, // Let user manually select end time
       assignedTo: null,
       priority: "low",
@@ -299,6 +299,16 @@ function ViewAllTasksScreen({ navigation, route }) {
           const newDate = new Date(currentDraft.startTime);
           newDate.setHours(selectedDate.getHours());
           newDate.setMinutes(selectedDate.getMinutes());
+          
+          // Check if the selected time is in the past
+          const now = new Date();
+          const isToday = newDate.toDateString() === now.toDateString();
+          
+          if (isToday && newDate < now) {
+            setPastTimeDialogVisible(true);
+            return;
+          }
+          
           updateDraftTask(activeDraftId, "startTime", newDate);
         }
       }
@@ -356,6 +366,26 @@ function ViewAllTasksScreen({ navigation, route }) {
           }
           newDate.setHours(selectedDate.getHours());
           newDate.setMinutes(selectedDate.getMinutes());
+          
+          // Check if the selected time is in the past
+          const now = new Date();
+          const isToday = newDate.toDateString() === now.toDateString();
+          
+          if (isToday && newDate < now) {
+            setPastTimeDialogVisible(true);
+            return;
+          }
+          
+          // Check if end time is before start time
+          if (newDate <= currentDraft.startTime) {
+            Alert.alert(
+              'Invalid End Time',
+              'End time must be after start time. Please choose a later time.',
+              [{ text: 'OK' }]
+            );
+            return;
+          }
+          
           updateDraftTask(activeDraftId, "endTime", newDate);
         }
       }
@@ -394,16 +424,7 @@ function ViewAllTasksScreen({ navigation, route }) {
     // End time is optional - no validation needed
 
     // --- Validation: Dates & Times (MCP Context 7) ---
-    // Business Rule: Validate startTime >= minStartTime (when draft was created) and endTime > startTime
-
-    // Ensure start time is not before the minimum start time (when draft was created)
-    if (draftTask.minStartTime && draftTask.startTime < draftTask.minStartTime) {
-      Alert.alert(
-        "Error",
-        "Start time cannot be before the draft creation time"
-      );
-      return;
-    }
+    // Business Rule: Validate endTime > startTime
 
     // Only validate end time if it's provided (optional field)
     if (draftTask.endTime) {
@@ -442,7 +463,6 @@ function ViewAllTasksScreen({ navigation, route }) {
         title: draftTask.title.trim(),
         description: draftTask.description.trim(),
         startTime: draftTask.startTime.toISOString(),
-        minStartTime: draftTask.minStartTime.toISOString(), // Include minStartTime for backend validation
         endTime: draftTask.endTime ? draftTask.endTime.toISOString() : null, // Make endTime optional
         projectId: projectId,
         assignedToUserId: draftTask.assignedToUserId || null,
@@ -1529,6 +1549,22 @@ function ViewAllTasksScreen({ navigation, route }) {
           }
           mode="time"
           onChange={handleStartTimeChange}
+          minimumDate={
+            activeDraftId
+              ? (() => {
+                  const currentDraft = draftTasks.find((draft) => draft.id === activeDraftId);
+                  if (currentDraft) {
+                    const draftDate = new Date(currentDraft.startTime);
+                    const today = new Date();
+                    // Only set minimum date if the draft date is today
+                    if (draftDate.toDateString() === today.toDateString()) {
+                      return today;
+                    }
+                  }
+                  return undefined;
+                })()
+              : undefined
+          }
         />
       )}
 
@@ -1551,6 +1587,22 @@ function ViewAllTasksScreen({ navigation, route }) {
           }
           mode="time"
           onChange={handleEndTimeChange}
+          minimumDate={
+            activeDraftId
+              ? (() => {
+                  const currentDraft = draftTasks.find((draft) => draft.id === activeDraftId);
+                  if (currentDraft) {
+                    const draftDate = new Date(currentDraft.endTime || currentDraft.startTime);
+                    const today = new Date();
+                    // Only set minimum date if the draft date is today
+                    if (draftDate.toDateString() === today.toDateString()) {
+                      return today;
+                    }
+                  }
+                  return undefined;
+                })()
+              : undefined
+          }
         />
       )}
 
@@ -1700,6 +1752,93 @@ function ViewAllTasksScreen({ navigation, route }) {
                 </Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Past Time Dialog */}
+      <Modal
+        visible={pastTimeDialogVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setPastTimeDialogVisible(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingHorizontal: 20,
+        }}>
+          <View style={{
+            backgroundColor: 'white',
+            borderRadius: 16,
+            padding: 20,
+            width: '100%',
+            maxWidth: 320,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.2,
+            shadowRadius: 16,
+            elevation: 8,
+          }}>
+            {/* Warning Icon */}
+            <View style={{
+              alignItems: 'center',
+              marginBottom: 16,
+            }}>
+              <View style={{
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor: '#FEF2F2',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 12,
+              }}>
+                <Ionicons name="time" size={24} color="#EF4444" />
+              </View>
+              <Text style={{
+                fontSize: 18,
+                fontWeight: 'bold',
+                color: '#1F2937',
+                textAlign: 'center',
+                marginBottom: 4,
+              }}>
+                Invalid Time
+              </Text>
+            </View>
+
+            {/* Message */}
+            <Text style={{
+              fontSize: 15,
+              color: '#6B7280',
+              textAlign: 'center',
+              lineHeight: 22,
+              marginBottom: 20,
+            }}>
+              Start time must be in the future. Please choose a future time.
+            </Text>
+
+            {/* Action Button */}
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#EF4444',
+                paddingVertical: 12,
+                borderRadius: 10,
+                alignItems: 'center',
+              }}
+              onPress={() => setPastTimeDialogVisible(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={{
+                fontSize: 15,
+                fontWeight: '600',
+                color: 'white',
+              }}>
+                OK
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

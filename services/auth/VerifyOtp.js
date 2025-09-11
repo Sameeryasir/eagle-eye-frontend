@@ -22,6 +22,16 @@ export async function verifyOtp(emailOrPhone, code) {
       }
     });
 
+    // --- Debug: Log the complete API response ---
+    console.log('=== OTP Verification API Response ===');
+    console.log('Response status:', response.status);
+    console.log('Response headers:', response.headers);
+    console.log('Response data:', JSON.stringify(response.data, null, 2));
+    console.log('Has access_token:', !!response.data?.access_token);
+    console.log('Has refresh_token:', !!response.data?.refresh_token);
+    console.log('Has user object:', !!response.data?.user);
+    console.log('=====================================');
+
     return response.data;
   } catch (error) {
     console.error('Verify OTP Error:', error);

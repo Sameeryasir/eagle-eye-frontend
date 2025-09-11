@@ -1,9 +1,15 @@
 
 import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, ScrollView, Modal, Dimensions } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, Dimensions, Alert } from "react-native";
 import Timetable from "react-native-calendar-timetable";
 import CustomBottomNav from "./components/CustomBottomNav";
 import { Ionicons } from "@expo/vector-icons";
+import { getEventsForLogInUser } from "../services/event/getEventsForLogInUser";
+import { getUserRole } from "../services/utils/userRole";
+import CreateEventModal from "./components/CreateEventModal";
+import EventDetailsModal from "./components/EventDetailsModal";
+import PastDateDialog from "./components/PastDateDialog";
+import TaskDetailsModal from "./components/TaskDetailsModal";
 
 const { width, height } = Dimensions.get("window");
 
@@ -27,6 +33,17 @@ const CalenderDetailScreen = ({ route, navigation }) => {
   // --- State for task dialog ---
   const [dialogTask, setDialogTask] = useState(null);
   const [showTaskDialog, setShowTaskDialog] = useState(false);
+  
+  
+  // --- State for modals ---
+  const [showEventCreationDialog, setShowEventCreationDialog] = useState(false);
+  const [showPastDateDialog, setShowPastDateDialog] = useState(false);
+  const [dialogEvent, setDialogEvent] = useState(null);
+  const [showEventDetailsDialog, setShowEventDetailsDialog] = useState(false);
+
+  // --- State for events ---
+  const [events, setEvents] = useState([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
 
   // --- Priority-based color mapping function ---
   const getPriorityColor = (priority) => {
@@ -46,17 +63,62 @@ const CalenderDetailScreen = ({ route, navigation }) => {
     }
   };
 
-  // --- Convert task data to Timetable format ---
+  // --- Fetch events function ---
+  const fetchEvents = async () => {
+    try {
+      setIsLoadingEvents(true);
+      
+      // Check user role - only Owner can fetch events
+      const userRole = await getUserRole();
+      if (userRole !== "Owner") {
+        console.log('User role is not Owner, skipping event fetch');
+        setEvents([]);
+        return;
+      }
+      
+      const response = await getEventsForLogInUser(selectedDate); // Pass selectedDate parameter
+      if (response.success && response.data) {
+        setEvents(response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching events:', error);
+      Alert.alert('Error', 'Failed to load events. Please try again.');
+    } finally {
+      setIsLoadingEvents(false);
+    }
+  };
+
+  // --- Handler for when event is created ---
+  const handleEventCreated = () => {
+    fetchEvents();
+  };
+
+  // --- Handler for task navigation ---
+  const handleViewTask = (task) => {
+    navigation.navigate('TaskDetails', { taskId: task.originalTaskId || task.id });
+  };
+
+
+  // --- Fetch events on component mount and when selectedDate changes ---
+  useEffect(() => {
+    fetchEvents();
+  }, [selectedDate]);
+
+  // --- Convert task and event data to Timetable format ---
   useEffect(() => {
     console.log('=== useEffect triggered ===');
     console.log('Tasks in useEffect:', tasks);
     console.log('Tasks length in useEffect:', tasks?.length);
+    console.log('Events in useEffect:', events);
+    console.log('Events length in useEffect:', events?.length);
     
+    const allItems = [];
+    
+    // --- Process tasks ---
     if (tasks && tasks.length > 0) {
       console.log('Processing tasks for timetable...');
       
-      // --- Process each task and convert to Timetable format ---
-      const timetableItems = tasks.map((task, index) => {
+      const taskItems = tasks.map((task, index) => {
         console.log(`Processing task ${index}:`, {
           id: task.id,
           title: task.title,
@@ -77,8 +139,11 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           endTimeString: endDate.toLocaleTimeString()
         });
         
+        // --- Ensure unique key for each task item ---
+        const uniqueKey = task.id ? `task-${task.id}` : `task-${index}-${task.title || 'untitled'}-${startDate.getTime()}`;
+        
         return {
-          id: task.id || index,
+          id: uniqueKey,
           title: task.title || 'Untitled Task',
           startDate: startDate,
           endDate: endDate,
@@ -86,63 +151,100 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           description: task.description,
           priority: task.priority,
           status: task.status,
-          assignedTo: task.assignedTo
+          assignedTo: task.assignedTo,
+          originalTaskId: task.id,
+          type: 'task' // Mark as task
         };
       });
       
-      console.log('Final timetable items:', timetableItems);
-      setItems(timetableItems);
-    } else {
-      console.log('No tasks to process or tasks array is empty');
-      // --- Fallback to empty array if no tasks ---
-      setItems([]);
+      allItems.push(...taskItems);
     }
-  }, [tasks]);
+    
+    // --- Process events ---
+    if (events && events.length > 0) {
+      console.log('Processing events for timetable...');
+      
+      const eventItems = events.map((event, index) => {
+        console.log(`Processing event ${index}:`, {
+          id: event.id,
+          title: event.title,
+          startTime: event.startTime,
+          endTime: event.endTime
+        });
+        
+        // --- Use the actual event startTime and endTime ---
+        const startDate = event.startTime ? new Date(event.startTime) : new Date();
+        const endDate = event.endTime ? new Date(event.endTime) : new Date(startDate.getTime() + 60 * 60 * 1000); // Default 1 hour duration
+        
+        console.log(`Converted dates for event ${index}:`, {
+          startDate: startDate,
+          endDate: endDate,
+          startTimeString: startDate.toLocaleTimeString(),
+          endTimeString: endDate.toLocaleTimeString()
+        });
+        
+        // --- Ensure unique key for each event item ---
+        const uniqueKey = event.id ? `event-${event.id}` : `event-${index}-${event.title || 'untitled'}-${startDate.getTime()}`;
+        
+        return {
+          id: uniqueKey,
+          title: event.title || 'Untitled Event',
+          startDate: startDate,
+          endDate: endDate,
+          // --- Additional event properties for reference ---
+          description: event.description,
+          priority: event.priority || 'medium',
+          status: event.status || 'pending',
+          originalEventId: event.id,
+          type: 'event' // Mark as event
+        };
+      });
+      
+      allItems.push(...eventItems);
+    }
+    
+    console.log('Final timetable items (tasks + events):', allItems);
+    setItems(allItems);
+  }, [tasks, events]);
 
-  // --- Handle case when no tasks are available ---
-  if (!tasks || tasks.length === 0) {
-    return (
-      <View className="flex-1 bg-white">
-        <View className="flex-1 justify-center items-center p-5">
-          <Text className="text-base text-gray-500 text-center mb-5">No tasks found for {selectedDate}</Text>
-          <TouchableOpacity 
-            className="bg-blue-500 px-5 py-2.5 rounded-lg"
-            onPress={() => navigation.goBack()}
-          >
-            <Text className="text-white text-base font-semibold">Go Back</Text>
-          </TouchableOpacity>
-        </View>
-        {/* --- Custom Bottom Navigation - Always Visible --- */}
-        <CustomBottomNav />
-      </View>
-    );
-  }
+  // --- Always show CalenderDetailScreen regardless of task count ---
+  // Removed the early return for no tasks - now always displays the screen
 
-  // --- Custom render item component (styled like CalenderScreen tasks) ---
+  // --- Custom render item component (styled for both tasks and events) ---
   const renderItem = ({ style, item }) => {
     const priorityColor = getPriorityColor(item.priority);
 
-    // --- Calculate task duration to determine layout ---
+    // --- Calculate duration to determine layout ---
     const duration = item.endDate.getTime() - item.startDate.getTime();
     const durationMinutes = Math.round(duration / (1000 * 60));
     const isShortDuration = durationMinutes < 60; // Less than 1 hour
 
-    // --- Handle task press ---
-    const handleTaskPress = () => {
-      setDialogTask(item);
-      setShowTaskDialog(true);
+    // --- Handle item press ---
+    const handleItemPress = () => {
+      if (isEvent) {
+        setDialogEvent(item);
+        setShowEventDetailsDialog(true);
+      } else {
+        setDialogTask(item);
+        setShowTaskDialog(true);
+      }
     };
+
+    // --- Different styling for tasks vs events ---
+    const isEvent = item.type === 'event';
+    const backgroundColor = isEvent ? '#EFF6FF' : '#F9FAFB'; // Blue tint for events, gray for tasks
+    const borderColor = isEvent ? '#3B82F6' : priorityColor; // Blue border for events, priority color for tasks
 
     return (
       <TouchableOpacity
         style={[
           style,
           {
-            backgroundColor: '#F9FAFB', // Light gray background like CalenderScreen
-            borderRadius: 6, // Rounded corners like CalenderScreen
-            padding: isShortDuration ? 4 : 8, // Reduced padding for short duration tasks
-            borderLeftWidth: 3, // Slightly thicker border for better visibility
-            borderLeftColor: priorityColor, // Priority-based colored left border
+            backgroundColor: backgroundColor,
+            borderRadius: 6,
+            padding: isShortDuration ? 4 : 8,
+            borderLeftWidth: 3,
+            borderLeftColor: borderColor,
             shadowColor: '#000',
             shadowOffset: {
               width: 0,
@@ -150,35 +252,24 @@ const CalenderDetailScreen = ({ route, navigation }) => {
             },
             shadowOpacity: 0.1,
             shadowRadius: 2,
-            elevation: 2, // Subtle shadow like CalenderScreen
-            justifyContent: 'center', // Center content vertically for short tasks
+            elevation: 2,
+            justifyContent: 'center',
           }
         ]}
-        activeOpacity={0.8}
-        onPress={handleTaskPress}
+        activeOpacity={0.6}
+        onPress={handleItemPress}
       >
-        {/* --- Task Title - Always show --- */}
+        {/* --- Item Title --- */}
         <Text 
-          className="text-gray-800 text-xs font-semibold text-center"
-          numberOfLines={isShortDuration ? 1 : 1}
+          className="text-gray-800 text-sm font-semibold text-center"
+          numberOfLines={1}
           style={{ 
-            marginBottom: isShortDuration ? 0 : 2,
-            lineHeight: isShortDuration ? 12 : 14
+            marginBottom: 2,
+            lineHeight: 16
           }}
         >
           {item.title}
         </Text>
-        
-        {/* --- Task Description - Only show for longer duration tasks --- */}
-        {!isShortDuration && (
-          <Text 
-            className="text-gray-600 text-xs font-normal text-center italic"
-            numberOfLines={1}
-            style={{ marginBottom: 2 }}
-          >
-            {item.description || 'No description available'}
-          </Text>
-        )}
         
         {/* --- Time Display - Compact for short duration --- */}
         <Text 
@@ -186,10 +277,10 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           numberOfLines={1}
           style={{ 
             lineHeight: isShortDuration ? 12 : 14,
-            fontSize: isShortDuration ? 10 : 12 // Slightly smaller font for short duration
+            fontSize: isShortDuration ? 10 : 12
           }}
         >
-          {item.startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })} - {item.endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+          {item.startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })} - {item.endDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
         </Text>
       </TouchableOpacity>
     );
@@ -207,7 +298,9 @@ const CalenderDetailScreen = ({ route, navigation }) => {
         <View className="bg-white border-b-2 border-gray-200 shadow-sm" style={{ elevation: 3 }}>
           <View className="flex-row justify-between items-center px-5 py-4">
             <View className="flex-1">
-              <Text className="text-xs font-bold text-gray-500 tracking-wider mb-1 uppercase">SCHEDULED TASKS</Text>
+              <Text className="text-xs font-bold text-gray-500 tracking-wider mb-1 uppercase">
+                {items.length > 0 ? 'SCHEDULED ITEMS' : 'SCHEDULE VIEW'}
+              </Text>
               <Text className="text-lg font-semibold text-gray-800 leading-6">
                 {selectedDate ? new Date(selectedDate).toLocaleDateString('en-US', { 
                   weekday: 'long', 
@@ -220,7 +313,7 @@ const CalenderDetailScreen = ({ route, navigation }) => {
             <View className="items-center bg-gray-100 px-3 py-2 rounded-lg min-w-15">
               <Text className="text-xl font-bold text-gray-800 leading-6">{items.length}</Text>
               <Text className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                {items.length === 1 ? 'Task' : 'Tasks'}
+                {items.length === 1 ? 'Item' : 'Items'}
               </Text>
             </View>
           </View>
@@ -231,113 +324,67 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           renderItem={renderItem}
           date={selectedDate ? new Date(selectedDate) : new Date()} // Use the selected date from navigation
           fromHour={0} // 12 AM
-          toHour={23.99}  // 11:59 PM - Shows until 11:59 PM
+          toHour={24}  // 12 AM next day - Shows until 11:59 PM clearly
           is12Hour={true} // 12-hour format
           hourHeight={60}
           timeWidth={60}
         />
       </ScrollView>
       
+
       {/* --- Custom Bottom Navigation - Always Visible --- */}
-      <CustomBottomNav />
+      <CustomBottomNav 
+        handleFabPress={async () => {
+          // Check user role and only show event creation dialog for Owner
+          const userRole = await getUserRole();
+          if (userRole === "Owner") {
+            // Check if selected date is in the past
+            const today = new Date();
+            const selectedDateObj = selectedDate ? new Date(selectedDate) : new Date();
+            
+            // Set time to start of day for accurate comparison
+            today.setHours(0, 0, 0, 0);
+            selectedDateObj.setHours(0, 0, 0, 0);
+            
+            const isPastDate = selectedDateObj < today;
+            
+            // Only show event creation dialog if date is today or future
+            if (!isPastDate) {
+              setShowEventCreationDialog(true);
+            } else {
+              // Show custom dialog for past date
+              setShowPastDateDialog(true);
+            }
+          }
+        }}
+      />
       
-      {/* --- Task Details Dialog --- */}
-      <Modal
+      {/* --- Modal Components --- */}
+      <TaskDetailsModal
         visible={showTaskDialog}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowTaskDialog(false)}
-      >
-        <View className="flex-1 bg-transparent justify-center items-center px-6" style={{ paddingTop: height * 0.15, paddingBottom: height * 0.15 }}>
-          <View className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
-            {/* --- Black Header Navbar --- */}
-            <View className="bg-black px-6 py-4">
-              <View className="flex-row items-center justify-between">
-                <Text className="text-lg font-bold text-white">Task Details</Text>
-                <TouchableOpacity
-                  onPress={() => setShowTaskDialog(false)}
-                  className="w-8 h-8 bg-gray-700 rounded-full items-center justify-center"
-                >
-                  <Ionicons name="close" size={20} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-            </View>
-            
-            {/* --- Dialog Content --- */}
-            <View className="p-6">
-            
-            {dialogTask && (
-              <>
-                {/* --- Task Title --- */}
-                <Text className="text-xl font-bold text-gray-800 mb-3">
-                  {dialogTask.title}
-                </Text>
-                
-                {/* --- Task Description --- */}
-                <View className="mb-4">
-                  <Text className="text-sm font-semibold text-gray-600 mb-1">Description:</Text>
-                  <Text className="text-base text-gray-700 leading-5">
-                    {dialogTask.description || 'No description available'}
-                  </Text>
-                </View>
-                
-                {/* --- Time Information --- */}
-                <View className="mb-4">
-                  <Text className="text-sm font-semibold text-gray-600 mb-2">Schedule:</Text>
-                  <Text className="text-base text-gray-700 mb-2">
-                    {dialogTask.startDate.toLocaleTimeString([], { 
-                      hour: '2-digit', 
-                      minute: '2-digit', 
-                      hour12: true 
-                    })} - {dialogTask.endDate.toLocaleTimeString([], { 
-                      hour: '2-digit', 
-                      minute: '2-digit', 
-                      hour12: true 
-                    })}
-                  </Text>
-                  <Text className="text-base text-gray-700">
-                    {dialogTask.startDate.toLocaleDateString('en-US', { 
-                      weekday: 'long', 
-                      year: 'numeric', 
-                      month: 'long', 
-                      day: 'numeric' 
-                    })}
-                  </Text>
-                </View>
-                
-                {/* --- Priority and Status --- */}
-                <View className="flex-row justify-between items-center mb-6">
-                  <View className="flex-row items-center">
-                    <View 
-                      className="w-3 h-3 rounded-full mr-2"
-                      style={{ backgroundColor: getPriorityColor(dialogTask.priority) }}
-                    />
-                    <Text className="text-sm font-medium text-gray-600">
-                      {dialogTask.priority || 'No Priority'}
-                    </Text>
-                  </View>
-                  {dialogTask.status && (
-                    <View className="bg-gray-100 px-3 py-1 rounded-full">
-                      <Text className="text-sm font-medium text-gray-700">
-                        {dialogTask.status}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                
-                {/* --- Close Button --- */}
-                <TouchableOpacity
-                  onPress={() => setShowTaskDialog(false)}
-                  className="bg-black py-3 rounded-xl"
-                >
-                  <Text className="text-white text-center font-semibold text-base">Close</Text>
-                </TouchableOpacity>
-              </>
-            )}
-            </View>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setShowTaskDialog(false)}
+        task={dialogTask}
+        onViewTask={handleViewTask}
+      />
+
+      <CreateEventModal
+        visible={showEventCreationDialog}
+        onClose={() => setShowEventCreationDialog(false)}
+        selectedDate={selectedDate}
+        onEventCreated={handleEventCreated}
+      />
+
+      <PastDateDialog
+        visible={showPastDateDialog}
+        onClose={() => setShowPastDateDialog(false)}
+      />
+
+      <EventDetailsModal
+        visible={showEventDetailsDialog}
+        onClose={() => setShowEventDetailsDialog(false)}
+        event={dialogEvent}
+        onEventUpdated={handleEventCreated}
+      />
     </View>
   );
 };

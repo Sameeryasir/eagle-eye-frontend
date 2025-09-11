@@ -115,32 +115,23 @@ function CalenderScreen({ navigation }) {
     console.log('Task List length:', taskList.length);
     console.log('=====================================');
     
-    if (taskList.length === 0) {
-      // --- Show Info Toast Message ---
-      Toast.show({
-        type: 'info',
-        text1: 'No Tasks',
-        text2: `No tasks scheduled for ${day.dateString}`,
-        visibilityTime: 2000,
-        autoHide: true,
-        topOffset: 80,
-      });
-      return;
-    }
-    
     // --- Show Navigation Toast Message ---
     Toast.show({
       type: 'success',
-      text1: 'Viewing Tasks',
-      text2: `Found ${taskList.length} task(s) for ${day.dateString}`,
+      text1: 'Opening Schedule',
+      text2: taskList.length > 0 
+        ? `Found ${taskList.length} task(s) for ${day.dateString}`
+        : `Viewing schedule for ${day.dateString}`,
       visibilityTime: 2000,
       autoHide: true,
       topOffset: 80,
     });
     
-    navigation.navigate("TaskDetails", {
-      selectedDate: day.dateString,
-      taskList: taskList,
+    // --- Always navigate to CalenderDetailScreen regardless of task count ---
+    // Pass date in YYYY-MM-DD format as expected by backend
+    navigation.navigate("CalenderDetailScreen", {
+      selectedDate: day.dateString, // This is already in YYYY-MM-DD format from calendar
+      tasks: taskList,
     });
   };
 
@@ -150,32 +141,6 @@ function CalenderScreen({ navigation }) {
     await fetchTasks();
   };
 
-  const onTaskPress = (task, date) => {
-    // --- Debug: Log the task and date data ---
-    console.log('=== CalenderScreen onTaskPress Debug ===');
-    console.log('Selected Date:', date.dateString);
-    console.log('Selected Task:', task);
-    console.log('Tasks Object:', tasks);
-    console.log('Tasks for this date:', tasks[date.dateString]);
-    console.log('Tasks array length:', tasks[date.dateString]?.length);
-    console.log('=====================================');
-    
-    // --- Show Navigation Toast Message ---
-    Toast.show({
-      type: 'success',
-      text1: 'Viewing Task Details',
-      text2: `Opening details for "${task.title}"`,
-      visibilityTime: 2000,
-      autoHide: true,
-      topOffset: 80,
-    });
-    
-    navigation.navigate("CalenderDetailScreen", {
-      selectedDate: date.dateString,
-      tasks: tasks[date.dateString] || [],  // Pass the specific tasks for this date
-      selectedTask: task
-    });
-  };
 
   // --- Show loading screen ---
   if (loading) {
@@ -237,9 +202,8 @@ function CalenderScreen({ navigation }) {
                   <Text className="text-lg text-black font-medium mb-1.5">{date.day}</Text>
                   <View className="w-full items-center gap-1">
                     {visibleTasks.map((task, index) => (
-                      <TouchableOpacity 
+                      <View 
                         key={index} 
-                        onPress={() => onTaskPress(task, date)}
                         className="bg-gray-50 px-1.5 py-1 rounded-md border-l-2 border-l-black my-0.5 min-w-15 max-w-11/12 shadow-sm"
                       >
                         <Text numberOfLines={1} className="text-xs text-gray-800 font-medium text-center">
@@ -247,7 +211,7 @@ function CalenderScreen({ navigation }) {
                             ? `${task.title.slice(0, 8)}...`
                             : task.title}
                         </Text>
-                      </TouchableOpacity>
+                      </View>
                     ))}
                     {hiddenCount > 0 && (
                       <View className="bg-gray-100 px-1 py-0.5 rounded-lg border border-gray-400 mt-0.5">

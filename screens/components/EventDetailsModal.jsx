@@ -1,0 +1,348 @@
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, Modal, Alert } from 'react-native';
+import { Ionicons } from "@expo/vector-icons";
+import Toast from 'react-native-toast-message';
+import UpdateEventModal from './UpdateEventModal';
+import { deleteEventById } from '../../services/event/deleteById';
+
+const EventDetailsModal = ({ 
+  visible, 
+  onClose, 
+  event,
+  onEventUpdated 
+}) => {
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const handleUpdate = () => {
+    setShowUpdateModal(true);
+  };
+
+  const handleUpdateModalClose = () => {
+    setShowUpdateModal(false);
+  };
+
+  const handleEventUpdated = () => {
+    setShowUpdateModal(false);
+    onClose();
+    if (onEventUpdated) {
+      onEventUpdated();
+    }
+  };
+
+  const handleDelete = () => {
+    setDeleteDialogVisible(true);
+  };
+
+  const confirmDelete = async () => {
+    // Close dialog immediately when delete button is tapped
+    setDeleteDialogVisible(false);
+
+    try {
+      // Call the delete service
+      await deleteEventById(event.originalEventId || event.id);
+
+      // Show success toast message
+      Toast.show({
+        type: 'success',
+        text1: 'Event Deleted Successfully!',
+        text2: 'Your event has been permanently removed',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
+
+      // Close modal and refresh events list
+      onClose();
+      if (onEventUpdated) {
+        onEventUpdated();
+      }
+
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      console.error('Error response:', error.response?.data);
+      
+      let errorMessage = 'Failed to delete event. Please try again.';
+      
+      if (error.response?.status === 400) {
+        errorMessage = 'Invalid request. Please try again.';
+      } else if (error.response?.status === 401) {
+        errorMessage = 'Session expired. Please log in again.';
+      } else if (error.response?.status === 403) {
+        errorMessage = 'You do not have permission to delete this event.';
+      } else if (error.response?.status === 404) {
+        errorMessage = 'Event not found.';
+      } else if (error.response?.status === 500) {
+        errorMessage = 'Server error. Please try again later.';
+      }
+      
+      // Show error toast message
+      Toast.show({
+        type: 'error',
+        text1: 'Delete Failed',
+        text2: errorMessage,
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
+    }
+  };
+
+  const cancelDelete = () => {
+    setDeleteDialogVisible(false);
+  };
+
+  return (
+    <>
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      {/* --- Transparent backdrop --- */}
+      <View className="flex-1 bg-transparent justify-center items-center px-6">
+        <View 
+          className="bg-white rounded-3xl w-full max-w-sm overflow-hidden"
+          style={{
+            shadowColor: '#000',
+            shadowOffset: {
+              width: 0,
+              height: 10,
+            },
+            shadowOpacity: 0.25,
+            shadowRadius: 20,
+            elevation: 10,
+          }}
+        >
+          {/* --- Gradient Header --- */}
+          <View 
+            className="px-6 py-5"
+            style={{
+              backgroundColor: 'black',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+            }}
+          >
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center">
+              <View className="w-10 h-10 bg-black rounded-full items-center justify-center mr-3">
+                  <Ionicons name="calendar" size={20} color="#FFFFFF" />
+                </View>
+                <Text className="text-lg font-bold text-white">Event Details</Text>
+              </View>
+              <TouchableOpacity
+                onPress={onClose}
+                className="w-8 h-8 bg-black rounded-full items-center justify-center"
+                style={{ backgroundColor: '#4B5563' }}
+              >
+                <Ionicons name="close" size={18} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
+          
+          {/* --- Dialog Content --- */}
+          <View className="p-6 bg-gray-50">
+          
+          {event && (
+            <>
+              {/* --- Event Title Section --- */}
+              <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
+                <View className="flex-row items-center mb-3">
+                <View className="w-8 h-8 bg-blue-100 rounded-full items-center justify-center mr-3">
+                    <Ionicons name="document-text" size={16} color="#3B82F6" />
+                  </View>
+                  <Text className="text-sm font-semibold text-gray-700">Event Title</Text>
+                </View>
+                <Text className="text-lg font-bold text-gray-800 leading-6 ml-11">
+                  {event.title}
+                </Text>
+              </View>
+              
+              {/* --- Event Description Section --- */}
+              <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
+                <View className="flex-row items-center mb-3">
+                  <View className="w-8 h-8 bg-green-100 rounded-full items-center justify-center mr-3">
+                    <Ionicons name="list" size={16} color="#10B981" />
+                  </View>
+                  <Text className="text-sm font-semibold text-gray-700">Description</Text>
+                </View>
+                <Text className="text-base text-gray-700 leading-6 ml-11">
+                  {event.description || 'No description available'}
+                </Text>
+              </View>
+
+              {/* --- Event Time Section --- */}
+              <View className="bg-white rounded-2xl p-4 mb-6 shadow-sm">
+                <View className="flex-row items-center mb-3">
+                  <View className="w-8 h-8 bg-orange-100 rounded-full items-center justify-center mr-3">
+                    <Ionicons name="time" size={16} color="#F59E0B" />
+                  </View>
+                  <Text className="text-sm font-semibold text-gray-700">Time</Text>
+                </View>
+                <Text className="text-base text-gray-700 leading-6 ml-11">
+                  {event.startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })} - {event.endDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
+                </Text>
+              </View>
+              
+              {/* --- Action Buttons --- */}
+              <View className="flex-row space-x-3 gap-4">
+               
+                <TouchableOpacity
+                  onPress={handleUpdate}
+                  className="flex-1 bg-gray-200 py-3 rounded-xl"
+                >
+                  <Text className="text-gray-700 text-center font-semibold text-base">Update</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleDelete}
+                  className="flex-1 bg-black py-3 rounded-xl"
+                >
+                  <Text className="text-white text-center font-semibold text-base">Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+          </View>
+        </View>
+      </View>
+    </Modal>
+
+    {/* Update Event Modal */}
+    <UpdateEventModal
+      visible={showUpdateModal}
+      onClose={handleUpdateModalClose}
+      event={event}
+      onEventUpdated={handleEventUpdated}
+    />
+
+    {/* Beautiful Delete Confirmation Dialog */}
+    <Modal
+      visible={deleteDialogVisible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={cancelDelete}
+    >
+      <View style={{
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+      }}>
+        <View style={{
+          backgroundColor: 'white',
+          borderRadius: 16,
+          padding: 20,
+          width: '100%',
+          maxWidth: 320,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.2,
+          shadowRadius: 16,
+          elevation: 8,
+        }}>
+          {/* Warning Icon */}
+          <View style={{
+            alignItems: 'center',
+            marginBottom: 16,
+          }}>
+            <View style={{
+              width: 48,
+              height: 48,
+              borderRadius: 24,
+              backgroundColor: '#FEF2F2',
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginBottom: 12,
+            }}>
+              <Ionicons name="warning" size={24} color="#EF4444" />
+            </View>
+            <Text style={{
+              fontSize: 18,
+              fontWeight: 'bold',
+              color: '#1F2937',
+              textAlign: 'center',
+              marginBottom: 4,
+            }}>
+              Delete Event
+            </Text>
+          </View>
+
+          {/* Message */}
+          <Text style={{
+            fontSize: 15,
+            color: '#6B7280',
+            textAlign: 'center',
+            lineHeight: 22,
+            marginBottom: 16,
+          }}>
+            Are you sure you want to delete{' '}
+            <Text style={{ fontWeight: '600', color: '#1F2937' }}>
+              "{event?.title}"
+            </Text>
+            {' '}permanently?
+          </Text>
+          
+          <Text style={{
+            fontSize: 13,
+            color: '#EF4444',
+            textAlign: 'center',
+            fontWeight: '500',
+            marginBottom: 20,
+          }}>
+            This action cannot be undone.
+          </Text>
+
+          {/* Action Buttons */}
+          <View style={{
+            flexDirection: 'row',
+            gap: 10,
+          }}>
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                backgroundColor: '#F3F4F6',
+                paddingVertical: 12,
+                borderRadius: 10,
+                alignItems: 'center',
+              }}
+              onPress={cancelDelete}
+              activeOpacity={0.8}
+            >
+              <Text style={{
+                fontSize: 15,
+                fontWeight: '600',
+                color: '#374151',
+              }}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                backgroundColor: '#EF4444',
+                paddingVertical: 12,
+                borderRadius: 10,
+                alignItems: 'center',
+              }}
+              onPress={confirmDelete}
+              activeOpacity={0.8}
+            >
+              <Text style={{
+                fontSize: 15,
+                fontWeight: '600',
+                color: 'white',
+              }}>
+                Delete
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+    </>
+  );
+};
+
+export default EventDetailsModal;

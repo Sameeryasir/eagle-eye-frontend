@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getUserRole } from '../../services/utils/userRole';
 import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '../../context/AuthContext';
 
 const { width } = Dimensions.get('window');
 
@@ -16,6 +17,7 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
   const [userRole, setUserRole] = React.useState(null);
   const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
   const navigation = useNavigation();
+  const { logout } = useAuth();
 
   React.useEffect(() => {
     if (isVisible) {
@@ -83,29 +85,24 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
 
   const confirmLogout = async () => {
     try {
-      // Clear all stored tokens and user data
-      await AsyncStorage.multiRemove([
-        'token',
-        'refreshToken',
-        'userRole',
-        'userFirstName',
-        'userLastName',
-        'userId'
-      ]);
-      
       // Close dialog and sidebar
       setShowLogoutDialog(false);
       onClose();
       
-      // Navigate to SignIn screen
+      // Navigate to SignIn screen immediately
       navigation.reset({
         index: 0,
         routes: [{ name: 'SignIn' }],
       });
+      
+      // Handle logout in background
+      logout().catch(error => {
+        console.error('Logout error:', error);
+      });
+      
     } catch (error) {
       console.error('Error during logout:', error);
       setShowLogoutDialog(false);
-      // You can add a toast message here if needed
     }
   };
 

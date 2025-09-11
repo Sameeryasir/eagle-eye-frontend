@@ -54,10 +54,20 @@ const Code = () => {
     Keyboard.dismiss(); // Dismiss keyboard before proceeding
     setLoading(true);
     try {
+      // --- Step 1: Verify OTP ---
       const data = await verifyOtp(emailOrPhone, code.trim());
       console.log('Full response data:', data);
 
-      // Use AuthContext to handle login
+      // --- Debug: Log data being passed to login ---
+      console.log('=== Data passed to login function ===');
+      console.log('Data structure:', JSON.stringify(data, null, 2));
+      console.log('Has access_token:', !!data?.access_token);
+      console.log('Has refresh_token:', !!data?.refresh_token);
+      console.log('Has user:', !!data?.user);
+      console.log('=====================================');
+
+      // --- Step 2: Use AuthContext to handle login (includes Expo token generation) ---
+      // This will automatically generate the Expo push token after successful OTP verification
       await login(data);
 
       setLoading(false);

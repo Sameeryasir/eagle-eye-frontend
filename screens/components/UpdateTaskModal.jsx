@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
+import NoChangesDialog from './NoChangesDialog';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import DropDownPicker from "react-native-dropdown-picker";
 import { updateTask } from '../../services/tasks/updateTaskById';
@@ -50,6 +51,7 @@ export default function UpdateTaskModal({
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [showAssignedDropdown, setShowAssignedDropdown] = useState(false);
   const [isDropdownInteracting, setIsDropdownInteracting] = useState(false);
+  const [noChangesDialogVisible, setNoChangesDialogVisible] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [priorityOptions] = useState([
@@ -339,14 +341,7 @@ export default function UpdateTaskModal({
     const hasChanges = Object.keys(taskPayload).length > 0;
 
     if (!hasChanges) {
-      Toast.show({
-        type: 'info',
-        text1: 'No Changes',
-        text2: 'No changes were made to the task',
-        visibilityTime: 3000,
-        autoHide: true,
-        topOffset: 80,
-      });
+      setNoChangesDialogVisible(true);
       return;
     }
 
@@ -835,6 +830,12 @@ export default function UpdateTaskModal({
             onChange={handleEndTimeChange}
           />
         )}
+
+        {/* No Changes Dialog */}
+        <NoChangesDialog
+          visible={noChangesDialogVisible}
+          onClose={() => setNoChangesDialogVisible(false)}
+        />
       </View>
     </Modal>
   );
