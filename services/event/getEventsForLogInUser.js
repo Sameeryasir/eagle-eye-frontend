@@ -19,10 +19,9 @@ export async function getEventsForLogInUser(date) {
     }
 
     // Format date to YYYY-MM-DD if provided
-    const formattedDate = date ? new Date(date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
     
     try {
-        const response = await axios.get(`${API_URL}/event/date/${formattedDate}`, {
+        const response = await axios.get(`${API_URL}/event/date/${date}`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
@@ -38,7 +37,7 @@ export async function getEventsForLogInUser(date) {
             if (!newToken) throw new Error('Unable to refresh token.');
 
             // Retry the original request with new token
-            const retryResponse = await axios.get(`${API_URL}/event/date/${formattedDate}`, {
+            const retryResponse = await axios.get(`${API_URL}/event/date/${date}`, {
                 headers: {
                     'Authorization': `Bearer ${newToken}`,
                     'Content-Type': 'application/json'

@@ -175,18 +175,18 @@ function CalenderScreen({ navigation }) {
   return (
     <View className="flex-1 bg-white">
       <ScrollView 
-        className="flex-1 pt-12"
+        className="flex-1 pt-3"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={["#00adf5", "#007AFF"]}
-            tintColor="#00adf5"
+            colors={[ "#3155A1"]}
+            tintColor="#3155A1"
             progressBackgroundColor="#ffffff"
           />
         }
       >
-        <Text className="text-3xl font-bold text-center mb-2 ">📅 My Tasks</Text>
+        <Text className="text-3xl font-bold text-center  ">📅 My Tasks</Text>
 
         <Calendar
           markingType={"custom"}
@@ -224,7 +224,7 @@ function CalenderScreen({ navigation }) {
             );
           }}
           theme={{
-            todayTextColor: "#00adf5",
+            todayTextColor: "#000000",
             arrowColor: "black",
           }}
           enableSwipeMonths={true}

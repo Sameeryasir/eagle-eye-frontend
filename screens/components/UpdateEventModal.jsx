@@ -79,16 +79,6 @@ const UpdateEventModal = ({
       combinedDateTime.setSeconds(0);
       combinedDateTime.setMilliseconds(0);
       
-      // Check if end time is before start time
-      if (startTime && combinedDateTime <= startTime) {
-        Alert.alert(
-          'Invalid Time',
-          'End time must be after start time. Please choose a later time.',
-          [{ text: 'OK' }]
-        );
-        return;
-      }
-      
       setEndTime(combinedDateTime);
       const timeString = combinedDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
       handleEventFormChange('endTime', timeString);
@@ -112,11 +102,6 @@ const UpdateEventModal = ({
       return;
     }
 
-    // Check if end time is after start time (final validation)
-    if (endTime <= startTime) {
-      Alert.alert('Error', 'End time must be after start time. Please adjust your times.');
-      return;
-    }
 
     // Check if any changes were made
     const originalTitle = event.title || '';

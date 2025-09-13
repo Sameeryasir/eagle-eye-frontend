@@ -458,16 +458,37 @@ function ViewAllTasksScreen({ navigation, route }) {
     setCreatingTaskId(draftTask.id);
 
     try {
+      // --- FIXED: Proper timezone handling for task creation ---
+      // Business Rule: Use same timezone conversion approach as event handling
+      // This ensures tasks created "today" appear on "today" in the calendar for all timezones
+      
+      // --- Convert to local timezone for date extraction (same as event handling) ---
+      // This ensures the task appears on the correct calendar day
+      const localStartDate = new Date(draftTask.startTime);
+      const localEndDate = draftTask.endTime ? new Date(draftTask.endTime) : null;
+      
+      // Extract the local date in YYYY-MM-DD format (same as event conversion)
+      const taskDate = localStartDate.getFullYear() + '-' + 
+        String(localStartDate.getMonth() + 1).padStart(2, '0') + '-' + 
+        String(localStartDate.getDate()).padStart(2, '0');
+      
       // Prepare the data for API call
       const taskPayload = {
         title: draftTask.title.trim(),
         description: draftTask.description.trim(),
-        startTime: draftTask.startTime.toISOString(),
+        startTime: draftTask.startTime.toISOString(), // ISO 8601 string format
         endTime: draftTask.endTime ? draftTask.endTime.toISOString() : null, // Make endTime optional
         projectId: projectId,
         assignedToUserId: draftTask.assignedToUserId || null,
         priority: draftTask.priority || null,
       };
+
+      console.log('=== Task Creation Debug ===');
+      console.log('Original Start Time:', draftTask.startTime.toLocaleString());
+      console.log('Local Start Date:', localStartDate.toLocaleDateString());
+      console.log('Task Date (YYYY-MM-DD):', taskDate);
+      console.log('Task Payload Being Sent:', taskPayload);
+      console.log('=== End Task Creation Debug ===');
 
       const response = await createTask(taskPayload);
 

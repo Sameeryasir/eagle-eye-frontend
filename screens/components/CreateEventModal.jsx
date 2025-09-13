@@ -16,8 +16,7 @@ const CreateEventModal = ({
     title: '',
     description: '',
     startTime: '',
-    endTime: '',
-    priority: 'medium'
+    endTime: ''
   });
 
   // --- State for time pickers ---
@@ -70,8 +69,7 @@ const CreateEventModal = ({
       title: '',
       description: '',
       startTime: '',
-      endTime: '',
-      priority: 'medium'
+      endTime: ''
     });
     setStartTime(new Date());
     setEndTime(new Date());
@@ -172,15 +170,56 @@ const CreateEventModal = ({
     }
 
     try {
-      // Format the event data - backend expects ISO 8601 strings and no createdAt
+      // --- FIXED: Proper timezone handling for event creation ---
+      // Business Rule: Use same timezone conversion approach as task handling
+      // This ensures events created "today" appear on "today" in the calendar for all timezones
+      
+      // Get the intended date (the date the user selected)
+      const intendedDate = selectedDate ? new Date(selectedDate) : new Date();
+      
+      // --- Create date objects that preserve the intended calendar date ---
+      // This approach matches the task timezone conversion logic
+      const eventStartTime = new Date(intendedDate);
+      eventStartTime.setHours(startTime.getHours());
+      eventStartTime.setMinutes(startTime.getMinutes());
+      eventStartTime.setSeconds(startTime.getSeconds());
+      eventStartTime.setMilliseconds(startTime.getMilliseconds());
+      
+      const eventEndTime = new Date(intendedDate);
+      eventEndTime.setHours(endTime.getHours());
+      eventEndTime.setMinutes(endTime.getMinutes());
+      eventEndTime.setSeconds(endTime.getSeconds());
+      eventEndTime.setMilliseconds(endTime.getMilliseconds());
+      
+      // --- Convert to local timezone for date extraction (same as task handling) ---
+      // This ensures the event appears on the correct calendar day
+      const localStartDate = new Date(eventStartTime);
+      const localEndDate = new Date(eventEndTime);
+      
+      // Extract the local date in YYYY-MM-DD format (same as task conversion)
+      const eventDate = localStartDate.getFullYear() + '-' + 
+        String(localStartDate.getMonth() + 1).padStart(2, '0') + '-' + 
+        String(localStartDate.getDate()).padStart(2, '0');
+      
+      // Format the event data - backend expects ISO 8601 strings
       const eventData = {
         title: eventForm.title.trim(),
         description: eventForm.description.trim() || '',
-        startTime: startTime.toISOString(), // ISO 8601 string format
-        endTime: endTime.toISOString() // ISO 8601 string format
+        startTime: eventStartTime.toISOString(), // ISO 8601 string format
+        endTime: eventEndTime.toISOString() // ISO 8601 string format
       };
 
-      console.log('Sending event data:', eventData);
+      console.log('=== Event Creation Debug ===');
+      console.log('Selected Date:', selectedDate);
+      console.log('Intended Date:', intendedDate);
+      console.log('Original Start Time:', startTime.toLocaleString());
+      console.log('Event Start Time:', eventStartTime.toLocaleString());
+      console.log('Original End Time:', endTime.toLocaleString());
+      console.log('Event End Time:', eventEndTime.toLocaleString());
+      console.log('Local Start Date:', localStartDate.toLocaleDateString());
+      console.log('Event Date (YYYY-MM-DD):', eventDate);
+      console.log('Event Data Being Sent:', eventData);
+      console.log('=== End Event Creation Debug ===');
 
       // Call the createEvent service
       const result = await createEvent(eventData);

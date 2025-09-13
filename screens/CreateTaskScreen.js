@@ -371,17 +371,47 @@ function CreateTaskScreen({ navigation, route }) {
     setIsLoading(true);
 
     try {
+      // --- FIXED: Proper timezone handling for task creation ---
+      // Business Rule: Use same timezone conversion approach as event and project handling
+      // This ensures tasks created "today" appear on "today" in the calendar for all timezones
+      
+      // --- Convert to local timezone for date extraction (same as event/project handling) ---
+      // This ensures the task appears on the correct calendar day
+      const localStartDate = new Date(startDateTime);
+      const localEndDate = endDateTime ? new Date(endDateTime) : null;
+      
+      // Extract the local dates in YYYY-MM-DD format (same as event/project conversion)
+      const taskStartDate = localStartDate.getFullYear() + '-' + 
+        String(localStartDate.getMonth() + 1).padStart(2, '0') + '-' + 
+        String(localStartDate.getDate()).padStart(2, '0');
+      
+      const taskEndDate = localEndDate ? localEndDate.getFullYear() + '-' + 
+        String(localEndDate.getMonth() + 1).padStart(2, '0') + '-' + 
+        String(localEndDate.getDate()).padStart(2, '0') : null;
+
       // Prepare the data for API call
       const taskPayload = {
         title: taskData.title.trim(),
         description: taskData.description.trim(),
         assignedToUserId: taskData.assignedTo?.id || null,
         priority: taskData.priority || null,
-        startTime: startDateTime.toISOString(),
+        startTime: startDateTime.toISOString(), // ISO 8601 string format
         minStartTime: minStartTime.toISOString(), // Send captured time for backend validation
-        endTime: endDateTime ? endDateTime.toISOString() : null,
+        endTime: endDateTime ? endDateTime.toISOString() : null, // ISO 8601 string format
         projectId: projectId,
       };
+
+      console.log('=== CreateTaskScreen Task Creation Debug ===');
+      console.log('Original Start Time:', startDateTime.toLocaleString());
+      console.log('Local Start Date:', localStartDate.toLocaleDateString());
+      console.log('Task Start Date (YYYY-MM-DD):', taskStartDate);
+      if (endDateTime) {
+        console.log('Original End Time:', endDateTime.toLocaleString());
+        console.log('Local End Date:', localEndDate.toLocaleDateString());
+        console.log('Task End Date (YYYY-MM-DD):', taskEndDate);
+      }
+      console.log('Task Payload Being Sent:', taskPayload);
+      console.log('=== End CreateTaskScreen Task Creation Debug ===');
 
       const response = await createTask(taskPayload);
 

@@ -58,7 +58,7 @@ export default function UpdateTaskModal({
     { id: 'low', label: 'Low', color: '#10B981' },
     { id: 'medium', label: 'Medium', color: '#F59E0B' },
     { id: 'high', label: 'High', color: '#EF4444' },
-    { id: 'critical', label: 'Critical', color: '#DC2626' }
+    { id: 'critical', label: 'Critical', color: '#EF4444' } // Match CalenderDetailScreen color
   ]);
 
   useEffect(() => {
@@ -202,7 +202,8 @@ export default function UpdateTaskModal({
       setStartDateTime(newDate);
       
       // Ensure end date is not before start date
-      if (newDate > endDateTime) {
+      if (endDateTime && newDate > endDateTime) {
+        // If end date exists but is before new start time, update end date to match start date
         setEndDateTime(newDate);
       }
     }
@@ -231,15 +232,38 @@ export default function UpdateTaskModal({
     setShowEndTimePicker(false);
     // Only update if user selected a time (not cancelled) - matching CreateTaskScreen
     if (event.type === 'set' && selectedDate) {
-      // If endDateTime exists, update the time on the existing date
-      // If not, create a new date with current date and selected time
-      const newDate = endDateTime ? new Date(endDateTime) : new Date();
-      // Only update the time components, preserve the date
-      newDate.setHours(selectedDate.getHours());
-      newDate.setMinutes(selectedDate.getMinutes());
-      newDate.setSeconds(0);
-      newDate.setMilliseconds(0);
-      setEndDateTime(newDate);
+      // Always preserve the original end date, only update the time components
+      if (endDateTime) {
+        // If endDateTime exists, preserve the existing date and only update time
+        const newDate = new Date(endDateTime);
+        newDate.setHours(selectedDate.getHours());
+        newDate.setMinutes(selectedDate.getMinutes());
+        newDate.setSeconds(0);
+        newDate.setMilliseconds(0);
+        
+        // Validate that end time is not before start time
+        if (newDate >= startDateTime) {
+          setEndDateTime(newDate);
+        } else {
+          // Show error if end time is before start time
+          Toast.show({
+            type: 'error',
+            text1: 'Invalid Time',
+            text2: 'End time cannot be before start time',
+            visibilityTime: 3000,
+            autoHide: true,
+            topOffset: 80,
+          });
+        }
+      } else {
+        // If no endDateTime exists, use startDateTime date with selected time
+        const newDate = new Date(startDateTime);
+        newDate.setHours(selectedDate.getHours());
+        newDate.setMinutes(selectedDate.getMinutes());
+        newDate.setSeconds(0);
+        newDate.setMilliseconds(0);
+        setEndDateTime(newDate);
+      }
     }
   };
 
@@ -276,6 +300,19 @@ export default function UpdateTaskModal({
         text1: 'Validation Error',
         text2: 'Task ID is required to update a task',
         visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
+      return;
+    }
+
+    // Validate that end time is not before start time
+    if (endDateTime && endDateTime < startDateTime) {
+      Toast.show({
+        type: 'error',
+        text1: 'Time Validation Error',
+        text2: 'End time cannot be before start time. Please adjust your dates.',
+        visibilityTime: 4000,
         autoHide: true,
         topOffset: 80,
       });

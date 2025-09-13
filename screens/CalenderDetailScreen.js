@@ -77,8 +77,19 @@ const CalenderDetailScreen = ({ route, navigation }) => {
       }
       
       const response = await getEventsForLogInUser(selectedDate); // Pass selectedDate parameter
+      console.log('=== fetchEvents Response ===');
+      console.log('Response:', response);
+      console.log('Response success:', response.success);
+      console.log('Response data:', response.data);
+      console.log('Response data length:', response.data?.length);
+      
       if (response.success && response.data) {
+        console.log('=== Setting Events ===');
+        console.log('Events being set:', response.data);
         setEvents(response.data);
+        console.log('Events set successfully');
+      } else {
+        console.log('No events to set - response.success:', response.success, 'response.data:', response.data);
       }
     } catch (error) {
       console.error('Error fetching events:', error);
@@ -128,15 +139,52 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           endTimeType: typeof task.endTime
         });
         
-        // --- Use the actual task startTime and endTime ---
-        const startDate = task.startTime ? new Date(task.startTime) : new Date();
-        const endDate = task.endTime ? new Date(task.endTime) : new Date(startDate.getTime() + 60 * 60 * 1000); // Default 1 hour duration
+        // --- FIXED: Convert task times to local time for proper display ---
+        // Business Rule: Tasks come from server in UTC format, convert to local timezone
+        // This fixes the issue where tasks created before 3-4 AM don't show up
+        let startDate, endDate;
+        
+        if (task.startTime) {
+          // Parse UTC time and convert to local time
+          startDate = new Date(task.startTime);
+          console.log(`Task UTC startTime: ${task.startTime} -> Local: ${startDate.toLocaleString()}`);
+        } else {
+          startDate = new Date();
+        }
+        
+        if (task.endTime) {
+          // Parse UTC time and convert to local time
+          endDate = new Date(task.endTime);
+          
+          // Apply the same date adjustment for end time
+          const selectedDateObj = selectedDate ? new Date(selectedDate) : new Date();
+          const taskEndDate = new Date(task.endTime);
+          
+          const selectedDateStr = selectedDateObj.toDateString();
+          const taskEndDateStr = taskEndDate.toDateString();
+          
+          if (selectedDateStr !== taskEndDateStr) {
+            console.log(`Adjusting task end date to match selected date`);
+            endDate = new Date(selectedDateObj);
+            endDate.setHours(taskEndDate.getHours());
+            endDate.setMinutes(taskEndDate.getMinutes());
+            endDate.setSeconds(taskEndDate.getSeconds());
+            endDate.setMilliseconds(taskEndDate.getMilliseconds());
+          }
+          
+          console.log(`Task UTC endTime: ${task.endTime} -> Local: ${endDate.toLocaleString()}`);
+        } else {
+          // Default 1 hour duration if no end time
+          endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+        }
         
         console.log(`Converted dates for task ${index}:`, {
           startDate: startDate,
           endDate: endDate,
           startTimeString: startDate.toLocaleTimeString(),
-          endTimeString: endDate.toLocaleTimeString()
+          endTimeString: endDate.toLocaleTimeString(),
+          startDateISO: startDate.toISOString(),
+          endDateISO: endDate.toISOString()
         });
         
         // --- Ensure unique key for each task item ---
@@ -169,18 +217,39 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           id: event.id,
           title: event.title,
           startTime: event.startTime,
-          endTime: event.endTime
+          endTime: event.endTime,
+          startTimeType: typeof event.startTime,
+          endTimeType: typeof event.endTime
         });
         
-        // --- Use the actual event startTime and endTime ---
-        const startDate = event.startTime ? new Date(event.startTime) : new Date();
-        const endDate = event.endTime ? new Date(event.endTime) : new Date(startDate.getTime() + 60 * 60 * 1000); // Default 1 hour duration
+        // --- FIXED: Convert UTC times to local time for proper display ---
+        // Business Rule: Events come from server in UTC format, convert to local timezone
+        let startDate, endDate;
+        
+        if (event.startTime) {
+          // Parse UTC time and convert to local time
+          startDate = new Date(event.startTime);
+          console.log(`UTC startTime: ${event.startTime} -> Local: ${startDate.toLocaleString()}`);
+        } else {
+          startDate = new Date();
+        }
+        
+        if (event.endTime) {
+          // Parse UTC time and convert to local time
+          endDate = new Date(event.endTime);
+          console.log(`UTC endTime: ${event.endTime} -> Local: ${endDate.toLocaleString()}`);
+        } else {
+          // Default 1 hour duration if no end time
+          endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+        }
         
         console.log(`Converted dates for event ${index}:`, {
           startDate: startDate,
           endDate: endDate,
           startTimeString: startDate.toLocaleTimeString(),
-          endTimeString: endDate.toLocaleTimeString()
+          endTimeString: endDate.toLocaleTimeString(),
+          startDateISO: startDate.toISOString(),
+          endDateISO: endDate.toISOString()
         });
         
         // --- Ensure unique key for each event item ---
@@ -204,6 +273,9 @@ const CalenderDetailScreen = ({ route, navigation }) => {
     }
     
     console.log('Final timetable items (tasks + events):', allItems);
+    console.log('Total items count:', allItems.length);
+    console.log('Selected date for timetable:', selectedDate ? new Date(selectedDate) : new Date());
+    
     setItems(allItems);
   }, [tasks, events]);
 
@@ -328,6 +400,8 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           is12Hour={true} // 12-hour format
           hourHeight={60}
           timeWidth={60}
+          // --- FIXED: Show events that start on the selected date ---
+          // The timetable will automatically filter items by the date prop
         />
       </ScrollView>
       

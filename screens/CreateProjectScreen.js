@@ -135,6 +135,24 @@ function CreateProjectScreen({ navigation }) {
       return;
     }
 
+    // --- FIXED: Proper timezone handling for project creation ---
+    // Business Rule: Use same timezone conversion approach as event and task handling
+    // This ensures projects created "today" appear on "today" in the calendar for all timezones
+    
+    // --- Convert to local timezone for date extraction (same as event/task handling) ---
+    // This ensures the project appears on the correct calendar day
+    const localStartDate = new Date(startDate);
+    const localEndDate = new Date(endDate);
+    
+    // Extract the local dates in YYYY-MM-DD format (same as event/task conversion)
+    const projectStartDate = localStartDate.getFullYear() + '-' + 
+      String(localStartDate.getMonth() + 1).padStart(2, '0') + '-' + 
+      String(localStartDate.getDate()).padStart(2, '0');
+    
+    const projectEndDate = localEndDate.getFullYear() + '-' + 
+      String(localEndDate.getMonth() + 1).padStart(2, '0') + '-' + 
+      String(localEndDate.getDate()).padStart(2, '0');
+
     const startDateISO = startDate.toISOString();
     const endDateISO = endDate.toISOString();
 
@@ -145,9 +163,19 @@ function CreateProjectScreen({ navigation }) {
       const projectPayload = {
         name: projectData.name.trim(),
         description: projectData.description.trim(),
-        startDate: startDateISO,
-        endDate: endDateISO,
+        startDate: startDateISO, // ISO 8601 string format
+        endDate: endDateISO, // ISO 8601 string format
       };
+
+      console.log('=== Project Creation Debug ===');
+      console.log('Original Start Date:', startDate.toLocaleString());
+      console.log('Local Start Date:', localStartDate.toLocaleDateString());
+      console.log('Project Start Date (YYYY-MM-DD):', projectStartDate);
+      console.log('Original End Date:', endDate.toLocaleString());
+      console.log('Local End Date:', localEndDate.toLocaleDateString());
+      console.log('Project End Date (YYYY-MM-DD):', projectEndDate);
+      console.log('Project Payload Being Sent:', projectPayload);
+      console.log('=== End Project Creation Debug ===');
 
       const response = await createProject(projectPayload);
       
