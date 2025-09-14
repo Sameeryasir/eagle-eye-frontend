@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Modal, TextInput, Alert, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Modal, TextInput, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import Toast from 'react-native-toast-message';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as Localization from 'expo-localization';
 import { createEvent } from "../../services/event/createEvent";
+import ErrorDialog from './ErrorDialog';
 
 const CreateEventModal = ({ 
   visible, 
@@ -24,6 +26,14 @@ const CreateEventModal = ({
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [startTime, setStartTime] = useState(new Date());
   const [endTime, setEndTime] = useState(new Date());
+  const [isCreating, setIsCreating] = useState(false);
+
+  // --- State for custom error dialog ---
+  const [errorDialog, setErrorDialog] = useState({
+    visible: false,
+    title: '',
+    message: ''
+  });
 
   // --- Set current time when modal opens ---
   useEffect(() => {
@@ -75,6 +85,24 @@ const CreateEventModal = ({
     setEndTime(new Date());
   };
 
+  // --- Helper function to show custom error dialog ---
+  const showErrorDialog = (title, message) => {
+    setErrorDialog({
+      visible: true,
+      title: title,
+      message: message
+    });
+  };
+
+  // --- Helper function to close custom error dialog ---
+  const closeErrorDialog = () => {
+    setErrorDialog({
+      visible: false,
+      title: '',
+      message: ''
+    });
+  };
+
   // --- Time picker handlers ---
   const handleStartTimeChange = (event, selectedTime) => {
     setShowStartTimePicker(Platform.OS === 'ios');
@@ -88,17 +116,7 @@ const CreateEventModal = ({
       combinedDateTime.setMilliseconds(0);
       
       // Only check for past time if the event date is today
-      const today = new Date();
-      const isToday = eventDate.toDateString() === today.toDateString();
-      
-      if (isToday && combinedDateTime < today) {
-        Alert.alert(
-          'Invalid Time',
-          'You cannot select a time in the past for today. Please choose a future time.',
-          [{ text: 'OK' }]
-        );
-        return;
-      }
+     
       
       setStartTime(combinedDateTime);
       const timeString = combinedDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
@@ -122,20 +140,18 @@ const CreateEventModal = ({
       const isToday = eventDate.toDateString() === today.toDateString();
       
       if (isToday && combinedDateTime < today) {
-        Alert.alert(
+        showErrorDialog(
           'Invalid Time',
-          'You cannot select a time in the past for today. Please choose a future time.',
-          [{ text: 'OK' }]
+          'You cannot select a time in the past for today. Please choose a future time.'
         );
         return;
       }
       
       // Check if end time is before start time
       if (startTime && combinedDateTime <= startTime) {
-        Alert.alert(
+        showErrorDialog(
           'Invalid Time',
-          'End time must be after start time. Please choose a later time.',
-          [{ text: 'OK' }]
+          'End time must be after start time. Please choose a later time.'
         );
         return;
       }
@@ -149,25 +165,27 @@ const CreateEventModal = ({
   const handleCreateEvent = async () => {
     // Basic validation
     if (!eventForm.title.trim()) {
-      Alert.alert('Error', 'Please enter a title for the event');
+      showErrorDialog('Error', 'Please enter a title for the event');
       return;
     }
 
     if (!eventForm.startTime.trim()) {
-      Alert.alert('Error', 'Please enter a start time for the event');
+      showErrorDialog('Error', 'Please enter a start time for the event');
       return;
     }
 
     if (!eventForm.endTime.trim()) {
-      Alert.alert('Error', 'Please enter an end time for the event');
+      showErrorDialog('Error', 'Please enter an end time for the event');
       return;
     }
 
     // Check if end time is after start time (final validation)
     if (endTime <= startTime) {
-      Alert.alert('Error', 'End time must be after start time. Please adjust your times.');
+      showErrorDialog('Error', 'End time must be after start time. Please adjust your times.');
       return;
     }
+
+    setIsCreating(true);
 
     try {
       // --- FIXED: Proper timezone handling for event creation ---
@@ -201,15 +219,25 @@ const CreateEventModal = ({
         String(localStartDate.getMonth() + 1).padStart(2, '0') + '-' + 
         String(localStartDate.getDate()).padStart(2, '0');
       
-      // Format the event data - backend expects ISO 8601 strings
+      // --- TIMEZONE-AWARE TIMESTAMPS (Using Expo Localization) ---
+      // Get timezone information using expo-localization for better accuracy
+      const timezoneName = Localization.timezone; // e.g., "America/New_York"
+      const locale = Localization.locale; // e.g., "en-US"
+      const locales = Localization.locales; // Array of supported locales
+      
+      // Get timezone offset using expo-localization
+      const timezoneOffset = new Date().getTimezoneOffset(); // Minutes offset from UTC
+      const timezoneOffsetHours = -timezoneOffset / 60; // Convert to hours (negative because getTimezoneOffset returns opposite)
+      
+      // Format the event data - Backend DTO only accepts: title, description, startTime, endTime
       const eventData = {
         title: eventForm.title.trim(),
         description: eventForm.description.trim() || '',
-        startTime: eventStartTime.toISOString(), // ISO 8601 string format
-        endTime: eventEndTime.toISOString() // ISO 8601 string format
+        startTime: eventStartTime.toISOString(), // ISO 8601 string format (UTC)
+        endTime: eventEndTime.toISOString() // ISO 8601 string format (UTC)
       };
 
-      console.log('=== Event Creation Debug ===');
+      console.log('=== Event Creation Debug (Timezone-Aware) ===');
       console.log('Selected Date:', selectedDate);
       console.log('Intended Date:', intendedDate);
       console.log('Original Start Time:', startTime.toLocaleString());
@@ -218,6 +246,20 @@ const CreateEventModal = ({
       console.log('Event End Time:', eventEndTime.toLocaleString());
       console.log('Local Start Date:', localStartDate.toLocaleDateString());
       console.log('Event Date (YYYY-MM-DD):', eventDate);
+      console.log('--- TIMEZONE INFORMATION (Expo Localization) - DEBUG ONLY ---');
+      console.log('Timezone Name:', timezoneName);
+      console.log('Timezone Offset (Hours):', timezoneOffsetHours);
+      console.log('Timezone Offset (Minutes):', timezoneOffset);
+      console.log('--- LOCALIZATION INFORMATION - DEBUG ONLY ---');
+      console.log('Locale:', locale);
+      console.log('Locales:', locales);
+      console.log('Region:', Localization.region);
+      console.log('--- TIME INFORMATION - DEBUG ONLY ---');
+      console.log('Local Start Time:', eventStartTime.toLocaleString());
+      console.log('Local End Time:', eventEndTime.toLocaleString());
+      console.log('UTC Start Time:', eventData.startTime);
+      console.log('UTC End Time:', eventData.endTime);
+      console.log('--- BACKEND DATA (DTO Compliant) ---');
       console.log('Event Data Being Sent:', eventData);
       console.log('=== End Event Creation Debug ===');
 
@@ -273,6 +315,8 @@ const CreateEventModal = ({
         autoHide: true,
         topOffset: 80,
       });
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -291,7 +335,7 @@ const CreateEventModal = ({
       <View className="flex-1 bg-white">
         {/* Black Navbar */}
         <View className="bg-black px-4 py-3 flex-row items-center justify-between">
-          <Text className="text-white text-[18px] font-semibold">Create Event</Text>
+          <Text className="text-black text-[18px] font-semibold">Create Event</Text>
           <TouchableOpacity onPress={handleClose}>
             <Ionicons name="close" size={24} color="white" />
           </TouchableOpacity>
@@ -388,8 +432,14 @@ const CreateEventModal = ({
             className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
             onPress={handleCreateEvent}
             activeOpacity={0.8}
+            disabled={isCreating}
+            style={{ opacity: isCreating ? 0.6 : 1 }}
           >
-            <Text className="text-white text-[16px] font-semibold">Create Event</Text>
+            {isCreating ? (
+              <ActivityIndicator color="white" size="small" />
+            ) : (
+              <Text className="text-white text-[16px] font-semibold">Create Event</Text>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -415,6 +465,14 @@ const CreateEventModal = ({
             minimumDate={selectedDate && new Date(selectedDate).toDateString() === new Date().toDateString() ? new Date() : undefined}
           />
         )}
+
+        {/* --- Custom Error Dialog --- */}
+        <ErrorDialog
+          visible={errorDialog.visible}
+          onClose={closeErrorDialog}
+          title={errorDialog.title}
+          message={errorDialog.message}
+        />
       </View>
     </Modal>
   );

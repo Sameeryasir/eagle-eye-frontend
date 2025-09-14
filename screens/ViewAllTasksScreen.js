@@ -6,7 +6,6 @@ import {
   TextInput,
   StatusBar,
   Keyboard,
-  Alert,
   FlatList,
   Platform,
   TouchableWithoutFeedback,
@@ -24,6 +23,7 @@ import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
 import UpdateTaskModal from "./components/UpdateTaskModal";
 import FilterModal from "./components/FilterModal";
+import ErrorDialog from "./components/ErrorDialog";
 import { deleteTaskById } from "../services/tasks/deleteTaskById";
 import { getTaskByProjectId } from "../services/tasks/getTaskByProjectId";
 import { createTask } from "../services/tasks/createTask";
@@ -160,6 +160,13 @@ function ViewAllTasksScreen({ navigation, route }) {
   const [taskToDelete, setTaskToDelete] = useState(null);
   const [pastTimeDialogVisible, setPastTimeDialogVisible] = useState(false);
 
+  // --- State for custom error dialog ---
+  const [errorDialog, setErrorDialog] = useState({
+    visible: false,
+    title: '',
+    message: ''
+  });
+
   // Filter Modal State
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState({
@@ -171,6 +178,24 @@ function ViewAllTasksScreen({ navigation, route }) {
   const [filtersApplied, setFiltersApplied] = useState(false); // Track if filters are currently applied
 
   const { projectId, createDraft, showUpcomingTasks } = route.params || {};
+
+  // --- Helper function to show custom error dialog ---
+  const showErrorDialog = (title, message) => {
+    setErrorDialog({
+      visible: true,
+      title: title,
+      message: message
+    });
+  };
+
+  // --- Helper function to close custom error dialog ---
+  const closeErrorDialog = () => {
+    setErrorDialog({
+      visible: false,
+      title: '',
+      message: ''
+    });
+  };
 
   useEffect(() => {
     // Load data on initial mount
@@ -305,7 +330,10 @@ function ViewAllTasksScreen({ navigation, route }) {
           const isToday = newDate.toDateString() === now.toDateString();
           
           if (isToday && newDate < now) {
-            setPastTimeDialogVisible(true);
+            showErrorDialog(
+              'Invalid Time',
+              'You cannot select a time in the past for today. Please choose a future time.'
+            );
             return;
           }
           
@@ -372,16 +400,18 @@ function ViewAllTasksScreen({ navigation, route }) {
           const isToday = newDate.toDateString() === now.toDateString();
           
           if (isToday && newDate < now) {
-            setPastTimeDialogVisible(true);
+            showErrorDialog(
+              'Invalid Time',
+              'You cannot select a time in the past for today. Please choose a future time.'
+            );
             return;
           }
           
           // Check if end time is before start time
           if (newDate <= currentDraft.startTime) {
-            Alert.alert(
+            showErrorDialog(
               'Invalid End Time',
-              'End time must be after start time. Please choose a later time.',
-              [{ text: 'OK' }]
+              'End time must be after start time. Please choose a later time.'
             );
             return;
           }
@@ -406,18 +436,18 @@ function ViewAllTasksScreen({ navigation, route }) {
   const handleCreateTaskFromDraft = async (draftTask) => {
     // Validate required fields
     if (!draftTask.title.trim()) {
-      Alert.alert("Error", "Task title is required");
+      showErrorDialog("Error", "Task title is required");
       return;
     }
 
     if (!draftTask.description.trim()) {
-      Alert.alert("Error", "Task description is required");
+      showErrorDialog("Error", "Task description is required");
       return;
     }
 
     // Validate that projectId is available
     if (!projectId) {
-      Alert.alert("Error", "Project ID is required to create a task");
+      showErrorDialog("Error", "Project ID is required to create a task");
       return;
     }
 
@@ -430,7 +460,7 @@ function ViewAllTasksScreen({ navigation, route }) {
     if (draftTask.endTime) {
       // Ensure end time is after start time
       if (draftTask.endTime <= draftTask.startTime) {
-        Alert.alert(
+        showErrorDialog(
           "Error",
           "End date and time must be after start date and time"
         );
@@ -445,12 +475,12 @@ function ViewAllTasksScreen({ navigation, route }) {
 
       // Ensure end time is at least 15 minutes after start time
       if (timeDifference < minDuration) {
-        Alert.alert("Error", "Task duration must be at least 15 minutes");
+        showErrorDialog("Error", "Task duration must be at least 15 minutes");
         return;
       }
 
       if (timeDifference > maxDuration) {
-        Alert.alert("Error", "Task duration cannot exceed 1 year");
+        showErrorDialog("Error", "Task duration cannot exceed 1 year");
         return;
       }
     }
@@ -754,7 +784,7 @@ function ViewAllTasksScreen({ navigation, route }) {
   const handleUpdate = (task) => {
     // Only allow updating tasks if user is not an Employee
     if (userRole === "Employee") {
-      Alert.alert("Access Denied", "Employees cannot update tasks.");
+      showErrorDialog("Access Denied", "Employees cannot update tasks.");
       return;
     }
 
@@ -1863,6 +1893,14 @@ function ViewAllTasksScreen({ navigation, route }) {
           </View>
         </View>
       </Modal>
+
+      {/* --- Custom Error Dialog --- */}
+      <ErrorDialog
+        visible={errorDialog.visible}
+        onClose={closeErrorDialog}
+        title={errorDialog.title}
+        message={errorDialog.message}
+      />
     </View>
   );
 }

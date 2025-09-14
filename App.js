@@ -49,6 +49,7 @@ import LogIn from "./screens/LogInScreen";
 import Code from "./screens/OtpScreen";
 import Header from "./components/Header";
 import Sidebar from "./screens/components/Sidebar";
+import SplashScreen from "./screens/components/SplashScreen";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 
 import HomeScreen from "./screens/HomeScreen";
@@ -107,40 +108,17 @@ const CustomHeaderForScreens = ({ onMenuPress, title = "Screen" }) => {
 const LoadingScreen = () => (
   <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffffff' }}>
     <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-    <Logo width={90} height={90} />
-    <Text style={{ marginTop: 20, fontSize: 16, color: '#666' }}>Loading...</Text>
+    <Text style={{ fontSize: 16, color: '#666' }}>Loading...</Text>
   </SafeAreaView>
 );
 
 // Navigation component that handles initial routing
 const AppNavigator = () => {
-  const { isAuthenticated, initialRoute, isLoading } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [navigationRef, setNavigationRef] = useState(null);
   
-  // Show loading screen while checking authentication
-  if (isLoading) {
-    return <LoadingScreen />;
-  }
-  
-  // Handle navigation when authentication state changes
-  useEffect(() => {
-    if (navigationRef && !isLoading) {
-      if (isAuthenticated) {
-        navigationRef.reset({
-          index: 0,
-          routes: [{ name: 'HomeScreen' }],
-        });
-      } else {
-        navigationRef.reset({
-          index: 0,
-          routes: [{ name: 'SignIn' }],
-        });
-      }
-    }
-  }, [isAuthenticated, navigationRef, isLoading]);
-  
-  // Authentication check completed - proceed with navigation
+  // SplashScreen will handle initial routing and auth checking
 
   const handleMenuPress = () => {
     setSidebarVisible(true);
@@ -180,7 +158,17 @@ const AppNavigator = () => {
     <MenuProvider>
       <SafeAreaProvider>
         <NavigationContainer ref={setNavigationRef}>
-          <Stack.Navigator initialRouteName={initialRoute}>
+          <Stack.Navigator 
+            screenOptions={{ headerShown: false }} 
+            initialRouteName="SplashScreen"
+          >
+            <Stack.Screen
+              name="SplashScreen"
+              component={SplashScreen}
+              options={{
+                headerShown: false,
+              }}
+            />
             <Stack.Screen
               name="SignIn"
               component={SignIn}

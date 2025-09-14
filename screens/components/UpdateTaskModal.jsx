@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Alert,
   ActivityIndicator,
   Keyboard,
   Modal,
@@ -19,6 +18,7 @@ import {
 import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 import NoChangesDialog from './NoChangesDialog';
+import ErrorDialog from './ErrorDialog';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import DropDownPicker from "react-native-dropdown-picker";
 import { updateTask } from '../../services/tasks/updateTaskById';
@@ -60,6 +60,13 @@ export default function UpdateTaskModal({
     { id: 'high', label: 'High', color: '#EF4444' },
     { id: 'critical', label: 'Critical', color: '#EF4444' } // Match CalenderDetailScreen color
   ]);
+
+  // --- State for custom error dialog ---
+  const [errorDialog, setErrorDialog] = useState({
+    visible: false,
+    title: '',
+    message: ''
+  });
 
   useEffect(() => {
     // Add keyboard listeners with height tracking
@@ -121,6 +128,24 @@ export default function UpdateTaskModal({
     } catch (error) {
       console.error("Error loading employees:", error);
     }
+  };
+
+  // --- Helper function to show custom error dialog ---
+  const showErrorDialog = (title, message) => {
+    setErrorDialog({
+      visible: true,
+      title: title,
+      message: message
+    });
+  };
+
+  // --- Helper function to close custom error dialog ---
+  const closeErrorDialog = () => {
+    setErrorDialog({
+      visible: false,
+      title: '',
+      message: ''
+    });
   };
 
   const handleEmployeeSearch = (text) => {
@@ -199,6 +224,19 @@ export default function UpdateTaskModal({
       const newDate = new Date(startDateTime);
       newDate.setHours(selectedDate.getHours());
       newDate.setMinutes(selectedDate.getMinutes());
+      
+      // Only check for past time if the task date is today
+      const now = new Date();
+      const isToday = newDate.toDateString() === now.toDateString();
+      
+      if (isToday && newDate < now) {
+        showErrorDialog(
+          'Invalid Time',
+          'You cannot select a time in the past for today. Please choose a future time.'
+        );
+        return;
+      }
+      
       setStartDateTime(newDate);
       
       // Ensure end date is not before start date
@@ -241,19 +279,27 @@ export default function UpdateTaskModal({
         newDate.setSeconds(0);
         newDate.setMilliseconds(0);
         
+        // Only check for past time if the task date is today
+        const now = new Date();
+        const isToday = newDate.toDateString() === now.toDateString();
+        
+        if (isToday && newDate < now) {
+          showErrorDialog(
+            'Invalid Time',
+            'You cannot select a time in the past for today. Please choose a future time.'
+          );
+          return;
+        }
+        
         // Validate that end time is not before start time
         if (newDate >= startDateTime) {
           setEndDateTime(newDate);
         } else {
           // Show error if end time is before start time
-          Toast.show({
-            type: 'error',
-            text1: 'Invalid Time',
-            text2: 'End time cannot be before start time',
-            visibilityTime: 3000,
-            autoHide: true,
-            topOffset: 80,
-          });
+          showErrorDialog(
+            'Invalid End Time',
+            'End time must be after start time. Please choose a later time.'
+          );
         }
       } else {
         // If no endDateTime exists, use startDateTime date with selected time
@@ -262,6 +308,19 @@ export default function UpdateTaskModal({
         newDate.setMinutes(selectedDate.getMinutes());
         newDate.setSeconds(0);
         newDate.setMilliseconds(0);
+        
+        // Only check for past time if the task date is today
+        const now = new Date();
+        const isToday = newDate.toDateString() === now.toDateString();
+        
+        if (isToday && newDate < now) {
+          showErrorDialog(
+            'Invalid Time',
+            'You cannot select a time in the past for today. Please choose a future time.'
+          );
+          return;
+        }
+        
         setEndDateTime(newDate);
       }
     }
@@ -270,52 +329,24 @@ export default function UpdateTaskModal({
   const handleUpdateTask = async () => {
     // Validate required fields
     if (!taskData.title.trim()) {
-      Toast.show({
-        type: 'error',
-        text1: 'Validation Error',
-        text2: 'Task title is required',
-        visibilityTime: 3000,
-        autoHide: true,
-        topOffset: 80,
-      });
+      showErrorDialog('Validation Error', 'Task title is required');
       return;
     }
 
     if (!taskData.description.trim()) {
-      Toast.show({
-        type: 'error',
-        text1: 'Validation Error',
-        text2: 'Task description is required',
-        visibilityTime: 3000,
-        autoHide: true,
-        topOffset: 80,
-      });
+      showErrorDialog('Validation Error', 'Task description is required');
       return;
     }
 
     // Validate that task ID is available
     if (!task?.id) {
-      Toast.show({
-        type: 'error',
-        text1: 'Validation Error',
-        text2: 'Task ID is required to update a task',
-        visibilityTime: 3000,
-        autoHide: true,
-        topOffset: 80,
-      });
+      showErrorDialog('Validation Error', 'Task ID is required to update a task');
       return;
     }
 
     // Validate that end time is not before start time
     if (endDateTime && endDateTime < startDateTime) {
-      Toast.show({
-        type: 'error',
-        text1: 'Time Validation Error',
-        text2: 'End time cannot be before start time. Please adjust your dates.',
-        visibilityTime: 4000,
-        autoHide: true,
-        topOffset: 80,
-      });
+      showErrorDialog('Time Validation Error', 'End time cannot be before start time. Please adjust your dates.');
       return;
     }
 
@@ -872,6 +903,14 @@ export default function UpdateTaskModal({
         <NoChangesDialog
           visible={noChangesDialogVisible}
           onClose={() => setNoChangesDialogVisible(false)}
+        />
+
+        {/* --- Custom Error Dialog --- */}
+        <ErrorDialog
+          visible={errorDialog.visible}
+          onClose={closeErrorDialog}
+          title={errorDialog.title}
+          message={errorDialog.message}
         />
       </View>
     </Modal>

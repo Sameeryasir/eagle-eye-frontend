@@ -49,7 +49,11 @@
     "react-native-svg-transformer": "^1.5.1",
     "react-native-timeline-flatlist": "^0.8.0",
     "react-native-toast-message": "^2.3.3",
-    "tailwindcss": "^3.4.17"
+    "tailwindcss": "^3.4.17",
+    "react-dom": "19.0.0",
+    "react-native-web": "^0.20.0",
+    "@expo/metro-runtime": "~5.0.4",
+    "expo-localization": "~16.1.6"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",

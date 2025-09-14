@@ -4,6 +4,7 @@ import { View, Text, TouchableOpacity, ScrollView, Dimensions, Alert } from "rea
 import Timetable from "react-native-calendar-timetable";
 import CustomBottomNav from "./components/CustomBottomNav";
 import { Ionicons } from "@expo/vector-icons";
+import * as Localization from 'expo-localization';
 import { getEventsForLogInUser } from "../services/event/getEventsForLogInUser";
 import { getUserRole } from "../services/utils/userRole";
 import CreateEventModal from "./components/CreateEventModal";
@@ -188,7 +189,9 @@ const CalenderDetailScreen = ({ route, navigation }) => {
         });
         
         // --- Ensure unique key for each task item ---
-        const uniqueKey = task.id ? `task-${task.id}` : `task-${index}-${task.title || 'untitled'}-${startDate.getTime()}`;
+        // Business Rule: Create stable, unique keys to prevent React key warnings
+        // Use combination of task ID, index, and timestamp to ensure uniqueness
+        const uniqueKey = `task-${task.id || 'no-id'}-${index}-${startDate.getTime()}-${task.title?.replace(/\s+/g, '-') || 'untitled'}`;
         
         return {
           id: uniqueKey,
@@ -222,22 +225,30 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           endTimeType: typeof event.endTime
         });
         
-        // --- FIXED: Convert UTC times to local time for proper display ---
-        // Business Rule: Events come from server in UTC format, convert to local timezone
+        // --- FIXED: Convert UTC times to local time using expo-localization ---
+        // Business Rule: Events come from server in UTC format, convert to user's local timezone
         let startDate, endDate;
         
         if (event.startTime) {
-          // Parse UTC time and convert to local time
+          // Parse UTC time and convert to local time using user's timezone
           startDate = new Date(event.startTime);
-          console.log(`UTC startTime: ${event.startTime} -> Local: ${startDate.toLocaleString()}`);
+          // Use expo-localization to get proper local time display
+          const localStartTime = startDate.toLocaleString(Localization.locale, {
+            timeZone: Localization.timezone
+          });
+          console.log(`UTC startTime: ${event.startTime} -> Local (${Localization.timezone}): ${localStartTime}`);
         } else {
           startDate = new Date();
         }
         
         if (event.endTime) {
-          // Parse UTC time and convert to local time
+          // Parse UTC time and convert to local time using user's timezone
           endDate = new Date(event.endTime);
-          console.log(`UTC endTime: ${event.endTime} -> Local: ${endDate.toLocaleString()}`);
+          // Use expo-localization to get proper local time display
+          const localEndTime = endDate.toLocaleString(Localization.locale, {
+            timeZone: Localization.timezone
+          });
+          console.log(`UTC endTime: ${event.endTime} -> Local (${Localization.timezone}): ${localEndTime}`);
         } else {
           // Default 1 hour duration if no end time
           endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
@@ -253,7 +264,9 @@ const CalenderDetailScreen = ({ route, navigation }) => {
         });
         
         // --- Ensure unique key for each event item ---
-        const uniqueKey = event.id ? `event-${event.id}` : `event-${index}-${event.title || 'untitled'}-${startDate.getTime()}`;
+        // Business Rule: Create stable, unique keys to prevent React key warnings
+        // Use combination of event ID, index, and timestamp to ensure uniqueness
+        const uniqueKey = `event-${event.id || 'no-id'}-${index}-${startDate.getTime()}-${event.title?.replace(/\s+/g, '-') || 'untitled'}`;
         
         return {
           id: uniqueKey,
@@ -352,7 +365,17 @@ const CalenderDetailScreen = ({ route, navigation }) => {
             fontSize: isShortDuration ? 10 : 12
           }}
         >
-          {item.startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })} - {item.endDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
+          {item.startDate.toLocaleTimeString(Localization.locale, { 
+            hour: '2-digit', 
+            minute: '2-digit', 
+            hour12: true,
+            timeZone: Localization.timezone 
+          })} - {item.endDate.toLocaleTimeString(Localization.locale, { 
+            hour: 'numeric', 
+            minute: '2-digit', 
+            hour12: true,
+            timeZone: Localization.timezone 
+          })}
         </Text>
       </TouchableOpacity>
     );
@@ -374,11 +397,12 @@ const CalenderDetailScreen = ({ route, navigation }) => {
                 {items.length > 0 ? 'SCHEDULED ITEMS' : 'SCHEDULE VIEW'}
               </Text>
               <Text className="text-lg font-semibold text-gray-800 leading-6">
-                {selectedDate ? new Date(selectedDate).toLocaleDateString('en-US', { 
+                {selectedDate ? new Date(selectedDate).toLocaleDateString(Localization.locale, { 
                   weekday: 'long', 
                   year: 'numeric', 
                   month: 'long', 
-                  day: 'numeric' 
+                  day: 'numeric',
+                  timeZone: Localization.timezone
                 }) : 'Selected Date'}
               </Text>
             </View>

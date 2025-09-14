@@ -101,7 +101,12 @@ const Code = () => {
       });
 
       // ✅ Navigate to HomeScreen without parameters (Toast handles the success message)
-      navigation.navigate(targetScreen);
+      // Use navigation.reset() to prevent back navigation to OTP screen
+      // This clears the navigation stack and makes HomeScreen the root screen
+      navigation.reset({
+        index: 0,
+        routes: [{ name: targetScreen }],
+      });
 
     } catch (error) {
       setLoading(false);

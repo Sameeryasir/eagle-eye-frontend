@@ -18,10 +18,13 @@ export async function getEventsForLogInUser(date) {
         throw new Error('No token found');
     }
 
-    // Format date to YYYY-MM-DD if provided
+    // --- FIXED: Always require a date parameter ---
+    // Business Rule: The API only supports fetching events by specific date
+    // If no date provided, use today's date as default
+    const targetDate = date ; // YYYY-MM-DD format
     
     try {
-        const response = await axios.get(`${API_URL}/event/date/${date}`, {
+        const response = await axios.get(`${API_URL}/event/date/${targetDate}`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
@@ -37,7 +40,7 @@ export async function getEventsForLogInUser(date) {
             if (!newToken) throw new Error('Unable to refresh token.');
 
             // Retry the original request with new token
-            const retryResponse = await axios.get(`${API_URL}/event/date/${date}`, {
+            const retryResponse = await axios.get(`${API_URL}/event/date/${targetDate}`, {
                 headers: {
                     'Authorization': `Bearer ${newToken}`,
                     'Content-Type': 'application/json'

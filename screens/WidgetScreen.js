@@ -813,6 +813,7 @@ function WidgetScreen({ navigation, route }) {
       />
 
       <CustomBottomNav
+        currentScreen="chats" // ✅ ADD: Tell bottom nav we're on chats/widget screen
         onAddPress={() => {
           // --- FAB Navigation Logic Based on User Role and Widget States ---
           

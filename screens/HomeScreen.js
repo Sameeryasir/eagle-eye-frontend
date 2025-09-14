@@ -473,6 +473,7 @@ function HomeScreen({ navigation, route }) {
       <CustomBottomNav
         keyboardVisible={keyboardVisible}
         project
+        currentScreen="home" // ✅ ADD: Tell bottom nav we're on home screen
         onAddPress={() => {
           // Only allow project creation for Owner role
           if (userRole === "Employee" || userRole === "Manager") {

@@ -17,7 +17,6 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userRole, setUserRole] = useState(null);
   const [userInfo, setUserInfo] = useState(null);
-  const [initialRoute, setInitialRoute] = useState('SignIn');
   const [expoPushToken, setExpoPushToken] = useState(null);
   const [isLoading, setIsLoading] = useState(true); // Show loading while checking auth
 
@@ -49,14 +48,14 @@ export const AuthProvider = ({ children }) => {
           id: userId
         });
         setExpoPushToken(expoToken);
-        setInitialRoute('HomeScreen'); // Go directly to HomeScreen
+        // SplashScreen will handle navigation routing
       } else {
         // No tokens, user needs to login
         setIsAuthenticated(false);
         setUserRole(null);
         setUserInfo(null);
         setExpoPushToken(null);
-        setInitialRoute('SignIn');
+        // SplashScreen will handle navigation routing
       }
     } catch (error) {
       console.error('Auth check error:', error);
@@ -65,7 +64,7 @@ export const AuthProvider = ({ children }) => {
       setUserRole(null);
       setUserInfo(null);
       setExpoPushToken(null);
-      setInitialRoute('SignIn');
+      // SplashScreen will handle navigation routing
     } finally {
       // Always stop loading when done
       setIsLoading(false);
@@ -116,7 +115,7 @@ export const AuthProvider = ({ children }) => {
         role: userData.user?.role?.name,
         id: userData.user?.id?.toString()
       });
-      setInitialRoute('HomeScreen');
+      // Navigation will be handled by the current screen
     } catch (error) {
       console.error('Login error:', error);
       throw error;
@@ -160,7 +159,7 @@ export const AuthProvider = ({ children }) => {
       setUserRole(null);
       setUserInfo(null);
       setExpoPushToken(null);
-      setInitialRoute('SignIn');
+      // Navigation will be handled by the current screen
     } catch (error) {
       console.error('Error during logout:', error);
       throw error;
@@ -173,7 +172,6 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated,
     userRole,
     userInfo,
-    initialRoute,
     expoPushToken,
     login,
     logout,

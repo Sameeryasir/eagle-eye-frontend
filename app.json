@@ -8,32 +8,8 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/icons/splash-icon-dark.png",
-      "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "plugins": [
-      [
-        "expo-splash-screen",
-        {
-          "backgroundColor": "#ffffff",
-          "image": "./assets/icons/splash-icon.png",
-          "dark": {
-            "image": "./assets/icons/splash-icon-dark.png",
-            "backgroundColor": "#ffffff"
-          },
-          "imageWidth": 200
-        }
-      ],
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/icon.png",
-          "color": "#000000",
-          "mode": "production"
-        }
-      ]
-    ],
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -70,9 +46,12 @@
     },
     "extra": {
       "eas": {
-        "projectId": "ae67d744-1b28-41a4-b998-bff813198a65"
+        "projectId": "befe57d8-c92e-4a8f-aff7-4322bd20c73c"
       }
     },
-    "owner": "ghayour"
+    "owner": "fazalerabbi",
+    "plugins": [
+      "expo-localization"
+    ]
   }
 }

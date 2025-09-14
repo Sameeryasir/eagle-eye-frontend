@@ -1,7 +1,7 @@
 import React from "react";
 import { View, TouchableOpacity, Dimensions, Animated, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { getUserRole } from "../../services/utils/userRole";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -18,8 +18,31 @@ export default function CustomBottomNav({
   isLoading = false,
 }) {
   const navigation = useNavigation();
+  const route = useRoute(); // Get current route information
   const [activeTab, setActiveTab] = React.useState("home"); // Track active tab
   const insets = useSafeAreaInsets(); // Get safe area insets
+
+  // --- Route Change Detection ---
+  // Update active tab based on current screen name
+  // This ensures the bottom navigation highlights the correct tab based on the current screen
+  React.useEffect(() => {
+    const getActiveTabFromRoute = (routeName) => {
+      switch (routeName) {
+        case "HomeScreen":
+          return "home"; // Home icon highlighted for home/dashboard screens
+        case "CalenderScreen":
+        case "CalenderDetailScreen":
+          return "profile"; // Calendar icon highlighted for calendar screens
+   
+ 
+        default:
+      }
+    };
+
+    // Set active tab based on current route
+    const currentTab = getActiveTabFromRoute(route.name);
+    setActiveTab(currentTab);
+  }, [route.name]); // Re-run when route name changes
 
   const handleAddPress = async () => {
     if (onAddPress) {
@@ -52,7 +75,6 @@ export default function CustomBottomNav({
   };
 
   const navigateToHome = async () => {
-    setActiveTab("home");
     const userRole = await getUserRole();
 
     if (userRole === "Owner" || userRole === "Admin" || userRole === "Manager" || userRole === "Employee") {
@@ -64,14 +86,16 @@ export default function CustomBottomNav({
   };
 
   const navigateToChats = () => {
+    // Navigate to  screen when chats icon is pressed
   };
 
   const navigateToNotifications = () => {
-    setActiveTab("notifications");
+    // No navigation - just visual indicator
+    // This icon only shows which screen is active, no tap functionality
   };
 
   const navigateToProfile = () => {
-    setActiveTab("profile");
+    // Navigate to calendar screen when calendar icon is pressed
     navigation.navigate("CalenderScreen");
   };
   // Hide the bottom navigation when keyboard is visible
