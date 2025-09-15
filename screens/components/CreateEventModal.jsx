@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Modal, TextInput, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Modal, TextInput, Platform, ActivityIndicator, KeyboardAvoidingView } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import Toast from 'react-native-toast-message';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import DropDownPicker from 'react-native-dropdown-picker';
 import * as Localization from 'expo-localization';
 import { createEvent } from "../../services/event/createEvent";
+import { getEmployeesToAssignTask } from "../../services/employees/getEmployeesOfTheCompany";
+import { getMyProjects } from "../../services/projects/getProjectsByLoginUserId";
 import ErrorDialog from './ErrorDialog';
 
 const CreateEventModal = ({ 
@@ -18,7 +21,9 @@ const CreateEventModal = ({
     title: '',
     description: '',
     startTime: '',
-    endTime: ''
+    endTime: '',
+    isProject: false, // Add checkbox for project designation
+    
   });
 
   // --- State for time pickers ---
@@ -34,6 +39,18 @@ const CreateEventModal = ({
     title: '',
     message: ''
   });
+
+  // --- State for React Native dropdown picker (Multiple Selection) ---
+  const [employees, setEmployees] = useState([]);
+  const [employeeDropdownOpen, setEmployeeDropdownOpen] = useState(false);
+  const [selectedEmployeeValues, setSelectedEmployeeValues] = useState([]);
+  const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
+
+  // --- State for Project dropdown ---
+  const [projects, setProjects] = useState([]);
+  const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
+  const [selectedProjectValues, setSelectedProjectValues] = useState([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
 
   // --- Set current time when modal opens ---
   useEffect(() => {
@@ -63,6 +80,9 @@ const CreateEventModal = ({
         startTime: startTimeString,
         endTime: '' // Show "Not selected" initially
       }));
+
+      // Always fetch projects when modal opens
+      fetchProjects();
     }
   }, [visible, selectedDate]);
 
@@ -79,10 +99,17 @@ const CreateEventModal = ({
       title: '',
       description: '',
       startTime: '',
-      endTime: ''
+      endTime: '',
+      isProject: false, // Reset checkbox to unchecked
+      assignedEmployees: [], // Reset selected employees
+      selectedProjects: [] // Reset selected projects
     });
     setStartTime(new Date());
     setEndTime(new Date());
+    setSelectedEmployeeValues([]); // Reset dropdown selections
+    setEmployeeDropdownOpen(false); // Close dropdown when form is reset
+    setSelectedProjectValues([]); // Reset project selection
+    setProjectDropdownOpen(false); // Close project dropdown when form is reset
   };
 
   // --- Helper function to show custom error dialog ---
@@ -101,6 +128,182 @@ const CreateEventModal = ({
       title: '',
       message: ''
     });
+  };
+
+  // --- Employee data is now fetched from real API service ---
+
+  // --- Function to fetch projects ---
+  const fetchProjects = async () => {
+    setIsLoadingProjects(true);
+    try {
+      // --- Use real API service to fetch projects ---
+      const response = await getMyProjects();
+      
+      if (response && Array.isArray(response)) {
+        // Business Rule: Convert API response to dropdown picker format (label, value)
+        const formattedProjects = response.map(project => {
+          // Create display name for project
+          let displayName = project.name || project.title || 'Unnamed Project';
+          
+          // Add project description if available (truncated)
+          if (project.description) {
+            const truncatedDesc = project.description.length > 30 
+              ? project.description.substring(0, 27) + '...'
+              : project.description;
+            displayName += ` - ${truncatedDesc}`;
+          }
+          
+          // Truncate if too long (max 60 characters)
+          if (displayName.length > 60) {
+            displayName = displayName.substring(0, 57) + '...';
+          }
+          
+          const formattedProject = {
+            label: displayName,
+            value: project.id, // Use project.id from API response
+            project: project // Keep original project object for reference
+          };
+          
+          // --- Debug logging to ensure data structure is correct ---
+          console.log('Formatted Project:', formattedProject);
+          console.log('Project ID:', project.id);
+          console.log('Project Name:', project.name || project.title);
+          
+          return formattedProject;
+        });
+        
+        console.log('=== Projects Loaded Successfully ===');
+        console.log('All Formatted Projects from API:', formattedProjects);
+        console.log('Total projects loaded:', formattedProjects.length);
+        console.log('Setting projects state...');
+        setProjects(formattedProjects);
+        console.log('=== End Projects Loading ===');
+        
+        // Simulate loading delay for better UX
+        setTimeout(() => {
+          setIsLoadingProjects(false);
+        }, 300);
+        
+      } else {
+        console.warn('No projects data received from API');
+        setProjects([]);
+        setIsLoadingProjects(false);
+      }
+      
+    } catch (error) {
+      console.error('Error fetching projects from API:', error);
+      showErrorDialog(
+        'Error Loading Projects',
+        'Failed to load projects list. Please try again.'
+      );
+      setIsLoadingProjects(false);
+    }
+  };
+
+  // --- Function to fetch employees for project assignment ---
+  const fetchEmployees = async () => {
+    setIsLoadingEmployees(true);
+    try {
+      // --- Use real API service to fetch employees ---
+      const response = await getEmployeesToAssignTask();
+      
+      if (response && Array.isArray(response)) {
+        // Business Rule: Convert API response to dropdown picker format (label, value)
+        const formattedEmployees = response.map(employee => {
+          // Create display name similar to UpdateTaskModal format
+          const fullName = `${employee.first_name || ""} ${employee.last_name || ""}`.trim();
+          let displayName = fullName ? `${fullName} (${employee.email})` : employee.email;
+          
+          // Truncate if too long (max 50 characters)
+          if (displayName.length > 50) {
+            displayName = displayName.substring(0, 47) + "...";
+          }
+          
+          const formattedEmployee = {
+            label: displayName,
+            value: employee.id, // Use employee.id from API response
+            employee: employee // Keep original employee object for reference
+          };
+          
+          // --- Debug logging to ensure data structure is correct ---
+          console.log('Formatted Employee:', formattedEmployee);
+          console.log('Employee Email:', employee.email);
+          console.log('Employee ID:', employee.id);
+          
+          return formattedEmployee;
+        });
+        
+        console.log('All Formatted Employees from API:', formattedEmployees);
+        console.log('Total employees loaded:', formattedEmployees.length);
+        setEmployees(formattedEmployees);
+        
+        // Simulate loading delay for better UX
+        setTimeout(() => {
+          setIsLoadingEmployees(false);
+        }, 300);
+        
+      } else {
+        console.warn('No employees data received from API');
+        setEmployees([]);
+        setIsLoadingEmployees(false);
+      }
+      
+    } catch (error) {
+      console.error('Error fetching employees from API:', error);
+      showErrorDialog(
+        'Error Loading Employees',
+        'Failed to load employees list. Please try again.'
+      );
+      setIsLoadingEmployees(false);
+    }
+  };
+
+  // --- Handle project checkbox change ---
+  const handleProjectCheckboxChange = (isChecked) => {
+    console.log('Project checkbox changed to:', isChecked);
+    handleEventFormChange('isProject', isChecked);
+    
+    if (isChecked) {
+      // If checkbox is checked, fetch employees
+      console.log('Project checkbox is checked - fetching employees');
+      fetchEmployees();
+    } else {
+      // If checkbox is unchecked, clear selected employees (keep project selection)
+      console.log('Project checkbox is unchecked - clearing employees');
+      setSelectedEmployeeValues([]);
+      handleEventFormChange('assignedEmployees', []);
+    }
+  };
+
+  // --- Handle multiple project selection from dropdown ---
+  const handleProjectSelection = (values) => {
+    console.log('=== handleProjectSelection called ===');
+    console.log('Values received:', values);
+    console.log('Available projects:', projects);
+    
+    setSelectedProjectValues(values);
+    
+    // Find the selected project objects
+    const selectedProjects = projects
+      .filter(proj => values.includes(proj.value))
+      .map(proj => proj.project);
+    console.log('Found selected projects:', selectedProjects);
+    
+    handleEventFormChange('selectedProjects', selectedProjects);
+    console.log('Updated form with projects:', selectedProjects);
+    console.log('=== End handleProjectSelection ===');
+  };
+
+  // --- Handle multiple employee selection from dropdown ---
+  const handleEmployeeSelection = (values) => {
+    setSelectedEmployeeValues(values);
+    
+    // Find the selected employee objects
+    const selectedEmployees = employees
+      .filter(emp => values.includes(emp.value))
+      .map(emp => emp.employee);
+    
+    handleEventFormChange('assignedEmployees', selectedEmployees);
   };
 
   // --- Time picker handlers ---
@@ -185,6 +388,10 @@ const CreateEventModal = ({
       return;
     }
 
+    // --- Project-specific validation removed ---
+    // Business Rule: Employee and project selection are for UI only, not sent to backend
+    // Validation for project assignment is handled in UI state only
+
     setIsCreating(true);
 
     try {
@@ -229,12 +436,14 @@ const CreateEventModal = ({
       const timezoneOffset = new Date().getTimezoneOffset(); // Minutes offset from UTC
       const timezoneOffsetHours = -timezoneOffset / 60; // Convert to hours (negative because getTimezoneOffset returns opposite)
       
-      // Format the event data - Backend DTO only accepts: title, description, startTime, endTime
+      // Format the event data - Backend DTO accepts: title, description, startTime, endTime
+      // Business Rule: Employee selection is for UI only, not included in backend data
       const eventData = {
         title: eventForm.title.trim(),
         description: eventForm.description.trim() || '',
         startTime: eventStartTime.toISOString(), // ISO 8601 string format (UTC)
         endTime: eventEndTime.toISOString() // ISO 8601 string format (UTC)
+        // Note: Employee data is kept in UI state but not sent to backend
       };
 
       console.log('=== Event Creation Debug (Timezone-Aware) ===');
@@ -259,6 +468,11 @@ const CreateEventModal = ({
       console.log('Local End Time:', eventEndTime.toLocaleString());
       console.log('UTC Start Time:', eventData.startTime);
       console.log('UTC End Time:', eventData.endTime);
+      console.log('--- UI STATE DEBUG (Not Sent to Backend) ---');
+      console.log('Is Project:', eventForm.isProject);
+      console.log('Selected Projects (UI Only):', eventForm.selectedProjects);
+      console.log('Assigned Employees (UI Only):', eventForm.assignedEmployees);
+      console.log('Note: Project and employee data are for UI display only, not sent to backend');
       console.log('--- BACKEND DATA (DTO Compliant) ---');
       console.log('Event Data Being Sent:', eventData);
       console.log('=== End Event Creation Debug ===');
@@ -342,10 +556,9 @@ const CreateEventModal = ({
         </View>
         
         <View className="flex-1 p-5 items-center">
-          <ScrollView 
+          <View 
             className="flex-1 w-full max-w-md"
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 100 }}
+            style={{ paddingBottom: 100 }}
           >
             <View className="mb-8 items-center">
               <Text className="text-[28px] font-bold text-[#333]">Create Event</Text>
@@ -388,6 +601,391 @@ const CreateEventModal = ({
                 />
               </View>
 
+              {/* Project Checkbox */}
+              <View className="mb-5">
+                <TouchableOpacity className="flex-row items-center justify-between p-3 border border-[#e1e8ed] rounded-lg bg-[#f8f9fa]"
+                  onPress={() => handleProjectCheckboxChange(!eventForm.isProject)}
+                  activeOpacity={0.7}
+                >
+                  <View className="flex-row items-center flex-1">
+                    <Ionicons name="folder" size={16} color="#374151" style={{ marginRight: 6 }} />
+                    <Text className="text-[16px] font-medium text-[#333]">This is a Project</Text>
+                  </View>
+                  <View className={`w-5 h-5 border-2 rounded items-center justify-center ${
+                    eventForm.isProject 
+                      ? 'bg-black border-black' 
+                      : 'bg-white border-[#d1d5db]'
+                  }`}>
+                    {eventForm.isProject && (
+                      <Ionicons name="checkmark" size={12} color="white" />
+                    )}
+                  </View>
+                </TouchableOpacity>
+              </View>
+
+              {/* Project Selection Dropdown - Hidden when "This is a Project" is checked */}
+              {!eventForm.isProject && (
+                <View className="mb-5">
+                <View className="flex-row items-center mb-2">
+                  <Ionicons name="folder-open" size={16} color="#374151" style={{ marginRight: 6 }} />
+                  <Text className="text-[16px] font-semibold text-[#333]">Select Project</Text>
+                </View>
+                
+                {/* Project Dropdown Picker - Single Selection */}
+                <DropDownPicker
+                  open={projectDropdownOpen}
+                  value={selectedProjectValues}
+                  items={projects}
+                  setOpen={setProjectDropdownOpen}
+                  setValue={(callback) => {
+                    console.log('Project dropdown setValue called with callback:', callback);
+                  }}
+                  setItems={setProjects}
+                  multiple={true}
+                  min={0}
+                  max={10}
+                  placeholder="Select projects (multiple allowed)"
+                  placeholderStyle={{
+                    color: '#999',
+                    fontSize: 16,
+                    fontWeight: '500'
+                  }}
+                  multipleText={`${selectedProjectValues.length} Projects selected`}
+                  multipleTextStyle={{
+                    color: '#000000',
+                    fontSize: 16,
+                    fontWeight: '600'
+                  }}
+                  onSelectItem={(items) => {
+                    console.log('Selected project items:', items);
+                    const values = items.map(item => item.value);
+                    handleProjectSelection(values);
+                  }}
+                  loading={isLoadingProjects}
+                  activityIndicatorColor="#666"
+                  searchable={true}
+                  searchPlaceholder="Search projects..."
+                  searchTextInputStyle={{
+                    fontSize: 16,
+                    color: '#333'
+                  }}
+                  style={{
+                    backgroundColor: '#f8f9fa',
+                    borderColor: '#e1e8ed',
+                    borderRadius: 8,
+                    minHeight: 50,
+                    paddingHorizontal: 12
+                  }}
+                  dropDownContainerStyle={{
+                    backgroundColor: '#ffffff',
+                    borderColor: '#e1e8ed',
+                    borderRadius: 8,
+                    borderTopWidth: 0,
+                    elevation: 3,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    maxHeight: 300
+                  }}
+                  textStyle={{
+                    fontSize: 16,
+                    color: '#333',
+                    fontWeight: '500'
+                  }}
+                  selectedItemContainerStyle={{
+                    backgroundColor: '#f5f5f5',
+                    borderLeftWidth: 3,
+                    borderLeftColor: '#000000'
+                  }}
+                  selectedItemLabelStyle={{
+                    color: '#000000',
+                    fontWeight: '600'
+                  }}
+                  listItemContainerStyle={{
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    borderBottomWidth: 1,
+                    borderBottomColor: '#f0f0f0'
+                  }}
+                  listItemLabelStyle={{
+                    fontSize: 16,
+                    color: '#333',
+                    flex: 1,
+                    marginLeft: 12
+                  }}
+                  arrowIconStyle={{
+                    tintColor: '#666'
+                  }}
+                  tickIconStyle={{
+                    tintColor: '#000000',
+                    width: 20,
+                    height: 20
+                  }}
+                  // --- Custom checkbox styling ---
+                  renderListItem={(item) => {
+                    const isSelected = selectedProjectValues.includes(item.value);
+                    // --- Safe access to project data ---
+                    const project = item.project || {};
+                    
+                    return (
+                      <TouchableOpacity
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          paddingVertical: 12,
+                          paddingHorizontal: 16,
+                          backgroundColor: isSelected ? '#f5f5f5' : 'transparent',
+                          borderLeftWidth: isSelected ? 3 : 0,
+                          borderLeftColor: '#000000'
+                        }}
+                        onPress={() => {
+                          const newValues = isSelected
+                            ? selectedProjectValues.filter(val => val !== item.value)
+                            : [...selectedProjectValues, item.value];
+                          handleProjectSelection(newValues);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        {/* Custom Checkbox */}
+                        <View style={{
+                          width: 20,
+                          height: 20,
+                          borderWidth: 2,
+                          borderColor: isSelected ? '#000000' : '#d1d5db',
+                          borderRadius: 4,
+                          backgroundColor: isSelected ? '#000000' : 'transparent',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          {isSelected && (
+                            <Ionicons name="checkmark" size={14} color="white" />
+                          )}
+                        </View>
+                        
+                        {/* Project Info - Single Line Layout */}
+                        <View style={{ flex: 1, marginLeft: 12, flexDirection: 'row', alignItems: 'center' }}>
+                          <Text style={{
+                            fontSize: 16,
+                            color: isSelected ? '#000000' : '#333',
+                            fontWeight: isSelected ? '600' : '500',
+                            flex: 1
+                          }}>
+                            {item.label || 'Unknown Project'}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  }}
+                  badgeTextStyle={{
+                    fontSize: 12,
+                    color: '#000000',
+                    fontWeight: '600'
+                  }}
+                  badgeContainerStyle={{
+                    backgroundColor: '#f0f0f0',
+                    borderRadius: 12,
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    marginRight: 4,
+                    marginBottom: 4
+                  }}
+                  closeAfterSelecting={false}
+                  zIndex={2000}
+                  zIndexInverse={2000}
+                />
+              </View>
+              )}
+
+              {/* Employee Selection Dropdown - Only show when project is checked */}
+              {eventForm.isProject && (
+                <View className="mb-5">
+                  <View className="flex-row items-center mb-2">
+                    <Ionicons name="people" size={16} color="#374151" style={{ marginRight: 6 }} />
+                    <Text className="text-[16px] font-semibold text-[#333]">Assign to Employee</Text>
+                  </View>
+                  
+                  {/* React Native Dropdown Picker - Multiple Selection with Checkboxes */}
+                  <DropDownPicker
+                    open={employeeDropdownOpen}
+                    value={selectedEmployeeValues}
+                    items={employees}
+                    setOpen={setEmployeeDropdownOpen}
+                    setValue={setSelectedEmployeeValues}
+                    setItems={setEmployees}
+                    multiple={true}
+                    min={0}
+                    max={10}
+                    placeholder="Select employees (multiple allowed)"
+                    placeholderStyle={{
+                      color: '#999',
+                      fontSize: 16,
+                      fontWeight: '500'
+                    }}
+                    multipleText="Employees selected"
+                    multipleTextStyle={{
+                      color: '#1e40af',
+                      fontSize: 16,
+                      fontWeight: '600'
+                    }}
+                    onSelectItem={(items) => {
+                      console.log('Selected items:', items);
+                      const values = items.map(item => item.value);
+                      handleEmployeeSelection(values);
+                    }}
+                    loading={isLoadingEmployees}
+                    activityIndicatorColor="#666"
+                    searchable={true}
+                    searchPlaceholder="Search employees..."
+                    searchTextInputStyle={{
+                      fontSize: 16,
+                      color: '#333'
+                    }}
+                    style={{
+                      backgroundColor: '#f8f9fa',
+                      borderColor: '#e1e8ed',
+                      borderRadius: 8,
+                      minHeight: 50,
+                      paddingHorizontal: 12
+                    }}
+                    dropDownContainerStyle={{
+                      backgroundColor: '#ffffff',
+                      borderColor: '#e1e8ed',
+                      borderRadius: 8,
+                      borderTopWidth: 0,
+                      elevation: 3,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.1,
+                      shadowRadius: 4,
+                      maxHeight: 300
+                    }}
+                    textStyle={{
+                      fontSize: 16,
+                      color: '#333',
+                      fontWeight: '500'
+                    }}
+                    selectedItemContainerStyle={{
+                      backgroundColor: '#f0f9ff',
+                      borderLeftWidth: 3,
+                      borderLeftColor: '#1e40af'
+                    }}
+                    selectedItemLabelStyle={{
+                      color: '#1e40af',
+                      fontWeight: '600'
+                    }}
+                    listItemContainerStyle={{
+                      paddingVertical: 12,
+                      paddingHorizontal: 16,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      borderBottomWidth: 1,
+                      borderBottomColor: '#f0f0f0'
+                    }}
+                    listItemLabelStyle={{
+                      fontSize: 16,
+                      color: '#333',
+                      flex: 1,
+                      marginLeft: 12
+                    }}
+                    arrowIconStyle={{
+                      tintColor: '#666'
+                    }}
+                    tickIconStyle={{
+                      tintColor: '#1e40af',
+                      width: 20,
+                      height: 20
+                    }}
+                    // --- Custom checkbox styling ---
+                    renderListItem={(item) => {
+                      const isSelected = selectedEmployeeValues.includes(item.value);
+                      // --- Safe access to employee data ---
+                      const employee = item.employee || {};
+                      const employeeEmail = employee.email || '';
+                      
+                      return (
+                        <TouchableOpacity
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            paddingVertical: 12,
+                            paddingHorizontal: 16,
+                            backgroundColor: isSelected ? '#f5f5f5' : 'transparent',
+                            borderLeftWidth: isSelected ? 3 : 0,
+                            borderLeftColor: '#000000'
+                          }}
+                          onPress={() => {
+                            const newValues = isSelected
+                              ? selectedEmployeeValues.filter(val => val !== item.value)
+                              : [...selectedEmployeeValues, item.value];
+                            handleEmployeeSelection(newValues);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          {/* Custom Checkbox */}
+                          <View style={{
+                            width: 20,
+                            height: 20,
+                            borderWidth: 2,
+                            borderColor: isSelected ? '#000000' : '#d1d5db',
+                            borderRadius: 4,
+                            backgroundColor: isSelected ? '#000000' : 'transparent',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}>
+                            {isSelected && (
+                              <Ionicons name="checkmark" size={14} color="white" />
+                            )}
+                          </View>
+                          
+                          {/* Employee Info - Single Line Layout */}
+                          <View style={{ flex: 1, marginLeft: 12, flexDirection: 'row', alignItems: 'center' }}>
+                            <Text style={{
+                              fontSize: 16,
+                              color: isSelected ? '#000000' : '#333',
+                              fontWeight: isSelected ? '600' : '500',
+                              flex: 1
+                            }}>
+                              {item.label || 'Unknown Employee'}
+                            </Text>
+                            {employeeEmail && (
+                              <Text style={{
+                                fontSize: 14,
+                                color: '#666',
+                                marginLeft: 8,
+                                fontStyle: 'italic'
+                              }}>
+                                {employeeEmail.length > 25 ? employeeEmail.substring(0, 22) + '...' : employeeEmail}
+                              </Text>
+                            )}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    }}
+                    badgeTextStyle={{
+                      fontSize: 12,
+                      color: '#1e40af',
+                      fontWeight: '600'
+                    }}
+                    badgeContainerStyle={{
+                      backgroundColor: '#e0f2fe',
+                      borderRadius: 12,
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                      marginRight: 4,
+                      marginBottom: 4
+                    }}
+                    closeAfterSelecting={false}
+                    zIndex={3000}
+                    zIndexInverse={1000}
+                  />
+                  
+                 
+                </View>
+              )}
+
               {/* Start Time */}
               <View className="mb-5">
                 <View className="flex-row items-center mb-2">
@@ -423,7 +1021,7 @@ const CreateEventModal = ({
               </View>
 
             </View>
-          </ScrollView>
+          </View>
         </View>
 
         {/* Fixed Action Button - Always positioned at bottom */}

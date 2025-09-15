@@ -16,6 +16,7 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
   });
   const [userRole, setUserRole] = React.useState(null);
   const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
+  const [activeMenuItem, setActiveMenuItem] = React.useState('chats'); // Track which menu item is active
   const navigation = useNavigation();
   const { logout } = useAuth();
 
@@ -61,22 +62,26 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
 
   const getMenuItems = () => {
     const baseItems = [
-      { id: 'chats', title: 'Chats', icon: 'chatbubbles', isActive: true },
-      { id: 'files', title: 'Files', icon: 'document-text' },
-      { id: 'material', title: 'Material', icon: 'cube' },
+      { id: 'chats', title: 'Chats', icon: 'chatbubbles', isActive: activeMenuItem === 'chats' },
+      { id: 'files', title: 'Files', icon: 'document-text', isActive: activeMenuItem === 'files' },
+      { id: 'material', title: 'Material', icon: 'cube', isActive: activeMenuItem === 'material' },
     ];
 
     // Only show Personnel menu item if user is not an Employee
     if (userRole !== 'Employee') {
-      baseItems.push({ id: 'personnel', title: 'Personnel.', icon: 'people' });
+      baseItems.push({ id: 'personnel', title: 'Personnel.', icon: 'people', isActive: activeMenuItem === 'personnel' });
     }
 
     return baseItems;
   };
 
   const handleNavigate = (itemId) => {
-    onNavigate(itemId);
-    onClose();
+    // Update the active menu item state to show visual feedback
+    setActiveMenuItem(itemId);
+    
+    // Add navigation specifically for Personnel item
+    
+    // Note: Other items only show visual feedback without navigation
   };
 
   const handleLogout = () => {

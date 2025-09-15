@@ -65,6 +65,7 @@ import UpdateProjectScreen from "./screens/UpdateProjectScreen";
 import TaskDetailsScreen from "./screens/TaskDetailsScreen";
 import LogsDetailScreen from "./screens/LogsDetailScreen";
 import CreatLogScreen from "./screens/CreatLogScreen";
+import PersonalScreen from "./screens/PersonalScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -144,7 +145,7 @@ const AppNavigator = () => {
           // Navigate to material screen
           break;
         case "personnel":
-          // Navigate to personnel screen
+          navigationRef.navigate("PersonalScreen");
           break;
         default:
           break;
@@ -412,6 +413,24 @@ const AppNavigator = () => {
                   <CustomHeaderForScreens
                     onMenuPress={handleMenuPress}
                     title="Create Logs"
+                  />
+                ),
+                headerBackTitleVisible: false,
+                headerStyle: {
+                  backgroundColor: "white",
+                },
+                headerShadowVisible: false,
+              }}
+            />
+            <Stack.Screen
+              name="PersonalScreen"
+              component={PersonalScreen}
+              options={{
+                headerShown: true,
+                header: () => (
+                  <CustomHeaderForScreens
+                    onMenuPress={handleMenuPress}
+                    title="Personnel"
                   />
                 ),
                 headerBackTitleVisible: false,

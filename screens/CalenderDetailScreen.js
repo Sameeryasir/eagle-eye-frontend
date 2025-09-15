@@ -208,11 +208,13 @@ const CalenderDetailScreen = ({ route, navigation }) => {
         
         // --- Ensure unique key for each task item ---
         // Business Rule: Create stable, unique keys to prevent React key warnings
-        // Use combination of task ID, index, and timestamp to ensure uniqueness
-        const uniqueKey = `task-${task.id || 'no-id'}-${index}-${startDate.getTime()}-${task.title?.replace(/\s+/g, '-') || 'untitled'}`;
+        // Use task ID as primary key, with fallback to ensure uniqueness
+        const taskId = task.id || `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const uniqueKey = `task-${taskId}`;
         
         return {
           id: uniqueKey,
+          key: uniqueKey, // Add explicit key property for React
           title: task.title || 'Untitled Task',
           startDate: startDate,
           endDate: endDate,
@@ -283,11 +285,13 @@ const CalenderDetailScreen = ({ route, navigation }) => {
         
         // --- Ensure unique key for each event item ---
         // Business Rule: Create stable, unique keys to prevent React key warnings
-        // Use combination of event ID, index, and timestamp to ensure uniqueness
-        const uniqueKey = `event-${event.id || 'no-id'}-${index}-${startDate.getTime()}-${event.title?.replace(/\s+/g, '-') || 'untitled'}`;
+        // Use event ID as primary key, with fallback to ensure uniqueness
+        const eventId = event.id || `event-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const uniqueKey = `event-${eventId}`;
         
         return {
           id: uniqueKey,
+          key: uniqueKey, // Add explicit key property for React
           title: event.title || 'Untitled Event',
           startDate: startDate,
           endDate: endDate,
