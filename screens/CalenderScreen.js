@@ -118,19 +118,13 @@ function CalenderScreen({ navigation }) {
         return;
       }
 
-      // ✅ FIX: Fetch events for today to avoid timezone issues
-      // Business Rule: Get events for today and let the calendar group them by local date
-      // Note: API only supports fetching events by specific date
-      console.log('CalenderScreen - Fetching events for today to avoid timezone issues');
+      // ✅ FIXED: Fetch ALL events like tasks service
+      // Business Rule: Get all events and let the calendar group them by local date
+      // This matches how tasks are handled - fetch all data and group on frontend
+      console.log('CalenderScreen - Fetching all events like tasks service');
       
-      // --- Get today's date in YYYY-MM-DD format for API ---
-      const today = new Date();
-      const todayDate = today.getFullYear() + '-' + 
-        String(today.getMonth() + 1).padStart(2, '0') + '-' + 
-        String(today.getDate()).padStart(2, '0');
-      
-      // --- Fetch events for today (API requires a specific date) ---
-      const response = await getEventsForLogInUser(todayDate);
+      // --- Fetch ALL events (no date parameter needed) ---
+      const response = await getEventsForLogInUser();
       
       if (response.success && response.data) {
         // --- Group events by date ---

@@ -77,7 +77,7 @@ const CalenderDetailScreen = ({ route, navigation }) => {
         return;
       }
       
-      const response = await getEventsForLogInUser(selectedDate); // Pass selectedDate parameter
+      const response = await getEventsForLogInUser(); // Fetch all events like tasks service
       console.log('=== fetchEvents Response ===');
       console.log('Response:', response);
       console.log('Response success:', response.success);
@@ -85,9 +85,27 @@ const CalenderDetailScreen = ({ route, navigation }) => {
       console.log('Response data length:', response.data?.length);
       
       if (response.success && response.data) {
-        console.log('=== Setting Events ===');
-        console.log('Events being set:', response.data);
-        setEvents(response.data);
+        console.log('=== Filtering Events by Selected Date ===');
+        console.log('All events:', response.data);
+        console.log('Selected date:', selectedDate);
+        
+        // --- Filter events by selected date (like tasks are handled) ---
+        // Business Rule: Filter all events to show only those for the selected date
+        const filteredEvents = response.data.filter(event => {
+          if (!event.startTime) return false;
+          
+          // Convert event date to local timezone and compare with selected date
+          const eventDate = new Date(event.startTime);
+          const eventDateString = eventDate.getFullYear() + '-' + 
+            String(eventDate.getMonth() + 1).padStart(2, '0') + '-' + 
+            String(eventDate.getDate()).padStart(2, '0');
+          
+          console.log(`Event "${event.title}" - Event Date: ${eventDateString}, Selected Date: ${selectedDate}`);
+          return eventDateString === selectedDate;
+        });
+        
+        console.log('Filtered events for selected date:', filteredEvents);
+        setEvents(filteredEvents);
         console.log('Events set successfully');
       } else {
         console.log('No events to set - response.success:', response.success, 'response.data:', response.data);

@@ -4,7 +4,7 @@ import {API_URL} from '@env'
 import refreshToken from '../utils/tokenRefresh';
 import { getUserRole } from '../utils/userRole';
 
-export async function getEventsForLogInUser(date) {
+export async function getEventsForLogInUser() {
     // Check user role - only Owner can access events
     const userRole = await getUserRole();
     if (userRole !== "Owner") {
@@ -18,13 +18,12 @@ export async function getEventsForLogInUser(date) {
         throw new Error('No token found');
     }
 
-    // --- FIXED: Always require a date parameter ---
-    // Business Rule: The API only supports fetching events by specific date
-    // If no date provided, use today's date as default
-    const targetDate = date ; // YYYY-MM-DD format
+    // --- FIXED: Fetch all events like tasks service ---
+    // Business Rule: Get all events and let frontend group them by date
+    // This matches the pattern used by getAllTasks service
     
     try {
-        const response = await axios.get(`${API_URL}/event/date/${targetDate}`, {
+        const response = await axios.get(`${API_URL}/event`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
@@ -40,7 +39,7 @@ export async function getEventsForLogInUser(date) {
             if (!newToken) throw new Error('Unable to refresh token.');
 
             // Retry the original request with new token
-            const retryResponse = await axios.get(`${API_URL}/event/date/${targetDate}`, {
+            const retryResponse = await axios.get(`${API_URL}/event`, {
                 headers: {
                     'Authorization': `Bearer ${newToken}`,
                     'Content-Type': 'application/json'

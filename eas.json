@@ -9,7 +9,7 @@
       "distribution": "internal",
       "env": {
         "NODE_ENV": "development",
-        "API_URL": "https://198229d9069c.ngrok-free.app"
+        "API_URL": "https://api.eagle-eye.ca/"
       },
       "android": {
         "buildType": "apk"
@@ -22,14 +22,14 @@
       },
       "env": {
         "NODE_ENV": "production",
-        "API_URL": "https://198229d9069c.ngrok-free.app"
+        "API_URL": "https://api.eagle-eye.ca/"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
         "NODE_ENV": "production",
-        "API_URL": "https://198229d9069c.ngrok-free.app"
+        "API_URL": "https://api.eagle-eye.ca/"
       }
     }
   },
