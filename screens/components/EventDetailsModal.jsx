@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, Modal, Alert, FlatList } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import Toast from 'react-native-toast-message';
 import UpdateEventModal from './UpdateEventModal';
 import { deleteEventById } from '../../services/event/deleteById';
+import { getUserRole } from '../../services/utils/userRole';
 
 const EventDetailsModal = ({ 
   visible, 
@@ -13,7 +14,40 @@ const EventDetailsModal = ({
 }) => {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const [userRole, setUserRole] = useState(null);
+  const [isLoadingRole, setIsLoadingRole] = useState(true);
+
+  // --- Fetch user role when modal becomes visible ---
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      if (visible) {
+        try {
+          setIsLoadingRole(true);
+          const role = await getUserRole();
+          setUserRole(role);
+          console.log('EventDetailsModal - User role:', role);
+        } catch (error) {
+          console.error('Error fetching user role:', error);
+          setUserRole(null);
+        } finally {
+          setIsLoadingRole(false);
+        }
+      }
+    };
+
+    fetchUserRole();
+  }, [visible]);
+
   const handleUpdate = () => {
+    // Check if user is Employee and show alert
+    if (userRole === 'Employee') {
+      Alert.alert(
+        'Access Denied',
+        'Employees cannot update events.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
     setShowUpdateModal(true);
   };
 
@@ -30,6 +64,15 @@ const EventDetailsModal = ({
   };
 
   const handleDelete = () => {
+    // Check if user is Employee and show alert
+    if (userRole === 'Employee') {
+      Alert.alert(
+        'Access Denied',
+        'Employees cannot delete events.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
     setDeleteDialogVisible(true);
   };
 
@@ -158,21 +201,9 @@ const EventDetailsModal = ({
                 </Text>
               </View>
               
-              {/* --- Event Description Section --- */}
-              <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
-                <View className="flex-row items-center mb-3">
-                  <View className="w-8 h-8 bg-green-100 rounded-full items-center justify-center mr-3">
-                    <Ionicons name="list" size={16} color="#10B981" />
-                  </View>
-                  <Text className="text-sm font-semibold text-gray-700">Description</Text>
-                </View>
-                <Text className="text-base text-gray-700 leading-6 ml-11">
-                  {event.description || 'No description available'}
-                </Text>
-              </View>
 
               {/* --- Event Time Section --- */}
-              <View className="bg-white rounded-2xl p-4 mb-6 shadow-sm">
+              <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
                 <View className="flex-row items-center mb-3">
                   <View className="w-8 h-8 bg-orange-100 rounded-full items-center justify-center mr-3">
                     <Ionicons name="time" size={16} color="#F59E0B" />
@@ -183,21 +214,129 @@ const EventDetailsModal = ({
                   {event.startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })} - {event.endDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
                 </Text>
               </View>
+
+              {/* --- Project Assignment Section --- */}
+              {event.projects && event.projects.length > 0 && (
+                <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
+                  <View className="flex-row items-center mb-3">
+                    <View className="w-8 h-8 bg-purple-100 rounded-full items-center justify-center mr-3">
+                      <Ionicons name="folder" size={16} color="#8B5CF6" />
+                    </View>
+                    <Text className="text-sm font-semibold text-gray-700">Assigned Projects</Text>
+                  </View>
+                  <View>
+                    <FlatList
+                      data={event.projects}
+                      keyExtractor={(item, index) => `project-${index}`}
+                      renderItem={({ item: project, index }) => (
+                        <View className="flex-row items-start mb-3">
+                          {/* Project Number Badge - Left Side */}
+                          <View className="mr-3 mt-1">
+                            <View className=" items-center justify-center">
+                              <Text className="text-sm font-bold text-black">
+                                {index + 1}
+                              </Text>
+                            </View>
+                          </View>
+                          
+                          {/* Project Card */}
+                          <View 
+                            className="bg-gray-50 rounded-xl p-3 border border-gray-200 flex-1"
+                            style={{
+                              shadowColor: '#000',
+                              shadowOffset: { width: 0, height: 1 },
+                              shadowOpacity: 0.05,
+                              shadowRadius: 2,
+                              elevation: 1,
+                            }}
+                          >
+                            {/* Project Name */}
+                            <View className="flex-row items-center mb-2">
+                              <View className="w-6 h-6 bg-purple-200 rounded-full items-center justify-center mr-2">
+                                <Ionicons name="folder-outline" size={12} color="#8B5CF6" />
+                              </View>
+                              <Text className="text-base font-semibold text-gray-800 flex-1">
+                                {project.name || 'Unnamed Project'}
+                              </Text>
+                            </View>
+                            
+                             {/* Project Description */}
+                             {project.description && (
+                               <View className="ml-8">
+                                 <Text className="text-sm text-gray-600 leading-5">
+                                   {project.description.length > 10 
+                                     ? project.description.substring(0, 10) + '...' 
+                                     : project.description
+                                   }
+                                 </Text>
+                               </View>
+                             )}
+                            
+                            {/* Show placeholder if no description */}
+                            {!project.description && (
+                              <View className="ml-8">
+                                <Text className="text-sm text-gray-400 italic">
+                                  No description available
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                        </View>
+                      )}
+                      scrollEnabled={true}
+                      showsVerticalScrollIndicator={false}
+                      nestedScrollEnabled={true}
+                      initialNumToRender={2}
+                      maxToRenderPerBatch={2}
+                      windowSize={5}
+                      removeClippedSubviews={true}
+                      style={{ maxHeight: 200 }}
+                      contentContainerStyle={{ paddingBottom: 10 }}
+                    />
+                  </View>
+                </View>
+              )}
+
+           
               
               {/* --- Action Buttons --- */}
-              <View className="flex-row space-x-3 gap-4">
+              <View className="flex-row space-x-3 gap-4 mb-6">
                
                 <TouchableOpacity
                   onPress={handleUpdate}
-                  className="flex-1 bg-gray-200 py-3 rounded-xl"
+                  disabled={isLoadingRole}
+                  className={`flex-1 py-3 rounded-xl ${
+                    isLoadingRole 
+                      ? 'bg-gray-100' 
+                      : 'bg-gray-200'
+                  }`}
+                  style={{ opacity: isLoadingRole ? 0.5 : 1 }}
                 >
-                  <Text className="text-gray-700 text-center font-semibold text-base">Update</Text>
+                  <Text className={`text-center font-semibold text-base ${
+                    isLoadingRole 
+                      ? 'text-gray-400' 
+                      : 'text-gray-700'
+                  }`}>
+                    Update
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleDelete}
-                  className="flex-1 bg-black py-3 rounded-xl"
+                  disabled={isLoadingRole}
+                  className={`flex-1 py-3 rounded-xl ${
+                    isLoadingRole 
+                      ? 'bg-gray-100' 
+                      : 'bg-black'
+                  }`}
+                  style={{ opacity: isLoadingRole ? 0.5 : 1 }}
                 >
-                  <Text className="text-white text-center font-semibold text-base">Delete</Text>
+                  <Text className={`text-center font-semibold text-base ${
+                    isLoadingRole 
+                      ? 'text-gray-400' 
+                      : 'text-white'
+                  }`}>
+                    Delete
+                  </Text>
                 </TouchableOpacity>
               </View>
             </>

@@ -23,7 +23,8 @@ const CreateEventModal = ({
     startTime: '',
     endTime: '',
     isProject: false, // Add checkbox for project designation
-    
+    assignedTo: [], // Store selected employees (backend expects this field)
+    projects: [] // Store selected projects (backend expects this field)
   });
 
   // --- State for time pickers ---
@@ -95,14 +96,20 @@ const CreateEventModal = ({
   };
 
   const resetEventForm = () => {
+    console.log('=== Resetting Event Form ===');
+    console.log('Before reset - assignedTo:', eventForm.assignedTo);
+    console.log('Before reset - projects:', eventForm.projects);
+    console.log('Before reset - selectedEmployeeValues:', selectedEmployeeValues);
+    console.log('Before reset - selectedProjectValues:', selectedProjectValues);
+    
     setEventForm({
       title: '',
       description: '',
       startTime: '',
       endTime: '',
       isProject: false, // Reset checkbox to unchecked
-      assignedEmployees: [], // Reset selected employees
-      selectedProjects: [] // Reset selected projects
+      assignedTo: [], // Reset assignedTo field (for employees)
+      projects: [] // Reset projects field (for projects)
     });
     setStartTime(new Date());
     setEndTime(new Date());
@@ -110,6 +117,9 @@ const CreateEventModal = ({
     setEmployeeDropdownOpen(false); // Close dropdown when form is reset
     setSelectedProjectValues([]); // Reset project selection
     setProjectDropdownOpen(false); // Close project dropdown when form is reset
+    
+    console.log('Form reset completed');
+    console.log('=== End Form Reset ===');
   };
 
   // --- Helper function to show custom error dialog ---
@@ -264,14 +274,17 @@ const CreateEventModal = ({
     handleEventFormChange('isProject', isChecked);
     
     if (isChecked) {
-      // If checkbox is checked, fetch employees
-      console.log('Project checkbox is checked - fetching employees');
+      // If checkbox is checked, fetch employees and clear project selection
+      console.log('Project checkbox is checked - fetching employees and clearing projects');
       fetchEmployees();
+      // Clear project selection when switching to employee mode
+      setSelectedProjectValues([]);
+      handleEventFormChange('projects', []); // Clear projects field
     } else {
-      // If checkbox is unchecked, clear selected employees (keep project selection)
+      // If checkbox is unchecked, clear selected employees and keep project selection
       console.log('Project checkbox is unchecked - clearing employees');
       setSelectedEmployeeValues([]);
-      handleEventFormChange('assignedEmployees', []);
+      handleEventFormChange('assignedTo', []); // Clear assignedTo field (employees)
     }
   };
 
@@ -289,13 +302,26 @@ const CreateEventModal = ({
       .map(proj => proj.project);
     console.log('Found selected projects:', selectedProjects);
     
-    handleEventFormChange('selectedProjects', selectedProjects);
+    // Store project objects in projects field (backend expects this for projects)
+    handleEventFormChange('projects', selectedProjects);
+    
+    // Clear employee selection when projects are selected (mutual exclusivity)
+    if (values.length > 0) {
+      setSelectedEmployeeValues([]);
+      handleEventFormChange('assignedTo', []);
+      console.log('Cleared employee selection due to project selection');
+    }
+    
     console.log('Updated form with projects:', selectedProjects);
     console.log('=== End handleProjectSelection ===');
   };
 
   // --- Handle multiple employee selection from dropdown ---
   const handleEmployeeSelection = (values) => {
+    console.log('=== Employee Selection Debug ===');
+    console.log('Selected values:', values);
+    console.log('Available employees:', employees);
+    
     setSelectedEmployeeValues(values);
     
     // Find the selected employee objects
@@ -303,7 +329,20 @@ const CreateEventModal = ({
       .filter(emp => values.includes(emp.value))
       .map(emp => emp.employee);
     
-    handleEventFormChange('assignedEmployees', selectedEmployees);
+    console.log('Selected employee objects:', selectedEmployees);
+    console.log('Employee IDs being stored:', selectedEmployees.map(emp => emp.id));
+    
+    // Store employee objects in assignedTo field (backend expects this for employees)
+    handleEventFormChange('assignedTo', selectedEmployees);
+    
+    // Clear project selection when employees are selected (mutual exclusivity)
+    if (values.length > 0) {
+      setSelectedProjectValues([]);
+      handleEventFormChange('projects', []);
+      console.log('Cleared project selection due to employee selection');
+    }
+    
+    console.log('=== End Employee Selection Debug ===');
   };
 
   // --- Time picker handlers ---
@@ -388,9 +427,22 @@ const CreateEventModal = ({
       return;
     }
 
-    // --- Project-specific validation removed ---
-    // Business Rule: Employee and project selection are for UI only, not sent to backend
-    // Validation for project assignment is handled in UI state only
+    // --- Project-specific validation ---
+    // Business Rule: Send ONLY ONE type at a time - either employees OR projects, never both
+    // This ensures the API receives clean, unambiguous data
+    
+    // Validation: Ensure only one assignment type is selected
+    const hasEmployees = eventForm.isProject && eventForm.assignedTo && eventForm.assignedTo.length > 0;
+    const hasProjects = !eventForm.isProject && eventForm.projects && eventForm.projects.length > 0;
+    
+    // Additional safety check: prevent both from being true (should not happen with UI logic)
+    if (hasEmployees && hasProjects) {
+      showErrorDialog(
+        'Invalid Assignment',
+        'You cannot assign both employees and projects to the same event. Please choose one assignment type.'
+      );
+      return;
+    }
 
     setIsCreating(true);
 
@@ -436,14 +488,33 @@ const CreateEventModal = ({
       const timezoneOffset = new Date().getTimezoneOffset(); // Minutes offset from UTC
       const timezoneOffsetHours = -timezoneOffset / 60; // Convert to hours (negative because getTimezoneOffset returns opposite)
       
-      // Format the event data - Backend DTO accepts: title, description, startTime, endTime
-      // Business Rule: Employee selection is for UI only, not included in backend data
+      // Format the event data - Backend DTO accepts: title, description, startTime, endTime, assignedTo, projects
+      // Business Rule: Send ONLY ONE type at a time - either employees OR projects, never both
+      let assignedToIds = [];
+      let projectIds = [];
+      
+      if (eventForm.isProject && eventForm.assignedTo && eventForm.assignedTo.length > 0) {
+        // Case 1: "This is a Project" is checked - send employee IDs in assignedTo
+        assignedToIds = eventForm.assignedTo.map(emp => emp.id);
+        console.log('Sending EMPLOYEE IDs to API (assignedTo):', assignedToIds);
+      } else if (!eventForm.isProject && eventForm.projects && eventForm.projects.length > 0) {
+        // Case 2: "This is a Project" is NOT checked - send project IDs in projects
+        projectIds = eventForm.projects.map(proj => proj.id);
+        console.log('Sending PROJECT IDs to API (projects):', projectIds);
+      } else {
+        // Case 3: No assignments - send empty arrays
+        assignedToIds = [];
+        projectIds = [];
+        console.log('No assignments - sending empty arrays to API');
+      }
+      
       const eventData = {
         title: eventForm.title.trim(),
         description: eventForm.description.trim() || '',
         startTime: eventStartTime.toISOString(), // ISO 8601 string format (UTC)
-        endTime: eventEndTime.toISOString() // ISO 8601 string format (UTC)
-        // Note: Employee data is kept in UI state but not sent to backend
+        endTime: eventEndTime.toISOString(), // ISO 8601 string format (UTC)
+        assignedTo: assignedToIds, // Employee IDs (when isProject is true)
+        projects: projectIds // Project IDs (when isProject is false)
       };
 
       console.log('=== Event Creation Debug (Timezone-Aware) ===');
@@ -468,13 +539,19 @@ const CreateEventModal = ({
       console.log('Local End Time:', eventEndTime.toLocaleString());
       console.log('UTC Start Time:', eventData.startTime);
       console.log('UTC End Time:', eventData.endTime);
-      console.log('--- UI STATE DEBUG (Not Sent to Backend) ---');
+      console.log('--- UI STATE DEBUG ---');
       console.log('Is Project:', eventForm.isProject);
-      console.log('Selected Projects (UI Only):', eventForm.selectedProjects);
-      console.log('Assigned Employees (UI Only):', eventForm.assignedEmployees);
-      console.log('Note: Project and employee data are for UI display only, not sent to backend');
+      console.log('AssignedTo (UI State):', eventForm.assignedTo);
+      console.log('Projects (UI State):', eventForm.projects);
+      console.log('Selected Employee Values:', selectedEmployeeValues);
+      console.log('Selected Project Values:', selectedProjectValues);
       console.log('--- BACKEND DATA (DTO Compliant) ---');
       console.log('Event Data Being Sent:', eventData);
+      console.log('AssignedTo Array (Employee IDs):', eventData.assignedTo);
+      console.log('Projects Array (Project IDs):', eventData.projects);
+      console.log('Assignment Type:', eventForm.isProject ? 'Employees' : 'Projects');
+      console.log('Employee Count:', eventData.assignedTo.length);
+      console.log('Project Count:', eventData.projects.length);
       console.log('=== End Event Creation Debug ===');
 
       // Call the createEvent service
@@ -626,10 +703,44 @@ const CreateEventModal = ({
               {/* Project Selection Dropdown - Hidden when "This is a Project" is checked */}
               {!eventForm.isProject && (
                 <View className="mb-5">
-                <View className="flex-row items-center mb-2">
-                  <Ionicons name="folder-open" size={16} color="#374151" style={{ marginRight: 6 }} />
-                  <Text className="text-[16px] font-semibold text-[#333]">Select Project</Text>
-                </View>
+                  <View className="flex-row items-center justify-between mb-2">
+                    <View className="flex-row items-center">
+                      <Ionicons name="folder-open" size={16} color="#374151" style={{ marginRight: 6 }} />
+                      <Text className="text-[16px] font-semibold text-[#333]">Select Project</Text>
+                    </View>
+                    
+                    {/* Select All / Unselect All Button */}
+                    {projects.length > 0 && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          const allProjectIds = projects.map(proj => proj.value);
+                          const isAllSelected = allProjectIds.every(id => selectedProjectValues.includes(id));
+                          
+                          if (isAllSelected) {
+                            // Unselect all projects
+                            setSelectedProjectValues([]);
+                            handleEventFormChange('projects', []);
+                            console.log('Unselected all projects');
+                          } else {
+                            // Select all projects
+                            setSelectedProjectValues(allProjectIds);
+                            const allProjects = projects.map(proj => proj.project);
+                            handleEventFormChange('projects', allProjects);
+                            console.log('Selected all projects:', allProjectIds);
+                          }
+                        }}
+                        className="bg-blue-100 px-3 py-1 rounded-lg"
+                        activeOpacity={0.7}
+                      >
+                        <Text className="text-blue-600 text-[12px] font-medium">
+                          {projects.every(proj => selectedProjectValues.includes(proj.value)) 
+                            ? 'Unselect All' 
+                            : 'Select All'
+                          }
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 
                 {/* Project Dropdown Picker - Single Selection */}
                 <DropDownPicker
@@ -650,7 +761,7 @@ const CreateEventModal = ({
                     fontSize: 16,
                     fontWeight: '500'
                   }}
-                  multipleText={`${selectedProjectValues.length} Projects selected`}
+                  multipleText={`${selectedProjectValues.length} Project${selectedProjectValues.length !== 1 ? 's' : ''} Selected`}
                   multipleTextStyle={{
                     color: '#000000',
                     fontSize: 16,
@@ -802,9 +913,43 @@ const CreateEventModal = ({
               {/* Employee Selection Dropdown - Only show when project is checked */}
               {eventForm.isProject && (
                 <View className="mb-5">
-                  <View className="flex-row items-center mb-2">
-                    <Ionicons name="people" size={16} color="#374151" style={{ marginRight: 6 }} />
-                    <Text className="text-[16px] font-semibold text-[#333]">Assign to Employee</Text>
+                  <View className="flex-row items-center justify-between mb-2">
+                    <View className="flex-row items-center">
+                      <Ionicons name="people" size={16} color="#374151" style={{ marginRight: 6 }} />
+                      <Text className="text-[16px] font-semibold text-[#333]">Assign to Employee</Text>
+                    </View>
+                    
+                    {/* Select All / Unselect All Button */}
+                    {employees.length > 0 && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          const allEmployeeIds = employees.map(emp => emp.value);
+                          const isAllSelected = allEmployeeIds.every(id => selectedEmployeeValues.includes(id));
+                          
+                          if (isAllSelected) {
+                            // Unselect all employees
+                            setSelectedEmployeeValues([]);
+                            handleEventFormChange('assignedTo', []);
+                            console.log('Unselected all employees');
+                          } else {
+                            // Select all employees
+                            setSelectedEmployeeValues(allEmployeeIds);
+                            const allEmployees = employees.map(emp => emp.employee);
+                            handleEventFormChange('assignedTo', allEmployees);
+                            console.log('Selected all employees:', allEmployeeIds);
+                          }
+                        }}
+                        className="bg-blue-100 px-3 py-1 rounded-lg"
+                        activeOpacity={0.7}
+                      >
+                        <Text className="text-blue-600 text-[12px] font-medium">
+                          {employees.every(emp => selectedEmployeeValues.includes(emp.value)) 
+                            ? 'Unselect All' 
+                            : 'Select All'
+                          }
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                   
                   {/* React Native Dropdown Picker - Multiple Selection with Checkboxes */}
@@ -824,7 +969,7 @@ const CreateEventModal = ({
                       fontSize: 16,
                       fontWeight: '500'
                     }}
-                    multipleText="Employees selected"
+                    multipleText={`${selectedEmployeeValues.length} Employee${selectedEmployeeValues.length !== 1 ? 's' : ''} Selected`}
                     multipleTextStyle={{
                       color: '#1e40af',
                       fontSize: 16,
@@ -941,7 +1086,7 @@ const CreateEventModal = ({
                           </View>
                           
                           {/* Employee Info - Single Line Layout */}
-                          <View style={{ flex: 1, marginLeft: 12, flexDirection: 'row', alignItems: 'center' }}>
+                          <View style={{ flex: 1, marginLeft: 12 }}>
                             <Text style={{
                               fontSize: 16,
                               color: isSelected ? '#000000' : '#333',
@@ -949,17 +1094,17 @@ const CreateEventModal = ({
                               flex: 1
                             }}>
                               {item.label || 'Unknown Employee'}
+                              {employeeEmail && (
+                                <Text style={{
+                                  fontSize: 14,
+                                  color: '#666',
+                                  marginLeft: 8,
+                                  fontStyle: 'italic'
+                                }}>
+                                  {employeeEmail.length > 25 ? employeeEmail.substring(0, 22) + '...' : employeeEmail}
+                                </Text>
+                              )}
                             </Text>
-                            {employeeEmail && (
-                              <Text style={{
-                                fontSize: 14,
-                                color: '#666',
-                                marginLeft: 8,
-                                fontStyle: 'italic'
-                              }}>
-                                {employeeEmail.length > 25 ? employeeEmail.substring(0, 22) + '...' : employeeEmail}
-                              </Text>
-                            )}
                           </View>
                         </TouchableOpacity>
                       );

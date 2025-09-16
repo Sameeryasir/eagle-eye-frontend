@@ -69,10 +69,12 @@ const CalenderDetailScreen = ({ route, navigation }) => {
     try {
       setIsLoadingEvents(true);
       
-      // Check user role - only Owner can fetch events
+      // Check user role - Owner, Employee, and Manager can fetch events
       const userRole = await getUserRole();
-      if (userRole !== "Owner") {
-        console.log('User role is not Owner, skipping event fetch');
+      const allowedRoles = ["Owner", "Employee", "Manager"];
+      
+      if (!allowedRoles.includes(userRole)) {
+        console.log('User role is not allowed, skipping event fetch. User role:', userRole);
         setEvents([]);
         return;
       }
@@ -242,8 +244,45 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           startTime: event.startTime,
           endTime: event.endTime,
           startTimeType: typeof event.startTime,
-          endTimeType: typeof event.endTime
+          endTimeType: typeof event.endTime,
+          // --- Debug: Log project and employee assignment information ---
+          projects: event.projects,
+          projectsCount: event.projects ? event.projects.length : 0,
+          assignedTo: event.assignedTo,
+          assignedToCount: event.assignedTo ? event.assignedTo.length : 0
         });
+        
+        // --- Debug: Log detailed project information ---
+        if (event.projects && event.projects.length > 0) {
+          console.log(`Event "${event.title}" has ${event.projects.length} project(s):`);
+          event.projects.forEach((project, projectIndex) => {
+            console.log(`  Project ${projectIndex + 1}:`, {
+              id: project.id,
+              name: project.name,
+              description: project.description,
+              startDate: project.startDate,
+              createdAt: project.createdAt
+            });
+          });
+        } else {
+          console.log(`Event "${event.title}" has no projects assigned`);
+        }
+        
+        // --- Debug: Log detailed employee assignment information ---
+        if (event.assignedTo && event.assignedTo.length > 0) {
+          console.log(`Event "${event.title}" has ${event.assignedTo.length} employee(s) assigned:`);
+          event.assignedTo.forEach((employee, employeeIndex) => {
+            console.log(`  Employee ${employeeIndex + 1}:`, {
+              id: employee.id,
+              email: employee.email,
+              first_name: employee.first_name,
+              last_name: employee.last_name,
+              title: employee.title
+            });
+          });
+        } else {
+          console.log(`Event "${event.title}" has no employees assigned`);
+        }
         
         // --- FIXED: Convert UTC times to local time using expo-localization ---
         // Business Rule: Events come from server in UTC format, convert to user's local timezone
@@ -300,7 +339,10 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           priority: event.priority || 'medium',
           status: event.status || 'pending',
           originalEventId: event.id,
-          type: 'event' // Mark as event
+          type: 'event', // Mark as event
+          // --- Add project and employee assignment information ---
+          assignedTo: event.assignedTo || [],
+          projects: event.projects || []
         };
       });
       

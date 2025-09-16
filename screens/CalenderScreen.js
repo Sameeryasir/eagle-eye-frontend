@@ -110,10 +110,12 @@ function CalenderScreen({ navigation }) {
   // --- Fetch Events from API ---
   const fetchEvents = async () => {
     try {
-      // Check user role - only Owner can access events
+      // Check user role - Owner, Employee, and Manager can access events
       const userRole = await getUserRole();
-      if (userRole !== "Owner") {
-        console.log('CalenderScreen - User role is not Owner, skipping event fetch');
+      const allowedRoles = ["Owner", "Employee", "Manager"];
+      
+      if (!allowedRoles.includes(userRole)) {
+        console.log('CalenderScreen - User role is not allowed, skipping event fetch. User role:', userRole);
         setEvents({});
         return;
       }
@@ -163,7 +165,10 @@ function CalenderScreen({ navigation }) {
             endTimeFormatted: event.endTime ? formatDateTime(event.endTime) : 'No end time',
             description: event.description || 'No description',
             priority: event.priority,
-            status: event.status
+            status: event.status,
+            // --- Add project and employee assignment information ---
+            assignedTo: event.assignedTo || [],
+            projects: event.projects || []
           });
         });
         

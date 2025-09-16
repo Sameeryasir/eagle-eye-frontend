@@ -5,10 +5,12 @@ import refreshToken from '../utils/tokenRefresh';
 import { getUserRole } from '../utils/userRole';
 
 export async function getEventsForLogInUser() {
-    // Check user role - only Owner can access events
+    // Check user role - Owner, Employee, and Manager can access events
     const userRole = await getUserRole();
-    if (userRole !== "Owner") {
-        throw new Error('Access denied. Only Owner role can access events.');
+    const allowedRoles = ["Owner", "Employee", "Manager"];
+    
+    if (!allowedRoles.includes(userRole)) {
+        throw new Error('Access denied. Only Owner, Employee, and Manager roles can access events.');
     }
 
     let token = await AsyncStorage.getItem('token');
