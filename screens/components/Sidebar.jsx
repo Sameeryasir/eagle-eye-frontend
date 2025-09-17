@@ -80,6 +80,12 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
     setActiveMenuItem(itemId);
     
     // Add navigation specifically for Personnel item
+    if (itemId === 'personnel') {
+      // Close sidebar first
+      onClose();
+      // Navigate to PersonalScreen
+      navigation.navigate('PersonalScreen');
+    }
     
     // Note: Other items only show visual feedback without navigation
   };

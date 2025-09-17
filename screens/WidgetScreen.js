@@ -84,7 +84,7 @@ function WidgetScreen({ navigation, route }) {
         createdAt: log.createdAt, // Preserve original createdAt for filtering
         description: log.note || 'No description',
         images: log.images || [], // Keep all images for the log
-        image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : require("../assets/robot.png"),
+        image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : null,
       }));
 
       // Sort logs by date (newest first)
@@ -270,7 +270,7 @@ function WidgetScreen({ navigation, route }) {
             createdAt: log.createdAt,
             description: log.note || 'No description',
             images: log.images || [],
-            image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : require("../assets/robot.png"),
+            image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : null,
           }));
 
           // Sort logs by date (newest first)
@@ -816,17 +816,21 @@ function WidgetScreen({ navigation, route }) {
         currentScreen="chats" // ✅ ADD: Tell bottom nav we're on chats/widget screen
         onAddPress={() => {
           // --- FAB Navigation Logic Based on User Role and Widget States ---
+          console.log("WidgetScreen - FAB pressed, userRole:", userRole, "projectId:", projectId, "tasks.length:", tasks.length, "logs.length:", logs.length);
           
           // For Manager role: If tasks widget is empty, navigate to CreateTaskScreen
           if (userRole === "Manager" && tasks.length === 0) {
             const navigationParams = { projectId: projectId }; // Use projectId from route params
+            console.log("WidgetScreen - Manager navigating to CreateTask with projectId:", projectId);
             navigation.navigate("CreateTask", navigationParams);
             return;
           }
           
-          // For Employee role: If logs widget is empty, navigate to CreateLogScreen with projectId from params
-          if (userRole === "Employee" && logs.length === 0) {
+          // For Employee role: Always allow navigation to CreateLogScreen (MCP Context 7)
+          // Business Rule: Employees should be able to create logs regardless of existing logs
+          if (userRole === "Employee") {
             const navigationParams = { projectId: projectId }; // Use projectId from route params
+            console.log("WidgetScreen - Employee FAB pressed, navigating to CreatLog with projectId:", projectId);
             navigation.navigate("CreatLog", navigationParams);
             return;
           }

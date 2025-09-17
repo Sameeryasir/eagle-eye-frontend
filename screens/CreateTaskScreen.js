@@ -315,10 +315,7 @@ function CreateTaskScreen({ navigation, route }) {
       return;
     }
 
-    if (!taskData.description.trim()) {
-      Alert.alert('Error', 'Task description is required');
-      return;
-    }
+    // Description is now optional - no validation required
 
     // --- Validation: Dates & Times (MCP Context 7) ---
     // Business Rule: Validate startTime >= minStartTime (when draft was created) and endTime > startTime
@@ -512,11 +509,11 @@ function CreateTaskScreen({ navigation, route }) {
                 <View className="mb-5">
                   <View className="flex-row items-center mb-2">
                     <Ionicons name="chatbubble-ellipses" size={16} color="#374151" style={{ marginRight: 6 }} />
-                    <Text className="text-[16px] font-semibold text-[#333]">Description *</Text>
+                    <Text className="text-[16px] font-semibold text-[#333]">Description (Optional)</Text>
                   </View>
                   <TextInput
                     className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333] h-24"
-                    placeholder="Describe your task"
+                    placeholder="Describe your task (optional)"
                     value={taskData.description}
                     onChangeText={(value) => handleInputChange('description', value)}
                     multiline
@@ -650,7 +647,7 @@ function CreateTaskScreen({ navigation, route }) {
                 <View className="mb-5">
                   <View className="flex-row items-center mb-2">
                     <Ionicons name="calendar" size={16} color="#374151" style={{ marginRight: 6 }} />
-                    <Text className="text-[16px] font-semibold text-[#333]">End Date & Time *</Text>
+                    <Text className="text-[16px] font-semibold text-[#333]">End Date & Time (Optional)</Text>
                   </View>
                   <View className="flex-row gap-2">
                     <TouchableOpacity

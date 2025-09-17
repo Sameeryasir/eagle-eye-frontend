@@ -1572,6 +1572,7 @@ function ViewAllTasksScreen({ navigation, route }) {
       )}
 
       {/* Hide CustomBottomNav when UpdateTaskModal is visible */}
+      {/* CustomBottomNav will automatically hide FAB for Employee role */}
       {!updateTaskModalVisible && <CustomBottomNav onAddPress={handleFabPress} />}
 
       <Sidebar

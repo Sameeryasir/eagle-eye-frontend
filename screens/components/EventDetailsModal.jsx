@@ -229,7 +229,7 @@ const EventDetailsModal = ({
                       data={event.projects}
                       keyExtractor={(item, index) => `project-${index}`}
                       renderItem={({ item: project, index }) => (
-                        <View className="flex-row items-start mb-3">
+                        <View className="flex-row items-start mb-2">
                           {/* Project Number Badge - Left Side */}
                           <View className="mr-3 mt-1">
                             <View className=" items-center justify-center">
@@ -241,7 +241,7 @@ const EventDetailsModal = ({
                           
                           {/* Project Card */}
                           <View 
-                            className="bg-gray-50 rounded-xl p-3 border border-gray-200 flex-1"
+                            className="bg-gray-50 rounded-xl p-2 border border-gray-200 flex-1"
                             style={{
                               shadowColor: '#000',
                               shadowOffset: { width: 0, height: 1 },
@@ -290,8 +290,8 @@ const EventDetailsModal = ({
                       maxToRenderPerBatch={2}
                       windowSize={5}
                       removeClippedSubviews={true}
-                      style={{ maxHeight: 200 }}
-                      contentContainerStyle={{ paddingBottom: 10 }}
+                      style={{ maxHeight: 120 }}
+                      contentContainerStyle={{ paddingBottom: 8 }}
                     />
                   </View>
                 </View>

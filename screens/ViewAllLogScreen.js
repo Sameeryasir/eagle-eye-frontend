@@ -128,7 +128,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                   createdAt: task.log.createdAt, // Keep original createdAt for filtering (format: "2025-08-28T10:44:55.453Z")
                   description: task.log.note || 'No description',
                   images: task.log.images || [],
-                  image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
+                  image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : null,
                   projectName: project.name,
                 };
                 allLogs.push(transformedLog);
@@ -385,7 +385,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
           createdAt: log.createdAt,
           description: log.note || 'No description',
           images: log.images || [],
-          image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : require("../assets/robot.png"),
+          image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : null,
           projectName: projectName,
         }));
 
@@ -443,7 +443,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         createdAt: log.createdAt, // Preserve original createdAt for filtering (format: "2025-08-28T10:44:55.453Z")
         description: log.note || 'No description',
         images: log.images || [], // Keep all images for the log
-        image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : require("../assets/robot.png"),
+        image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : null,
         projectName: projectName, // Use the project name from the filter
       }));
 
@@ -777,7 +777,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                 createdAt: task.log.createdAt,
                 description: task.log.note || 'No description',
                 images: task.log.images || [],
-                image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : require("../assets/robot.png"),
+                image: task.log.images && task.log.images.length > 0 ? { uri: task.log.images[0].imageUrl } : null,
                 projectName: project.name,
               };
               allLogs.push(transformedLog);
@@ -825,7 +825,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                   createdAt: log.createdAt,
                   description: log.note || 'No description',
                   images: log.images || [],
-                  image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : require("../assets/robot.png"),
+                  image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : null,
                   projectName: projectName,
                 }));
 
@@ -864,7 +864,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                 createdAt: log.createdAt,
                 description: log.note || 'No description',
                 images: log.images || [],
-                image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : require("../assets/robot.png"),
+                image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : null,
                 projectName: selectedProject.name,
               }));
 

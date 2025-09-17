@@ -215,7 +215,7 @@ function LogsDetailScreen({ navigation, route }) {
   // Get actual uploaded images from log
   const logImages = log && log.images && log.images.length > 0
     ? log.images.map(img => ({ uri: img.imageUrl }))
-    : [require('../assets/robot.png')]; // Fallback to default image
+    : []; // No fallback image
 
   const nextImage = () => {
     setCurrentImageIndex((prevIndex) =>
@@ -587,95 +587,135 @@ function LogsDetailScreen({ navigation, route }) {
             <View style={{
               padding: cardPadding
             }}>
-
-
-              {/* Image Carousel */}
-              <View style={{
-                marginTop: 16,
-                borderRadius: 12,
-                overflow: 'hidden',
-                backgroundColor: '#F9FAFB',
-                borderWidth: 1,
-                borderColor: '#F3F4F6',
-                position: 'relative'
-              }}>
-                <Image
-                  source={logImages[currentImageIndex]}
-                  style={{
-                    width: '100%',
-                    height: imageHeight,
-                  }}
-                  contentFit="cover"
-                />
-
-                {/* Navigation Arrows */}
-                <TouchableOpacity
-                  onPress={previousImage}
-                  style={{
-                    position: 'absolute',
-                    left: 12,
-                    top: '50%',
-                    transform: [{ translateY: -20 }],
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Ionicons name="chevron-back" size={24} color="white" />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={nextImage}
-                  style={{
-                    position: 'absolute',
-                    right: 12,
-                    top: '50%',
-                    transform: [{ translateY: -20 }],
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Ionicons name="chevron-forward" size={24} color="white" />
-                </TouchableOpacity>
-
-                {/* Image Counter */}
-                <View style={{
-                  position: 'absolute',
-                  bottom: 12,
-                  right: 12,
-                  backgroundColor: 'rgba(0, 0, 0, 0.6)',
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  borderRadius: 12,
-                }}>
-                  <Text style={{
-                    color: 'white',
-                    fontSize: 12,
-                    fontWeight: '600',
+              {logImages.length > 0 ? (
+                <>
+                  {/* Image Carousel */}
+                  <View style={{
+                    marginTop: 16,
+                    borderRadius: 12,
+                    overflow: 'hidden',
+                    backgroundColor: '#F9FAFB',
+                    borderWidth: 1,
+                    borderColor: '#F3F4F6',
+                    position: 'relative'
                   }}>
-                    {currentImageIndex + 1} / {logImages.length}
+                    <Image
+                      source={logImages[currentImageIndex]}
+                      style={{
+                        width: '100%',
+                        height: imageHeight,
+                      }}
+                      contentFit="cover"
+                    />
+
+                    {/* Navigation Arrows */}
+                    <TouchableOpacity
+                      onPress={previousImage}
+                      style={{
+                        position: 'absolute',
+                        left: 12,
+                        top: '50%',
+                        transform: [{ translateY: -20 }],
+                        width: 40,
+                        height: 40,
+                        borderRadius: 20,
+                        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Ionicons name="chevron-back" size={24} color="white" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={nextImage}
+                      style={{
+                        position: 'absolute',
+                        right: 12,
+                        top: '50%',
+                        transform: [{ translateY: -20 }],
+                        width: 40,
+                        height: 40,
+                        borderRadius: 20,
+                        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Ionicons name="chevron-forward" size={24} color="white" />
+                    </TouchableOpacity>
+
+                    {/* Image Counter */}
+                    <View style={{
+                      position: 'absolute',
+                      bottom: 12,
+                      right: 12,
+                      backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                      borderRadius: 12,
+                    }}>
+                      <Text style={{
+                        color: 'white',
+                        fontSize: 12,
+                        fontWeight: '600',
+                      }}>
+                        {currentImageIndex + 1} / {logImages.length}
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  {/* File Info */}
+                  <View className="flex-row items-center justify-center" style={{ padding: 2, marginTop: 12 }}>
+                    <View className="mr-3">
+                      <Text className="text-sm text-gray-600">
+                        2.4 MB • Added 2 hours ago
+                      </Text>
+                    </View>
+                    <TouchableOpacity style={{ padding: 8 }}>
+                      <Ionicons name="download-outline" size={20} color="#6B7280" />
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : (
+                /* No Images Uploaded State */
+                <View style={{
+                  marginTop: 16,
+                  paddingVertical: 40,
+                  paddingHorizontal: 20,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: '#F9FAFB',
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: '#F3F4F6',
+                  borderStyle: 'dashed',
+                }}>
+                  <Ionicons 
+                    name="image-outline" 
+                    size={48} 
+                    color="#9CA3AF" 
+                    style={{ marginBottom: 12 }}
+                  />
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '600',
+                    color: '#6B7280',
+                    marginBottom: 4,
+                    textAlign: 'center',
+                  }}>
+                    No Images Uploaded
+                  </Text>
+                  <Text style={{
+                    fontSize: 14,
+                    color: '#9CA3AF',
+                    textAlign: 'center',
+                    lineHeight: 20,
+                  }}>
+                    This log doesn't have any images attached
                   </Text>
                 </View>
-              </View>
-            </View>
-            <View className="flex-row items-center justify-center" style={{ padding: 2 }}>
-
-              <View className="mr-3">
-
-                <Text className="text-sm text-gray-600">
-                  2.4 MB • Added 2 hours ago
-                </Text>
-              </View>
-              <TouchableOpacity style={{ padding: 8 }}>
-                <Ionicons name="download-outline" size={20} color="#6B7280" />
-              </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>

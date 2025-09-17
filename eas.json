@@ -9,7 +9,7 @@
       "distribution": "internal",
       "env": {
         "NODE_ENV": "development",
-        "API_URL": "https://325bef33baa9.ngrok-free.app"
+        "API_URL": ""
       },
       "android": {
         "buildType": "apk"
@@ -22,14 +22,14 @@
       },
       "env": {
         "NODE_ENV": "production",
-        "API_URL": "https://325bef33baa9.ngrok-free.app"
+        "API_URL": ""
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
         "NODE_ENV": "production",
-        "API_URL": "https://325bef33baa9.ngrok-free.app"
+        "API_URL": ""
       }
     }
   },

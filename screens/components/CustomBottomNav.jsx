@@ -20,7 +20,38 @@ export default function CustomBottomNav({
   const navigation = useNavigation();
   const route = useRoute(); // Get current route information
   const [activeTab, setActiveTab] = React.useState("home"); // Track active tab
+  const [userRole, setUserRole] = React.useState(null); // Track user role
   const insets = useSafeAreaInsets(); // Get safe area insets
+
+  // --- Load User Role (MCP Context 7) ---
+  // Business Rule: Get user role to determine FAB visibility based on current screen
+  React.useEffect(() => {
+    const loadUserRole = async () => {
+      try {
+        const role = await getUserRole();
+        setUserRole(role);
+      } catch (error) {
+        console.error("CustomBottomNav - Error loading user role:", error);
+      }
+    };
+    
+    loadUserRole();
+  }, []);
+
+  // --- Check if FAB should be hidden (MCP Context 7) ---
+  // Business Rule: Hide FAB for Employee users on ViewAllTasksScreen, HomeScreen, CalenderScreen, and CalenderDetailScreen
+  // Hide FAB on calendar screens until userRole is loaded to prevent flashing during navigation
+  const isCalendarScreen = route.name === "CalenderScreen" || route.name === "CalenderDetailScreen";
+  const shouldHideFAB = (
+    userRole === "Employee" && (
+      route.name === "ViewAllTasksScreen" || 
+      route.name === "HomeScreen" || 
+      isCalendarScreen
+    )
+  ) || (
+    // Hide FAB on calendar screens until userRole is loaded to prevent flashing
+    isCalendarScreen && userRole === null
+  );
 
   // --- Route Change Detection ---
   // Update active tab based on current screen name
@@ -34,7 +65,7 @@ export default function CustomBottomNav({
         case "CalenderDetailScreen":
           return "profile"; // Calendar icon highlighted for calendar screens
    
- 
+
         default:
       }
     };
@@ -124,7 +155,7 @@ export default function CustomBottomNav({
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          justifyContent: 'space-between',
+          justifyContent: shouldHideFAB ? 'space-around' : 'space-between',
           width: '90%',
           height: 70,
           backgroundColor: 'black',
@@ -143,7 +174,11 @@ export default function CustomBottomNav({
       >
         <TouchableOpacity
           className="items-center justify-center relative"
-          style={{ width: (width * 0.9 - 30) / 5 }}
+          style={{ 
+            width: shouldHideFAB 
+              ? (width * 0.9 - 30) / 4  // 4 equal sections when FAB is hidden
+              : (width * 0.9 - 30) / 5   // 5 sections when FAB is visible
+          }}
           onPress={navigateToHome}
         >
           <Ionicons name="home-outline" size={24} color="#fff" />
@@ -153,7 +188,11 @@ export default function CustomBottomNav({
         </TouchableOpacity>
         <TouchableOpacity
           className="items-center justify-center relative"
-          style={{ width: (width * 0.9 - 30) / 5 }}
+          style={{ 
+            width: shouldHideFAB 
+              ? (width * 0.9 - 30) / 4  // 4 equal sections when FAB is hidden
+              : (width * 0.9 - 30) / 5   // 5 sections when FAB is visible
+          }}
           onPress={navigateToProfile}
         >
           {/* Calendar icon (fixed spelling + valid icon) */}
@@ -164,11 +203,19 @@ export default function CustomBottomNav({
           )}
         </TouchableOpacity>
 
-        <View style={{ width: 65 }} />
+        {/* FAB Spacer - Only show when FAB is visible (MCP Context 7) */}
+        {/* Business Rule: This spacer reserves space for the FAB when it's visible */}
+        {!shouldHideFAB && (
+          <View style={{ width: 65 }} />
+        )}
 
         <TouchableOpacity
           className="items-center justify-center relative"
-          style={{ width: (width * 0.9 - 30) / 5 }}
+          style={{ 
+            width: shouldHideFAB 
+              ? (width * 0.9 - 30) / 4  // 4 equal sections when FAB is hidden
+              : (width * 0.9 - 30) / 5   // 5 sections when FAB is visible
+          }}
           onPress={navigateToChats}
         >
           <Ionicons name="chatbubble-outline" size={24} color="#fff" />
@@ -179,7 +226,11 @@ export default function CustomBottomNav({
 
         <TouchableOpacity
           className="items-center justify-center relative"
-          style={{ width: (width * 0.9 - 30) / 5 }}
+          style={{ 
+            width: shouldHideFAB 
+              ? (width * 0.9 - 30) / 4  // 4 equal sections when FAB is hidden
+              : (width * 0.9 - 30) / 5   // 5 sections when FAB is visible
+          }}
           onPress={navigateToNotifications}
         >
           <Ionicons name="notifications-outline" size={24} color="#fff" />
@@ -189,38 +240,41 @@ export default function CustomBottomNav({
         </TouchableOpacity>
       </View>
 
-      {/* Floating Action Button */}
-      <View
-        style={{
-          position: 'absolute',
-          bottom: 45 + insets.bottom, // Reset FAB position since container is transformed
-          zIndex: 1001,
-          // Ensure FAB stays in same position regardless of app state
-          left: '50%',
-          marginLeft: -32.5, // Half of FAB width (65/2) to center it
-        }}
-      >
-        <TouchableOpacity
+      {/* Floating Action Button - Hide for Employee users on multiple screens (MCP Context 7) */}
+      {/* Business Rule: Hide FAB for Employee users on ViewAllTasksScreen, HomeScreen, CalenderScreen, and CalenderDetailScreen */}
+      {!shouldHideFAB && (
+        <View
           style={{
-            width: 65,
-            height: 65,
-            borderRadius: 32.5,
-            backgroundColor: 'black',
-            justifyContent: 'center',
-            alignItems: 'center',
-            borderWidth: 3,
-            borderColor: 'white',
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.2,
-            shadowRadius: 8,
-            elevation: 8,
+            position: 'absolute',
+            bottom: 45 + insets.bottom, // Reset FAB position since container is transformed
+            zIndex: 1001,
+            // Ensure FAB stays in same position regardless of app state
+            left: '50%',
+            marginLeft: -32.5, // Half of FAB width (65/2) to center it
           }}
-          onPress={handleAddPress}
         >
-          <Ionicons name="add" size={30} color="white" />
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            style={{
+              width: 65,
+              height: 65,
+              borderRadius: 32.5,
+              backgroundColor: 'black',
+              justifyContent: 'center',
+              alignItems: 'center',
+              borderWidth: 3,
+              borderColor: 'white',
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.2,
+              shadowRadius: 8,
+              elevation: 8,
+            }}
+            onPress={handleAddPress}
+          >
+            <Ionicons name="add" size={30} color="white" />
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
