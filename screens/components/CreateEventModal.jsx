@@ -797,7 +797,13 @@ const CreateEventModal = ({
                     shadowOffset: { width: 0, height: 2 },
                     shadowOpacity: 0.1,
                     shadowRadius: 4,
-                    maxHeight: 300
+                    maxHeight: 200
+                  }}
+                  scrollViewProps={{
+                    nestedScrollEnabled: true,
+                    showsVerticalScrollIndicator: true,
+                    bounces: true,
+                    scrollEnabled: true
                   }}
                   textStyle={{
                     fontSize: 16,
@@ -1094,16 +1100,6 @@ const CreateEventModal = ({
                               flex: 1
                             }}>
                               {item.label || 'Unknown Employee'}
-                              {employeeEmail && (
-                                <Text style={{
-                                  fontSize: 14,
-                                  color: '#666',
-                                  marginLeft: 8,
-                                  fontStyle: 'italic'
-                                }}>
-                                  {employeeEmail.length > 25 ? employeeEmail.substring(0, 22) + '...' : employeeEmail}
-                                </Text>
-                              )}
                             </Text>
                           </View>
                         </TouchableOpacity>

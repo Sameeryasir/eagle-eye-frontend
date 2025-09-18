@@ -39,7 +39,7 @@ import {
 const searchBarClasses = `flex-row items-center rounded-2xl px-4 py-3 bg-[#F8FAFC] border border-[#EAECF0]`;
 
 const ViewAllLogScreen = ({ route, navigation }) => {
-  const { logs } = route.params || [];
+  const { logs, projectName } = route.params || [];
 
   // Debug: Log the received parameters from navigation
   console.log("=== ViewAllLogScreen - Navigation Parameters Debug ===");
@@ -48,6 +48,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   console.log("ViewAllLogScreen - logs length:", logs ? logs.length : 'no logs');
   console.log("ViewAllLogScreen - managerProjectId:", route.params?.managerProjectId);
   console.log("ViewAllLogScreen - projectId:", route.params?.projectId);
+  console.log("ViewAllLogScreen - projectName:", route.params?.projectName);
   console.log("======================================================");
 
   // Debug: Log the received logs data to check createdAt field
@@ -1013,7 +1014,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   };
 
   // Separate Manager Card Component
-  const ManagerLogCard = ({ log }) => (
+  const ManagerLogCard = ({ log, projectName, selectedProjectFilter }) => (
     <TouchableOpacity
       onPress={() => {
         console.log("ManagerLogCard - Log tapped:", log);
@@ -1038,23 +1039,14 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       <View>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
           <View style={{ flex: 1, marginRight: 12 }}>
-            {/* Created by section first */}
+            {/* Project and Created by section */}
             <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-              <Text style={{
-                fontSize: Math.min(15, screenWidth * 0.038),
-                color: "black",
-                fontWeight: "600",
-                letterSpacing: 0.3,
-                marginRight: 8,
-              }}>
-                Created by:
-              </Text>
               <Text style={{
                 fontSize: Math.min(15, screenWidth * 0.038),
                 color: "#333",
                 fontWeight: "500",
               }}>
-                {log.createdBy}
+                {log.date} • {(selectedProjectFilter !== "All Logs" ? selectedProjectFilter : projectName) || log.projectName || 'Unknown Project'} • {log.createdBy}
               </Text>
             </View>
 
@@ -1858,9 +1850,9 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       ) : (
         <View>
           {filteredLogs.map((log, index) => (
-            <View key={`${log.id}-${log.projectName || 'unknown'}-${index}`} style={{ marginBottom: index < filteredLogs.length - 1 ? 20 : 0 }}>
+            <View key={`log-${log.id}-${index}-${log.createdBy?.replace(/\s+/g, '') || 'unknown'}-${log.description?.substring(0, 10)?.replace(/\s+/g, '') || 'no-desc'}`} style={{ marginBottom: index < filteredLogs.length - 1 ? 20 : 0 }}>
               {userRole === "Manager" || userRole === "Owner" ? (
-                <ManagerLogCard log={log} />
+                <ManagerLogCard log={log} projectName={projectName} selectedProjectFilter={selectedProjectFilter} />
               ) : (
                 <LogCard log={log} />
               )}

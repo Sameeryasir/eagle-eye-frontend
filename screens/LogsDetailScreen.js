@@ -113,6 +113,54 @@ function LogsDetailScreen({ navigation, route }) {
     }
   };
 
+  // --- Auto-generate title parts for two-line display ---
+  const generateLogTitleParts = () => {
+    if (!log) return { firstLine: "Daily Log", secondLine: "" };
+
+    try {
+      const date = new Date(log.createdAt);
+      const employeeName = log.user ? 
+        `${log.user.first_name || ''} ${log.user.last_name || ''}`.trim() || 
+        log.user.email || 
+        'Unknown Employee' : 
+        'Unknown Employee';
+
+      // Format date as "Month Day, Year" (e.g., "December 15, 2024")
+      const formattedDate = date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+
+      // --- Extract project information from tasks ---
+      let projectName = '';
+      if (log.tasks && log.tasks.length > 0) {
+        // Get unique project names from tasks
+        const projectNames = log.tasks
+          .filter(task => task.project && task.project.name)
+          .map(task => task.project.name);
+        
+        // Remove duplicates and join with comma if multiple projects
+        const uniqueProjects = [...new Set(projectNames)];
+        
+        if (uniqueProjects.length > 0) {
+          projectName = uniqueProjects.length === 1 
+            ? uniqueProjects[0] 
+            : `${uniqueProjects.slice(0, 2).join(', ')}${uniqueProjects.length > 2 ? ' +' + (uniqueProjects.length - 2) + ' more' : ''}`;
+        }
+      }
+
+      // Build two-line title: Date-Project on first line, Employee name on second line
+      const firstLine = projectName ? `${formattedDate} - ${projectName}` : formattedDate;
+      const secondLine = employeeName;
+
+      return { firstLine, secondLine };
+    } catch (error) {
+      console.error("Error generating log title:", error);
+      return { firstLine: "Daily Log", secondLine: "" };
+    }
+  };
+
   const handleUpdate = () => {
     // Show the update modal with the current log data
     console.log("LogsDetailScreen - handleUpdate called with log:", log);
@@ -310,6 +358,36 @@ function LogsDetailScreen({ navigation, route }) {
           />
         }
       >
+        {/* Auto-Generated Title Section */}
+        <View style={{ marginHorizontal: horizontalMargin, marginBottom: cardSpacing }}>
+          <View style={{
+            backgroundColor: 'white',
+            borderRadius: isLargeScreen ? 20 : 16,
+            padding: cardPadding,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.05,
+            shadowRadius: 2,
+            elevation: 2,
+            borderWidth: 1,
+            borderColor: '#f3f4f6'
+          }}>
+            <View className="flex-row items-start">
+              <View className="w-12 h-12 rounded-xl bg-blue-100 items-center justify-center mr-4 mt-1">
+                <Ionicons name="calendar-outline" size={24} color="#3B82F6" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-lg font-bold text-gray-900 leading-tight mb-1">
+                  {generateLogTitleParts().firstLine}
+                </Text>
+                <Text className="text-base font-semibold text-gray-700 leading-tight">
+                  {generateLogTitleParts().secondLine}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
         {/* Log Title Card */}
         <View style={{ marginHorizontal: horizontalMargin, marginBottom: cardSpacing }}>
           <View style={{
@@ -391,7 +469,7 @@ function LogsDetailScreen({ navigation, route }) {
 
             {log && log.note && (
               <View className="pt-4 border-t border-gray-100">
-                <Text className="text-sm font-bold text-gray-600 mb-2">DESCRIPTION</Text>
+                <Text className="text-sm font-bold text-gray-600 mb-2">NOTE</Text>
                 <Text className="text-base text-gray-700 leading-relaxed">
                   {log.note}
                 </Text>

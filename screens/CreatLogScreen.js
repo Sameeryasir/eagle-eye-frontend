@@ -431,18 +431,6 @@ function CreatLogScreen({ navigation, route }) {
 
   const handleSubmitLog = async () => {
     // --- Validation ---
-    if (!logNote.trim()) {
-      // --- Show Error Toast Message ---
-      Toast.show({
-        type: 'error',
-        text1: 'Validation Error',
-        text2: 'Please enter a note for the log',
-        visibilityTime: 4000,
-        autoHide: true,
-        topOffset: 80,
-      });
-      return;
-    }
 
     if (checkedTasks.size === 0) {
       // --- Show Error Toast Message ---
@@ -1107,10 +1095,10 @@ function CreatLogScreen({ navigation, route }) {
             <TouchableOpacity
               className="w-[280px] rounded-xl py-4 items-center justify-center"
               onPress={handleSubmitLog}
-              disabled={isSubmittingLog || isUploadingImages || !logNote.trim()}
+              disabled={isSubmittingLog || isUploadingImages}
               style={{ 
-                backgroundColor: (!logNote.trim() || isSubmittingLog || isUploadingImages) ? '#D1D5DB' : '#000000',
-                opacity: (isSubmittingLog || isUploadingImages || !logNote.trim()) ? 0.6 : 1 
+                backgroundColor: (isSubmittingLog || isUploadingImages) ? '#D1D5DB' : '#000000',
+                opacity: (isSubmittingLog || isUploadingImages) ? 0.6 : 1 
               }}
             >
               {(isSubmittingLog || isUploadingImages) ? (

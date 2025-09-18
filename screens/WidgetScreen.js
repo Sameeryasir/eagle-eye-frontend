@@ -49,7 +49,7 @@ function WidgetScreen({ navigation, route }) {
   const [logsLoading, setLogsLoading] = useState(true);
   const isFirstMount = useRef(true);
 
-  const { projectId } = route.params || {};
+  const { projectId, projectName } = route.params || {};
 
   // Load logs function
   const loadLogs = async (projectId) => {
@@ -77,15 +77,17 @@ function WidgetScreen({ navigation, route }) {
       console.log("WidgetScreen - Processing logs array:", logsArray);
 
       // Transform logs data to match the expected format
-      const transformedLogs = logsArray.map(log => ({
-        id: log.id,
-        createdBy: log.user ? `${log.user.first_name || ''} ${log.user.last_name || ''}`.trim() : 'Unknown User',
-        date: log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'N/A',
-        createdAt: log.createdAt, // Preserve original createdAt for filtering
-        description: log.note || 'No description',
-        images: log.images || [], // Keep all images for the log
-        image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : null,
-      }));
+      const transformedLogs = logsArray.map(log => {
+        return {
+          id: log.id,
+          createdBy: log.user ? `${log.user.first_name || ''} ${log.user.last_name || ''}`.trim() : 'Unknown User',
+          date: log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'N/A',
+          createdAt: log.createdAt, // Preserve original createdAt for filtering
+          description: log.note || 'No description',
+          images: log.images || [], // Keep all images for the log
+          image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : null,
+        };
+      });
 
       // Sort logs by date (newest first)
       const sortedLogs = transformedLogs.sort((a, b) => {
@@ -136,10 +138,10 @@ function WidgetScreen({ navigation, route }) {
           console.log("WidgetScreen - Employee: getProjectById response:", response);
 
           if (response) {
-            // Map the project data
+            // Map the project data, use projectName from HomeScreen if available
             setProject({
               id: response.id,
-              name: response.name || "Project",
+              name: projectName || response.name || "Project",
               description: response.description,
               startDate: response.startDate,
               endDate: response.endDate
@@ -179,19 +181,28 @@ function WidgetScreen({ navigation, route }) {
           console.log("WidgetScreen - Manager: getProjectById response:", response);
 
           if (response && response.project) {
-            setProject(response.project);
+            setProject({
+              ...response.project,
+              name: projectName || response.project.name
+            });
             setTasks(response.tasks || []);
           } else if (response && response.tasks) {
-            setProject(response);
+            setProject({
+              ...response,
+              name: projectName || response.name
+            });
             setTasks(response.tasks || []);
           } else if (response && Array.isArray(response)) {
-            setProject({ name: "Project" });
+            setProject({ name: projectName || "Project" });
             setTasks(response);
           } else if (response) {
-            setProject(response);
+            setProject({
+              ...response,
+              name: projectName || response.name
+            });
             setTasks([]);
           } else {
-            setProject({ name: "Project" });
+            setProject({ name: projectName || "Project" });
             setTasks([]);
           }
         } else {
@@ -263,15 +274,17 @@ function WidgetScreen({ navigation, route }) {
 
         // Map the owner logs response to the expected format
         if (ownerLogsResponse && Array.isArray(ownerLogsResponse)) {
-          const mappedLogs = ownerLogsResponse.map(log => ({
-            id: log.id,
-            createdBy: log.user ? `${log.user.first_name || ''} ${log.user.last_name || ''}`.trim() : 'Unknown User',
-            date: log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'N/A',
-            createdAt: log.createdAt,
-            description: log.note || 'No description',
-            images: log.images || [],
-            image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : null,
-          }));
+          const mappedLogs = ownerLogsResponse.map(log => {
+            return {
+              id: log.id,
+              createdBy: log.user ? `${log.user.first_name || ''} ${log.user.last_name || ''}`.trim() : 'Unknown User',
+              date: log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'N/A',
+              createdAt: log.createdAt,
+              description: log.note || 'No description',
+              images: log.images || [],
+              image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : null,
+            };
+          });
 
           // Sort logs by date (newest first)
           const sortedLogs = mappedLogs.sort((a, b) => {
@@ -612,11 +625,13 @@ function WidgetScreen({ navigation, route }) {
           onPress={() => {
             if (logs.length > 0) {
               console.log("WidgetScreen - Navigating to ViewAllLogScreen with logs:", logs);
-              // Pass project ID for all user roles
+              
+              // Pass project ID and project name for all user roles
               const navigationParams = { 
                 logs: logs,
                 managerProjectId: userRole === "Manager" ? (managerProjectId || projectId) : null,
-                projectId: projectId  // Pass projectId for Employee and other roles
+                projectId: projectId,  // Pass projectId for Employee and other roles
+                projectName: projectName || project?.name || 'Unknown Project',  // Pass project name from HomeScreen/WidgetScreen
               };
               navigation.navigate("ViewAllLogScreen", navigationParams);
             }
@@ -670,9 +685,7 @@ function WidgetScreen({ navigation, route }) {
                     }}
                     numberOfLines={1}
                   >
-                    {log.description && log.description.length > 20
-                      ? log.description.substring(0, 20) + "..."
-                      : log.description}
+                    {`Project: ${projectName || project?.name || 'Unknown Project'}`}
                   </Text>
                   <View style={{ flexDirection: "row", alignItems: "center" }}>
                     <Text style={{

@@ -66,6 +66,7 @@ import TaskDetailsScreen from "./screens/TaskDetailsScreen";
 import LogsDetailScreen from "./screens/LogsDetailScreen";
 import CreatLogScreen from "./screens/CreatLogScreen";
 import PersonalScreen from "./screens/PersonalScreen";
+import ProjectAssignment from "./screens/ProjectAssignment";
 
 const Stack = createNativeStackNavigator();
 
@@ -431,6 +432,24 @@ const AppNavigator = () => {
                   <CustomHeaderForScreens
                     onMenuPress={handleMenuPress}
                     title="Personnel"
+                  />
+                ),
+                headerBackTitleVisible: false,
+                headerStyle: {
+                  backgroundColor: "white",
+                },
+                headerShadowVisible: false,
+              }}
+            />
+            <Stack.Screen
+              name="ProjectAssignment"
+              component={ProjectAssignment}
+              options={{
+                headerShown: true,
+                header: () => (
+                  <CustomHeaderForScreens
+                    onMenuPress={handleMenuPress}
+                    title="Assign Project"
                   />
                 ),
                 headerBackTitleVisible: false,

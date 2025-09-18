@@ -304,7 +304,10 @@ function HomeScreen({ navigation, route }) {
       className="bg-white rounded-2xl p-0 mb-4 border border-[#f0f0f0] overflow-hidden"
       style={{ width: cardWidth }}
       onPress={() =>
-        navigation.navigate("WidgetScreen", { projectId: project.id })
+        navigation.navigate("WidgetScreen", { 
+          projectId: project.id,
+          projectName: project.name 
+        })
       }
     >
       {/* Navbar-like header */}

@@ -40,6 +40,12 @@ export default function CustomBottomNav({
 
   // --- Check if FAB should be hidden (MCP Context 7) ---
   // Business Rule: Hide FAB for Employee users on ViewAllTasksScreen, HomeScreen, CalenderScreen, and CalenderDetailScreen
+  // Hide FAB for Owner role on ViewAllLogScreen
+  // Hide FAB for Owner, Manager, and Employee roles on PersonalScreen, ProjectAssignment, and LogsDetailScreen
+  // Hide FAB for all users on TaskDetailsScreen
+  // Hide FAB for Manager and Employee roles on CreateLogScreen
+  // Hide FAB for Owner, Manager, and Employee roles on CalenderScreen
+  // Show FAB for Owner role on CalenderDetailScreen
   // Hide FAB on calendar screens until userRole is loaded to prevent flashing during navigation
   const isCalendarScreen = route.name === "CalenderScreen" || route.name === "CalenderDetailScreen";
   const shouldHideFAB = (
@@ -48,6 +54,24 @@ export default function CustomBottomNav({
       route.name === "HomeScreen" || 
       isCalendarScreen
     )
+  ) || (
+    // Hide FAB for Owner, Manager, and Employee roles on ViewAllLogScreen
+    (userRole === "Owner" ) && route.name === "ViewAllLogScreen"
+  ) || (
+    // Hide FAB for Owner, Manager, and Employee roles on PersonalScreen, ProjectAssignment, and LogsDetail
+    (userRole === "Owner" || userRole === "Manager" || userRole === "Employee") && (route.name === "PersonalScreen" || route.name === "ProjectAssignment" || route.name === "LogsDetail")
+  ) || (
+    // Hide FAB for all users on TaskDetailsScreen
+    route.name === "TaskDetails"
+  ) || (
+    // Hide FAB for Manager and Employee roles on CreateLogScreen
+    (userRole === "Manager" || userRole === "Employee") && route.name === "CreatLog"
+  ) || (
+    // Hide FAB for Owner, Manager, and Employee roles on CalenderScreen
+    (userRole === "Owner" || userRole === "Manager" || userRole === "Employee") && route.name === "CalenderScreen"
+  ) || (
+    // Hide FAB for Manager and Employee roles on CalenderDetailScreen (Owner can see FAB)
+    (userRole === "Manager" || userRole === "Employee") && route.name === "CalenderDetailScreen"
   ) || (
     // Hide FAB on calendar screens until userRole is loaded to prevent flashing
     isCalendarScreen && userRole === null
