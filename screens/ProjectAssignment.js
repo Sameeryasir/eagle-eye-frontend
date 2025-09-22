@@ -19,6 +19,7 @@ import { getMyProjects } from '../services/projects/getProjectsByLoginUserId';
 import { assignProjectToEmployees } from '../services/projects/assignProject';
 import { getUserById } from '../services/user/getUserById';
 import Toast from 'react-native-toast-message';
+import Loader from '../services/utils/loader';
 
 function ProjectAssignment({ navigation, route }) {
   const { employee, employeeId } = route.params || {};
@@ -236,10 +237,7 @@ function ProjectAssignment({ navigation, route }) {
     return (
       <View className="flex-1 bg-white">
         <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
-        <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" color="#3155A1" />
-          <Text className="text-[16px] text-[#666] mt-4">Loading details...</Text>
-        </View>
+        <Loader size="large" color="#000000" text="Loading details..." />
         <CustomBottomNav navigation={navigation} />
       </View>
     );
@@ -258,8 +256,8 @@ function ProjectAssignment({ navigation, route }) {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={['#000000']} // Android
-              tintColor="#000000" // iOS
+              colors={['#3155A1']} // Android - matches HomeScreen
+              tintColor="#3155A1" // iOS - matches HomeScreen
             />
           ) : null
         }

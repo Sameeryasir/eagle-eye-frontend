@@ -14,6 +14,7 @@ import React, { useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MenuProvider } from "react-native-popup-menu";
 import Toast from 'react-native-toast-message';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component {
@@ -67,6 +68,7 @@ import LogsDetailScreen from "./screens/LogsDetailScreen";
 import CreatLogScreen from "./screens/CreatLogScreen";
 import PersonalScreen from "./screens/PersonalScreen";
 import ProjectAssignment from "./screens/ProjectAssignment";
+import WeekView from "./screens/WeekView";
 
 const Stack = createNativeStackNavigator();
 
@@ -157,9 +159,10 @@ const AppNavigator = () => {
 
 
   return (
-    <MenuProvider>
-      <SafeAreaProvider>
-        <NavigationContainer ref={setNavigationRef}>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <MenuProvider>
+        <SafeAreaProvider>
+          <NavigationContainer ref={setNavigationRef}>
           <Stack.Navigator 
             screenOptions={{ headerShown: false }} 
             initialRouteName="SplashScreen"
@@ -459,6 +462,25 @@ const AppNavigator = () => {
                 headerShadowVisible: false,
               }}
             />
+            <Stack.Screen
+              name="WeekView"
+              component={WeekView}
+              options={{
+                headerShown: true,
+                header: () => (
+                  <CustomHeaderForScreens
+                    onMenuPress={handleMenuPress}
+                    title="Week View"
+                  />
+                ),
+                headerBackTitleVisible: false,
+                headerStyle: {
+                  backgroundColor: "white",
+                },
+                headerShadowVisible: false,
+              }}
+            />
+          
           </Stack.Navigator>
 
           {/* Sidebar - rendered at app level for proper overlay */}
@@ -472,6 +494,7 @@ const AppNavigator = () => {
         <Toast />
       </SafeAreaProvider>
     </MenuProvider>
+    </GestureHandlerRootView>
   );
 };
 

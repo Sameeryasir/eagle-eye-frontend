@@ -13,6 +13,7 @@ module.exports = function (api) {
         safe: true, // Allow missing .env file
         verbose: false, // Reduce console output
       }],
+      'react-native-worklets-core/plugin',
       'react-native-reanimated/plugin',
     ],
   };

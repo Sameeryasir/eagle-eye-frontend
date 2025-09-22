@@ -7,6 +7,8 @@ import {
   ActivityIndicator,
   RefreshControl,
   ScrollView,
+  StyleSheet,
+  Animated,
 } from "react-native";
 import { Calendar } from "react-native-calendars";
 import Toast from 'react-native-toast-message';
@@ -14,6 +16,8 @@ import getAllTasks from "../services/tasks/getAllTasks";
 import { getEventsForLogInUser } from "../services/event/getEventsForLogInUser";
 import { getUserRole } from "../services/utils/userRole";
 import CustomBottomNav from "./components/CustomBottomNav";
+import MyWeekView from "./components/WeekView";
+import CalendarToggle from "./components/CalendarToggle";
 
 const { height } = Dimensions.get("window");
 
@@ -25,6 +29,13 @@ function CalenderScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [viewMode, setViewMode] = useState('monthly'); // 'monthly' or 'weekly' - controls which view to show
+  const [weekViewEvents, setWeekViewEvents] = useState([]); // Events formatted for WeekView
+  const [monthlyViewLoading, setMonthlyViewLoading] = useState(false); // Loading state for monthly view switch
+  
+  // --- Animation values for smooth toggle transitions ---
+  const weeklyButtonScale = useState(new Animated.Value(viewMode === 'weekly' ? 1 : 0.95))[0];
+  const monthlyButtonScale = useState(new Animated.Value(viewMode === 'monthly' ? 1 : 0.95))[0];
 
   // --- Helper function for date and time formatting ---
   const formatDateTime = (dateString) => {
@@ -38,6 +49,7 @@ function CalenderScreen({ navigation }) {
     }); // "2:30 PM"
     return `${dateStr} ${timeStr}`; // "1/15/2024 2:30 PM"
   };
+
 
   // --- Fetch Tasks from API ---
   const fetchTasks = async () => {
@@ -299,6 +311,42 @@ function CalenderScreen({ navigation }) {
     }
   };
 
+  // --- Handle view mode change with smooth animations ---
+  const handleViewModeChange = (newViewMode) => {
+    if (newViewMode === viewMode) return; // No change needed
+    
+    // Animate button scales
+    if (newViewMode === 'weekly') {
+      Animated.parallel([
+        Animated.spring(weeklyButtonScale, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.spring(monthlyButtonScale, {
+          toValue: 0.95,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.spring(monthlyButtonScale, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.spring(weeklyButtonScale, {
+          toValue: 0.95,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+    
+    setViewMode(newViewMode);
+  };
+
 
   // --- Show loading screen ---
   if (loading) {
@@ -332,67 +380,86 @@ function CalenderScreen({ navigation }) {
 
   return (
     <View className="flex-1 bg-white">
-      <ScrollView 
-        className="flex-1 pt-3"
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[ "#3155A1"]}
-            tintColor="#3155A1"
-            progressBackgroundColor="#ffffff"
-          />
-        }
-      >
-        <Text className="text-3xl font-bold text-center  ">📅 My Schedule</Text>
+      {/* --- Reusable Toggle Component --- */}
+      <CalendarToggle
+        currentView={viewMode}
+        onWeeklyPress={() => setViewMode('weekly')}
+        onMonthlyPress={() => setViewMode('monthly')}
+      />
 
-        <Calendar
-          markingType={"custom"}
-          onDayPress={onDayPress}
-          dayComponent={({ date, state }) => {
-            const taskList = tasks[date.dateString];
-            const visibleTasks = taskList?.slice(0, 2) || [];
-            const hiddenCount = taskList?.length > 2 ? taskList.length - 2 : 0;
+      {/* --- Conditional View Rendering --- */}
+      {viewMode === 'monthly' ? (
+        /* --- Monthly Calendar View in ScrollView --- */
+        <ScrollView 
+          className="flex-1"
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[ "#3155A1"]}
+              tintColor="#3155A1"
+              progressBackgroundColor="#ffffff"
+            />
+          }
+        >
+          <Calendar
+            markingType={"custom"}
+            onDayPress={onDayPress}
+            dayComponent={({ date, state }) => {
+              const taskList = tasks[date.dateString];
+              const visibleTasks = taskList?.slice(0, 2) || [];
+              const hiddenCount = taskList?.length > 2 ? taskList.length - 2 : 0;
 
-            return (
-              <TouchableOpacity onPress={() => onDayPress(date)}>
-                <View className="items-center py-2 mx-1 min-h-20 h-auto">
-                  <Text className="text-lg text-black font-medium mb-1.5">{date.day}</Text>
-                  <View className="w-full items-center gap-1">
-                    {visibleTasks.map((task, index) => (
-                      <View 
-                        key={index} 
-                        className="bg-gray-50 px-1.5 py-1 rounded-md border-l-2 border-l-black my-0.5 min-w-15 max-w-11/12 shadow-sm"
-                      >
-                        <Text numberOfLines={1} className="text-xs text-gray-800 font-medium text-center">
-                          {task.title.length > 8
-                            ? `${task.title.slice(0, 8)}...`
-                            : task.title}
-                        </Text>
-                      </View>
-                    ))}
-                    {hiddenCount > 0 && (
-                      <View className="bg-gray-100 px-1 py-0.5 rounded-lg border border-gray-400 mt-0.5">
-                        <Text className="text-xs text-gray-600 font-semibold text-center">+{hiddenCount} more</Text>
-                      </View>
-                    )}
+              return (
+                <TouchableOpacity onPress={() => onDayPress(date)}>
+                  <View className="items-center py-2 mx-1 min-h-20 h-auto">
+                    <Text className="text-lg text-black font-medium mb-1.5">{date.day}</Text>
+                    <View className="w-full items-center gap-1">
+                      {visibleTasks.map((task, index) => (
+                        <View 
+                          key={index} 
+                          className="bg-gray-50 px-1.5 py-1 rounded-md border-l-2 border-l-black my-0.5 min-w-15 max-w-11/12 shadow-sm"
+                        >
+                          <Text numberOfLines={1} className="text-xs text-gray-800 font-medium text-center">
+                            {task.title.length > 8
+                              ? `${task.title.slice(0, 8)}...`
+                              : task.title}
+                          </Text>
+                        </View>
+                      ))}
+                      {hiddenCount > 0 && (
+                        <View className="bg-gray-100 px-1 py-0.5 rounded-lg border border-gray-400 mt-0.5">
+                          <Text className="text-xs text-gray-600 font-semibold text-center">+{hiddenCount} more</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
-                </View>
-              </TouchableOpacity>
-            );
-          }}
-          theme={{
-            todayTextColor: "#000000",
-            arrowColor: "black",
-          }}
-          enableSwipeMonths={true}
-        />
-      </ScrollView>
+                </TouchableOpacity>
+              );
+            }}
+            theme={{
+              todayTextColor: "#000000",
+              arrowColor: "black",
+            }}
+            enableSwipeMonths={true}
+          />
+        </ScrollView>
+      ) : (
+        /* --- Weekly View without ScrollView for proper centering --- */
+        <View style={{ flex: 1 }}>
+          <MyWeekView navigation={navigation} />
+        </View>
+      )}
       
       {/* --- Custom Bottom Navigation --- */}
       <CustomBottomNav />
     </View>
   );
 }
+
+// --- Note: Toggle styles moved to reusable CalendarToggle component ---
+const styles = StyleSheet.create({
+  // Other styles can be added here if needed
+});
 
 export default CalenderScreen;

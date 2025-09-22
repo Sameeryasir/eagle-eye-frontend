@@ -40,6 +40,7 @@ export default function CustomBottomNav({
 
   // --- Check if FAB should be hidden (MCP Context 7) ---
   // Business Rule: Hide FAB for Employee users on ViewAllTasksScreen, HomeScreen, CalenderScreen, and CalenderDetailScreen
+  // Business Rule: Hide FAB for Manager users on HomeScreen, CalenderScreen, and CalenderDetailScreen (but show on ViewAllTasksScreen)
   // Hide FAB for Owner role on ViewAllLogScreen
   // Hide FAB for Owner, Manager, and Employee roles on PersonalScreen, ProjectAssignment, and LogsDetailScreen
   // Hide FAB for all users on TaskDetailsScreen
@@ -51,6 +52,11 @@ export default function CustomBottomNav({
   const shouldHideFAB = (
     userRole === "Employee" && (
       route.name === "ViewAllTasksScreen" || 
+      route.name === "HomeScreen" || 
+      isCalendarScreen
+    )
+  ) || (
+    userRole === "Manager" && (
       route.name === "HomeScreen" || 
       isCalendarScreen
     )
@@ -264,8 +270,9 @@ export default function CustomBottomNav({
         </TouchableOpacity>
       </View>
 
-      {/* Floating Action Button - Hide for Employee users on multiple screens (MCP Context 7) */}
+      {/* Floating Action Button - Hide for Employee and Manager users on multiple screens (MCP Context 7) */}
       {/* Business Rule: Hide FAB for Employee users on ViewAllTasksScreen, HomeScreen, CalenderScreen, and CalenderDetailScreen */}
+      {/* Business Rule: Hide FAB for Manager users on HomeScreen, CalenderScreen, and CalenderDetailScreen (but show on ViewAllTasksScreen) */}
       {!shouldHideFAB && (
         <View
           style={{

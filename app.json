@@ -8,8 +8,7 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "backgroundColor": "#ffffff",
-      "image": null
+      "backgroundColor": "#ffffff"
     },
     "ios": {
       "supportsTablet": true,
@@ -47,10 +46,10 @@
     },
     "extra": {
       "eas": {
-        "projectId": "befe57d8-c92e-4a8f-aff7-4322bd20c73c"
+        "projectId": "595be4b1-2164-4fed-8bb5-4b026abcba17"
       }
     },
-    "owner": "fazalerabbi",
+    "owner": "sameer_yasir",
     "plugins": [
       "expo-localization"
     ]

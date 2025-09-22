@@ -685,7 +685,7 @@ function WidgetScreen({ navigation, route }) {
                     }}
                     numberOfLines={1}
                   >
-                    {`Project: ${projectName || project?.name || 'Unknown Project'}`}
+                    {userRole === "Employee" ? `Project: ${projectName || project?.name || 'Unknown Project'}` : `Project: ${projectName || project?.name || 'Unknown Project'}`}
                   </Text>
                   <View style={{ flexDirection: "row", alignItems: "center" }}>
                     <Text style={{

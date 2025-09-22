@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Modal, Alert, FlatList } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, FlatList } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import Toast from 'react-native-toast-message';
 import UpdateEventModal from './UpdateEventModal';
+import AccessDeniedDialog from './AccessDeniedDialog';
 import { deleteEventById } from '../../services/event/deleteById';
 import { getUserRole } from '../../services/utils/userRole';
 
@@ -16,6 +17,13 @@ const EventDetailsModal = ({
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [userRole, setUserRole] = useState(null);
   const [isLoadingRole, setIsLoadingRole] = useState(true);
+  
+  // --- State for access denied dialog ---
+  const [accessDeniedDialog, setAccessDeniedDialog] = useState({
+    visible: false,
+    title: '',
+    message: ''
+  });
 
   // --- Fetch user role when modal becomes visible ---
   useEffect(() => {

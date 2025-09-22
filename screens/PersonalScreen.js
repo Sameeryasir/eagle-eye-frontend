@@ -398,10 +398,7 @@ function PersonalScreen({ navigation }) {
     return (
       <View style={{ flex: 1, backgroundColor: 'white' }}>
         <StatusBar barStyle="dark-content" backgroundColor="white" />
-        <Header />
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <Loader size="large" color="#000000" text="Loading employees..." />
-        </View>
+        <Loader size="large" color="#000000" text="Loading employees..." />
         <CustomBottomNav />
       </View>
     );

@@ -1237,7 +1237,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     </TouchableOpacity>
   );
 
-  const LogCard = ({ log }) => (
+  const LogCard = ({ log, projectName, selectedProjectFilter }) => (
     <TouchableOpacity
       onPress={() => {
         console.log("LogCard - Log tapped:", log);
@@ -1261,10 +1261,20 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       activeOpacity={0.7}
     >
       <View>
-        {/* Employee and other roles - No Created by section */}
-
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
           <View style={{ flex: 1, marginRight: 12 }}>
+            {/* Project and Date section - Same as Manager view */}
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
+              <Text style={{
+                fontSize: Math.min(15, screenWidth * 0.038),
+                color: "#333",
+                fontWeight: "500",
+              }}>
+                {log.date} • {(selectedProjectFilter !== "All Logs" ? selectedProjectFilter : projectName) || log.projectName || 'Unknown Project'}
+              </Text>
+            </View>
+
+            {/* Note section */}
             <Text style={{
               fontSize: Math.min(15, screenWidth * 0.038),
               color: "#333",
@@ -1283,8 +1293,8 @@ const ViewAllLogScreen = ({ route, navigation }) => {
               }}>
                 Note:{" "}
               </Text>
-              {log.description && log.description.length > 33
-                ? log.description.substring(0, 33) + "..."
+              {log.description && log.description.length > 15
+                ? log.description.substring(0, 15) + "..."
                 : log.description}
             </Text>
           </View>
@@ -1854,7 +1864,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
               {userRole === "Manager" || userRole === "Owner" ? (
                 <ManagerLogCard log={log} projectName={projectName} selectedProjectFilter={selectedProjectFilter} />
               ) : (
-                <LogCard log={log} />
+                <LogCard log={log} projectName={projectName} selectedProjectFilter={selectedProjectFilter} />
               )}
             </View>
           ))}

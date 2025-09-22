@@ -54,6 +54,8 @@
     "react-native-timeline-flatlist": "^0.8.0",
     "react-native-toast-message": "^2.3.3",
     "react-native-web": "^0.20.0",
+    "react-native-week-view": "^0.30.0",
+    "react-native-worklets-core": "^1.6.2",
     "tailwindcss": "^3.4.17"
   },
   "devDependencies": {

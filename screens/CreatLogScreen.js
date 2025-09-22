@@ -992,7 +992,7 @@ function CreatLogScreen({ navigation, route }) {
           <View className="p-6">
             {/* --- Note Section (First) --- */}
             <View className="mb-6">
-              <Text className="text-[16px] font-semibold text-[#333] mb-2">Note *</Text>
+              <Text className="text-[16px] font-semibold text-[#333] mb-2">Note</Text>
               <TextInput
                 className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333] h-24"
                 placeholder="Enter note "
@@ -1095,10 +1095,10 @@ function CreatLogScreen({ navigation, route }) {
             <TouchableOpacity
               className="w-[280px] rounded-xl py-4 items-center justify-center"
               onPress={handleSubmitLog}
-              disabled={isSubmittingLog || isUploadingImages}
+              disabled={isSubmittingLog || isUploadingImages || !logNote.trim()}
               style={{ 
-                backgroundColor: (isSubmittingLog || isUploadingImages) ? '#D1D5DB' : '#000000',
-                opacity: (isSubmittingLog || isUploadingImages) ? 0.6 : 1 
+                backgroundColor: (isSubmittingLog || isUploadingImages || !logNote.trim()) ? '#D1D5DB' : '#000000',
+                opacity: (isSubmittingLog || isUploadingImages || !logNote.trim()) ? 0.6 : 1 
               }}
             >
               {(isSubmittingLog || isUploadingImages) ? (
