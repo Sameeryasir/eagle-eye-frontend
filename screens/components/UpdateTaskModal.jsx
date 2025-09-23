@@ -333,10 +333,9 @@ export default function UpdateTaskModal({
       return;
     }
 
-    if (!taskData.description.trim()) {
-      showErrorDialog('Validation Error', 'Task description is required');
-      return;
-    }
+    // --- FIXED: Description is now optional (MCP Context 7) ---
+    // Business Rule: Only title is required, description can be empty
+    // This allows users to update tasks without detailed descriptions
 
     // Validate that task ID is available
     if (!task?.id) {
@@ -362,7 +361,7 @@ export default function UpdateTaskModal({
 
     const currentTask = {
       title: taskData.title.trim(),
-      description: taskData.description.trim(),
+      description: taskData.description ? taskData.description.trim() : "", // Handle empty description gracefully
       assignedTo: taskData.assignedTo,
       priority: taskData.priority,
       startTime: startDateTime,

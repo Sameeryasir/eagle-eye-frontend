@@ -27,11 +27,13 @@ const CreateEventModal = ({
     projects: [] // Store selected projects (backend expects this field)
   });
 
-  // --- State for time pickers ---
+  // --- State for date and time pickers (following task creation pattern) ---
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
-  const [startTime, setStartTime] = useState(new Date());
-  const [endTime, setEndTime] = useState(new Date());
+  const [startDateTime, setStartDateTime] = useState(new Date());
+  const [endDateTime, setEndDateTime] = useState(new Date());
   const [isCreating, setIsCreating] = useState(false);
 
   // --- State for custom error dialog ---
@@ -53,33 +55,34 @@ const CreateEventModal = ({
   const [selectedProjectValues, setSelectedProjectValues] = useState([]);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
 
-  // --- Set current time when modal opens ---
+  // --- Set current time when modal opens (following task creation pattern) ---
   useEffect(() => {
     if (visible) {
       const now = new Date();
       const eventDate = selectedDate ? new Date(selectedDate) : new Date();
       
-      // Combine current time with the selected date
-      const currentStartTime = new Date(eventDate);
-      currentStartTime.setHours(now.getHours());
-      currentStartTime.setMinutes(now.getMinutes());
-      currentStartTime.setSeconds(0);
-      currentStartTime.setMilliseconds(0);
+      // Combine current time with the selected date (following task pattern)
+      const currentStartDateTime = new Date(eventDate);
+      currentStartDateTime.setHours(now.getHours());
+      currentStartDateTime.setMinutes(now.getMinutes());
+      currentStartDateTime.setSeconds(0);
+      currentStartDateTime.setMilliseconds(0);
       
       // Set end time to 1 hour after start time
-      const currentEndTime = new Date(currentStartTime);
-      currentEndTime.setHours(currentEndTime.getHours() + 1);
+      const currentEndDateTime = new Date(currentStartDateTime);
+      currentEndDateTime.setHours(currentEndDateTime.getHours() + 1);
       
-      setStartTime(currentStartTime);
-      setEndTime(currentEndTime);
+      setStartDateTime(currentStartDateTime);
+      setEndDateTime(currentEndDateTime);
       
-      // Update form with current times
-      const startTimeString = currentStartTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+      // Update form with current times (display format)
+      const startTimeString = currentStartDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+      const endTimeString = currentEndDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
       
       setEventForm(prev => ({
         ...prev,
         startTime: startTimeString,
-        endTime: '' // Show "Not selected" initially
+        endTime: endTimeString
       }));
 
       // Always fetch projects when modal opens
@@ -111,8 +114,8 @@ const CreateEventModal = ({
       assignedTo: [], // Reset assignedTo field (for employees)
       projects: [] // Reset projects field (for projects)
     });
-    setStartTime(new Date());
-    setEndTime(new Date());
+    setStartDateTime(new Date());
+    setEndDateTime(new Date());
     setSelectedEmployeeValues([]); // Reset dropdown selections
     setEmployeeDropdownOpen(false); // Close dropdown when form is reset
     setSelectedProjectValues([]); // Reset project selection
@@ -345,43 +348,34 @@ const CreateEventModal = ({
     console.log('=== End Employee Selection Debug ===');
   };
 
-  // --- Time picker handlers ---
-  const handleStartTimeChange = (event, selectedTime) => {
-    setShowStartTimePicker(Platform.OS === 'ios');
-    if (selectedTime) {
-      // Combine selected time with the event date
-      const eventDate = selectedDate ? new Date(selectedDate) : new Date();
-      const combinedDateTime = new Date(eventDate);
-      combinedDateTime.setHours(selectedTime.getHours());
-      combinedDateTime.setMinutes(selectedTime.getMinutes());
-      combinedDateTime.setSeconds(0);
-      combinedDateTime.setMilliseconds(0);
+  // --- Date and time picker handlers (following task creation pattern) ---
+  const handleStartDateChange = (event, selectedDate) => {
+    setShowStartDatePicker(false);
+    if (selectedDate) {
+      const newDate = new Date(selectedDate);
+      newDate.setHours(startDateTime.getHours());
+      newDate.setMinutes(startDateTime.getMinutes());
+      setStartDateTime(newDate);
       
-      // Only check for past time if the event date is today
-     
-      
-      setStartTime(combinedDateTime);
-      const timeString = combinedDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-      handleEventFormChange('startTime', timeString);
+      // Ensure end date is not before start date
+      if (newDate > endDateTime) {
+        setEndDateTime(newDate);
+      }
     }
   };
 
-  const handleEndTimeChange = (event, selectedTime) => {
-    setShowEndTimePicker(Platform.OS === 'ios');
+  const handleStartTimeChange = (event, selectedTime) => {
+    setShowStartTimePicker(Platform.OS === 'ios');
     if (selectedTime) {
-      // Combine selected time with the event date
-      const eventDate = selectedDate ? new Date(selectedDate) : new Date();
-      const combinedDateTime = new Date(eventDate);
-      combinedDateTime.setHours(selectedTime.getHours());
-      combinedDateTime.setMinutes(selectedTime.getMinutes());
-      combinedDateTime.setSeconds(0);
-      combinedDateTime.setMilliseconds(0);
+      const newDate = new Date(startDateTime);
+      newDate.setHours(selectedTime.getHours());
+      newDate.setMinutes(selectedTime.getMinutes());
       
       // Only check for past time if the event date is today
-      const today = new Date();
-      const isToday = eventDate.toDateString() === today.toDateString();
+      const now = new Date();
+      const isToday = newDate.toDateString() === now.toDateString();
       
-      if (isToday && combinedDateTime < today) {
+      if (isToday && newDate < now) {
         showErrorDialog(
           'Invalid Time',
           'You cannot select a time in the past for today. Please choose a future time.'
@@ -389,18 +383,73 @@ const CreateEventModal = ({
         return;
       }
       
-      // Check if end time is before start time
-      if (startTime && combinedDateTime <= startTime) {
-        showErrorDialog(
-          'Invalid Time',
-          'End time must be after start time. Please choose a later time.'
-        );
-        return;
+      setStartDateTime(newDate);
+      
+      // Ensure end date is not before start date
+      if (endDateTime && newDate > endDateTime) {
+        setEndDateTime(newDate);
       }
       
-      setEndTime(combinedDateTime);
-      const timeString = combinedDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-      handleEventFormChange('endTime', timeString);
+      // Update form display
+      const timeString = newDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+      handleEventFormChange('startTime', timeString);
+    }
+  };
+
+  const handleEndDateChange = (event, selectedDate) => {
+    setShowEndDatePicker(false);
+    if (event.type === 'set' && selectedDate) {
+      const newDate = new Date(selectedDate);
+      if (endDateTime) {
+        newDate.setHours(endDateTime.getHours());
+        newDate.setMinutes(endDateTime.getMinutes());
+        newDate.setSeconds(endDateTime.getSeconds());
+      } else {
+        newDate.setHours(23);
+        newDate.setMinutes(59);
+        newDate.setSeconds(0);
+      }
+      setEndDateTime(newDate);
+    }
+  };
+
+  const handleEndTimeChange = (event, selectedTime) => {
+    setShowEndTimePicker(Platform.OS === 'ios');
+    if (event.type === 'set' && selectedTime) {
+      if (endDateTime) {
+        const newDate = new Date(endDateTime);
+        newDate.setHours(selectedTime.getHours());
+        newDate.setMinutes(selectedTime.getMinutes());
+        newDate.setSeconds(0);
+        newDate.setMilliseconds(0);
+        
+        // Only check for past time if the event date is today
+        const now = new Date();
+        const isToday = newDate.toDateString() === now.toDateString();
+        
+        if (isToday && newDate < now) {
+          showErrorDialog(
+            'Invalid Time',
+            'You cannot select a time in the past for today. Please choose a future time.'
+          );
+          return;
+        }
+        
+        // Validate that end time is not before start time
+        if (newDate >= startDateTime) {
+          setEndDateTime(newDate);
+          
+          // Update form display
+          const timeString = newDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+          handleEventFormChange('endTime', timeString);
+        } else {
+          showErrorDialog(
+            'Invalid Time',
+            'End time must be after start time. Please choose a later time.'
+          );
+          return;
+        }
+      }
     }
   };
 
@@ -422,7 +471,7 @@ const CreateEventModal = ({
     }
 
     // Check if end time is after start time (final validation)
-    if (endTime <= startTime) {
+    if (endDateTime <= startDateTime) {
       showErrorDialog('Error', 'End time must be after start time. Please adjust your times.');
       return;
     }
@@ -447,31 +496,14 @@ const CreateEventModal = ({
     setIsCreating(true);
 
     try {
-      // --- FIXED: Proper timezone handling for event creation ---
+      // --- FIXED: Proper timezone handling for event creation (following task pattern) ---
       // Business Rule: Use same timezone conversion approach as task handling
       // This ensures events created "today" appear on "today" in the calendar for all timezones
       
-      // Get the intended date (the date the user selected)
-      const intendedDate = selectedDate ? new Date(selectedDate) : new Date();
-      
-      // --- Create date objects that preserve the intended calendar date ---
-      // This approach matches the task timezone conversion logic
-      const eventStartTime = new Date(intendedDate);
-      eventStartTime.setHours(startTime.getHours());
-      eventStartTime.setMinutes(startTime.getMinutes());
-      eventStartTime.setSeconds(startTime.getSeconds());
-      eventStartTime.setMilliseconds(startTime.getMilliseconds());
-      
-      const eventEndTime = new Date(intendedDate);
-      eventEndTime.setHours(endTime.getHours());
-      eventEndTime.setMinutes(endTime.getMinutes());
-      eventEndTime.setSeconds(endTime.getSeconds());
-      eventEndTime.setMilliseconds(endTime.getMilliseconds());
-      
       // --- Convert to local timezone for date extraction (same as task handling) ---
       // This ensures the event appears on the correct calendar day
-      const localStartDate = new Date(eventStartTime);
-      const localEndDate = new Date(eventEndTime);
+      const localStartDate = new Date(startDateTime);
+      const localEndDate = new Date(endDateTime);
       
       // Extract the local date in YYYY-MM-DD format (same as task conversion)
       const eventDate = localStartDate.getFullYear() + '-' + 
@@ -511,19 +543,16 @@ const CreateEventModal = ({
       const eventData = {
         title: eventForm.title.trim(),
         description: eventForm.description.trim() || '',
-        startTime: eventStartTime.toISOString(), // ISO 8601 string format (UTC)
-        endTime: eventEndTime.toISOString(), // ISO 8601 string format (UTC)
+        startTime: startDateTime.toISOString(), // ISO 8601 string format (UTC)
+        endTime: endDateTime.toISOString(), // ISO 8601 string format (UTC)
         assignedTo: assignedToIds, // Employee IDs (when isProject is true)
         projects: projectIds // Project IDs (when isProject is false)
       };
 
       console.log('=== Event Creation Debug (Timezone-Aware) ===');
       console.log('Selected Date:', selectedDate);
-      console.log('Intended Date:', intendedDate);
-      console.log('Original Start Time:', startTime.toLocaleString());
-      console.log('Event Start Time:', eventStartTime.toLocaleString());
-      console.log('Original End Time:', endTime.toLocaleString());
-      console.log('Event End Time:', eventEndTime.toLocaleString());
+      console.log('Start DateTime:', startDateTime.toLocaleString());
+      console.log('End DateTime:', endDateTime.toLocaleString());
       console.log('Local Start Date:', localStartDate.toLocaleDateString());
       console.log('Event Date (YYYY-MM-DD):', eventDate);
       console.log('--- TIMEZONE INFORMATION (Expo Localization) - DEBUG ONLY ---');
@@ -535,8 +564,8 @@ const CreateEventModal = ({
       console.log('Locales:', locales);
       console.log('Region:', Localization.region);
       console.log('--- TIME INFORMATION - DEBUG ONLY ---');
-      console.log('Local Start Time:', eventStartTime.toLocaleString());
-      console.log('Local End Time:', eventEndTime.toLocaleString());
+      console.log('Local Start Time:', startDateTime.toLocaleString());
+      console.log('Local End Time:', endDateTime.toLocaleString());
       console.log('UTC Start Time:', eventData.startTime);
       console.log('UTC End Time:', eventData.endTime);
       console.log('--- UI STATE DEBUG ---');
@@ -1127,38 +1156,64 @@ const CreateEventModal = ({
                 </View>
               )}
 
-              {/* Start Time */}
+              {/* Start Date & Time */}
               <View className="mb-5">
                 <View className="flex-row items-center mb-2">
                   <Ionicons name="time" size={16} color="#374151" style={{ marginRight: 6 }} />
-                  <Text className="text-[16px] font-semibold text-[#333]">Start Time</Text>
+                  <Text className="text-[16px] font-semibold text-[#333]">Start Date & Time *</Text>
                 </View>
-                <TouchableOpacity
-                  className="flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                  onPress={() => setShowStartTimePicker(true)}
-                >
-                  <Text className="text-[16px] text-[#333] font-medium">
-                    {eventForm.startTime || 'Select start time'}
-                  </Text>
-                  <Ionicons name="time-outline" size={16} color="#666" />
-                </TouchableOpacity>
+                <View className="flex-row gap-2">
+                  <TouchableOpacity
+                    className="flex-[2] flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                    onPress={() => setShowStartDatePicker(true)}
+                  >
+                    <Text className="text-[16px] text-[#333] font-medium">
+                      {startDateTime.toLocaleDateString()}
+                    </Text>
+                    <Ionicons name="calendar-outline" size={16} color="#666" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className={`flex-1 flex-row items-center justify-between border rounded-lg p-3 ${startDateTime ? 'border-[#e1e8ed] bg-[#f8f9fa]' : 'border-[#d1d5db] bg-[#f3f4f6]'
+                      }`}
+                    onPress={() => startDateTime && setShowStartTimePicker(true)}
+                    disabled={!startDateTime}
+                    activeOpacity={startDateTime ? 0.8 : 1}
+                  >
+                    <Text className={`text-[16px] font-medium ${startDateTime ? 'text-[#333]' : 'text-[#9ca3af]'
+                      }`}>
+                      {startDateTime ? startDateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "Select time"}
+                    </Text>
+                    <Ionicons name="time-outline" size={16} color={startDateTime ? "#666" : "#9ca3af"} />
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              {/* End Time */}
+              {/* End Date & Time */}
               <View className="mb-5">
                 <View className="flex-row items-center mb-2">
                   <Ionicons name="calendar" size={16} color="#374151" style={{ marginRight: 6 }} />
-                  <Text className="text-[16px] font-semibold text-[#333]">End Time</Text>
+                  <Text className="text-[16px] font-semibold text-[#333]">End Date & Time *</Text>
                 </View>
-                <TouchableOpacity
-                  className="flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                  onPress={() => setShowEndTimePicker(true)}
-                >
-                  <Text className="text-[16px] text-[#333] font-medium">
-                    {eventForm.endTime || 'Not selected'}
-                  </Text>
-                  <Ionicons name="time-outline" size={16} color="#666" />
-                </TouchableOpacity>
+                <View className="flex-row gap-2">
+                  <TouchableOpacity
+                    className="flex-[2] flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                    onPress={() => setShowEndDatePicker(true)}
+                  >
+                    <Text className="text-[16px] text-[#333] font-medium">
+                      {endDateTime ? endDateTime.toLocaleDateString() : "No end date selected"}
+                    </Text>
+                    <Ionicons name="calendar-outline" size={16} color="#666" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="flex-1 flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                    onPress={() => setShowEndTimePicker(true)}
+                  >
+                    <Text className="text-[16px] text-[#333] font-medium">
+                      {endDateTime ? endDateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "No time"}
+                    </Text>
+                    <Ionicons name="time-outline" size={16} color="#666" />
+                  </TouchableOpacity>
+                </View>
               </View>
 
             </View>
@@ -1182,26 +1237,46 @@ const CreateEventModal = ({
           </TouchableOpacity>
         </View>
 
-        {/* Time Pickers */}
+        {/* Date and Time Pickers (following task creation pattern) */}
+        {showStartDatePicker && (
+          <DateTimePicker
+            value={startDateTime}
+            mode="date"
+            display="default"
+            onChange={handleStartDateChange}
+            minimumDate={new Date()}
+          />
+        )}
+
         {showStartTimePicker && (
           <DateTimePicker
-            value={startTime}
+            value={startDateTime}
             mode="time"
             is24Hour={false}
             display="default"
             onChange={handleStartTimeChange}
-            minimumDate={selectedDate && new Date(selectedDate).toDateString() === new Date().toDateString() ? new Date() : undefined}
+            minimumDate={startDateTime.toDateString() === new Date().toDateString() ? new Date() : undefined}
+          />
+        )}
+
+        {showEndDatePicker && (
+          <DateTimePicker
+            value={endDateTime}
+            mode="date"
+            display="default"
+            onChange={handleEndDateChange}
+            minimumDate={startDateTime}
           />
         )}
 
         {showEndTimePicker && (
           <DateTimePicker
-            value={endTime}
+            value={endDateTime}
             mode="time"
             is24Hour={false}
             display="default"
             onChange={handleEndTimeChange}
-            minimumDate={selectedDate && new Date(selectedDate).toDateString() === new Date().toDateString() ? new Date() : undefined}
+            minimumDate={endDateTime.toDateString() === new Date().toDateString() ? new Date() : undefined}
           />
         )}
 

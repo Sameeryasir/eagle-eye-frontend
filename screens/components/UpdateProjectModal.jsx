@@ -15,6 +15,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { updateProjectById } from "../../services/projects/updateProjectById";
+import NoChangesDialog from "./NoChangesDialog";
 
 export default function UpdateProjectModal({ 
   visible, 
@@ -30,6 +31,7 @@ export default function UpdateProjectModal({
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [showNoChangesDialog, setShowNoChangesDialog] = useState(false);
 
   useEffect(() => {
     // Add keyboard listeners
@@ -136,7 +138,7 @@ export default function UpdateProjectModal({
     const hasChanges = Object.keys(projectPayload).length > 0;
 
     if (!hasChanges) {
-      Alert.alert('No Changes', 'No changes were made to the project.');
+      setShowNoChangesDialog(true);
       return;
     }
 
@@ -310,6 +312,12 @@ export default function UpdateProjectModal({
             minimumDate={new Date()}
           />
         )}
+
+        {/* No Changes Dialog */}
+        <NoChangesDialog
+          visible={showNoChangesDialog}
+          onClose={() => setShowNoChangesDialog(false)}
+        />
       </View>
     </Modal>
   );

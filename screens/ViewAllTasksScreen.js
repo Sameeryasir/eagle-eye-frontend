@@ -440,10 +440,9 @@ function ViewAllTasksScreen({ navigation, route }) {
       return;
     }
 
-    if (!draftTask.description.trim()) {
-      showErrorDialog("Error", "Task description is required");
-      return;
-    }
+    // --- FIXED: Description is now optional (MCP Context 7) ---
+    // Business Rule: Only title is required, description can be empty
+    // This allows users to create tasks quickly without detailed descriptions
 
     // Validate that projectId is available
     if (!projectId) {
@@ -505,7 +504,7 @@ function ViewAllTasksScreen({ navigation, route }) {
       // Prepare the data for API call
       const taskPayload = {
         title: draftTask.title.trim(),
-        description: draftTask.description.trim(),
+        description: draftTask.description ? draftTask.description.trim() : "", // Handle empty description gracefully
         startTime: draftTask.startTime.toISOString(), // ISO 8601 string format
         endTime: draftTask.endTime ? draftTask.endTime.toISOString() : null, // Make endTime optional
         projectId: projectId,

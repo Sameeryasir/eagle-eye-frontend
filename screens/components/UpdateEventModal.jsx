@@ -26,6 +26,12 @@ const UpdateEventModal = ({
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [startTime, setStartTime] = useState(new Date());
   const [endTime, setEndTime] = useState(new Date());
+  
+  // --- State for date pickers ---
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [startDate, setStartDate] = useState(new Date());
+  const [endDate, setEndDate] = useState(new Date());
   const [isUpdating, setIsUpdating] = useState(false);
   const [noChangesDialogVisible, setNoChangesDialogVisible] = useState(false);
 
@@ -47,6 +53,8 @@ const UpdateEventModal = ({
       });
       setStartTime(event.startDate ? new Date(event.startDate) : new Date());
       setEndTime(event.endDate ? new Date(event.endDate) : new Date());
+      setStartDate(event.startDate ? new Date(event.startDate) : new Date());
+      setEndDate(event.endDate ? new Date(event.endDate) : new Date());
     }
   }, [event, visible]);
 
@@ -76,30 +84,21 @@ const UpdateEventModal = ({
     });
   };
 
-  // --- Helper function to check if time is in the past today ---
-  // Business Rule: Users cannot update events to times that have already passed today
+  // --- Helper function to get minimum time for today ---
+  // Business Rule: Users cannot select past times for today's events
   // This prevents setting event times that are in the past for today's events
-  const isTimeInPastToday = (eventDate, newTime) => {
+  const getMinimumTimeForDate = (selectedDate) => {
     const today = new Date();
-    const eventDateOnly = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+    const selectedDateOnly = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
     const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     
-    // Check if event is for today
-    if (eventDateOnly.getTime() === todayDateOnly.getTime()) {
-      // Event is for today - check if new time is in the past
-      const currentTime = today.getHours() * 60 + today.getMinutes(); // Convert to minutes
-      const newEventTime = newTime.getHours() * 60 + newTime.getMinutes(); // Convert to minutes
-      
-      console.log('=== TIME VALIDATION FOR TODAY ===');
-      console.log('Current Time (minutes):', currentTime);
-      console.log('New Event Time (minutes):', newEventTime);
-      console.log('Is Time in Past:', newEventTime < currentTime);
-      console.log('================================');
-      
-      return newEventTime < currentTime; // Return true if new time is in the past
+    // If the selected date is today, set minimum time to current time
+    if (selectedDateOnly.getTime() === todayDateOnly.getTime()) {
+      return today; // Return current time as minimum for today
     }
     
-    return false; // Not today, so time validation doesn't apply
+    // For future dates, no time restriction
+    return null;
   };
 
   // --- Time picker handlers ---
@@ -114,14 +113,21 @@ const UpdateEventModal = ({
       combinedDateTime.setSeconds(0);
       combinedDateTime.setMilliseconds(0);
       
-      // --- TIME VALIDATION WARNING FOR TODAY'S EVENTS ---
-      // Business Rule: Show warning if user selects past time for today's events
-      // This gives users immediate feedback about time selection
-      if (event && event.startDate) {
-        const eventDate = new Date(event.startDate);
-        if (isTimeInPastToday(eventDate, selectedTime)) {
-          console.log('Warning: User selected start time that is in the past today');
-          // Note: We allow the selection but will validate on update button press
+      // --- TIME VALIDATION: Check if selected time is in the past for today's events ---
+      // Business Rule: Users cannot select past times for today's events
+      // This prevents setting event times that are in the past for today's events
+      const today = new Date();
+      const selectedDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+      const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      
+      // If the selected date is today, check if the time is in the past
+      if (selectedDateOnly.getTime() === todayDateOnly.getTime()) {
+        if (combinedDateTime < today) {
+          showErrorDialog(
+            'Cannot Select Past Time', 
+            'You cannot select a time that has already passed for today\'s event. Please select a current or future time.'
+          );
+          return; // Don't update the time if it's in the past
         }
       }
       
@@ -142,24 +148,42 @@ const UpdateEventModal = ({
       combinedDateTime.setSeconds(0);
       combinedDateTime.setMilliseconds(0);
       
-      // --- TIME VALIDATION WARNING FOR TODAY'S EVENTS ---
-      // Business Rule: Show warning if user selects past time for today's events
-      // This gives users immediate feedback about time selection
-      if (event && event.endDate) {
-        const eventDate = new Date(event.endDate);
-        if (isTimeInPastToday(eventDate, selectedTime)) {
-          console.log('Warning: User selected end time that is in the past today');
-          // Note: We allow the selection but will validate on update button press
+      // --- TIME VALIDATION: Check if selected time is in the past for today's events ---
+      // Business Rule: Users cannot select past times for today's events
+      // This prevents setting event times that are in the past for today's events
+      const today = new Date();
+      const selectedDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+      const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      
+      // If the selected date is today, check if the time is in the past
+      if (selectedDateOnly.getTime() === todayDateOnly.getTime()) {
+        if (combinedDateTime < today) {
+          showErrorDialog(
+            'Cannot Select Past Time', 
+            'You cannot select a time that has already passed for today\'s event. Please select a current or future time.'
+          );
+          return; // Don't update the time if it's in the past
         }
       }
-      
-      // --- REMOVED: End time validation logic ---
-      // Business Rule: Allow users to set any end time, including times before start time
-      // This gives users full flexibility for event scheduling
       
       setEndTime(combinedDateTime);
       const timeString = combinedDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
       handleEventFormChange('endTime', timeString);
+    }
+  };
+
+  // --- Date picker handlers ---
+  const handleStartDateChange = (event, selectedDate) => {
+    setShowStartDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setStartDate(selectedDate);
+    }
+  };
+
+  const handleEndDateChange = (event, selectedDate) => {
+    setShowEndDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setEndDate(selectedDate);
     }
   };
 
@@ -176,60 +200,74 @@ const UpdateEventModal = ({
     console.log('==========================================');
 
     // --- PAST DATE VALIDATION ---
-    // Business Rule: Users cannot update events that are in the past
-    // This prevents modification of historical event data
-    if (event && event.startDate) {
-      const today = new Date();
-      const eventDate = new Date(event.startDate);
+    // Business Rule: Users cannot update events to dates that are in the past
+    // This prevents setting event dates that have already passed
+    const today = new Date();
+    const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    
+    console.log('=== PAST DATE VALIDATION ===');
+    console.log('Today Date Only:', todayDateOnly.toLocaleDateString());
+    console.log('New Start Date:', startDate.toLocaleDateString());
+    console.log('New End Date:', endDate.toLocaleDateString());
+    console.log('============================');
+    
+    // Check if user selected a start date that is in the past
+    const validationStartDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+    if (validationStartDateOnly < todayDateOnly) {
+      showErrorDialog(
+        'Cannot Update to Past Date', 
+        'You cannot update the event start date to a date that has already passed. Please select a current or future date.'
+      );
+      return; // Stop the update process
+    }
+    
+    // Check if user selected an end date that is in the past
+    const validationEndDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+    if (validationEndDateOnly < todayDateOnly) {
+      showErrorDialog(
+        'Cannot Update to Past Date', 
+        'You cannot update the event end date to a date that has already passed. Please select a current or future date.'
+      );
+      return; // Stop the update process
+    }
+
+    // --- TIME VALIDATION: Check if selected times are in the past for today's events ---
+    // Business Rule: Users cannot set past times for today's events
+    // This prevents setting event times that are in the past for today's events
+    const startDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+    const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+    
+    // Check if start time is in the past for today's events
+    if (startDateOnly.getTime() === todayDateOnly.getTime()) {
+      const startDateTime = new Date(startDate);
+      startDateTime.setHours(startTime.getHours());
+      startDateTime.setMinutes(startTime.getMinutes());
+      startDateTime.setSeconds(startTime.getSeconds());
+      startDateTime.setMilliseconds(startTime.getMilliseconds());
       
-      // Compare only the date part (ignore time) to determine if event is in the past
-      const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      const eventDateOnly = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
-      
-      console.log('=== PAST DATE VALIDATION ===');
-      console.log('Today Date Only:', todayDateOnly.toLocaleDateString());
-      console.log('Event Date Only:', eventDateOnly.toLocaleDateString());
-      console.log('Is Event in Past:', eventDateOnly < todayDateOnly);
-      console.log('============================');
-      
-      // Check if event date is before today
-      if (eventDateOnly < todayDateOnly) {
+      if (startDateTime < today) {
         showErrorDialog(
-          'Cannot Update Past Event', 
-          'You cannot update events that are in the past. Please select a current or future event.'
+          'Cannot Update to Past Time', 
+          'You cannot update the event start time to a time that has already passed for today\'s event. Please select a current or future time.'
         );
         return; // Stop the update process
       }
-
-      // --- TIME VALIDATION FOR TODAY'S EVENTS ---
-      // Business Rule: Users cannot update events to times that have already passed today
-      // This prevents setting event times that are in the past for today's events
-      if (eventDateOnly.getTime() === todayDateOnly.getTime()) {
-        // Event is for today - validate ONLY the newly selected times
-        
-        // Check if user selected a new start time that is in the past today
-        const originalStartTime = event.startDate ? new Date(event.startDate) : new Date();
-        const startTimeChanged = Math.abs(startTime.getTime() - originalStartTime.getTime()) > 1000; // 1 second tolerance
-        
-        if (startTimeChanged && isTimeInPastToday(eventDate, startTime)) {
-          showErrorDialog(
-            'Cannot Update to Past Time',
-            'You cannot update the event start time to a time that has already passed today.'
-          );
-          return; // Stop the update process
-        }
-        
-        // Check if user selected a new end time that is in the past today
-        const originalEndTime = event.endDate ? new Date(event.endDate) : new Date();
-        const endTimeChanged = Math.abs(endTime.getTime() - originalEndTime.getTime()) > 1000; // 1 second tolerance
-        
-        if (endTimeChanged && isTimeInPastToday(eventDate, endTime)) {
-          showErrorDialog(
-            'Cannot Update to Past Time',
-            'You cannot update the event end time to a time that has already passed today.'
-          );
-          return; // Stop the update process
-        }
+    }
+    
+    // Check if end time is in the past for today's events
+    if (endDateOnly.getTime() === todayDateOnly.getTime()) {
+      const endDateTime = new Date(endDate);
+      endDateTime.setHours(endTime.getHours());
+      endDateTime.setMinutes(endTime.getMinutes());
+      endDateTime.setSeconds(endTime.getSeconds());
+      endDateTime.setMilliseconds(endTime.getMilliseconds());
+      
+      if (endDateTime < today) {
+        showErrorDialog(
+          'Cannot Update to Past Time', 
+          'You cannot update the event end time to a time that has already passed for today\'s event. Please select a current or future time.'
+        );
+        return; // Stop the update process
       }
     }
 
@@ -253,18 +291,57 @@ const UpdateEventModal = ({
     // Business Rule: Allow users to set any end time, including times before start time
     // This gives users full flexibility for event scheduling
 
-    // Check if any changes were made
+    // --- CHANGE DETECTION: Check if any changes were made ---
+    // Business Rule: Detect changes in title, description, dates, and times
+    // This ensures users can update any aspect of the event
     const originalTitle = event.title || '';
     const originalDescription = event.description || '';
+    const originalStartDate = event.startDate ? new Date(event.startDate) : new Date();
+    const originalEndDate = event.endDate ? new Date(event.endDate) : new Date();
     const originalStartTime = event.startDate ? new Date(event.startDate) : new Date();
     const originalEndTime = event.endDate ? new Date(event.endDate) : new Date();
 
+    // Check for changes in all fields
     const titleChanged = eventForm.title.trim() !== originalTitle;
     const descriptionChanged = eventForm.description.trim() !== originalDescription;
+    
+    // --- DATE CHANGE DETECTION ---
+    // Compare dates only (ignore time) to detect date changes
+    const originalStartDateOnly = new Date(originalStartDate.getFullYear(), originalStartDate.getMonth(), originalStartDate.getDate());
+    const originalEndDateOnly = new Date(originalEndDate.getFullYear(), originalEndDate.getMonth(), originalEndDate.getDate());
+    const newStartDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+    const newEndDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+    
+    const startDateChanged = originalStartDateOnly.getTime() !== newStartDateOnly.getTime();
+    const endDateChanged = originalEndDateOnly.getTime() !== newEndDateOnly.getTime();
+    
+    // --- TIME CHANGE DETECTION ---
+    // Compare times only (ignore date) to detect time changes
     const startTimeChanged = Math.abs(startTime.getTime() - originalStartTime.getTime()) > 1000; // 1 second tolerance
     const endTimeChanged = Math.abs(endTime.getTime() - originalEndTime.getTime()) > 1000; // 1 second tolerance
 
-    if (!titleChanged && !descriptionChanged && !startTimeChanged && !endTimeChanged) {
+    // --- DEBUG: Change Detection Logging ---
+    console.log('=== CHANGE DETECTION DEBUG ===');
+    console.log('Title Changed:', titleChanged);
+    console.log('Description Changed:', descriptionChanged);
+    console.log('Start Date Changed:', startDateChanged);
+    console.log('End Date Changed:', endDateChanged);
+    console.log('Start Time Changed:', startTimeChanged);
+    console.log('End Time Changed:', endTimeChanged);
+    console.log('--- Original Values ---');
+    console.log('Original Start Date:', originalStartDateOnly.toLocaleDateString());
+    console.log('New Start Date:', newStartDateOnly.toLocaleDateString());
+    console.log('Original End Date:', originalEndDateOnly.toLocaleDateString());
+    console.log('New End Date:', newEndDateOnly.toLocaleDateString());
+    console.log('Original Start Time:', originalStartTime.toLocaleTimeString());
+    console.log('New Start Time:', startTime.toLocaleTimeString());
+    console.log('Original End Time:', originalEndTime.toLocaleTimeString());
+    console.log('New End Time:', endTime.toLocaleTimeString());
+    console.log('===============================');
+
+    // Check if any changes were made
+    if (!titleChanged && !descriptionChanged && !startDateChanged && !endDateChanged && !startTimeChanged && !endTimeChanged) {
+      console.log('No changes detected - showing no changes dialog');
       setNoChangesDialogVisible(true);
       return;
     }
@@ -276,20 +353,18 @@ const UpdateEventModal = ({
       // Business Rule: Use same timezone conversion approach as task handling
       // This ensures events updated "today" appear on "today" in the calendar for all timezones
       
-      // --- FIXED: Use the same date for both start and end times ---
-      // Business Rule: Both start and end times should use the original event date
-      // This prevents mixing different dates when updating event times
-      const originalEventDate = event.startDate ? new Date(event.startDate) : new Date();
+      // --- FIXED: Use selected dates for start and end times ---
+      // Business Rule: Use the dates selected by the user for proper multi-day event support
+      // This allows users to change both dates and times when updating events
       
-      // --- Create date objects that preserve the original event date ---
-      // Both start and end times use the same date to maintain consistency
-      const eventStartTime = new Date(originalEventDate);
+      // --- Create date objects using selected dates and times ---
+      const eventStartTime = new Date(startDate);
       eventStartTime.setHours(startTime.getHours());
       eventStartTime.setMinutes(startTime.getMinutes());
       eventStartTime.setSeconds(startTime.getSeconds());
       eventStartTime.setMilliseconds(startTime.getMilliseconds());
       
-      const eventEndTime = new Date(originalEventDate);
+      const eventEndTime = new Date(endDate);
       eventEndTime.setHours(endTime.getHours());
       eventEndTime.setMinutes(endTime.getMinutes());
       eventEndTime.setSeconds(endTime.getSeconds());
@@ -314,9 +389,12 @@ const UpdateEventModal = ({
       };
 
       console.log('=== EVENT UPDATE PROCESSING ===');
-      console.log('Original Event Date:', event.startDate);
-      console.log('Original Event Date Used:', originalEventDate.toLocaleDateString());
-      console.log('Original Event Date Used (ISO):', originalEventDate.toISOString());
+      console.log('Original Event Start Date:', event.startDate);
+      console.log('Original Event End Date:', event.endDate);
+      console.log('Start Date State:', startDate.toLocaleDateString());
+      console.log('Start Date State (ISO):', startDate.toISOString());
+      console.log('End Date State:', endDate.toLocaleDateString());
+      console.log('End Date State (ISO):', endDate.toISOString());
       console.log('Start Time State:', startTime.toLocaleString());
       console.log('Start Time State (ISO):', startTime.toISOString());
       console.log('End Time State:', endTime.toLocaleString());
@@ -459,38 +537,60 @@ const UpdateEventModal = ({
                 />
               </View>
 
-              {/* Start Time */}
+              {/* Start Date & Time */}
               <View className="mb-5">
                 <View className="flex-row items-center mb-2">
-                  <Ionicons name="time" size={16} color="#374151" style={{ marginRight: 6 }} />
-                  <Text className="text-[16px] font-semibold text-[#333]">Start Time</Text>
+                  <Ionicons name="calendar-outline" size={16} color="#374151" style={{ marginRight: 6 }} />
+                  <Text className="text-[16px] font-semibold text-[#333]">Start Date & Time</Text>
                 </View>
-                <TouchableOpacity
-                  className="flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                  onPress={() => setShowStartTimePicker(true)}
-                >
-                  <Text className="text-[16px] text-[#333] font-medium">
-                    {eventForm.startTime || 'Select start time'}
-                  </Text>
-                  <Ionicons name="time-outline" size={16} color="#666" />
-                </TouchableOpacity>
+                <View className="flex-row space-x-2">
+                  <TouchableOpacity
+                    className="flex-1 flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                    onPress={() => setShowStartDatePicker(true)}
+                  >
+                    <Text className="text-[16px] text-[#333] font-medium">
+                      {startDate.toLocaleDateString() || 'Select date'}
+                    </Text>
+                    <Ionicons name="calendar-outline" size={16} color="#666" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="flex-1 flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                    onPress={() => setShowStartTimePicker(true)}
+                  >
+                    <Text className="text-[16px] text-[#333] font-medium">
+                      {eventForm.startTime || 'Select time'}
+                    </Text>
+                    <Ionicons name="time-outline" size={16} color="#666" />
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              {/* End Time */}
+              {/* End Date & Time */}
               <View className="mb-5">
                 <View className="flex-row items-center mb-2">
-                  <Ionicons name="calendar" size={16} color="#374151" style={{ marginRight: 6 }} />
-                  <Text className="text-[16px] font-semibold text-[#333]">End Time</Text>
+                  <Ionicons name="calendar-outline" size={16} color="#374151" style={{ marginRight: 6 }} />
+                  <Text className="text-[16px] font-semibold text-[#333]">End Date & Time</Text>
                 </View>
-                <TouchableOpacity
-                  className="flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                  onPress={() => setShowEndTimePicker(true)}
-                >
-                  <Text className="text-[16px] text-[#333] font-medium">
-                    {eventForm.endTime || 'Select end time'}
-                  </Text>
-                  <Ionicons name="time-outline" size={16} color="#666" />
-                </TouchableOpacity>
+                <View className="flex-row space-x-2">
+                  <TouchableOpacity
+                    className="flex-1 flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                    onPress={() => setShowEndDatePicker(true)}
+                  >
+                    <Text className="text-[16px] text-[#333] font-medium">
+                      {endDate.toLocaleDateString() || 'Select date'}
+                    </Text>
+                    <Ionicons name="calendar-outline" size={16} color="#666" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="flex-1 flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                    onPress={() => setShowEndTimePicker(true)}
+                  >
+                    <Text className="text-[16px] text-[#333] font-medium">
+                      {eventForm.endTime || 'Select time'}
+                    </Text>
+                    <Ionicons name="time-outline" size={16} color="#666" />
+                  </TouchableOpacity>
+                </View>
               </View>
 
             </View>
@@ -514,6 +614,27 @@ const UpdateEventModal = ({
           </TouchableOpacity>
         </View>
 
+        {/* Date Pickers */}
+        {showStartDatePicker && (
+          <DateTimePicker
+            value={startDate}
+            mode="date"
+            display="default"
+            minimumDate={new Date()}
+            onChange={handleStartDateChange}
+          />
+        )}
+
+        {showEndDatePicker && (
+          <DateTimePicker
+            value={endDate}
+            mode="date"
+            display="default"
+            minimumDate={new Date()}
+            onChange={handleEndDateChange}
+          />
+        )}
+
         {/* Time Pickers */}
         {showStartTimePicker && (
           <DateTimePicker
@@ -521,6 +642,7 @@ const UpdateEventModal = ({
             mode="time"
             is24Hour={false}
             display="default"
+            minimumDate={getMinimumTimeForDate(startDate)}
             onChange={handleStartTimeChange}
           />
         )}
@@ -531,6 +653,7 @@ const UpdateEventModal = ({
             mode="time"
             is24Hour={false}
             display="default"
+            minimumDate={getMinimumTimeForDate(endDate)}
             onChange={handleEndTimeChange}
           />
         )}

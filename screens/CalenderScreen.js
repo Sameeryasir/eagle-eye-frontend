@@ -153,19 +153,27 @@ function CalenderScreen({ navigation }) {
           // --- FIXED: Convert to local timezone for date extraction ---
           // Business Rule: Use local date instead of UTC to prevent timezone issues
           // This ensures events created "today" appear on "today" in the calendar
-          const localDate = new Date(event.startTime);
-          const eventDate = localDate.getFullYear() + '-' + 
-            String(localDate.getMonth() + 1).padStart(2, '0') + '-' + 
-            String(localDate.getDate()).padStart(2, '0');
+          const localStartDate = new Date(event.startTime);
+          const localEndDate = event.endTime ? new Date(event.endTime) : localStartDate;
+          
+          // --- Get date strings for start and end dates ---
+          const eventStartDate = localStartDate.getFullYear() + '-' + 
+            String(localStartDate.getMonth() + 1).padStart(2, '0') + '-' + 
+            String(localStartDate.getDate()).padStart(2, '0');
+          
+          const eventEndDate = localEndDate.getFullYear() + '-' + 
+            String(localEndDate.getMonth() + 1).padStart(2, '0') + '-' + 
+            String(localEndDate.getDate()).padStart(2, '0');
           
           // --- Debug: Log timezone conversion for verification ---
-          console.log(`Event "${event.title}" - Original: ${event.startTime}, Local Date: ${localDate.toLocaleDateString()}, Event Date: ${eventDate}`);
+          console.log(`Event "${event.title}" - Original: ${event.startTime}, Local Start: ${localStartDate.toLocaleDateString()}, Local End: ${localEndDate.toLocaleDateString()}`);
+          console.log(`Event "${event.title}" - Start Date: ${eventStartDate}, End Date: ${eventEndDate}`);
           
-          if (!eventsByDate[eventDate]) {
-            eventsByDate[eventDate] = [];
-          }
+          // --- Check if this is a multi-day event ---
+          const isMultiDayEvent = eventStartDate !== eventEndDate;
           
-          eventsByDate[eventDate].push({
+          // --- Create event object with multi-day information ---
+          const eventObject = {
             id: event.id,
             title: event.title,
             type: 'event', // Mark as event for identification
@@ -180,8 +188,47 @@ function CalenderScreen({ navigation }) {
             status: event.status,
             // --- Add project and employee assignment information ---
             assignedTo: event.assignedTo || [],
-            projects: event.projects || []
-          });
+            projects: event.projects || [],
+            // --- Multi-day event properties ---
+            isMultiDayEvent: isMultiDayEvent,
+            originalStartDate: eventStartDate,
+            originalEndDate: eventEndDate
+          };
+          
+          // --- Add event to all dates it spans ---
+          if (isMultiDayEvent) {
+            console.log(`Multi-day event "${event.title}" - Adding to all dates from ${eventStartDate} to ${eventEndDate}`);
+            
+            // Generate all dates between start and end (inclusive)
+            const startDateObj = new Date(eventStartDate);
+            const endDateObj = new Date(eventEndDate);
+            
+            for (let currentDate = new Date(startDateObj); currentDate <= endDateObj; currentDate.setDate(currentDate.getDate() + 1)) {
+              const currentDateString = currentDate.getFullYear() + '-' + 
+                String(currentDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                String(currentDate.getDate()).padStart(2, '0');
+              
+              if (!eventsByDate[currentDateString]) {
+                eventsByDate[currentDateString] = [];
+              }
+              
+              // Add the event to this date
+              eventsByDate[currentDateString].push({
+                ...eventObject,
+                currentDisplayDate: currentDateString
+              });
+              
+              console.log(`Added event "${event.title}" to date: ${currentDateString}`);
+            }
+          } else {
+            // Single-day event - add only to start date
+            if (!eventsByDate[eventStartDate]) {
+              eventsByDate[eventStartDate] = [];
+            }
+            
+            eventsByDate[eventStartDate].push(eventObject);
+            console.log(`Single-day event "${event.title}" added to date: ${eventStartDate}`);
+          }
         });
         
         setEvents(eventsByDate);
@@ -406,27 +453,45 @@ function CalenderScreen({ navigation }) {
             markingType={"custom"}
             onDayPress={onDayPress}
             dayComponent={({ date, state }) => {
-              const taskList = tasks[date.dateString];
-              const visibleTasks = taskList?.slice(0, 2) || [];
-              const hiddenCount = taskList?.length > 2 ? taskList.length - 2 : 0;
+              // --- Get both tasks and events for this date ---
+              const taskList = tasks[date.dateString] || [];
+              const eventList = events[date.dateString] || [];
+              const combinedList = [...taskList, ...eventList];
+              
+              // --- Show first item (task or event) ---
+              const visibleItem = combinedList.slice(0, 1)[0];
+              const hiddenCount = combinedList.length > 1 ? combinedList.length - 1 : 0;
 
               return (
                 <TouchableOpacity onPress={() => onDayPress(date)}>
                   <View className="items-center py-2 mx-1 min-h-20 h-auto">
                     <Text className="text-lg text-black font-medium mb-1.5">{date.day}</Text>
                     <View className="w-full items-center gap-1">
-                      {visibleTasks.map((task, index) => (
+                      {/* --- Show first item (task or event) --- */}
+                      {visibleItem && (
                         <View 
-                          key={index} 
-                          className="bg-gray-50 px-1.5 py-1 rounded-md border-l-2 border-l-black my-0.5 min-w-15 max-w-11/12 shadow-sm"
+                          className={`px-1.5 py-1 rounded-md border-l-2 my-0.5 min-w-15 max-w-11/12 shadow-sm ${
+                            visibleItem.type === 'event' 
+                              ? visibleItem.isMultiDayEvent
+                                ? 'bg-blue-100 border-l-blue-600' // Multi-day events get darker blue
+                                : 'bg-blue-50 border-l-blue-500' // Single-day events get lighter blue
+                              : 'bg-gray-50 border-l-black'
+                          }`}
+                          style={{
+                            borderStyle: visibleItem.isMultiDayEvent ? 'dashed' : 'solid' // Dashed border for multi-day events
+                          }}
                         >
                           <Text numberOfLines={1} className="text-xs text-gray-800 font-medium text-center">
-                            {task.title.length > 8
-                              ? `${task.title.slice(0, 8)}...`
-                              : task.title}
+                            {visibleItem.title.length > 8
+                              ? `${visibleItem.title.slice(0, 8)}...`
+                              : visibleItem.title}
                           </Text>
+                          {/* --- Show type indicator --- */}
+                      
                         </View>
-                      ))}
+                      )}
+                      
+                      {/* --- Show "more" indicator if there are additional items --- */}
                       {hiddenCount > 0 && (
                         <View className="bg-gray-100 px-1 py-0.5 rounded-lg border border-gray-400 mt-0.5">
                           <Text className="text-xs text-gray-600 font-semibold text-center">+{hiddenCount} more</Text>

@@ -54,7 +54,9 @@ export default function MyWeekView({ navigation }) {
           if (task.startTime) {
             calendarEvents.push({
               id: `task-${task.id}`,
-              description: task.title,
+              title: task.title, // For modals
+              description: task.title, // For displaying in WeekView cards (library uses description field)
+              taskDescription: task.description || 'No description provided', // Actual task description
               startDate: new Date(task.startTime),
               endDate: task.endTime ? new Date(task.endTime) : new Date(new Date(task.startTime).getTime() + 60 * 60 * 1000),
               color: getPriorityColor(task.priority), // Use priority-based color
@@ -74,7 +76,9 @@ export default function MyWeekView({ navigation }) {
           if (event.startTime) {
             calendarEvents.push({
               id: `event-${event.id}`,
-              description: event.title,
+              title: event.title, // For modals
+              description: event.title, // For displaying in WeekView cards (library uses description field)
+              eventDescription: event.description || 'No description provided', // Actual event description
               startDate: new Date(event.startTime),
               endDate: event.endTime ? new Date(event.endTime) : new Date(new Date(event.startTime).getTime() + 60 * 60 * 1000),
               color: '#3B82F6', // Blue color for events

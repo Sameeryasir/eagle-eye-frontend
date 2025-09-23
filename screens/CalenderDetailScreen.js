@@ -91,19 +91,31 @@ const CalenderDetailScreen = ({ route, navigation }) => {
         console.log('All events:', response.data);
         console.log('Selected date:', selectedDate);
         
-        // --- Filter events by selected date (like tasks are handled) ---
-        // Business Rule: Filter all events to show only those for the selected date
+        // --- Filter events by selected date (including multi-day events) ---
+        // Business Rule: Show events that start, end, or span across the selected date
         const filteredEvents = response.data.filter(event => {
           if (!event.startTime) return false;
           
-          // Convert event date to local timezone and compare with selected date
-          const eventDate = new Date(event.startTime);
-          const eventDateString = eventDate.getFullYear() + '-' + 
-            String(eventDate.getMonth() + 1).padStart(2, '0') + '-' + 
-            String(eventDate.getDate()).padStart(2, '0');
+          // Convert event dates to local timezone
+          const eventStartDate = new Date(event.startTime);
+          const eventEndDate = event.endTime ? new Date(event.endTime) : eventStartDate;
+          const selectedDateObj = new Date(selectedDate);
           
-          console.log(`Event "${event.title}" - Event Date: ${eventDateString}, Selected Date: ${selectedDate}`);
-          return eventDateString === selectedDate;
+          // Get date strings for comparison (YYYY-MM-DD format)
+          const eventStartDateString = eventStartDate.getFullYear() + '-' + 
+            String(eventStartDate.getMonth() + 1).padStart(2, '0') + '-' + 
+            String(eventStartDate.getDate()).padStart(2, '0');
+          
+          const eventEndDateString = eventEndDate.getFullYear() + '-' + 
+            String(eventEndDate.getMonth() + 1).padStart(2, '0') + '-' + 
+            String(eventEndDate.getDate()).padStart(2, '0');
+          
+          // Check if selected date falls within the event's date range
+          const isEventOnSelectedDate = selectedDate >= eventStartDateString && selectedDate <= eventEndDateString;
+          
+          console.log(`Event "${event.title}" - Start: ${eventStartDateString}, End: ${eventEndDateString}, Selected: ${selectedDate}, Show: ${isEventOnSelectedDate}`);
+          
+          return isEventOnSelectedDate;
         });
         
         console.log('Filtered events for selected date:', filteredEvents);
@@ -284,8 +296,9 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           console.log(`Event "${event.title}" has no employees assigned`);
         }
         
-        // --- FIXED: Convert UTC times to local time using expo-localization ---
+        // --- FIXED: Convert UTC times to local time and handle multi-day events ---
         // Business Rule: Events come from server in UTC format, convert to user's local timezone
+        // For multi-day events, adjust display times based on selected date
         let startDate, endDate;
         
         if (event.startTime) {
@@ -313,6 +326,46 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
         }
         
+        // --- Handle multi-day events display ---
+        // Business Rule: For multi-day events, show appropriate time range for the selected date
+        const selectedDateObj = selectedDate ? new Date(selectedDate) : new Date();
+        const eventStartDateString = startDate.getFullYear() + '-' + 
+          String(startDate.getMonth() + 1).padStart(2, '0') + '-' + 
+          String(startDate.getDate()).padStart(2, '0');
+        const eventEndDateString = endDate.getFullYear() + '-' + 
+          String(endDate.getMonth() + 1).padStart(2, '0') + '-' + 
+          String(endDate.getDate()).padStart(2, '0');
+        const selectedDateString = selectedDateObj.getFullYear() + '-' + 
+          String(selectedDateObj.getMonth() + 1).padStart(2, '0') + '-' + 
+          String(selectedDateObj.getDate()).padStart(2, '0');
+        
+        // Adjust display times for multi-day events
+        if (selectedDateString !== eventStartDateString || selectedDateString !== eventEndDateString) {
+          console.log(`Multi-day event detected: "${event.title}"`);
+          console.log(`Event spans: ${eventStartDateString} to ${eventEndDateString}, showing for: ${selectedDateString}`);
+          
+          // If this is the start date, show from start time to end of day
+          if (selectedDateString === eventStartDateString) {
+            endDate = new Date(selectedDateObj);
+            endDate.setHours(23, 59, 59, 999); // End of day
+            console.log(`Start day: showing from ${startDate.toLocaleTimeString()} to end of day`);
+          }
+          // If this is the end date, show from start of day to end time
+          else if (selectedDateString === eventEndDateString) {
+            startDate = new Date(selectedDateObj);
+            startDate.setHours(0, 0, 0, 0); // Start of day
+            console.log(`End day: showing from start of day to ${endDate.toLocaleTimeString()}`);
+          }
+          // If this is a middle day, show full day
+          else {
+            startDate = new Date(selectedDateObj);
+            startDate.setHours(0, 0, 0, 0); // Start of day
+            endDate = new Date(selectedDateObj);
+            endDate.setHours(23, 59, 59, 999); // End of day
+            console.log(`Middle day: showing full day`);
+          }
+        }
+        
         console.log(`Converted dates for event ${index}:`, {
           startDate: startDate,
           endDate: endDate,
@@ -328,6 +381,9 @@ const CalenderDetailScreen = ({ route, navigation }) => {
         const eventId = event.id || `event-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         const uniqueKey = `event-${eventId}`;
         
+        // --- Determine if this is a multi-day event ---
+        const isMultiDayEvent = eventStartDateString !== eventEndDateString;
+        
         return {
           id: uniqueKey,
           key: uniqueKey, // Add explicit key property for React
@@ -342,7 +398,12 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           type: 'event', // Mark as event
           // --- Add project and employee assignment information ---
           assignedTo: event.assignedTo || [],
-          projects: event.projects || []
+          projects: event.projects || [],
+          // --- Multi-day event properties ---
+          isMultiDayEvent: isMultiDayEvent,
+          originalStartDate: eventStartDateString,
+          originalEndDate: eventEndDateString,
+          currentDisplayDate: selectedDateString
         };
       });
       
@@ -381,8 +442,29 @@ const CalenderDetailScreen = ({ route, navigation }) => {
 
     // --- Different styling for tasks vs events ---
     const isEvent = item.type === 'event';
-    const backgroundColor = isEvent ? '#EFF6FF' : '#F9FAFB'; // Blue tint for events, gray for tasks
-    const borderColor = isEvent ? '#3B82F6' : priorityColor; // Blue border for events, priority color for tasks
+    const isMultiDayEvent = item.isMultiDayEvent;
+    
+    // --- Enhanced styling for multi-day events ---
+    let backgroundColor, borderColor, borderStyle;
+    
+    if (isEvent) {
+      if (isMultiDayEvent) {
+        // Multi-day events get a special gradient-like background
+        backgroundColor = '#DBEAFE'; // Lighter blue for multi-day events
+        borderColor = '#1D4ED8'; // Darker blue border
+        borderStyle = 'dashed'; // Dashed border to indicate continuation
+      } else {
+        // Single-day events
+        backgroundColor = '#EFF6FF'; // Standard blue tint
+        borderColor = '#3B82F6'; // Standard blue border
+        borderStyle = 'solid';
+      }
+    } else {
+      // Tasks
+      backgroundColor = '#F9FAFB'; // Gray for tasks
+      borderColor = priorityColor; // Priority color for tasks
+      borderStyle = 'solid';
+    }
 
     return (
       <TouchableOpacity
@@ -394,6 +476,7 @@ const CalenderDetailScreen = ({ route, navigation }) => {
             padding: isShortDuration ? 4 : 8,
             borderLeftWidth: 3,
             borderLeftColor: borderColor,
+            borderStyle: borderStyle, // Apply dashed border for multi-day events
             shadowColor: '#000',
             shadowOffset: {
               width: 0,
@@ -408,7 +491,7 @@ const CalenderDetailScreen = ({ route, navigation }) => {
         activeOpacity={0.6}
         onPress={handleItemPress}
       >
-        {/* --- Item Title --- */}
+        {/* --- Item Title with Multi-day Indicator --- */}
         <Text 
           className="text-gray-800 text-sm font-semibold text-center"
           numberOfLines={1}
@@ -417,10 +500,10 @@ const CalenderDetailScreen = ({ route, navigation }) => {
             lineHeight: 16
           }}
         >
-          {item.title}
+          {isMultiDayEvent ? `📅 ${item.title}` : item.title}
         </Text>
         
-        {/* --- Time Display - Compact for short duration --- */}
+        {/* --- Time Display - Enhanced for multi-day events --- */}
         <Text 
           className="text-gray-500 text-xs font-medium text-center"
           numberOfLines={1}
@@ -429,17 +512,23 @@ const CalenderDetailScreen = ({ route, navigation }) => {
             fontSize: isShortDuration ? 10 : 12
           }}
         >
-          {item.startDate.toLocaleTimeString(Localization.locale, { 
-            hour: '2-digit', 
-            minute: '2-digit', 
-            hour12: true,
-            timeZone: Localization.timezone 
-          })} - {item.endDate.toLocaleTimeString(Localization.locale, { 
-            hour: 'numeric', 
-            minute: '2-digit', 
-            hour12: true,
-            timeZone: Localization.timezone 
-          })}
+          {isMultiDayEvent ? (
+            // Show date range for multi-day events
+            `${item.originalStartDate} to ${item.originalEndDate}`
+          ) : (
+            // Show time range for single-day events
+            `${item.startDate.toLocaleTimeString(Localization.locale, { 
+              hour: '2-digit', 
+              minute: '2-digit', 
+              hour12: true,
+              timeZone: Localization.timezone 
+            })} - ${item.endDate.toLocaleTimeString(Localization.locale, { 
+              hour: 'numeric', 
+              minute: '2-digit', 
+              hour12: true,
+              timeZone: Localization.timezone 
+            })}`
+          )}
         </Text>
       </TouchableOpacity>
     );

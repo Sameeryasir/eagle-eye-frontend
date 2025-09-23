@@ -39,16 +39,16 @@ export default function CustomBottomNav({
   }, []);
 
   // --- Check if FAB should be hidden (MCP Context 7) ---
-  // Business Rule: Hide FAB for Employee users on ViewAllTasksScreen, HomeScreen, CalenderScreen, and CalenderDetailScreen
-  // Business Rule: Hide FAB for Manager users on HomeScreen, CalenderScreen, and CalenderDetailScreen (but show on ViewAllTasksScreen)
+  // Business Rule: Hide FAB for Employee users on ViewAllTasksScreen, HomeScreen, CalenderScreen, CalenderDetailScreen, and WeekView
+  // Business Rule: Hide FAB for Manager users on HomeScreen, CalenderScreen, CalenderDetailScreen, and WeekView (but show on ViewAllTasksScreen)
   // Hide FAB for Owner role on ViewAllLogScreen
   // Hide FAB for Owner, Manager, and Employee roles on PersonalScreen, ProjectAssignment, and LogsDetailScreen
   // Hide FAB for all users on TaskDetailsScreen
   // Hide FAB for Manager and Employee roles on CreateLogScreen
   // Hide FAB for Owner, Manager, and Employee roles on CalenderScreen
-  // Show FAB for Owner role on CalenderDetailScreen
+  // Show FAB for Owner role on CalenderDetailScreen and WeekView (Manager and Employee cannot see FAB)
   // Hide FAB on calendar screens until userRole is loaded to prevent flashing during navigation
-  const isCalendarScreen = route.name === "CalenderScreen" || route.name === "CalenderDetailScreen";
+  const isCalendarScreen = route.name === "CalenderScreen" || route.name === "CalenderDetailScreen" || route.name === "WeekView";
   const shouldHideFAB = (
     userRole === "Employee" && (
       route.name === "ViewAllTasksScreen" || 
@@ -79,6 +79,9 @@ export default function CustomBottomNav({
     // Hide FAB for Manager and Employee roles on CalenderDetailScreen (Owner can see FAB)
     (userRole === "Manager" || userRole === "Employee") && route.name === "CalenderDetailScreen"
   ) || (
+    // Hide FAB for Manager and Employee roles on WeekView (Owner can see FAB)
+    (userRole === "Manager" || userRole === "Employee") && route.name === "WeekView"
+  ) || (
     // Hide FAB on calendar screens until userRole is loaded to prevent flashing
     isCalendarScreen && userRole === null
   );
@@ -93,6 +96,7 @@ export default function CustomBottomNav({
           return "home"; // Home icon highlighted for home/dashboard screens
         case "CalenderScreen":
         case "CalenderDetailScreen":
+        case "WeekView":
           return "profile"; // Calendar icon highlighted for calendar screens
    
 

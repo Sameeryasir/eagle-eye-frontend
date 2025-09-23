@@ -216,11 +216,55 @@ const EventDetailsModal = ({
                   <View className="w-8 h-8 bg-orange-100 rounded-full items-center justify-center mr-3">
                     <Ionicons name="time" size={16} color="#F59E0B" />
                   </View>
-                  <Text className="text-sm font-semibold text-gray-700">Time</Text>
+                  <Text className="text-sm font-semibold text-gray-700">
+                    {event.isMultiDayEvent ? 'Date & Time Range' : 'Time'}
+                  </Text>
                 </View>
-                <Text className="text-base text-gray-700 leading-6 ml-11">
-                  {event.startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })} - {event.endDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
-                </Text>
+                
+                {event.isMultiDayEvent ? (
+                  // --- Multi-day event display ---
+                  <View className="ml-11">
+                    {/* Date Range */}
+                    <View className="flex-row items-center mb-2">
+                      <Ionicons name="calendar" size={16} color="#6B7280" />
+                      <Text className="text-base text-gray-700 leading-6 ml-2 font-medium">
+                        {event.originalStartDate} to {event.originalEndDate}
+                      </Text>
+                    </View>
+                    
+                    {/* Time Range */}
+                    <View className="flex-row items-center">
+                      <Ionicons name="time" size={16} color="#6B7280" />
+                      <Text className="text-base text-gray-700 leading-6 ml-2">
+                        {event.startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })} - {event.endDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  // --- Single-day event display ---
+                  <View className="ml-11">
+                    {/* Date */}
+                    <View className="flex-row items-center mb-2">
+                      <Ionicons name="calendar" size={16} color="#6B7280" />
+                      <Text className="text-base text-gray-700 leading-6 ml-2 font-medium">
+                        {event.startDate.toLocaleDateString([], { 
+                          weekday: 'long', 
+                          year: 'numeric', 
+                          month: 'long', 
+                          day: 'numeric' 
+                        })}
+                      </Text>
+                    </View>
+                    
+                    {/* Time */}
+                    <View className="flex-row items-center">
+                      <Ionicons name="time" size={16} color="#6B7280" />
+                      <Text className="text-base text-gray-700 leading-6 ml-2">
+                        {event.startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })} - {event.endDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
+                      </Text>
+                    </View>
+                  </View>
+                )}
               </View>
 
               {/* --- Project Assignment Section --- */}
