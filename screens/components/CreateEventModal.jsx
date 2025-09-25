@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Modal, TextInput, Platform, ActivityIndicator, KeyboardAvoidingView } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, Modal, TextInput, Platform, ActivityIndicator, Keyboard, TouchableWithoutFeedback, FlatList } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import Toast from 'react-native-toast-message';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -36,6 +36,16 @@ const CreateEventModal = ({
   const [endDateTime, setEndDateTime] = useState(new Date());
   const [isCreating, setIsCreating] = useState(false);
 
+  // --- State for keyboard handling (following UpdateTaskModal pattern) ---
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isDropdownInteracting, setIsDropdownInteracting] = useState(false);
+  
+  // --- Refs for scroll management ---
+  const scrollViewRef = useRef(null);
+  const titleInputRef = useRef(null);
+  const descriptionInputRef = useRef(null);
+
   // --- State for custom error dialog ---
   const [errorDialog, setErrorDialog] = useState({
     visible: false,
@@ -57,16 +67,50 @@ const CreateEventModal = ({
 
   // --- Set current time when modal opens (following task creation pattern) ---
   useEffect(() => {
+    // Add keyboard listeners with height tracking (following UpdateTaskModal pattern)
+    const keyboardDidShowListener = Keyboard.addListener(
+      'keyboardDidShow',
+      (event) => {
+        setKeyboardVisible(true);
+        setKeyboardHeight(event.endCoordinates.height);
+      }
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      'keyboardDidHide',
+      () => {
+        setKeyboardVisible(false);
+        setKeyboardHeight(0);
+      }
+    );
+
     if (visible) {
       const now = new Date();
       const eventDate = selectedDate ? new Date(selectedDate) : new Date();
       
-      // Combine current time with the selected date (following task pattern)
+      // --- FIXED: Use selectedDate as the base date for event creation ---
+      // Business Rule: When user taps on a specific date (like 29th), the event should start from that date
+      // This ensures the date picker starts from the selected date, not today's date
       const currentStartDateTime = new Date(eventDate);
-      currentStartDateTime.setHours(now.getHours());
-      currentStartDateTime.setMinutes(now.getMinutes());
-      currentStartDateTime.setSeconds(0);
-      currentStartDateTime.setMilliseconds(0);
+      
+      // --- Smart time setting based on selected date ---
+      // If selected date is today, use current time
+      // If selected date is in the future, use a reasonable default time (9:00 AM)
+      const today = new Date();
+      const isToday = eventDate.toDateString() === today.toDateString();
+      
+      if (isToday) {
+        // For today's date, use current time
+        currentStartDateTime.setHours(now.getHours());
+        currentStartDateTime.setMinutes(now.getMinutes());
+        currentStartDateTime.setSeconds(0);
+        currentStartDateTime.setMilliseconds(0);
+      } else {
+        // For future dates, use a reasonable default time (9:00 AM)
+        currentStartDateTime.setHours(9);
+        currentStartDateTime.setMinutes(0);
+        currentStartDateTime.setSeconds(0);
+        currentStartDateTime.setMilliseconds(0);
+      }
       
       // Set end time to 1 hour after start time
       const currentEndDateTime = new Date(currentStartDateTime);
@@ -88,6 +132,12 @@ const CreateEventModal = ({
       // Always fetch projects when modal opens
       fetchProjects();
     }
+
+    // Cleanup listeners
+    return () => {
+      keyboardDidShowListener?.remove();
+      keyboardDidHideListener?.remove();
+    };
   }, [visible, selectedDate]);
 
   // --- Event form handlers ---
@@ -371,7 +421,10 @@ const CreateEventModal = ({
       newDate.setHours(selectedTime.getHours());
       newDate.setMinutes(selectedTime.getMinutes());
       
-      // Only check for past time if the event date is today
+      // --- FIXED: Check for past time based on selectedDate, not just today ---
+      // Business Rule: If user selected a specific date (like 29th), they can only select future times
+      // If the selected date is today, check against current time
+      // If the selected date is in the future, any time is allowed
       const now = new Date();
       const isToday = newDate.toDateString() === now.toDateString();
       
@@ -385,10 +438,9 @@ const CreateEventModal = ({
       
       setStartDateTime(newDate);
       
-      // Ensure end date is not before start date
-      if (endDateTime && newDate > endDateTime) {
-        setEndDateTime(newDate);
-      }
+      // --- REMOVED: Automatic end time update ---
+      // Business Rule: Users should manually set end time independently
+      // This gives users full control over both start and end times
       
       // Update form display
       const timeString = newDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
@@ -423,7 +475,10 @@ const CreateEventModal = ({
         newDate.setSeconds(0);
         newDate.setMilliseconds(0);
         
-        // Only check for past time if the event date is today
+        // --- FIXED: Check for past time based on selectedDate, not just today ---
+        // Business Rule: If user selected a specific date (like 29th), they can only select future times
+        // If the selected date is today, check against current time
+        // If the selected date is in the future, any time is allowed
         const now = new Date();
         const isToday = newDate.toDateString() === now.toDateString();
         
@@ -643,6 +698,12 @@ const CreateEventModal = ({
   const handleClose = () => {
     onClose();
     resetEventForm();
+  };
+
+  // --- Keyboard dismissal function (following UpdateTaskModal pattern) ---
+  const dismissKeyboard = () => {
+    Keyboard.dismiss();
+    setIsDropdownInteracting(false);
   };
 
   return (
@@ -1220,8 +1281,13 @@ const CreateEventModal = ({
           </View>
         </View>
 
-        {/* Fixed Action Button - Always positioned at bottom */}
-        <View className="absolute bottom-0 left-0 right-0 px-5 pt-5 pb-5 bg-transparent items-center">
+        {/* Fixed Action Button - Better positioning when keyboard is visible */}
+        <View 
+          className="absolute left-0 right-0 px-5 pt-5 pb-5 bg-transparent items-center"
+          style={{ 
+            bottom: keyboardVisible ? 10 : 0 
+          }}
+        >
           <TouchableOpacity
             className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
             onPress={handleCreateEvent}
@@ -1244,7 +1310,7 @@ const CreateEventModal = ({
             mode="date"
             display="default"
             onChange={handleStartDateChange}
-            minimumDate={new Date()}
+            minimumDate={selectedDate ? new Date(selectedDate) : new Date()}
           />
         )}
 
@@ -1265,7 +1331,7 @@ const CreateEventModal = ({
             mode="date"
             display="default"
             onChange={handleEndDateChange}
-            minimumDate={startDateTime}
+            minimumDate={selectedDate ? new Date(selectedDate) : startDateTime}
           />
         )}
 

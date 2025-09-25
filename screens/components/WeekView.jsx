@@ -406,15 +406,7 @@ export default function MyWeekView({ navigation }) {
       </View>
       
       {/* --- FAB (Floating Action Button) with Plus Icon - Only for Owner role --- */}
-      {!isRoleLoading && userRole === "Owner" && (
-        <TouchableOpacity 
-          style={styles.fab}
-          onPress={handleFabPlusPress}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.fabText}>+</Text>
-        </TouchableOpacity>
-      )}
+  
       
       <CustomBottomNav />
       

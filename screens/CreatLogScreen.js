@@ -1095,10 +1095,10 @@ function CreatLogScreen({ navigation, route }) {
             <TouchableOpacity
               className="w-[280px] rounded-xl py-4 items-center justify-center"
               onPress={handleSubmitLog}
-              disabled={isSubmittingLog || isUploadingImages || !logNote.trim()}
+              disabled={isSubmittingLog || isUploadingImages || (!logNote.trim() && selectedImages.length === 0)}
               style={{ 
-                backgroundColor: (isSubmittingLog || isUploadingImages || !logNote.trim()) ? '#D1D5DB' : '#000000',
-                opacity: (isSubmittingLog || isUploadingImages || !logNote.trim()) ? 0.6 : 1 
+                backgroundColor: (isSubmittingLog || isUploadingImages || (!logNote.trim() && selectedImages.length === 0)) ? '#D1D5DB' : '#000000',
+                opacity: (isSubmittingLog || isUploadingImages || (!logNote.trim() && selectedImages.length === 0)) ? 0.6 : 1 
               }}
             >
               {(isSubmittingLog || isUploadingImages) ? (

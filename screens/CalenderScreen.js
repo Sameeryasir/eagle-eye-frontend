@@ -18,6 +18,7 @@ import { getUserRole } from "../services/utils/userRole";
 import CustomBottomNav from "./components/CustomBottomNav";
 import MyWeekView from "./components/WeekView";
 import CalendarToggle from "./components/CalendarToggle";
+import CreateEventModal from "./components/CreateEventModal";
 
 const { height } = Dimensions.get("window");
 
@@ -32,6 +33,9 @@ function CalenderScreen({ navigation }) {
   const [viewMode, setViewMode] = useState('monthly'); // 'monthly' or 'weekly' - controls which view to show
   const [weekViewEvents, setWeekViewEvents] = useState([]); // Events formatted for WeekView
   const [monthlyViewLoading, setMonthlyViewLoading] = useState(false); // Loading state for monthly view switch
+  
+  // --- State for create event modal ---
+  const [showEventCreationDialog, setShowEventCreationDialog] = useState(false);
   
   // --- Animation values for smooth toggle transitions ---
   const weeklyButtonScale = useState(new Animated.Value(viewMode === 'weekly' ? 1 : 0.95))[0];
@@ -304,6 +308,13 @@ function CalenderScreen({ navigation }) {
     combineTasksAndEvents();
   }, [tasks, events]);
 
+  // --- Handler for when event is created ---
+  const handleEventCreated = () => {
+    // Refresh both tasks and events when a new event is created
+    fetchEvents();
+    fetchTasks();
+  };
+
   // --- Handle day press ---
   const onDayPress = (day) => {
     const combinedList = combinedItems[day.dateString] || [];
@@ -464,8 +475,8 @@ function CalenderScreen({ navigation }) {
 
               return (
                 <TouchableOpacity onPress={() => onDayPress(date)}>
-                  <View className="items-center py-2 mx-1 min-h-20 h-auto">
-                    <Text className="text-lg text-black font-medium mb-1.5">{date.day}</Text>
+                  <View className="items-center py-1 mx-1 min-h-14 h-auto">
+                    <Text className="text-lg text-black font-medium mb-1">{date.day}</Text>
                     <View className="w-full items-center gap-1">
                       {/* --- Show first item (task or event) --- */}
                       {visibleItem && (
@@ -486,14 +497,12 @@ function CalenderScreen({ navigation }) {
                               ? `${visibleItem.title.slice(0, 8)}...`
                               : visibleItem.title}
                           </Text>
-                          {/* --- Show type indicator --- */}
-                      
                         </View>
                       )}
                       
                       {/* --- Show "more" indicator if there are additional items --- */}
                       {hiddenCount > 0 && (
-                        <View className="bg-gray-100 px-1 py-0.5 rounded-lg border border-gray-400 mt-0.5">
+                        <View className="bg-gray-100 px-1 py-0.5 rounded-lg border border-gray-400">
                           <Text className="text-xs text-gray-600 font-semibold text-center">+{hiddenCount} more</Text>
                         </View>
                       )}
@@ -517,7 +526,33 @@ function CalenderScreen({ navigation }) {
       )}
       
       {/* --- Custom Bottom Navigation --- */}
-      <CustomBottomNav />
+      <CustomBottomNav 
+        handleFabPress={async () => {
+          // Check user role and only show event creation dialog for Owner
+          const userRole = await getUserRole();
+          if (userRole === "Owner") {
+            setShowEventCreationDialog(true);
+          } else {
+            // Show message for non-Owner users
+            Toast.show({
+              type: 'info',
+              text1: 'Access Restricted',
+              text2: 'Only Owners can create events',
+              visibilityTime: 3000,
+              autoHide: true,
+              topOffset: 80,
+            });
+          }
+        }}
+      />
+
+      {/* --- Create Event Modal --- */}
+      <CreateEventModal
+        visible={showEventCreationDialog}
+        onClose={() => setShowEventCreationDialog(false)}
+        selectedDate={new Date().toISOString().split('T')[0]} // Default to today's date
+        onEventCreated={handleEventCreated}
+      />
     </View>
   );
 }

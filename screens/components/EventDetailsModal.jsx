@@ -85,9 +85,7 @@ const EventDetailsModal = ({
   };
 
   const confirmDelete = async () => {
-    // Close dialog immediately when delete button is tapped
-    setDeleteDialogVisible(false);
-
+    // Keep dialog open during API call - close it after response
     try {
       // Call the delete service
       await deleteEventById(event.originalEventId || event.id);
@@ -102,7 +100,8 @@ const EventDetailsModal = ({
         topOffset: 80,
       });
 
-      // Close modal and refresh events list
+      // Close delete dialog and modal, then refresh events list
+      setDeleteDialogVisible(false);
       onClose();
       if (onEventUpdated) {
         onEventUpdated();
@@ -135,6 +134,10 @@ const EventDetailsModal = ({
         autoHide: true,
         topOffset: 80,
       });
+
+      // Close delete dialog and modal after showing error toast
+      setDeleteDialogVisible(false);
+      onClose();
     }
   };
 

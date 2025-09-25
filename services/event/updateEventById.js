@@ -53,7 +53,19 @@ const updateEventById = async (eventId, eventData) => {
       }
     }
     
-    throw error;
+    // --- ENHANCED ERROR HANDLING: Extract API response message for better user feedback ---
+    // Business Rule: Show specific API error messages to users for better UX
+    // This ensures users see the exact validation error from the backend
+    
+    if (error.response?.data?.message) {
+      throw new Error(error.response.data.message);
+    } else if (error.response?.data?.error) {
+      throw new Error(error.response.data.error);
+    } else if (error.message) {
+      throw new Error(error.message);
+    } else {
+      throw new Error("Failed to update event");
+    }
   }
 };
 

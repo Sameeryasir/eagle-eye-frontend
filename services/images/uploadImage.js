@@ -29,10 +29,13 @@ export async function uploadImage(formData) {
       // refresh and retry once
       const newToken = await refreshToken(refreshTokenValue);
       const retryResponse = await axios.post(`${API_URL}/image/upload`, formData, {
-        headers: { Authorization: `Bearer ${newToken}` },
+        headers: { 
+          Authorization: `Bearer ${newToken}`,
+          'Content-Type': 'multipart/form-data',
+        },
       });
       return retryResponse.data;
     }
-    throw new Error("Upload failed");
+    throw new Error(err.response?.data?.message || err.message || "Upload failed");
   }
 }

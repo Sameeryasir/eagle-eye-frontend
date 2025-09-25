@@ -45,16 +45,57 @@ const UpdateEventModal = ({
   // --- Initialize form with event data ---
   useEffect(() => {
     if (event && visible) {
+      // --- FIXED: Handle multi-day events properly ---
+      // Business Rule: For multi-day events, use the actual start and end dates/times
+      // This ensures the update modal shows the correct full event duration
+      
+      let actualStartDate, actualEndDate;
+      
+      if (event.isMultiDayEvent && event.originalStartDate && event.originalEndDate) {
+        // For multi-day events, use the original start and end dates
+        actualStartDate = new Date(event.originalStartDate + 'T00:00:00');
+        actualEndDate = new Date(event.originalEndDate + 'T23:59:59');
+        
+        // Set the actual start and end times from the event data
+        if (event.startDate) {
+          const startTime = new Date(event.startDate);
+          actualStartDate.setHours(startTime.getHours());
+          actualStartDate.setMinutes(startTime.getMinutes());
+          actualStartDate.setSeconds(startTime.getSeconds());
+        }
+        
+        if (event.endDate) {
+          const endTime = new Date(event.endDate);
+          actualEndDate.setHours(endTime.getHours());
+          actualEndDate.setMinutes(endTime.getMinutes());
+          actualEndDate.setSeconds(endTime.getSeconds());
+        }
+      } else {
+        // For single-day events, use the existing logic
+        actualStartDate = event.startDate ? new Date(event.startDate) : new Date();
+        actualEndDate = event.endDate ? new Date(event.endDate) : new Date();
+      }
+      
       setEventForm({
         title: event.title || '',
         description: event.description || '',
-        startTime: event.startDate ? event.startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : '',
-        endTime: event.endDate ? event.endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : ''
+        startTime: actualStartDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }),
+        endTime: actualEndDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })
       });
-      setStartTime(event.startDate ? new Date(event.startDate) : new Date());
-      setEndTime(event.endDate ? new Date(event.endDate) : new Date());
-      setStartDate(event.startDate ? new Date(event.startDate) : new Date());
-      setEndDate(event.endDate ? new Date(event.endDate) : new Date());
+      
+      setStartTime(actualStartDate);
+      setEndTime(actualEndDate);
+      setStartDate(actualStartDate);
+      setEndDate(actualEndDate);
+      
+      // --- DEBUG: Log the initialization for multi-day events ---
+      console.log('=== UpdateEventModal Initialization ===');
+      console.log('Event isMultiDayEvent:', event.isMultiDayEvent);
+      console.log('Event originalStartDate:', event.originalStartDate);
+      console.log('Event originalEndDate:', event.originalEndDate);
+      console.log('Actual Start Date:', actualStartDate.toLocaleString());
+      console.log('Actual End Date:', actualEndDate.toLocaleString());
+      console.log('=== End Initialization ===');
     }
   }, [event, visible]);
 
@@ -205,8 +246,19 @@ const UpdateEventModal = ({
     const today = new Date();
     const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     
+    // Check if this is an ongoing event (start time passed, end time not passed)
+    const originalStartDate = event.startDate ? new Date(event.startDate) : new Date();
+    const originalEndDate = event.endDate ? new Date(event.endDate) : new Date();
+    const currentTime = new Date();
+    
+    const isEventOngoing = originalStartDate < currentTime && originalEndDate > currentTime;
+    
     console.log('=== PAST DATE VALIDATION ===');
     console.log('Today Date Only:', todayDateOnly.toLocaleDateString());
+    console.log('Original Start Date:', originalStartDate.toLocaleString());
+    console.log('Original End Date:', originalEndDate.toLocaleString());
+    console.log('Current Time:', currentTime.toLocaleString());
+    console.log('Is Event Ongoing:', isEventOngoing);
     console.log('New Start Date:', startDate.toLocaleDateString());
     console.log('New End Date:', endDate.toLocaleDateString());
     console.log('============================');
@@ -224,50 +276,93 @@ const UpdateEventModal = ({
     // Check if user selected an end date that is in the past
     const validationEndDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
     if (validationEndDateOnly < todayDateOnly) {
-      showErrorDialog(
-        'Cannot Update to Past Date', 
-        'You cannot update the event end date to a date that has already passed. Please select a current or future date.'
-      );
-      return; // Stop the update process
-    }
-
-    // --- TIME VALIDATION: Check if selected times are in the past for today's events ---
-    // Business Rule: Users cannot set past times for today's events
-    // This prevents setting event times that are in the past for today's events
-    const startDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-    const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
-    
-    // Check if start time is in the past for today's events
-    if (startDateOnly.getTime() === todayDateOnly.getTime()) {
-      const startDateTime = new Date(startDate);
-      startDateTime.setHours(startTime.getHours());
-      startDateTime.setMinutes(startTime.getMinutes());
-      startDateTime.setSeconds(startTime.getSeconds());
-      startDateTime.setMilliseconds(startTime.getMilliseconds());
-      
-      if (startDateTime < today) {
+      // For ongoing events, allow past dates if the new end time is in the future
+      if (!isEventOngoing) {
         showErrorDialog(
-          'Cannot Update to Past Time', 
-          'You cannot update the event start time to a time that has already passed for today\'s event. Please select a current or future time.'
+          'Cannot Update to Past Date', 
+          'You cannot update the event end date to a date that has already passed. Please select a current or future date.'
         );
         return; // Stop the update process
       }
+      // For ongoing events, we'll check the end time later
+      console.log('Ongoing event - allowing past end date, will check end time');
     }
+
+    // --- TIME VALIDATION: Handle ongoing events vs regular time validation ---
+    // Business Rule: Different validation for ongoing events vs regular events
+    const startDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+    const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
     
-    // Check if end time is in the past for today's events
-    if (endDateOnly.getTime() === todayDateOnly.getTime()) {
-      const endDateTime = new Date(endDate);
-      endDateTime.setHours(endTime.getHours());
-      endDateTime.setMinutes(endTime.getMinutes());
-      endDateTime.setSeconds(endTime.getSeconds());
-      endDateTime.setMilliseconds(endTime.getMilliseconds());
+    // Check for start time changes in ongoing events
+    if (isEventOngoing) {
+      // For ongoing events, check if user tried to change start date/time
+      const originalStartDateOnly = new Date(originalStartDate.getFullYear(), originalStartDate.getMonth(), originalStartDate.getDate());
+      const startDateChanged = originalStartDateOnly.getTime() !== startDateOnly.getTime();
+      const startTimeChanged = Math.abs(startTime.getTime() - originalStartDate.getTime()) > 1000; // 1 second tolerance
       
-      if (endDateTime < today) {
+      if (startDateChanged || startTimeChanged) {
         showErrorDialog(
-          'Cannot Update to Past Time', 
-          'You cannot update the event end time to a time that has already passed for today\'s event. Please select a current or future time.'
+          'Cannot Update Start Time of Ongoing Event', 
+          'You cannot update the start time of an ongoing event. You can only modify the end time, title, and description.'
         );
         return; // Stop the update process
+      }
+      
+      // For ongoing events, check if new end time > current time
+      const newEndDateTime = new Date(endDate);
+      newEndDateTime.setHours(endTime.getHours());
+      newEndDateTime.setMinutes(endTime.getMinutes());
+      newEndDateTime.setSeconds(endTime.getSeconds());
+      newEndDateTime.setMilliseconds(endTime.getMilliseconds());
+      
+      console.log('=== ONGOING EVENT END TIME CHECK ===');
+      console.log('New End DateTime:', newEndDateTime.toLocaleString());
+      console.log('Current Time:', currentTime.toLocaleString());
+      console.log('Is new end time > current time?', newEndDateTime > currentTime);
+      
+      if (newEndDateTime <= currentTime) {
+        showErrorDialog(
+          'Cannot Update to Past Time', 
+          'You cannot update the end time to a time that has already passed. Please select a current or future time.'
+        );
+        return; // Stop the update process
+      }
+      
+      console.log('Ongoing event end time update allowed');
+    } else {
+      // For non-ongoing events, use existing validation
+      // Check if start time is in the past for today's events
+      if (startDateOnly.getTime() === todayDateOnly.getTime()) {
+        const startDateTime = new Date(startDate);
+        startDateTime.setHours(startTime.getHours());
+        startDateTime.setMinutes(startTime.getMinutes());
+        startDateTime.setSeconds(startTime.getSeconds());
+        startDateTime.setMilliseconds(startTime.getMilliseconds());
+        
+        if (startDateTime < today) {
+          showErrorDialog(
+            'Cannot Update to Past Time', 
+            'You cannot update the event start time to a time that has already passed for today\'s event. Please select a current or future time.'
+          );
+          return; // Stop the update process
+        }
+      }
+      
+      // Check if end time is in the past for today's events
+      if (endDateOnly.getTime() === todayDateOnly.getTime()) {
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(endTime.getHours());
+        endDateTime.setMinutes(endTime.getMinutes());
+        endDateTime.setSeconds(endTime.getSeconds());
+        endDateTime.setMilliseconds(endTime.getMilliseconds());
+        
+        if (endDateTime < today) {
+          showErrorDialog(
+            'Cannot Update to Past Time', 
+            'You cannot update the event end time to a time that has already passed for today\'s event. Please select a current or future time.'
+          );
+          return; // Stop the update process
+        }
       }
     }
 
@@ -296,8 +391,6 @@ const UpdateEventModal = ({
     // This ensures users can update any aspect of the event
     const originalTitle = event.title || '';
     const originalDescription = event.description || '';
-    const originalStartDate = event.startDate ? new Date(event.startDate) : new Date();
-    const originalEndDate = event.endDate ? new Date(event.endDate) : new Date();
     const originalStartTime = event.startDate ? new Date(event.startDate) : new Date();
     const originalEndTime = event.endDate ? new Date(event.endDate) : new Date();
 
@@ -380,12 +473,12 @@ const UpdateEventModal = ({
         String(localStartDate.getMonth() + 1).padStart(2, '0') + '-' + 
         String(localStartDate.getDate()).padStart(2, '0');
       
-      // Format the event data - send Date objects (JavaScript auto-converts to UTC)
+      // Format the event data - send ISO strings (consistent with CreateEventModal)
       const eventData = {
         title: eventForm.title.trim(),
         description: eventForm.description.trim() || '',
-        startTime: eventStartTime, // Date object (auto-converts to proper UTC)
-        endTime: eventEndTime // Date object (auto-converts to proper UTC)
+        startTime: eventStartTime.toISOString(), // ISO 8601 string format (UTC)
+        endTime: eventEndTime.toISOString() // ISO 8601 string format (UTC)
       };
 
       console.log('=== EVENT UPDATE PROCESSING ===');
@@ -425,10 +518,12 @@ const UpdateEventModal = ({
         topOffset: 80,
       });
 
-      // Close modal and refresh events list
-      onClose();
+      // Close modal and refresh events list (like CreateEventModal)
+      // Call onEventUpdated to close both UpdateEventModal and EventDetailsModal
       if (onEventUpdated) {
         onEventUpdated();
+      } else {
+        onClose();
       }
 
     } catch (error) {
@@ -437,8 +532,15 @@ const UpdateEventModal = ({
       
       let errorMessage = 'Failed to update event. Please try again.';
       
-      if (error.response?.status === 400) {
-        // Handle validation errors
+      // --- FIXED: Handle both Axios errors and regular Error objects ---
+      // Business Rule: Handle validation errors from both API responses and thrown errors
+      // This ensures all 400-level validation errors show as toast messages
+      
+      // Check for error message first (from API service)
+      if (error.message && error.message !== 'Failed to update event') {
+        errorMessage = error.message;
+      } else if (error.response?.status === 400) {
+        // Handle Axios 400 validation errors
         if (error.response?.data?.message) {
           errorMessage = error.response.data.message;
         } else if (error.response?.data?.error) {
@@ -456,7 +558,11 @@ const UpdateEventModal = ({
         errorMessage = 'Server error. Please try again later.';
       }
       
-      // Show error toast message
+      // --- ALWAYS SHOW TOAST: Ensure toast is always displayed for any error ---
+      // Business Rule: Users must see feedback for any error that occurs
+      // This ensures no errors are silent and users always know what happened
+      console.log('Showing toast with message:', errorMessage);
+      
       Toast.show({
         type: 'error',
         text1: 'Update Failed',
@@ -465,6 +571,14 @@ const UpdateEventModal = ({
         autoHide: true,
         topOffset: 80,
       });
+
+      // Close modal after showing error toast (like CreateEventModal)
+      // Call onEventUpdated to close both UpdateEventModal and EventDetailsModal
+      if (onEventUpdated) {
+        onEventUpdated();
+      } else {
+        onClose();
+      }
     } finally {
       setIsUpdating(false);
     }
@@ -490,11 +604,12 @@ const UpdateEventModal = ({
           </TouchableOpacity>
         </View>
         
-        <View className="flex-1 p-5 items-center">
+        <View className="flex-1 bg-white">
           <ScrollView 
-            className="flex-1 w-full max-w-md"
+            className="flex-1 w-full max-w-md p-5"
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 100 }}
+            keyboardShouldPersistTaps="handled"
           >
             <View className="mb-8 items-center">
               <Text className="text-[28px] font-bold text-[#333]">Update Event</Text>

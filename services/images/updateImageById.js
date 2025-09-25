@@ -56,6 +56,6 @@ export async function updateImageById(imageId, updateData, newFile = null) {
       });
       return retryResponse.data;
     }
-    throw new Error("Update failed");
+    throw new Error(err.response?.data?.message || err.message || "Update failed");
   }
 }
