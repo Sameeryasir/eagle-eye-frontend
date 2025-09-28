@@ -1,6 +1,6 @@
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { API_URL } from '@env';
+import { API_URL } from '../../config/api.js';
 import refreshToken from '../utils/tokenRefresh';
 
 export async function createEvent(data) {

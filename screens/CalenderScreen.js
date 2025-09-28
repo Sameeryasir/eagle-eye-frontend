@@ -519,10 +519,8 @@ function CalenderScreen({ navigation }) {
           />
         </ScrollView>
       ) : (
-        /* --- Weekly View without ScrollView for proper centering --- */
-        <View style={{ flex: 1 }}>
-          <MyWeekView navigation={navigation} />
-        </View>
+        /* --- Weekly View Component --- */
+        <MyWeekView />
       )}
       
       {/* --- Custom Bottom Navigation --- */}
@@ -550,7 +548,7 @@ function CalenderScreen({ navigation }) {
       <CreateEventModal
         visible={showEventCreationDialog}
         onClose={() => setShowEventCreationDialog(false)}
-        selectedDate={new Date().toISOString().split('T')[0]} // Default to today's date
+        selectedDate={null} // Let CreateEventModal use current date
         onEventCreated={handleEventCreated}
       />
     </View>

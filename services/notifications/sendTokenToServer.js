@@ -3,7 +3,7 @@
 // Following MCP Context 7 best practices for clean, maintainable code
 
 import axios from 'axios';
-import { API_URL } from '@env';
+import { API_URL } from "../../config/api";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 

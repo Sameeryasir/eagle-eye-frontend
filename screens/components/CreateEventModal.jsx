@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Modal, TextInput, Platform, ActivityIndicator, Keyboard, TouchableWithoutFeedback, FlatList } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Modal, TextInput, Platform, ActivityIndicator, Keyboard, TouchableWithoutFeedback, FlatList, KeyboardAvoidingView } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import Toast from 'react-native-toast-message';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -40,6 +40,7 @@ const CreateEventModal = ({
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isDropdownInteracting, setIsDropdownInteracting] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   
   // --- Refs for scroll management ---
   const scrollViewRef = useRef(null);
@@ -80,6 +81,10 @@ const CreateEventModal = ({
       () => {
         setKeyboardVisible(false);
         setKeyboardHeight(0);
+        // Reset scroll position when keyboard closes to prevent content shift
+        if (scrollViewRef.current) {
+          scrollViewRef.current.scrollToOffset({ offset: 0, animated: true });
+        }
       }
     );
 
@@ -704,72 +709,92 @@ const CreateEventModal = ({
   const dismissKeyboard = () => {
     Keyboard.dismiss();
     setIsDropdownInteracting(false);
+    setIsSearching(false);
+    setEmployeeDropdownOpen(false);
+    setProjectDropdownOpen(false);
   };
 
   return (
     <Modal
       visible={visible}
       animationType="slide"
-      presentationStyle="formSheet"
+      presentationStyle="fullScreen"
       onRequestClose={handleClose}
     >
-      <View className="flex-1 bg-white">
-        {/* Black Navbar */}
-        <View className="bg-black px-4 py-3 flex-row items-center justify-between">
-          <Text className="text-black text-[18px] font-semibold">Create Event</Text>
-          <TouchableOpacity onPress={handleClose}>
-            <Ionicons name="close" size={24} color="white" />
-          </TouchableOpacity>
-        </View>
-        
-        <View className="flex-1 p-5 items-center">
-          <View 
-            className="flex-1 w-full max-w-md"
-            style={{ paddingBottom: 100 }}
-          >
-            <View className="mb-8 items-center">
-              <Text className="text-[28px] font-bold text-[#333]">Create Event</Text>
-              <Text className="text-[16px] text-[#666] text-center">Add a new event to your schedule</Text>
-            </View>
+      <TouchableWithoutFeedback onPress={dismissKeyboard}>
+        <KeyboardAvoidingView 
+          className="flex-1"
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+          style={{ backgroundColor: 'white', flex: 1 }}
+        >
+          {/* Black Navbar */}
+          <View className="bg-black px-4 py-3 flex-row items-center justify-between" style={{ borderBottomWidth: 0, marginTop: 0, marginLeft: 0, marginRight: 0 }}>
+            <Text className="text-white text-[18px] font-semibold">Create Event</Text>
+            <TouchableOpacity onPress={handleClose}>
+              <Ionicons name="close" size={24} color="white" />
+            </TouchableOpacity>
+          </View>
+          
+          <View className="flex-1 items-center">
+            <FlatList
+              ref={scrollViewRef}
+              className="flex-1 w-full max-w-md px-5"
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              scrollEnabled={keyboardVisible || ((employeeDropdownOpen || projectDropdownOpen) && (!isDropdownInteracting || isSearching))}
+              // --- FIXED: Add proper bottom padding to prevent content from hiding behind fixed button ---
+              contentContainerStyle={{
+                paddingTop: 20, // Add top padding for form content
+                paddingBottom: 120, // Add space for fixed button (80px button + 40px padding)
+                flexGrow: 1
+              }}
+              data={[{ key: 'form' }]}
+              renderItem={() => (
+                <View>
+                  <View className="mb-8 items-center">
+                    <Text className="text-[28px] font-bold text-[#333]">Create Event</Text>
+                    <Text className="text-[16px] text-[#666] text-center">Add a new event to your schedule</Text>
+                  </View>
 
-            <View className="mb-5">
-              {/* Event Title */}
-              <View className="mb-5">
-                <View className="flex-row items-center mb-2">
-                  <Ionicons name="document-text" size={16} color="#374151" style={{ marginRight: 6 }} />
-                  <Text className="text-[16px] font-semibold text-[#333]">Event Title</Text>
-                </View>
-                <TextInput
-                  className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333]"
-                  placeholder="Enter event title"
-                  value={eventForm.title}
-                  onChangeText={(text) => handleEventFormChange('title', text)}
-                  placeholderTextColor="#999"
-                  returnKeyType="next"
-                />
-              </View>
+                  <View className="mb-5">
+                    {/* Event Title */}
+                    <View className="mb-5">
+                      <View className="flex-row items-center mb-2">
+                        <Ionicons name="document-text" size={16} color="#374151" style={{ marginRight: 6 }} />
+                        <Text className="text-[16px] font-semibold text-[#333]">Event Title</Text>
+                      </View>
+                      <TextInput
+                        className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333]"
+                        placeholder="Enter event title"
+                        value={eventForm.title}
+                        onChangeText={(text) => handleEventFormChange('title', text)}
+                        placeholderTextColor="#999"
+                        returnKeyType="next"
+                      />
+                    </View>
 
-              {/* Event Description */}
-              <View className="mb-5">
-                <View className="flex-row items-center mb-2">
-                  <Ionicons name="chatbubble-ellipses" size={16} color="#374151" style={{ marginRight: 6 }} />
-                  <Text className="text-[16px] font-semibold text-[#333]">Description</Text>
-                </View>
-                <TextInput
-                  className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333] h-24"
-                  placeholder="Describe your event"
-                  value={eventForm.description}
-                  onChangeText={(text) => handleEventFormChange('description', text)}
-                  multiline
-                  numberOfLines={4}
-                  placeholderTextColor="#999"
-                  returnKeyType="next"
-                  style={{ textAlignVertical: 'top' }}
-                />
-              </View>
+                    {/* Event Description */}
+                    <View className="mb-5">
+                      <View className="flex-row items-center mb-2">
+                        <Ionicons name="chatbubble-ellipses" size={16} color="#374151" style={{ marginRight: 6 }} />
+                        <Text className="text-[16px] font-semibold text-[#333]">Description</Text>
+                      </View>
+                      <TextInput
+                        className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333] h-24"
+                        placeholder="Describe your event"
+                        value={eventForm.description}
+                        onChangeText={(text) => handleEventFormChange('description', text)}
+                        multiline
+                        numberOfLines={4}
+                        placeholderTextColor="#999"
+                        returnKeyType="next"
+                        style={{ textAlignVertical: 'top' }}
+                      />
+                    </View>
 
-              {/* Project Checkbox */}
-              <View className="mb-5">
+                    {/* Project Checkbox */}
+                    <View className="mb-5">
                 <TouchableOpacity className="flex-row items-center justify-between p-3 border border-[#e1e8ed] rounded-lg bg-[#f8f9fa]"
                   onPress={() => handleProjectCheckboxChange(!eventForm.isProject)}
                   activeOpacity={0.7}
@@ -837,7 +862,14 @@ const CreateEventModal = ({
                   open={projectDropdownOpen}
                   value={selectedProjectValues}
                   items={projects}
-                  setOpen={setProjectDropdownOpen}
+                  setOpen={(open) => {
+                    if (open) {
+                      setIsDropdownInteracting(true);
+                    } else {
+                      setIsDropdownInteracting(false);
+                    }
+                    setProjectDropdownOpen(open);
+                  }}
                   setValue={(callback) => {
                     console.log('Project dropdown setValue called with callback:', callback);
                   }}
@@ -870,6 +902,19 @@ const CreateEventModal = ({
                     fontSize: 16,
                     color: '#333'
                   }}
+                  searchTextInputProps={{
+                    placeholderTextColor: "#9ca3af",
+                    returnKeyType: "search",
+                    blurOnSubmit: false, // Keep focus for better UX
+                    autoCorrect: false,
+                    autoCapitalize: "none",
+                    onFocus: () => {
+                      setIsSearching(true);
+                    },
+                    onBlur: () => {
+                      setIsSearching(false);
+                    },
+                  }}
                   style={{
                     backgroundColor: '#f8f9fa',
                     borderColor: '#e1e8ed',
@@ -887,13 +932,36 @@ const CreateEventModal = ({
                     shadowOffset: { width: 0, height: 2 },
                     shadowOpacity: 0.1,
                     shadowRadius: 4,
-                    maxHeight: 200
+                    maxHeight: 200,
+                    zIndex: 999999,
+                    // Position dropdown above keyboard when keyboard is visible
+                    ...(keyboardVisible && {
+                      marginBottom: keyboardHeight - 50, // Adjust position to stay above keyboard
+                    }),
                   }}
+                  listMode="SCROLLVIEW"
                   scrollViewProps={{
                     nestedScrollEnabled: true,
                     showsVerticalScrollIndicator: true,
                     bounces: true,
-                    scrollEnabled: true
+                    scrollEnabled: true,
+                    onScrollBeginDrag: () => {
+                      setIsDropdownInteracting(true);
+                    },
+                    onScrollEndDrag: () => {
+                      if (projectDropdownOpen) {
+                        setIsDropdownInteracting(true);
+                      }
+                    },
+                    scrollEventThrottle: 16,
+                    onTouchStart: () => {
+                      setIsDropdownInteracting(true);
+                    },
+                    onTouchEnd: () => {
+                      if (!projectDropdownOpen) {
+                        setIsDropdownInteracting(false);
+                      }
+                    },
                   }}
                   textStyle={{
                     fontSize: 16,
@@ -1000,8 +1068,8 @@ const CreateEventModal = ({
                     marginBottom: 4
                   }}
                   closeAfterSelecting={false}
-                  zIndex={2000}
-                  zIndexInverse={2000}
+                  zIndex={999999}
+                  zIndexInverse={1000}
                 />
               </View>
               )}
@@ -1053,7 +1121,14 @@ const CreateEventModal = ({
                     open={employeeDropdownOpen}
                     value={selectedEmployeeValues}
                     items={employees}
-                    setOpen={setEmployeeDropdownOpen}
+                    setOpen={(open) => {
+                      if (open) {
+                        setIsDropdownInteracting(true);
+                      } else {
+                        setIsDropdownInteracting(false);
+                      }
+                      setEmployeeDropdownOpen(open);
+                    }}
                     setValue={setSelectedEmployeeValues}
                     setItems={setEmployees}
                     multiple={true}
@@ -1084,6 +1159,19 @@ const CreateEventModal = ({
                       fontSize: 16,
                       color: '#333'
                     }}
+                    searchTextInputProps={{
+                      placeholderTextColor: "#9ca3af",
+                      returnKeyType: "search",
+                      blurOnSubmit: false, // Keep focus for better UX
+                      autoCorrect: false,
+                      autoCapitalize: "none",
+                      onFocus: () => {
+                        setIsSearching(true);
+                      },
+                      onBlur: () => {
+                        setIsSearching(false);
+                      },
+                    }}
                     style={{
                       backgroundColor: '#f8f9fa',
                       borderColor: '#e1e8ed',
@@ -1101,7 +1189,36 @@ const CreateEventModal = ({
                       shadowOffset: { width: 0, height: 2 },
                       shadowOpacity: 0.1,
                       shadowRadius: 4,
-                      maxHeight: 300
+                      maxHeight: 200, // Increased by 2% (300 * 1.02)
+                      zIndex: 999999,
+                      // Position dropdown above keyboard when keyboard is visible
+                      ...(keyboardVisible && {
+                        marginBottom: keyboardHeight - 50, // Adjust position to stay above keyboard
+                      }),
+                    }}
+                    listMode="SCROLLVIEW"
+                    scrollViewProps={{
+                      nestedScrollEnabled: true,
+                      showsVerticalScrollIndicator: true,
+                      bounces: true,
+                      scrollEnabled: true,
+                      onScrollBeginDrag: () => {
+                        setIsDropdownInteracting(true);
+                      },
+                      onScrollEndDrag: () => {
+                        if (employeeDropdownOpen) {
+                          setIsDropdownInteracting(true);
+                        }
+                      },
+                      scrollEventThrottle: 16,
+                      onTouchStart: () => {
+                        setIsDropdownInteracting(true);
+                      },
+                      onTouchEnd: () => {
+                        if (!employeeDropdownOpen) {
+                          setIsDropdownInteracting(false);
+                        }
+                      },
                     }}
                     textStyle={{
                       fontSize: 16,
@@ -1118,12 +1235,14 @@ const CreateEventModal = ({
                       fontWeight: '600'
                     }}
                     listItemContainerStyle={{
-                      paddingVertical: 12,
-                      paddingHorizontal: 16,
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
                       flexDirection: 'row',
                       alignItems: 'center',
                       borderBottomWidth: 1,
-                      borderBottomColor: '#f0f0f0'
+                      borderBottomColor: '#f0f0f0',
+                      minHeight: 44, // Ensure consistent height
+                      maxHeight: 50 // Prevent items from being too tall
                     }}
                     listItemLabelStyle={{
                       fontSize: 16,
@@ -1151,11 +1270,14 @@ const CreateEventModal = ({
                           style={{
                             flexDirection: 'row',
                             alignItems: 'center',
-                            paddingVertical: 12,
-                            paddingHorizontal: 16,
+                            paddingVertical: 8,
+                            paddingHorizontal: 12,
                             backgroundColor: isSelected ? '#f5f5f5' : 'transparent',
                             borderLeftWidth: isSelected ? 3 : 0,
-                            borderLeftColor: '#000000'
+                            borderLeftColor: '#000000',
+                            minHeight: 44,
+                            maxHeight: 50,
+                            width: '100%'
                           }}
                           onPress={() => {
                             const newValues = isSelected
@@ -1181,13 +1303,22 @@ const CreateEventModal = ({
                             )}
                           </View>
                           
-                          {/* Employee Info - Single Line Layout */}
-                          <View style={{ flex: 1, marginLeft: 12 }}>
+                          {/* Employee Info - Responsive Single Line Layout */}
+                          <View style={{ 
+                            flex: 1, 
+                            marginLeft: 12,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            minHeight: 20
+                          }}>
                             <Text style={{
-                              fontSize: 16,
+                              fontSize: 14,
                               color: isSelected ? '#000000' : '#333',
                               fontWeight: isSelected ? '600' : '500',
-                              flex: 1
+                              flex: 1,
+                              numberOfLines: 1,
+                              ellipsizeMode: 'tail'
                             }}>
                               {item.label || 'Unknown Employee'}
                             </Text>
@@ -1209,7 +1340,7 @@ const CreateEventModal = ({
                       marginBottom: 4
                     }}
                     closeAfterSelecting={false}
-                    zIndex={3000}
+                    zIndex={999999}
                     zIndexInverse={1000}
                   />
                   
@@ -1217,143 +1348,141 @@ const CreateEventModal = ({
                 </View>
               )}
 
-              {/* Start Date & Time */}
-              <View className="mb-5">
-                <View className="flex-row items-center mb-2">
-                  <Ionicons name="time" size={16} color="#374151" style={{ marginRight: 6 }} />
-                  <Text className="text-[16px] font-semibold text-[#333]">Start Date & Time *</Text>
-                </View>
-                <View className="flex-row gap-2">
-                  <TouchableOpacity
-                    className="flex-[2] flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                    onPress={() => setShowStartDatePicker(true)}
-                  >
-                    <Text className="text-[16px] text-[#333] font-medium">
-                      {startDateTime.toLocaleDateString()}
-                    </Text>
-                    <Ionicons name="calendar-outline" size={16} color="#666" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    className={`flex-1 flex-row items-center justify-between border rounded-lg p-3 ${startDateTime ? 'border-[#e1e8ed] bg-[#f8f9fa]' : 'border-[#d1d5db] bg-[#f3f4f6]'
-                      }`}
-                    onPress={() => startDateTime && setShowStartTimePicker(true)}
-                    disabled={!startDateTime}
-                    activeOpacity={startDateTime ? 0.8 : 1}
-                  >
-                    <Text className={`text-[16px] font-medium ${startDateTime ? 'text-[#333]' : 'text-[#9ca3af]'
-                      }`}>
-                      {startDateTime ? startDateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "Select time"}
-                    </Text>
-                    <Ionicons name="time-outline" size={16} color={startDateTime ? "#666" : "#9ca3af"} />
-                  </TouchableOpacity>
-                </View>
-              </View>
+                    {/* Start Date & Time */}
+                    <View className="mb-5">
+                      <View className="flex-row items-center mb-2">
+                        <Ionicons name="time" size={16} color="#374151" style={{ marginRight: 6 }} />
+                        <Text className="text-[16px] font-semibold text-[#333]">Start Date & Time *</Text>
+                      </View>
+                      <View className="flex-row gap-2">
+                        <TouchableOpacity
+                          className="flex-[2] flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                          onPress={() => setShowStartDatePicker(true)}
+                        >
+                          <Text className="text-[16px] text-[#333] font-medium">
+                            {startDateTime.toLocaleDateString()}
+                          </Text>
+                          <Ionicons name="calendar-outline" size={16} color="#666" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          className={`flex-1 flex-row items-center justify-between border rounded-lg p-3 ${startDateTime ? 'border-[#e1e8ed] bg-[#f8f9fa]' : 'border-[#d1d5db] bg-[#f3f4f6]'
+                            }`}
+                          onPress={() => startDateTime && setShowStartTimePicker(true)}
+                          disabled={!startDateTime}
+                          activeOpacity={startDateTime ? 0.8 : 1}
+                        >
+                          <Text className={`text-[16px] font-medium ${startDateTime ? 'text-[#333]' : 'text-[#9ca3af]'
+                            }`}>
+                            {startDateTime ? startDateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "Select time"}
+                          </Text>
+                          <Ionicons name="time-outline" size={16} color={startDateTime ? "#666" : "#9ca3af"} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
 
-              {/* End Date & Time */}
-              <View className="mb-5">
-                <View className="flex-row items-center mb-2">
-                  <Ionicons name="calendar" size={16} color="#374151" style={{ marginRight: 6 }} />
-                  <Text className="text-[16px] font-semibold text-[#333]">End Date & Time *</Text>
+                    {/* End Date & Time */}
+                    <View className="mb-5">
+                      <View className="flex-row items-center mb-2">
+                        <Ionicons name="calendar" size={16} color="#374151" style={{ marginRight: 6 }} />
+                        <Text className="text-[16px] font-semibold text-[#333]">End Date & Time *</Text>
+                      </View>
+                      <View className="flex-row gap-2">
+                        <TouchableOpacity
+                          className="flex-[2] flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                          onPress={() => setShowEndDatePicker(true)}
+                        >
+                          <Text className="text-[16px] text-[#333] font-medium">
+                            {endDateTime ? endDateTime.toLocaleDateString() : "No end date selected"}
+                          </Text>
+                          <Ionicons name="calendar-outline" size={16} color="#666" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          className="flex-1 flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                          onPress={() => setShowEndTimePicker(true)}
+                        >
+                          <Text className="text-[16px] text-[#333] font-medium">
+                            {endDateTime ? endDateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "No time"}
+                          </Text>
+                          <Ionicons name="time-outline" size={16} color="#666" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
                 </View>
-                <View className="flex-row gap-2">
-                  <TouchableOpacity
-                    className="flex-[2] flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                    onPress={() => setShowEndDatePicker(true)}
-                  >
-                    <Text className="text-[16px] text-[#333] font-medium">
-                      {endDateTime ? endDateTime.toLocaleDateString() : "No end date selected"}
-                    </Text>
-                    <Ionicons name="calendar-outline" size={16} color="#666" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    className="flex-1 flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                    onPress={() => setShowEndTimePicker(true)}
-                  >
-                    <Text className="text-[16px] text-[#333] font-medium">
-                      {endDateTime ? endDateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "No time"}
-                    </Text>
-                    <Ionicons name="time-outline" size={16} color="#666" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-            </View>
+              )}
+              keyExtractor={(item) => item.key}
+            />
           </View>
-        </View>
 
-        {/* Fixed Action Button - Better positioning when keyboard is visible */}
-        <View 
-          className="absolute left-0 right-0 px-5 pt-5 pb-5 bg-transparent items-center"
-          style={{ 
-            bottom: keyboardVisible ? 10 : 0 
-          }}
-        >
-          <TouchableOpacity
-            className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
-            onPress={handleCreateEvent}
-            activeOpacity={0.8}
-            disabled={isCreating}
-            style={{ opacity: isCreating ? 0.6 : 1 }}
-          >
-            {isCreating ? (
-              <ActivityIndicator color="white" size="small" />
-            ) : (
-              <Text className="text-white text-[16px] font-semibold">Create Event</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+          {/* Fixed Action Button - Always positioned at bottom */}
+          <View className="absolute bottom-0 left-0 right-0 px-5 pt-5 pb-5 bg-transparent items-center">
+            <TouchableOpacity
+              className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
+              onPress={handleCreateEvent}
+              activeOpacity={0.8}
+              disabled={isCreating}
+              style={{ opacity: isCreating ? 0.6 : 1 }}
+            >
+              {isCreating ? (
+                <ActivityIndicator color="white" size="small" />
+              ) : (
+                <Text className="text-white text-[16px] font-semibold">Create Event</Text>
+              )}
+            </TouchableOpacity>
+          </View>
 
-        {/* Date and Time Pickers (following task creation pattern) */}
-        {showStartDatePicker && (
-          <DateTimePicker
-            value={startDateTime}
-            mode="date"
-            display="default"
-            onChange={handleStartDateChange}
-            minimumDate={selectedDate ? new Date(selectedDate) : new Date()}
+          {/* Date and Time Pickers (following task creation pattern) */}
+          {showStartDatePicker && (
+            <DateTimePicker
+              value={startDateTime}
+              mode="date"
+              display="default"
+              onChange={handleStartDateChange}
+              minimumDate={selectedDate ? new Date(selectedDate) : new Date()}
+            />
+          )}
+
+          {showStartTimePicker && (
+            <DateTimePicker
+              value={startDateTime}
+              mode="time"
+              is24Hour={false}
+              display="default"
+              onChange={handleStartTimeChange}
+              minimumDate={startDateTime.toDateString() === new Date().toDateString() ? new Date() : undefined}
+            />
+          )}
+
+          {showEndDatePicker && (
+            <DateTimePicker
+              value={endDateTime}
+              mode="date"
+              display="default"
+              onChange={handleEndDateChange}
+              minimumDate={selectedDate ? new Date(selectedDate) : startDateTime}
+            />
+          )}
+
+          {showEndTimePicker && (
+            <DateTimePicker
+              value={endDateTime}
+              mode="time"
+              is24Hour={false}
+              display="default"
+              onChange={handleEndTimeChange}
+              minimumDate={endDateTime.toDateString() === new Date().toDateString() ? new Date() : undefined}
+            />
+          )}
+
+          {/* --- Custom Error Dialog --- */}
+          <ErrorDialog
+            visible={errorDialog.visible}
+            onClose={closeErrorDialog}
+            title={errorDialog.title}
+            message={errorDialog.message}
           />
-        )}
-
-        {showStartTimePicker && (
-          <DateTimePicker
-            value={startDateTime}
-            mode="time"
-            is24Hour={false}
-            display="default"
-            onChange={handleStartTimeChange}
-            minimumDate={startDateTime.toDateString() === new Date().toDateString() ? new Date() : undefined}
-          />
-        )}
-
-        {showEndDatePicker && (
-          <DateTimePicker
-            value={endDateTime}
-            mode="date"
-            display="default"
-            onChange={handleEndDateChange}
-            minimumDate={selectedDate ? new Date(selectedDate) : startDateTime}
-          />
-        )}
-
-        {showEndTimePicker && (
-          <DateTimePicker
-            value={endDateTime}
-            mode="time"
-            is24Hour={false}
-            display="default"
-            onChange={handleEndTimeChange}
-            minimumDate={endDateTime.toDateString() === new Date().toDateString() ? new Date() : undefined}
-          />
-        )}
-
-        {/* --- Custom Error Dialog --- */}
-        <ErrorDialog
-          visible={errorDialog.visible}
-          onClose={closeErrorDialog}
-          title={errorDialog.title}
-          message={errorDialog.message}
-        />
-      </View>
+        </KeyboardAvoidingView>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 };

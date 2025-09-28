@@ -9,7 +9,8 @@ const getApiUrl = () => {
   // 2. process.env.API_URL (for local development)
   // 3. Default fallback
   return process.env.EXPO_PUBLIC_API_URL || 
-         process.env.API_URL
+         process.env.API_URL || 
+         'https://api.eagle-eye.ca/'
 };
 
 export const API_URL = getApiUrl();

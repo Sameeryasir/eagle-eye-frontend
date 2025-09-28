@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { API_URL } from "@env";
+import { API_URL } from "../../config/api";
 
 // Function to refresh the access token
 export default async function refreshToken(refreshTokenValue) {

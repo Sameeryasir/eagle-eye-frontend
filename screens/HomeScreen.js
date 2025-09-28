@@ -14,6 +14,7 @@ import {
   Modal,
   RefreshControl,
   ToastAndroid,
+  Dimensions,
 } from "react-native";
 import Toast from 'react-native-toast-message';
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -29,6 +30,14 @@ import { getMyProjects } from "../services/projects/getProjectsByLoginUserId";
 import { deleteProjectById } from "../services/projects/deleteProjectById";
 import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
+
+// --- Responsive Design Constants (MCP Context 7) ---
+// More comprehensive screen size detection for better responsive design
+const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
+const isVerySmallScreen = screenWidth < 380 || screenHeight < 650; // Very small devices (more aggressive)
+const isSmallScreen = screenWidth < 400 || screenHeight < 700; // Small devices
+const isMediumScreen = screenWidth < 450; // Medium devices
+const isLargeScreen = screenWidth >= 450; // Large devices
 
 const searchBarClasses = `flex-row items-center rounded-2xl px-4 py-3 bg-[#F8FAFC] border border-[#EAECF0]`;
 

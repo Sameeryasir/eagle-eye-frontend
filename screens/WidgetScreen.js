@@ -17,6 +17,12 @@ import { useFocusEffect } from "@react-navigation/native";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
+// More comprehensive screen size detection for better responsive design
+const isVerySmallScreen = screenWidth < 380 || screenHeight < 650; // Very small devices (more aggressive)
+const isSmallScreen = screenWidth < 400 || screenHeight < 700; // Small devices
+const isMediumScreen = screenWidth < 450; // Medium devices
+const isLargeScreen = screenWidth >= 450; // Large devices
+
 import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
 import { getTaskByProjectId } from "../services/tasks/getTaskByProjectId";
@@ -443,25 +449,35 @@ function WidgetScreen({ navigation, route }) {
     <View
       style={{
         backgroundColor: "white",
-        borderRadius: Math.min(20, screenWidth * 0.05),
-        padding: Math.min(25, screenWidth * 0.06),
-        marginBottom: 16,
-        marginTop: 8,
+        borderRadius: isVerySmallScreen ? 12 : Math.min(20, screenWidth * 0.05),
+        padding: isVerySmallScreen ? 12 : Math.min(25, screenWidth * 0.06),
+        marginBottom: isVerySmallScreen ? 12 : 16,
+        marginTop: isVerySmallScreen ? 6 : 8,
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 6 },
+        shadowOffset: { width: 0, height: isVerySmallScreen ? 4 : 6 },
         shadowOpacity: 0.12,
-        shadowRadius: 12,
-        elevation: 8,
+        shadowRadius: isVerySmallScreen ? 8 : 12,
+        elevation: isVerySmallScreen ? 6 : 8,
       }}
     >
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Ionicons name="list" size={Math.min(24, screenWidth * 0.06)} color="black" />
+      <View style={{ 
+        flexDirection: "row", 
+        justifyContent: "space-between", 
+        alignItems: "center", 
+        marginBottom: isVerySmallScreen ? 12 : 16,
+        flexWrap: "wrap"
+      }}>
+        <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+          <Ionicons 
+            name="list" 
+            size={isVerySmallScreen ? 18 : Math.min(24, screenWidth * 0.06)} 
+            color="black" 
+          />
           <Text style={{
-            fontSize: Math.min(20, screenWidth * 0.05),
+            fontSize: isVerySmallScreen ? 16 : Math.min(20, screenWidth * 0.05),
             fontWeight: "800",
             color: "#1a1a1a",
-            marginLeft: Math.min(10, screenWidth * 0.025),
+            marginLeft: isVerySmallScreen ? 6 : Math.min(10, screenWidth * 0.025),
             letterSpacing: 0.5,
           }}>
             Tasks ({tasks.length})
@@ -471,6 +487,7 @@ function WidgetScreen({ navigation, route }) {
           style={{
             flexDirection: "row",
             alignItems: "center",
+            marginTop: isVerySmallScreen ? 8 : 0,
           }}
           onPress={() => {
             const navigationParams = {
@@ -482,7 +499,7 @@ function WidgetScreen({ navigation, route }) {
         >
           <Text
             style={{
-              fontSize: Math.min(14, screenWidth * 0.035),
+              fontSize: isVerySmallScreen ? 12 : Math.min(14, screenWidth * 0.035),
               fontWeight: "bold",
               marginRight: 4,
               color: "black",
@@ -492,13 +509,13 @@ function WidgetScreen({ navigation, route }) {
           </Text>
           <Ionicons
             name="chevron-forward"
-            size={Math.min(16, screenWidth * 0.04)}
+            size={isVerySmallScreen ? 14 : Math.min(16, screenWidth * 0.04)}
             color="black"
           />
         </TouchableOpacity>
       </View>
 
-      <View style={{ height: Math.min(160, screenHeight * 0.2) }}>
+      <View style={{ height: isVerySmallScreen ? Math.min(140, screenHeight * 0.18) : Math.min(160, screenHeight * 0.2) }}>
         {tasks && tasks.length > 0 ? (
           <ScrollView
             showsVerticalScrollIndicator={false}
@@ -509,21 +526,26 @@ function WidgetScreen({ navigation, route }) {
                 key={task.id}
                 style={{
                   backgroundColor: "#f8f9fa",
-                  borderRadius: Math.min(12, screenWidth * 0.03),
-                  padding: Math.min(12, screenWidth * 0.03),
-                  marginBottom: 8,
+                  borderRadius: isVerySmallScreen ? 8 : Math.min(12, screenWidth * 0.03),
+                  padding: isVerySmallScreen ? 8 : Math.min(12, screenWidth * 0.03),
+                  marginBottom: isVerySmallScreen ? 6 : 8,
                   borderWidth: 1,
                   borderColor: "#e9ecef",
                 }}
               >
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <View style={{ 
+                  flexDirection: "row", 
+                  justifyContent: "space-between", 
+                  alignItems: "center", 
+                  marginBottom: isVerySmallScreen ? 4 : 6 
+                }}>
                   <Text
                     style={{
-                      fontSize: Math.min(16, screenWidth * 0.04),
+                      fontSize: isVerySmallScreen ? 14 : Math.min(16, screenWidth * 0.04),
                       fontWeight: "bold",
                       color: "#333",
                       flex: 1,
-                      marginRight: 8,
+                      marginRight: isVerySmallScreen ? 6 : 8,
                     }}
                     numberOfLines={1}
                   >
@@ -531,7 +553,7 @@ function WidgetScreen({ navigation, route }) {
                   </Text>
                   <View style={{ flexDirection: "row", alignItems: "center" }}>
                     <Text style={{
-                      fontSize: Math.min(12, screenWidth * 0.03),
+                      fontSize: isVerySmallScreen ? 10 : Math.min(12, screenWidth * 0.03),
                       color: "#666",
                       fontWeight: "500",
                     }}>
@@ -541,9 +563,13 @@ function WidgetScreen({ navigation, route }) {
                 </View>
                 {userRole !== "Employee" && (
                   <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    <Ionicons name="person" size={Math.min(14, screenWidth * 0.035)} color="#666" />
+                    <Ionicons 
+                      name="person" 
+                      size={isVerySmallScreen ? 12 : Math.min(14, screenWidth * 0.035)} 
+                      color="#666" 
+                    />
                     <Text style={{
-                      fontSize: Math.min(13, screenWidth * 0.032),
+                      fontSize: isVerySmallScreen ? 11 : Math.min(13, screenWidth * 0.032),
                       color: "#666",
                       fontWeight: "500",
                       marginLeft: 4,
@@ -551,7 +577,7 @@ function WidgetScreen({ navigation, route }) {
                       Assigned:
                     </Text>
                     <Text style={{
-                      fontSize: Math.min(13, screenWidth * 0.032),
+                      fontSize: isVerySmallScreen ? 11 : Math.min(13, screenWidth * 0.032),
                       color: "#666",
                       fontWeight: "500",
                       marginLeft: 4,
@@ -564,19 +590,29 @@ function WidgetScreen({ navigation, route }) {
             ))}
           </ScrollView>
         ) : (
-          <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingVertical: Math.min(40, screenHeight * 0.05), minHeight: Math.min(120, screenHeight * 0.15) }}>
-            <Ionicons name="list-outline" size={Math.min(48, screenWidth * 0.12)} color="#ccc" />
+          <View style={{ 
+            flex: 1, 
+            justifyContent: "center", 
+            alignItems: "center", 
+            paddingVertical: isVerySmallScreen ? Math.min(30, screenHeight * 0.04) : Math.min(40, screenHeight * 0.05), 
+            minHeight: isVerySmallScreen ? Math.min(100, screenHeight * 0.12) : Math.min(120, screenHeight * 0.15) 
+          }}>
+            <Ionicons 
+              name="list-outline" 
+              size={isVerySmallScreen ? Math.min(36, screenWidth * 0.09) : Math.min(48, screenWidth * 0.12)} 
+              color="#ccc" 
+            />
             <Text style={{
-              fontSize: Math.min(16, screenWidth * 0.04),
+              fontSize: isVerySmallScreen ? 14 : Math.min(16, screenWidth * 0.04),
               color: "#666",
               fontWeight: "600",
-              marginTop: 12,
+              marginTop: isVerySmallScreen ? 8 : 12,
               marginBottom: 4,
             }}>
               No tasks found
             </Text>
             <Text style={{
-              fontSize: Math.min(14, screenWidth * 0.035),
+              fontSize: isVerySmallScreen ? 12 : Math.min(14, screenWidth * 0.035),
               color: "#999",
               fontWeight: "400",
               textAlign: "center",
@@ -593,24 +629,34 @@ function WidgetScreen({ navigation, route }) {
     <View
       style={{
         backgroundColor: "white",
-        borderRadius: Math.min(20, screenWidth * 0.05),
-        padding: Math.min(20, screenWidth * 0.05),
-        marginBottom: 16,
+        borderRadius: isVerySmallScreen ? 12 : Math.min(20, screenWidth * 0.05),
+        padding: isVerySmallScreen ? 12 : Math.min(20, screenWidth * 0.05),
+        marginBottom: isVerySmallScreen ? 12 : 16,
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 6 },
+        shadowOffset: { width: 0, height: isVerySmallScreen ? 4 : 6 },
         shadowOpacity: 0.12,
-        shadowRadius: 12,
-        elevation: 8,
+        shadowRadius: isVerySmallScreen ? 8 : 12,
+        elevation: isVerySmallScreen ? 6 : 8,
       }}
     >
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Ionicons name="document-text" size={Math.min(24, screenWidth * 0.06)} color="black" />
+      <View style={{ 
+        flexDirection: "row", 
+        justifyContent: "space-between", 
+        alignItems: "center", 
+        marginBottom: isVerySmallScreen ? 12 : 16,
+        flexWrap: "wrap"
+      }}>
+        <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+          <Ionicons 
+            name="document-text" 
+            size={isVerySmallScreen ? 18 : Math.min(24, screenWidth * 0.06)} 
+            color="black" 
+          />
           <Text style={{
-            fontSize: Math.min(20, screenWidth * 0.05),
+            fontSize: isVerySmallScreen ? 16 : Math.min(20, screenWidth * 0.05),
             fontWeight: "800",
             color: "#1a1a1a",
-            marginLeft: Math.min(10, screenWidth * 0.025),
+            marginLeft: isVerySmallScreen ? 6 : Math.min(10, screenWidth * 0.025),
             letterSpacing: 0.5,
           }}>
             Activity Logs ({logs.length})
@@ -621,6 +667,7 @@ function WidgetScreen({ navigation, route }) {
             flexDirection: "row",
             alignItems: "center",
             opacity: logs.length === 0 ? 0.5 : 1,
+            marginTop: isVerySmallScreen ? 8 : 0,
           }}
           onPress={() => {
             if (logs.length > 0) {
@@ -639,7 +686,7 @@ function WidgetScreen({ navigation, route }) {
           disabled={logs.length === 0}
         >
           <Text style={{
-            fontSize: Math.min(14, screenWidth * 0.035),
+            fontSize: isVerySmallScreen ? 12 : Math.min(14, screenWidth * 0.035),
             fontWeight: "bold",
             color: logs.length === 0 ? "#999" : "black",
             marginRight: 4,
@@ -648,13 +695,13 @@ function WidgetScreen({ navigation, route }) {
           </Text>
           <Ionicons
             name="chevron-forward"
-            size={Math.min(16, screenWidth * 0.04)}
+            size={isVerySmallScreen ? 14 : Math.min(16, screenWidth * 0.04)}
             color={logs.length === 0 ? "#999" : "black"}
           />
         </TouchableOpacity>
       </View>
 
-      <View style={{ height: Math.min(200, screenHeight * 0.25) }}>
+      <View style={{ height: isVerySmallScreen ? Math.min(160, screenHeight * 0.2) : Math.min(200, screenHeight * 0.25) }}>
         {console.log("WidgetScreen - LogsWidget render: logs state:", logs, "logs.length:", logs ? logs.length : 0)}
         {logs && logs.length > 0 ? (
           <ScrollView
@@ -667,21 +714,26 @@ function WidgetScreen({ navigation, route }) {
                 key={log.id}
                 style={{
                   backgroundColor: "#f8f9fa",
-                  borderRadius: Math.min(12, screenWidth * 0.03),
-                  padding: Math.min(12, screenWidth * 0.03),
-                  marginBottom: 8,
+                  borderRadius: isVerySmallScreen ? 8 : Math.min(12, screenWidth * 0.03),
+                  padding: isVerySmallScreen ? 8 : Math.min(12, screenWidth * 0.03),
+                  marginBottom: isVerySmallScreen ? 6 : 8,
                   borderWidth: 1,
                   borderColor: "#e9ecef",
                 }}
               >
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <View style={{ 
+                  flexDirection: "row", 
+                  justifyContent: "space-between", 
+                  alignItems: "center", 
+                  marginBottom: isVerySmallScreen ? 4 : 6 
+                }}>
                   <Text
                     style={{
-                      fontSize: Math.min(16, screenWidth * 0.04),
+                      fontSize: isVerySmallScreen ? 14 : Math.min(16, screenWidth * 0.04),
                       fontWeight: "bold",
                       color: "#333",
                       flex: 1,
-                      marginRight: 8,
+                      marginRight: isVerySmallScreen ? 6 : 8,
                     }}
                     numberOfLines={1}
                   >
@@ -689,7 +741,7 @@ function WidgetScreen({ navigation, route }) {
                   </Text>
                   <View style={{ flexDirection: "row", alignItems: "center" }}>
                     <Text style={{
-                      fontSize: Math.min(12, screenWidth * 0.03),
+                      fontSize: isVerySmallScreen ? 10 : Math.min(12, screenWidth * 0.03),
                       color: "#666",
                       fontWeight: "500",
                     }}>
@@ -700,9 +752,13 @@ function WidgetScreen({ navigation, route }) {
 
                 {userRole !== "Employee" && (
                   <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    <Ionicons name="person" size={Math.min(14, screenWidth * 0.035)} color="#666" />
+                    <Ionicons 
+                      name="person" 
+                      size={isVerySmallScreen ? 12 : Math.min(14, screenWidth * 0.035)} 
+                      color="#666" 
+                    />
                     <Text style={{
-                      fontSize: Math.min(13, screenWidth * 0.032),
+                      fontSize: isVerySmallScreen ? 11 : Math.min(13, screenWidth * 0.032),
                       color: "#666",
                       fontWeight: "500",
                       marginLeft: 4,
@@ -710,7 +766,7 @@ function WidgetScreen({ navigation, route }) {
                       Created by:
                     </Text>
                     <Text style={{
-                      fontSize: Math.min(13, screenWidth * 0.032),
+                      fontSize: isVerySmallScreen ? 11 : Math.min(13, screenWidth * 0.032),
                       color: "#666",
                       fontWeight: "500",
                       marginLeft: 4,
@@ -723,19 +779,29 @@ function WidgetScreen({ navigation, route }) {
             ))}
           </ScrollView>
         ) : (
-          <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingVertical: Math.min(40, screenHeight * 0.05), minHeight: Math.min(120, screenHeight * 0.15) }}>
-            <Ionicons name="document-text-outline" size={Math.min(48, screenWidth * 0.12)} color="#ccc" />
+          <View style={{ 
+            flex: 1, 
+            justifyContent: "center", 
+            alignItems: "center", 
+            paddingVertical: isVerySmallScreen ? Math.min(30, screenHeight * 0.04) : Math.min(40, screenHeight * 0.05), 
+            minHeight: isVerySmallScreen ? Math.min(100, screenHeight * 0.12) : Math.min(120, screenHeight * 0.15) 
+          }}>
+            <Ionicons 
+              name="document-text-outline" 
+              size={isVerySmallScreen ? Math.min(36, screenWidth * 0.09) : Math.min(48, screenWidth * 0.12)} 
+              color="#ccc" 
+            />
             <Text style={{
-              fontSize: Math.min(16, screenWidth * 0.04),
+              fontSize: isVerySmallScreen ? 14 : Math.min(16, screenWidth * 0.04),
               color: "#666",
               fontWeight: "600",
-              marginTop: 12,
+              marginTop: isVerySmallScreen ? 8 : 12,
               marginBottom: 4,
             }}>
               No logs found
             </Text>
             <Text style={{
-              fontSize: Math.min(14, screenWidth * 0.035),
+              fontSize: isVerySmallScreen ? 12 : Math.min(14, screenWidth * 0.035),
               color: "#999",
               fontWeight: "400",
               textAlign: "center",
@@ -802,10 +868,10 @@ function WidgetScreen({ navigation, route }) {
       <ScrollView
         style={{
           flex: 1,
-          paddingHorizontal: Math.min(20, screenWidth * 0.05),
-          paddingVertical: Math.min(20, screenHeight * 0.025),
-          paddingBottom: 100,
-          paddingTop: 20,
+          paddingHorizontal: isVerySmallScreen ? Math.min(12, screenWidth * 0.03) : Math.min(20, screenWidth * 0.05),
+          paddingVertical: isVerySmallScreen ? Math.min(12, screenHeight * 0.015) : Math.min(20, screenHeight * 0.025),
+          paddingBottom: isVerySmallScreen ? 80 : 100,
+          paddingTop: isVerySmallScreen ? 12 : 20,
         }}
         refreshControl={
           <RefreshControl

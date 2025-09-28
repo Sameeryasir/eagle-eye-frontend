@@ -1,7 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { refreshToken } from '../utils/tokenRefresh';
-import { API_URL } from '@env';
+import { API_URL } from '../../config/api.js';
 
 
 const deleteEventById = async (eventId) => {

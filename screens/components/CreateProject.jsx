@@ -18,7 +18,12 @@ import Toast from 'react-native-toast-message';
 function CreateProject({ navigation, onSuccess, onCancel }) {
   // --- Get screen dimensions for responsive design ---
   const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-  const isSmallScreen = screenWidth < 375 || screenHeight < 667; // iPhone SE and smaller
+  
+  // More aggressive screen size detection for better responsive design
+  const isVerySmallScreen = screenWidth < 380 || screenHeight < 650; // Very small devices (more aggressive)
+  const isSmallScreen = screenWidth < 400 || screenHeight < 700; // Small devices
+  const isMediumScreen = screenWidth < 450; // Medium devices
+  const isLargeScreen = screenWidth >= 450; // Large devices
   
   const [projectData, setProjectData] = useState({
     name: '',
@@ -180,10 +185,20 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
   };
 
   return (
-    <View className="flex-1 bg-white">
-      {/* Black Navbar */}
-      <View className="bg-black px-4 py-3 flex-row items-center justify-between">
-        <Text className="text-black text-[18px] font-semibold">Create Project</Text>
+    <View 
+      className={`flex-1 ${isVerySmallScreen ? 'bg-blue-50' : 'bg-white'}`} 
+      style={{ 
+        height: screenHeight,
+        width: screenWidth,
+        margin: 0,
+        padding: 0
+      }}
+    >
+      {/* Black Navbar - Responsive sizing */}
+      <View className={`bg-black ${isVerySmallScreen ? 'px-3 py-2' : 'px-4 py-3'} flex-row items-center justify-between`}>
+        <Text className={`text-black ${isVerySmallScreen ? 'text-[16px]' : 'text-[18px]'} font-semibold`}>
+          Create Project
+        </Text>
         <TouchableOpacity onPress={() => {
           if (onCancel) {
             onCancel();
@@ -191,35 +206,46 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
             navigation.goBack();
           }
         }}>
-          <Ionicons name="close" size={24} color="white" />
+          <Ionicons name="close" size={isVerySmallScreen ? 20 : 24} color="white" />
         </TouchableOpacity>
       </View>
       
-      <View className="flex-1 px-5 items-center" style={{ paddingBottom: isSmallScreen ? 0 : 20 }}>
+      <View className={`flex-1 ${isVerySmallScreen ? 'px-2' : 'px-5'} items-center`} style={{ 
+        paddingBottom: isVerySmallScreen ? 0 : 20,
+        minHeight: screenHeight - 120 // Account for navbar and button areas
+      }}>
         <ScrollView
-          className="flex-1 w-full max-w-md"
+          className={`flex-1 w-full ${isVerySmallScreen ? 'max-w-sm' : 'max-w-md'}`}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ 
-            paddingBottom: isSmallScreen ? 100 : 20,
-            paddingTop: 0
+            paddingBottom: isVerySmallScreen ? 120 : isSmallScreen ? 100 : 20,
+            paddingTop: 0,
+            flexGrow: 1
           }}
           keyboardShouldPersistTaps="handled"
           onScrollBeginDrag={dismissKeyboard}
+          style={{ flex: 1 }}
         >
-          <View className={`${isSmallScreen ? 'mb-4' : 'mb-8'} items-center`}>
-            <Text className="text-[28px] font-bold text-[#333]">Create New Project</Text>
-            <Text className="text-[16px] text-[#666] text-center">Fill in the details below to create your project</Text>
+          <View className={`${isVerySmallScreen ? 'mb-3' : isSmallScreen ? 'mb-4' : 'mb-8'} items-center`}>
+            <Text className={`${isVerySmallScreen ? 'text-[18px]' : isSmallScreen ? 'text-[24px]' : 'text-[28px]'} font-bold text-[#333]`}>
+              Create New Project
+            </Text>
+            <Text className={`${isVerySmallScreen ? 'text-[12px]' : 'text-[16px]'} text-[#666] text-center`}>
+              Fill in the details below to create your project
+            </Text>
           </View>
 
-          <View className={`${isSmallScreen ? 'mb-3' : 'mb-5'}`}>
+          <View className={`${isVerySmallScreen ? 'mb-2' : isSmallScreen ? 'mb-3' : 'mb-5'}`}>
             {/* Project Name */}
-            <View className={`${isSmallScreen ? 'mb-3' : 'mb-5'}`}>
+            <View className={`${isVerySmallScreen ? 'mb-2' : isSmallScreen ? 'mb-3' : 'mb-5'}`}>
               <View className="flex-row items-center mb-2">
-                <Ionicons name="folder" size={20} color="black" style={{ marginRight: 8 }} />
-                <Text className="text-[16px] font-semibold text-[#333]">Project Name *</Text>
+                <Ionicons name="folder" size={isVerySmallScreen ? 18 : 20} color="black" style={{ marginRight: 8 }} />
+                <Text className={`${isVerySmallScreen ? 'text-[14px]' : 'text-[16px]'} font-semibold text-[#333]`}>
+                  Project Name *
+                </Text>
               </View>
               <TextInput
-                className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333]"
+                className={`border border-[#e1e8ed] rounded-lg ${isVerySmallScreen ? 'p-2' : 'p-3'} ${isVerySmallScreen ? 'text-[14px]' : 'text-[16px]'} bg-[#f8f9fa] text-[#333]`}
                 placeholder="Enter project name"
                 value={projectData.name}
                 onChangeText={(value) => handleInputChange('name', value)}
@@ -229,18 +255,20 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
             </View>
 
             {/* Project Description */}
-            <View className={`${isSmallScreen ? 'mb-3' : 'mb-5'}`}>
+            <View className={`${isVerySmallScreen ? 'mb-2' : isSmallScreen ? 'mb-3' : 'mb-5'}`}>
               <View className="flex-row items-center mb-2">
-                <Ionicons name="document-text" size={20} color="black" style={{ marginRight: 8 }} />
-                <Text className="text-[16px] font-semibold text-[#333]">Description *</Text>
+                <Ionicons name="document-text" size={isVerySmallScreen ? 18 : 20} color="black" style={{ marginRight: 8 }} />
+                <Text className={`${isVerySmallScreen ? 'text-[14px]' : 'text-[16px]'} font-semibold text-[#333]`}>
+                  Description *
+                </Text>
               </View>
               <TextInput
-                className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333] h-24"
+                className={`border border-[#e1e8ed] rounded-lg ${isVerySmallScreen ? 'p-2' : 'p-3'} ${isVerySmallScreen ? 'text-[14px]' : 'text-[16px]'} bg-[#f8f9fa] text-[#333] ${isVerySmallScreen ? 'h-20' : 'h-24'}`}
                 placeholder="Describe your project"
                 value={projectData.description}
                 onChangeText={(value) => handleInputChange('description', value)}
                 multiline
-                numberOfLines={4}
+                numberOfLines={isVerySmallScreen ? 3 : 4}
                 placeholderTextColor="#999"
                 returnKeyType="next"
                 style={{ textAlignVertical: 'top' }}
@@ -248,30 +276,32 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
             </View>
 
             {/* Start Date */}
-            <View className="mb-5">
+            <View className={`${isVerySmallScreen ? 'mb-3' : 'mb-5'}`}>
               <View className="flex-row items-center mb-2">
-                <Ionicons name="calendar" size={20} color="black" style={{ marginRight: 8 }} />
-                <Text className="text-[16px] font-semibold text-[#333]">Start Date *</Text>
+                <Ionicons name="calendar" size={isVerySmallScreen ? 18 : 20} color="black" style={{ marginRight: 8 }} />
+                <Text className={`${isVerySmallScreen ? 'text-[14px]' : 'text-[16px]'} font-semibold text-[#333]`}>
+                  Start Date *
+                </Text>
               </View>
               <TouchableOpacity
-                className="flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                className={`flex-row items-center justify-between border border-[#e1e8ed] rounded-lg ${isVerySmallScreen ? 'p-2' : 'p-3'} bg-[#f8f9fa]`}
                 onPress={() => setShowStartDatePicker(true)}
               >
-                <Text className="text-[16px] text-[#333] font-medium">
+                <Text className={`${isVerySmallScreen ? 'text-[14px]' : 'text-[16px]'} text-[#333] font-medium`}>
                   {startDate.toLocaleDateString()}
                 </Text>
-                <Ionicons name="calendar-outline" size={16} color="#666" />
+                <Ionicons name="calendar-outline" size={isVerySmallScreen ? 14 : 16} color="#666" />
               </TouchableOpacity>
             </View>
           </View>
         </ScrollView>
       </View>
 
-      {/* Fixed Action Button - Always positioned at bottom */}
+      {/* Fixed Action Button - Always positioned at bottom - Responsive sizing */}
       <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200">
-        <View className={`px-5 pt-4 items-center ${isSmallScreen ? 'pb-4' : 'pb-6'}`}>
+        <View className={`${isVerySmallScreen ? 'px-2' : 'px-5'} pt-4 items-center ${isVerySmallScreen ? 'pb-3' : isSmallScreen ? 'pb-4' : 'pb-6'}`}>
           <TouchableOpacity
-            className="w-full max-w-[280px] bg-black rounded-lg p-4 items-center justify-center"
+            className={`w-full ${isVerySmallScreen ? 'max-w-[260px]' : 'max-w-[280px]'} bg-black rounded-lg ${isVerySmallScreen ? 'p-3' : 'p-4'} items-center justify-center`}
             onPress={handleCreateProject}
             disabled={isLoading}
             activeOpacity={0.8}
@@ -281,7 +311,9 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
                 <ActivityIndicator color="#ffffff" size="small" />
               </View>
             ) : (
-              <Text className="text-white text-[16px] font-semibold">Create Project</Text>
+              <Text className={`text-white ${isVerySmallScreen ? 'text-[14px]' : 'text-[16px]'} font-semibold`}>
+                Create Project
+              </Text>
             )}
           </TouchableOpacity>
         </View>

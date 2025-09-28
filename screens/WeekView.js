@@ -1,318 +1,357 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text, ScrollView, Dimensions, TouchableOpacity } from 'react-native';
-import WeekView from 'react-native-week-view';
-import Toast from 'react-native-toast-message';
-import getAllTasks from "../services/tasks/getAllTasks";
-import { getEventsForLogInUser } from "../services/event/getEventsForLogInUser";
-import { getUserRole } from "../services/utils/userRole";
-import CustomBottomNav from "./components/CustomBottomNav";
+import React, { useState } from 'react';
+import { SafeAreaView, StyleSheet, View, Text, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import CustomBottomNav from './components/CustomBottomNav';
+import CreateEventModal from './components/CreateEventModal';
 
-export default function MyWeekView({ navigation }) {
-  // --- State Management ---
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  
-  // --- Screen dimensions removed - using flexible approach ---
+const { width } = Dimensions.get('window');
 
-  // --- Priority-based color mapping function (same as CalenderDetailScreen) ---
-  const getPriorityColor = (priority) => {
-    switch (priority?.toLowerCase()) {
-      case 'high':
-      case 'urgent':
-      case 'critical':
-        return '#EF4444'; // Red for high priority
-      case 'medium':
-      case 'normal':
-        return '#F59E0B'; // Orange for medium priority
-      case 'low':
-      case 'lowest':
-        return '#10B981'; // Green for low priority
-      default:
-        return '#6B7280'; // Gray for unknown/no priority
-    }
+export default function MyWeekView() {
+  // --- State Management for CreateEventModal (MCP Context 7) ---
+  // Business Rule: Modal state controls visibility and handles event creation flow
+  const [createEventModalVisible, setCreateEventModalVisible] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [currentWeek, setCurrentWeek] = useState(new Date());
+
+  // --- Sample Events Data (MCP Context 7) ---
+  // Business Rule: Demo events for week view display - replace with real API data
+  const [events, setEvents] = useState([
+    {
+      id: 1,
+      description: 'Team Meeting',
+      startDate: new Date(2024, 11, 27, 10, 0), // December 27, 2024, 10:00 AM
+      endDate: new Date(2024, 11, 27, 11, 0),   // December 27, 2024, 11:00 AM
+      color: '#4285f4',
+    },
+    {
+      id: 2,
+      description: 'Project Review',
+      startDate: new Date(2024, 11, 28, 14, 30), // December 28, 2024, 2:30 PM
+      endDate: new Date(2024, 11, 28, 15, 30),   // December 28, 2024, 3:30 PM
+      color: '#34a853',
+    },
+    {
+      id: 3,
+      description: 'Client Call',
+      startDate: new Date(2024, 11, 29, 9, 0),   // December 29, 2024, 9:00 AM
+      endDate: new Date(2024, 11, 29, 10, 0),    // December 29, 2024, 10:00 AM
+      color: '#ea4335',
+    },
+  ]);
+
+  // --- Week Navigation (MCP Context 7) ---
+  // Business Rule: Navigate between weeks without UI conflicts
+  const goToPreviousWeek = () => {
+    const newWeek = new Date(currentWeek);
+    newWeek.setDate(newWeek.getDate() - 7);
+    setCurrentWeek(newWeek);
   };
 
-  // --- Fetch Tasks and Events from API ---
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // --- Fetch tasks and events in parallel ---
-      const [tasksResponse, eventsResponse] = await Promise.all([
-        getAllTasks(),
-        fetchEventsWithRoleCheck()
-      ]);
-
-      const calendarEvents = [];
-
-      // --- Process tasks ---
-      if (tasksResponse.success && tasksResponse.data) {
-        tasksResponse.data.forEach(task => {
-          if (task.startTime) {
-            calendarEvents.push({
-              id: `task-${task.id}`,
-              title: task.title, // For modals
-              description: task.title, // For displaying in WeekView cards (library uses description field)
-              taskDescription: task.description || 'No description provided', // Actual task description
-              startDate: new Date(task.startTime),
-              endDate: task.endTime ? new Date(task.endTime) : new Date(new Date(task.startTime).getTime() + 60 * 60 * 1000),
-              color: getPriorityColor(task.priority), // Use priority-based color
-              type: 'task',
-              priority: task.priority,
-              status: task.status,
-              assignedTo: task.assignedTo,
-              originalTaskId: task.id
-            });
-          }
-        });
-      }
-
-      // --- Process events ---
-      if (eventsResponse && eventsResponse.length > 0) {
-        eventsResponse.forEach(event => {
-          if (event.startTime) {
-            calendarEvents.push({
-              id: `event-${event.id}`,
-              title: event.title, // For modals
-              description: event.title, // For displaying in WeekView cards (library uses description field)
-              eventDescription: event.description || 'No description provided', // Actual event description
-              startDate: new Date(event.startTime),
-              endDate: event.endTime ? new Date(event.endTime) : new Date(new Date(event.startTime).getTime() + 60 * 60 * 1000),
-              color: '#3B82F6', // Blue color for events
-              type: 'event',
-              priority: event.priority || 'medium',
-              status: event.status || 'pending',
-              originalEventId: event.id,
-              assignedTo: event.assignedTo || [],
-              projects: event.projects || []
-            });
-          }
-        });
-      }
-
-      setEvents(calendarEvents);
-
-    } catch (err) {
-      console.error('WeekView - Error fetching data:', err);
-      setError(err.message);
-      
-      // --- Show error toast ---
-      Toast.show({
-        type: 'error',
-        text1: 'Error Loading Calendar Data',
-        text2: 'Failed to load tasks and events',
-        visibilityTime: 3000,
-        autoHide: true,
-        topOffset: 80,
-      });
-      
-      setEvents([]);
-    } finally {
-      setLoading(false);
-    }
+  const goToNextWeek = () => {
+    const newWeek = new Date(currentWeek);
+    newWeek.setDate(newWeek.getDate() + 7);
+    setCurrentWeek(newWeek);
   };
 
-  // --- Helper function to fetch events with role check ---
-  const fetchEventsWithRoleCheck = async () => {
-    try {
-      const userRole = await getUserRole();
-      const allowedRoles = ["Owner", "Employee", "Manager"];
-      
-      if (!allowedRoles.includes(userRole)) {
-        console.log('WeekView - User role not allowed for events:', userRole);
-        return [];
-      }
+  // --- Get Week Days (MCP Context 7) ---
+  // Business Rule: Generate array of days for current week
+  const getWeekDays = () => {
+    const days = [];
+    const startOfWeek = new Date(currentWeek);
+    const day = startOfWeek.getDay();
+    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1); // Monday start
+    startOfWeek.setDate(diff);
 
-      const response = await getEventsForLogInUser();
-      return response.success ? response.data : [];
-    } catch (err) {
-      console.error('WeekView - Error fetching events:', err);
-      return [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(startOfWeek);
+      date.setDate(startOfWeek.getDate() + i);
+      days.push(date);
     }
+    return days;
   };
 
-  // --- Load data on component mount ---
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  // --- Handle event press ---
-  const onEventPress = (event) => {
-    Toast.show({
-      type: 'info',
-      text1: event.description,
-      text2: `${event.startDate.toLocaleTimeString([], {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-      })} - ${event.endDate.toLocaleTimeString([], {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-      })}`,
-      visibilityTime: 3000,
-      autoHide: true,
-      topOffset: 80,
+  // --- Get Events for Date (MCP Context 7) ---
+  // Business Rule: Filter events for specific date
+  const getEventsForDate = (date) => {
+    return events.filter(event => {
+      const eventDate = new Date(event.startDate);
+      return eventDate.toDateString() === date.toDateString();
     });
   };
 
-  // --- Show loading screen ---
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3155A1" />
-          <Text style={styles.loadingText}>Loading week view...</Text>
-        </View>
-        <CustomBottomNav />
-      </View>
-    );
-  }
+  // --- FAB Handler for CreateEventModal (MCP Context 7) ---
+  // Business Rule: FAB press opens CreateEventModal for event creation
+  const handleFabPress = () => {
+    console.log('WeekView - FAB pressed, opening CreateEventModal');
+    setSelectedDate(new Date()); // Use current date as default
+    setCreateEventModalVisible(true);
+  };
+
+  // --- Event Creation Handler (MCP Context 7) ---
+  // Business Rule: Handle successful event creation and refresh calendar data
+  const handleEventCreated = () => {
+    console.log('WeekView - Event created successfully, refreshing calendar');
+    // TODO: Replace with real API call to fetch events
+    // For now, we'll keep the sample events
+    // In real implementation, fetch events from your API here
+  };
+
+  // --- Modal Close Handler (MCP Context 7) ---
+  // Business Rule: Clean up modal state when closed
+  const handleCloseModal = () => {
+    setCreateEventModalVisible(false);
+    setSelectedDate(null);
+  };
+
+  // --- Event Press Handler (MCP Context 7) ---
+  // Business Rule: Handle event tap for future details modal
+  const handleEventPress = (event) => {
+    console.log('Event pressed:', event);
+    // TODO: Implement event details modal or navigation
+  };
+
+  // --- Day Press Handler (MCP Context 7) ---
+  // Business Rule: Handle day tap to create event for that date
+  const handleDayPress = (date) => {
+    console.log('Day pressed:', date);
+    setSelectedDate(date);
+    setCreateEventModalVisible(true);
+  };
 
   return (
-    <View style={styles.container}>
-      {/* --- Toggle Buttons (Weekly/Monthly) --- */}
-      <View style={styles.toggleContainer}>
-        <TouchableOpacity 
-          style={[styles.toggleButton, styles.activeButton]} 
-          onPress={() => {}} // Already on Weekly view
-        >
-          <Text style={[styles.toggleText, styles.activeText]}>Weekly</Text>
+    <SafeAreaView style={styles.container}>
+      {/* --- Custom Week View Header (MCP Context 7) --- */}
+      {/* Business Rule: Simple week navigation without library conflicts */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={goToPreviousWeek} style={styles.navButton}>
+          <Ionicons name="chevron-back" size={24} color="#333" />
         </TouchableOpacity>
         
-        <TouchableOpacity 
-          style={[styles.toggleButton, styles.inactiveButton]} 
-          onPress={() => navigation.navigate('CalenderScreen')}
-        >
-          <Text style={[styles.toggleText, styles.inactiveText]}>Monthly</Text>
+        <Text style={styles.weekTitle}>
+          {currentWeek.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+        </Text>
+        
+        <TouchableOpacity onPress={goToNextWeek} style={styles.navButton}>
+          <Ionicons name="chevron-forward" size={24} color="#333" />
         </TouchableOpacity>
       </View>
+
+      {/* --- Custom Week View Calendar (MCP Context 7) --- */}
+      {/* Business Rule: Simple 7-day week view without UI conflicts */}
+      <ScrollView style={styles.weekViewContainer} showsVerticalScrollIndicator={false}>
+        {/* Days Header */}
+        <View style={styles.daysHeader}>
+          {getWeekDays().map((date, index) => (
+            <View key={index} style={styles.dayHeader}>
+              <Text style={styles.dayName}>
+                {date.toLocaleDateString('en-US', { weekday: 'short' })}
+              </Text>
+              <Text style={[
+                styles.dayNumber,
+                date.toDateString() === new Date().toDateString() && styles.todayDayNumber
+              ]}>
+                {date.getDate()}
+              </Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Week Days with Events */}
+        <View style={styles.weekGrid}>
+          {getWeekDays().map((date, dayIndex) => {
+            const dayEvents = getEventsForDate(date);
+            const isToday = date.toDateString() === new Date().toDateString();
+            
+            return (
+              <TouchableOpacity
+                key={dayIndex}
+                style={[styles.dayColumn, isToday && styles.todayColumn]}
+                onPress={() => handleDayPress(date)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.dayContent}>
+                  {dayEvents.length > 0 ? (
+                    <ScrollView showsVerticalScrollIndicator={false}>
+                      {dayEvents.map((event) => (
+                        <TouchableOpacity
+                          key={event.id}
+                          style={[styles.eventItem, { backgroundColor: event.color }]}
+                          onPress={() => handleEventPress(event)}
+                        >
+                          <Text style={styles.eventTime}>
+                            {event.startDate.toLocaleTimeString([], { 
+                              hour: 'numeric', 
+                              minute: '2-digit',
+                              hour12: true 
+                            })}
+                          </Text>
+                          <Text style={styles.eventTitle} numberOfLines={2}>
+                            {event.description}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  ) : (
+                    <View style={styles.emptyDay}>
+                      <Text style={styles.emptyDayText}>Tap to add event</Text>
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </ScrollView>
       
-      {/* --- WeekView with natural flexible height --- */}
-      <View style={styles.weekViewContainer}>
-        <WeekView
-          events={events}
-          selectedDate={currentDate}     // Controls which week to show
-          numberOfDays={7}              // Show full week
-          formatDateHeader="ddd M/D"    // Day format (e.g. Sun 9/21, Mon 9/22)
-          hoursInDisplay={8}  // Reduced from 12 to 8 hours for better fit in smaller height
-          startHour={6}        // Start from 6 AM instead of midnight
-          endHour={22}         // End at 10 PM instead of midnight
-          formatTimeLabel="h:mm a"
+      {/* --- Custom Bottom Navigation with FAB (MCP Context 7) --- */}
+      {/* Business Rule: Show FAB for Owner role only, hide for Manager and Employee roles */}
+      <CustomBottomNav
+        handleFabPress={handleFabPress}
+        keyboardVisible={false}
+      />
 
-          // Navigation
-          onSwipeNext={() => {
-            const next = new Date(currentDate);
-            next.setDate(currentDate.getDate() + 7);
-            setCurrentDate(next);
-          }}
-          onSwipePrev={() => {
-            const prev = new Date(currentDate);
-            prev.setDate(currentDate.getDate() - 7);
-            setCurrentDate(prev);
-          }}
-
-          // Event click
-          onEventPress={onEventPress}
-
-          // Styles (same as CalenderDetailScreen)
-          headerStyle={styles.header}
-          todayHeaderStyle={styles.todayHeader}
-          hourTextStyle={styles.hourText}
-          eventContainerStyle={styles.eventContainer}
-        />
-      </View>
-      
-      <CustomBottomNav />
-    </View>
+      {/* --- Create Event Modal (MCP Context 7) --- */}
+      {/* Business Rule: Modal for creating new events with project/employee assignment */}
+      <CreateEventModal
+        visible={createEventModalVisible}
+        onClose={handleCloseModal}
+        selectedDate={selectedDate}
+        onEventCreated={handleEventCreated}
+      />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#fff' 
+  container: {
+    flex: 1,
+    backgroundColor: 'white',
   },
-  // --- WeekView Container with Natural Flexible Height ---
-  weekViewContainer: {
-    flex: 0.85, // Takes all available space naturally (not fixed)
-  },
-  // --- Toggle Button Styles ---
-  toggleContainer: {
+  // --- Header Navigation (MCP Context 7) ---
+  // Business Rule: Clean header with week navigation
+  header: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    marginVertical: 16,
-    marginHorizontal: 20,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 25,
-    padding: 4,
-  },
-  toggleButton: {
-    flex: 1,
-    paddingVertical: 12,
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    borderRadius: 20,
-    marginHorizontal: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  activeButton: {
-    backgroundColor: '#000000', // Black background for selected Weekly button
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  inactiveButton: {
-    backgroundColor: 'transparent',
-  },
-  toggleText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  activeText: {
-    color: '#ffffff', // White text on black background
-  },
-  inactiveText: {
-    color: '#666666', // Gray text for inactive buttons
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#6b7280',
-    marginTop: 16,
-    textAlign: 'center'
-  },
-  header: { 
+    paddingVertical: 15,
     backgroundColor: '#f8f9fa',
-    paddingVertical: 10,
-    paddingHorizontal: 5,
-    borderBottomWidth: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e1e8ed',
   },
-  todayHeader: {
-    backgroundColor: '#007AFF',
-    color: 'white'
-  },
-  hourText: { 
-    color: '#333' 
-  },
-  eventContainer: {
-    borderRadius: 4,
-    padding: 2,
-    margin: 1,
+  navButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'white',
+    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
+  },
+  weekTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  // --- Week View Container (MCP Context 7) ---
+  // Business Rule: Scrollable container for week view
+  weekViewContainer: {
+    flex: 1,
+    backgroundColor: 'white',
+  },
+  // --- Days Header (MCP Context 7) ---
+  // Business Rule: Day names and numbers header
+  daysHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#f8f9fa',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e1e8ed',
+  },
+  dayHeader: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRightWidth: 1,
+    borderRightColor: '#e1e8ed',
+  },
+  dayName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 4,
+  },
+  dayNumber: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+  },
+  todayDayNumber: {
+    color: '#000',
+    fontWeight: 'bold',
+    backgroundColor: '#000',
+    color: 'white',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  // --- Week Grid (MCP Context 7) ---
+  // Business Rule: 7-column grid for days
+  weekGrid: {
+    flexDirection: 'row',
+    flex: 1,
+    minHeight: 400,
+  },
+  dayColumn: {
+    flex: 1,
+    borderRightWidth: 1,
+    borderRightColor: '#e1e8ed',
+    backgroundColor: 'white',
+  },
+  todayColumn: {
+    backgroundColor: '#f8f9fa',
+  },
+  dayContent: {
+    flex: 1,
+    padding: 8,
+  },
+  // --- Event Styling (MCP Context 7) ---
+  // Business Rule: Event items with proper spacing
+  eventItem: {
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 8,
     elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  eventTime: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'white',
+    marginBottom: 2,
+  },
+  eventTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: 'white',
+    lineHeight: 16,
+  },
+  // --- Empty Day Styling (MCP Context 7) ---
+  // Business Rule: Placeholder for empty days
+  emptyDay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  emptyDayText: {
+    fontSize: 12,
+    color: '#999',
+    fontStyle: 'italic',
   },
 });

@@ -9,8 +9,8 @@
       "distribution": "internal",
       "env": {
         "NODE_ENV": "development",
-        "EXPO_PUBLIC_API_URL": "",
-        "API_URL": ""
+        "EXPO_PUBLIC_API_URL": "https://api.eagle-eye.ca/",
+        "API_URL": "https://api.eagle-eye.ca/"
       },
       "android": {
         "buildType": "apk"
@@ -23,16 +23,16 @@
       },
       "env": {
         "NODE_ENV": "production",
-        "EXPO_PUBLIC_API_URL": "",
-        "API_URL": ""
+        "EXPO_PUBLIC_API_URL": "https://api.eagle-eye.ca/",
+        "API_URL": "https://api.eagle-eye.ca/"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
         "NODE_ENV": "production",
-        "EXPO_PUBLIC_API_URL": "",
-        "API_URL": ""
+        "EXPO_PUBLIC_API_URL": "https://api.eagle-eye.ca/",
+        "API_URL": "https://api.eagle-eye.ca/"
       }
     }
   },

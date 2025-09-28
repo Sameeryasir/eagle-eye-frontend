@@ -7,6 +7,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get("window");
 
+// --- Responsive calculations for small screens ---
+const isSmallScreen = width < 375; // iPhone SE and smaller
+const isVerySmallScreen = width < 360; // Very small Android devices
+const iconSize = isVerySmallScreen ? 20 : isSmallScreen ? 22 : 24;
+const navHeight = isVerySmallScreen ? 60 : isSmallScreen ? 65 : 70;
+const fabSize = isVerySmallScreen ? 55 : isSmallScreen ? 60 : 65;
+
 export default function CustomBottomNav({
   keyboardVisible = false,
   task = false,
@@ -191,7 +198,7 @@ export default function CustomBottomNav({
           alignItems: 'center',
           justifyContent: shouldHideFAB ? 'space-around' : 'space-between',
           width: '90%',
-          height: 70,
+          height: navHeight,
           backgroundColor: 'black',
           borderRadius: 35,
           paddingHorizontal: 15,
@@ -215,7 +222,7 @@ export default function CustomBottomNav({
           }}
           onPress={navigateToHome}
         >
-          <Ionicons name="home-outline" size={24} color="#fff" />
+          <Ionicons name="home-outline" size={iconSize} color="#fff" />
           {activeTab === "home" && (
             <View className="absolute bottom-[-6px] w-5 h-[3px] bg-white rounded-[2px]" />
           )}
@@ -230,7 +237,7 @@ export default function CustomBottomNav({
           onPress={navigateToProfile}
         >
           {/* Calendar icon (fixed spelling + valid icon) */}
-          <Ionicons name="calendar-outline" size={24} color="#fff" />
+          <Ionicons name="calendar-outline" size={iconSize} color="#fff" />
 
           {activeTab === "profile" && (
             <View className="absolute bottom-[-6px] w-5 h-[3px] bg-white rounded-[2px]" />
@@ -252,7 +259,7 @@ export default function CustomBottomNav({
           }}
           onPress={navigateToChats}
         >
-          <Ionicons name="chatbubble-outline" size={24} color="#fff" />
+          <Ionicons name="chatbubble-outline" size={iconSize} color="#fff" />
           {activeTab === "chats" && (
             <View className="absolute bottom-[-6px] w-5 h-[3px] bg-white rounded-[2px]" />
           )}
