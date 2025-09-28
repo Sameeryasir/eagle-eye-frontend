@@ -809,7 +809,7 @@ export default function UpdateTaskModal({
                   </View>
 
                   {/* End Date & Time - Matching CreateTaskScreen */}
-                  <View className="mb-5">
+                  <View style={{ marginBottom: 30 }}>
                     <View className="flex-row items-center mb-2">
                       <Ionicons name="calendar" size={16} color="#374151" style={{ marginRight: 6 }} />
                       <Text className="text-[16px] font-semibold text-[#333]">End Date & Time</Text>

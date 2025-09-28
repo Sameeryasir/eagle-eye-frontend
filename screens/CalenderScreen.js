@@ -33,6 +33,7 @@ function CalenderScreen({ navigation }) {
   const [viewMode, setViewMode] = useState('monthly'); // 'monthly' or 'weekly' - controls which view to show
   const [weekViewEvents, setWeekViewEvents] = useState([]); // Events formatted for WeekView
   const [monthlyViewLoading, setMonthlyViewLoading] = useState(false); // Loading state for monthly view switch
+  const [userRole, setUserRole] = useState(null); // User role state to prevent FAB lag
   
   // --- State for create event modal ---
   const [showEventCreationDialog, setShowEventCreationDialog] = useState(false);
@@ -287,6 +288,21 @@ function CalenderScreen({ navigation }) {
     setCombinedItems(combined);
   };
 
+  // --- Load user role first to prevent FAB lag ---
+  useEffect(() => {
+    const loadUserRole = async () => {
+      try {
+        const role = await getUserRole();
+        setUserRole(role);
+        console.log('CalenderScreen - User role loaded early:', role);
+      } catch (error) {
+        console.error('CalenderScreen - Error loading user role:', error);
+      }
+    };
+    
+    loadUserRole();
+  }, []);
+
   // --- Load data on component mount ---
   useEffect(() => {
     const loadData = async () => {
@@ -525,9 +541,9 @@ function CalenderScreen({ navigation }) {
       
       {/* --- Custom Bottom Navigation --- */}
       <CustomBottomNav 
-        handleFabPress={async () => {
-          // Check user role and only show event creation dialog for Owner
-          const userRole = await getUserRole();
+        userRole={userRole} // Pass user role to prevent FAB lag
+        handleFabPress={() => {
+          // Use already loaded user role to prevent async lag
           if (userRole === "Owner") {
             setShowEventCreationDialog(true);
           } else {

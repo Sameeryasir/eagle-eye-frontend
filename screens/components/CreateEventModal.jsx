@@ -634,8 +634,12 @@ const CreateEventModal = ({
       console.log('Projects (UI State):', eventForm.projects);
       console.log('Selected Employee Values:', selectedEmployeeValues);
       console.log('Selected Project Values:', selectedProjectValues);
-      console.log('--- BACKEND DATA (DTO Compliant) ---');
+      console.log('--- BACKEND DATA (UTC Strings with Timezone) ---');
       console.log('Event Data Being Sent:', eventData);
+      console.log('Start Time with Timezone:', eventData.startTime);
+      console.log('End Time with Timezone:', eventData.endTime);
+      console.log('Timezone Name:', timezoneName);
+      console.log('Timezone Offset (Hours):', timezoneOffsetHours);
       console.log('AssignedTo Array (Employee IDs):', eventData.assignedTo);
       console.log('Projects Array (Project IDs):', eventData.projects);
       console.log('Assignment Type:', eventForm.isProject ? 'Employees' : 'Projects');
@@ -718,39 +722,29 @@ const CreateEventModal = ({
     <Modal
       visible={visible}
       animationType="slide"
-      presentationStyle="fullScreen"
+      presentationStyle="formSheet"
       onRequestClose={handleClose}
     >
-      <TouchableWithoutFeedback onPress={dismissKeyboard}>
-        <KeyboardAvoidingView 
-          className="flex-1"
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-          style={{ backgroundColor: 'white', flex: 1 }}
-        >
+      <View className="flex-1 bg-white">
           {/* Black Navbar */}
-          <View className="bg-black px-4 py-3 flex-row items-center justify-between" style={{ borderBottomWidth: 0, marginTop: 0, marginLeft: 0, marginRight: 0 }}>
+          <View className="bg-black px-4 py-3 flex-row items-center justify-between">
             <Text className="text-white text-[18px] font-semibold">Create Event</Text>
             <TouchableOpacity onPress={handleClose}>
               <Ionicons name="close" size={24} color="white" />
             </TouchableOpacity>
           </View>
           
-          <View className="flex-1 items-center">
-            <FlatList
-              ref={scrollViewRef}
-              className="flex-1 w-full max-w-md px-5"
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              scrollEnabled={keyboardVisible || ((employeeDropdownOpen || projectDropdownOpen) && (!isDropdownInteracting || isSearching))}
-              // --- FIXED: Add proper bottom padding to prevent content from hiding behind fixed button ---
-              contentContainerStyle={{
-                paddingTop: 20, // Add top padding for form content
-                paddingBottom: 120, // Add space for fixed button (80px button + 40px padding)
-                flexGrow: 1
-              }}
-              data={[{ key: 'form' }]}
-              renderItem={() => (
+          <TouchableWithoutFeedback onPress={dismissKeyboard}>
+            <View className="flex-1 p-5 items-center">
+              <FlatList
+                ref={scrollViewRef}
+                className="flex-1 w-full max-w-md"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 20 }}
+                keyboardShouldPersistTaps="handled"
+                scrollEnabled={true}
+                data={[{ key: 'form' }]}
+                renderItem={() => (
                 <View>
                   <View className="mb-8 items-center">
                     <Text className="text-[28px] font-bold text-[#333]">Create Event</Text>
@@ -795,25 +789,28 @@ const CreateEventModal = ({
 
                     {/* Project Checkbox */}
                     <View className="mb-5">
-                <TouchableOpacity className="flex-row items-center justify-between p-3 border border-[#e1e8ed] rounded-lg bg-[#f8f9fa]"
-                  onPress={() => handleProjectCheckboxChange(!eventForm.isProject)}
-                  activeOpacity={0.7}
-                >
-                  <View className="flex-row items-center flex-1">
-                    <Ionicons name="folder" size={16} color="#374151" style={{ marginRight: 6 }} />
-                    <Text className="text-[16px] font-medium text-[#333]">This is a Project</Text>
-                  </View>
-                  <View className={`w-5 h-5 border-2 rounded items-center justify-center ${
-                    eventForm.isProject 
-                      ? 'bg-black border-black' 
-                      : 'bg-white border-[#d1d5db]'
-                  }`}>
-                    {eventForm.isProject && (
-                      <Ionicons name="checkmark" size={12} color="white" />
-                    )}
-                  </View>
-                </TouchableOpacity>
-              </View>
+                      <View className="flex-row items-center mb-2">
+                        <Ionicons name="folder" size={16} color="#374151" style={{ marginRight: 6 }} />
+                        <Text className="text-[16px] font-semibold text-[#333]">This is a Project</Text>
+                      </View>
+                      <TouchableOpacity className="flex-row items-center justify-between p-3 border border-[#e1e8ed] rounded-lg bg-[#f8f9fa]"
+                        onPress={() => handleProjectCheckboxChange(!eventForm.isProject)}
+                        activeOpacity={0.7}
+                      >
+                        <View className="flex-row items-center flex-1">
+                          <Text className="text-[16px] font-medium text-[#333]">This is a Project</Text>
+                        </View>
+                        <View className={`w-5 h-5 border-2 rounded items-center justify-center ${
+                          eventForm.isProject 
+                            ? 'bg-black border-black' 
+                            : 'bg-white border-[#d1d5db]'
+                        }`}>
+                          {eventForm.isProject && (
+                            <Ionicons name="checkmark" size={12} color="white" />
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    </View>
 
               {/* Project Selection Dropdown - Hidden when "This is a Project" is checked */}
               {!eventForm.isProject && (
@@ -879,9 +876,9 @@ const CreateEventModal = ({
                   max={10}
                   placeholder="Select projects (multiple allowed)"
                   placeholderStyle={{
-                    color: '#999',
+                    color: "#9ca3af",
                     fontSize: 16,
-                    fontWeight: '500'
+                    fontWeight: "400",
                   }}
                   multipleText={`${selectedProjectValues.length} Project${selectedProjectValues.length !== 1 ? 's' : ''} Selected`}
                   multipleTextStyle={{
@@ -916,27 +913,32 @@ const CreateEventModal = ({
                     },
                   }}
                   style={{
-                    backgroundColor: '#f8f9fa',
-                    borderColor: '#e1e8ed',
+                    backgroundColor: "#f8f9fa",
+                    borderColor: "#e1e8ed",
                     borderRadius: 8,
-                    minHeight: 50,
-                    paddingHorizontal: 12
+                    minHeight: 0,
+                    paddingVertical: 12,
+                    paddingHorizontal: 12,
+                  }}
+                  textStyle={{
+                    fontSize: 16,
+                    color: selectedProjectValues.length > 0 ? "#333" : "#9ca3af",
+                    fontWeight: "400",
                   }}
                   dropDownContainerStyle={{
-                    backgroundColor: '#ffffff',
-                    borderColor: '#e1e8ed',
+                    backgroundColor: "white",
+                    borderColor: "#e5e7eb",
                     borderRadius: 8,
-                    borderTopWidth: 0,
-                    elevation: 3,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 4,
+                    shadowColor: "#000",
+                    shadowOpacity: 0.15,
+                    shadowRadius: 6,
+                    shadowOffset: { width: 0, height: 3 },
+                    elevation: 999999,
                     maxHeight: 200,
                     zIndex: 999999,
                     // Position dropdown above keyboard when keyboard is visible
                     ...(keyboardVisible && {
-                      marginBottom: keyboardHeight - 50, // Adjust position to stay above keyboard
+                      marginBottom: keyboardHeight + 10, // Position above keyboard with padding
                     }),
                   }}
                   listMode="SCROLLVIEW"
@@ -945,60 +947,26 @@ const CreateEventModal = ({
                     showsVerticalScrollIndicator: true,
                     bounces: true,
                     scrollEnabled: true,
-                    onScrollBeginDrag: () => {
-                      setIsDropdownInteracting(true);
-                    },
-                    onScrollEndDrag: () => {
-                      if (projectDropdownOpen) {
-                        setIsDropdownInteracting(true);
-                      }
-                    },
+                    keyboardShouldPersistTaps: "handled",
                     scrollEventThrottle: 16,
-                    onTouchStart: () => {
-                      setIsDropdownInteracting(true);
-                    },
-                    onTouchEnd: () => {
-                      if (!projectDropdownOpen) {
-                        setIsDropdownInteracting(false);
-                      }
-                    },
                   }}
-                  textStyle={{
-                    fontSize: 16,
-                    color: '#333',
-                    fontWeight: '500'
+                  labelProps={{
+                    numberOfLines: 1,
                   }}
-                  selectedItemContainerStyle={{
-                    backgroundColor: '#f5f5f5',
-                    borderLeftWidth: 3,
-                    borderLeftColor: '#000000'
+                  customItemContainerStyle={{
+                    height: 40,
                   }}
-                  selectedItemLabelStyle={{
-                    color: '#000000',
-                    fontWeight: '600'
-                  }}
-                  listItemContainerStyle={{
-                    paddingVertical: 12,
-                    paddingHorizontal: 16,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    borderBottomWidth: 1,
-                    borderBottomColor: '#f0f0f0'
-                  }}
-                  listItemLabelStyle={{
-                    fontSize: 16,
-                    color: '#333',
-                    flex: 1,
-                    marginLeft: 12
+                  customItemLabelStyle={{
+                    fontSize: 14,
+                    fontWeight: "500",
+                    color: "#333",
                   }}
                   arrowIconStyle={{
-                    tintColor: '#666'
+                    width: 16,
+                    height: 16,
+                    tintColor: "#6b7280",
                   }}
-                  tickIconStyle={{
-                    tintColor: '#000000',
-                    width: 20,
-                    height: 20
-                  }}
+                  showArrowIcon={true}
                   // --- Custom checkbox styling ---
                   renderListItem={(item) => {
                     const isSelected = selectedProjectValues.includes(item.value);
@@ -1136,9 +1104,9 @@ const CreateEventModal = ({
                     max={10}
                     placeholder="Select employees (multiple allowed)"
                     placeholderStyle={{
-                      color: '#999',
+                      color: "#9ca3af",
                       fontSize: 16,
-                      fontWeight: '500'
+                      fontWeight: "400",
                     }}
                     multipleText={`${selectedEmployeeValues.length} Employee${selectedEmployeeValues.length !== 1 ? 's' : ''} Selected`}
                     multipleTextStyle={{
@@ -1173,27 +1141,32 @@ const CreateEventModal = ({
                       },
                     }}
                     style={{
-                      backgroundColor: '#f8f9fa',
-                      borderColor: '#e1e8ed',
+                      backgroundColor: "#f8f9fa",
+                      borderColor: "#e1e8ed",
                       borderRadius: 8,
-                      minHeight: 50,
-                      paddingHorizontal: 12
+                      minHeight: 0,
+                      paddingVertical: 12,
+                      paddingHorizontal: 12,
+                    }}
+                    textStyle={{
+                      fontSize: 16,
+                      color: selectedEmployeeValues.length > 0 ? "#333" : "#9ca3af",
+                      fontWeight: "400",
                     }}
                     dropDownContainerStyle={{
-                      backgroundColor: '#ffffff',
-                      borderColor: '#e1e8ed',
+                      backgroundColor: "white",
+                      borderColor: "#e5e7eb",
                       borderRadius: 8,
-                      borderTopWidth: 0,
-                      elevation: 3,
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.1,
-                      shadowRadius: 4,
-                      maxHeight: 200, // Increased by 2% (300 * 1.02)
+                      shadowColor: "#000",
+                      shadowOpacity: 0.15,
+                      shadowRadius: 6,
+                      shadowOffset: { width: 0, height: 3 },
+                      elevation: 999999,
+                      maxHeight: 200,
                       zIndex: 999999,
                       // Position dropdown above keyboard when keyboard is visible
                       ...(keyboardVisible && {
-                        marginBottom: keyboardHeight - 50, // Adjust position to stay above keyboard
+                        marginBottom: keyboardHeight + 10, // Position above keyboard with padding
                       }),
                     }}
                     listMode="SCROLLVIEW"
@@ -1202,62 +1175,26 @@ const CreateEventModal = ({
                       showsVerticalScrollIndicator: true,
                       bounces: true,
                       scrollEnabled: true,
-                      onScrollBeginDrag: () => {
-                        setIsDropdownInteracting(true);
-                      },
-                      onScrollEndDrag: () => {
-                        if (employeeDropdownOpen) {
-                          setIsDropdownInteracting(true);
-                        }
-                      },
+                      keyboardShouldPersistTaps: "handled",
                       scrollEventThrottle: 16,
-                      onTouchStart: () => {
-                        setIsDropdownInteracting(true);
-                      },
-                      onTouchEnd: () => {
-                        if (!employeeDropdownOpen) {
-                          setIsDropdownInteracting(false);
-                        }
-                      },
                     }}
-                    textStyle={{
-                      fontSize: 16,
-                      color: '#333',
-                      fontWeight: '500'
+                    labelProps={{
+                      numberOfLines: 1,
                     }}
-                    selectedItemContainerStyle={{
-                      backgroundColor: '#f0f9ff',
-                      borderLeftWidth: 3,
-                      borderLeftColor: '#1e40af'
+                    customItemContainerStyle={{
+                      height: 40,
                     }}
-                    selectedItemLabelStyle={{
-                      color: '#1e40af',
-                      fontWeight: '600'
-                    }}
-                    listItemContainerStyle={{
-                      paddingVertical: 10,
-                      paddingHorizontal: 12,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      borderBottomWidth: 1,
-                      borderBottomColor: '#f0f0f0',
-                      minHeight: 44, // Ensure consistent height
-                      maxHeight: 50 // Prevent items from being too tall
-                    }}
-                    listItemLabelStyle={{
-                      fontSize: 16,
-                      color: '#333',
-                      flex: 1,
-                      marginLeft: 12
+                    customItemLabelStyle={{
+                      fontSize: 14,
+                      fontWeight: "500",
+                      color: "#333",
                     }}
                     arrowIconStyle={{
-                      tintColor: '#666'
+                      width: 16,
+                      height: 16,
+                      tintColor: "#6b7280",
                     }}
-                    tickIconStyle={{
-                      tintColor: '#1e40af',
-                      width: 20,
-                      height: 20
-                    }}
+                    showArrowIcon={true}
                     // --- Custom checkbox styling ---
                     renderListItem={(item) => {
                       const isSelected = selectedEmployeeValues.includes(item.value);
@@ -1365,23 +1302,19 @@ const CreateEventModal = ({
                           <Ionicons name="calendar-outline" size={16} color="#666" />
                         </TouchableOpacity>
                         <TouchableOpacity
-                          className={`flex-1 flex-row items-center justify-between border rounded-lg p-3 ${startDateTime ? 'border-[#e1e8ed] bg-[#f8f9fa]' : 'border-[#d1d5db] bg-[#f3f4f6]'
-                            }`}
-                          onPress={() => startDateTime && setShowStartTimePicker(true)}
-                          disabled={!startDateTime}
-                          activeOpacity={startDateTime ? 0.8 : 1}
+                          className="flex-1 flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                          onPress={() => setShowStartTimePicker(true)}
                         >
-                          <Text className={`text-[16px] font-medium ${startDateTime ? 'text-[#333]' : 'text-[#9ca3af]'
-                            }`}>
-                            {startDateTime ? startDateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "Select time"}
+                          <Text className="text-[16px] text-[#333] font-medium">
+                            {startDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
                           </Text>
-                          <Ionicons name="time-outline" size={16} color={startDateTime ? "#666" : "#9ca3af"} />
+                          <Ionicons name="time-outline" size={16} color="#666" />
                         </TouchableOpacity>
                       </View>
                     </View>
 
                     {/* End Date & Time */}
-                    <View className="mb-5">
+                    <View style={{ marginBottom: 50 }}>
                       <View className="flex-row items-center mb-2">
                         <Ionicons name="calendar" size={16} color="#374151" style={{ marginRight: 6 }} />
                         <Text className="text-[16px] font-semibold text-[#333]">End Date & Time *</Text>
@@ -1392,7 +1325,7 @@ const CreateEventModal = ({
                           onPress={() => setShowEndDatePicker(true)}
                         >
                           <Text className="text-[16px] text-[#333] font-medium">
-                            {endDateTime ? endDateTime.toLocaleDateString() : "No end date selected"}
+                            {endDateTime.toLocaleDateString()}
                           </Text>
                           <Ionicons name="calendar-outline" size={16} color="#666" />
                         </TouchableOpacity>
@@ -1401,7 +1334,7 @@ const CreateEventModal = ({
                           onPress={() => setShowEndTimePicker(true)}
                         >
                           <Text className="text-[16px] text-[#333] font-medium">
-                            {endDateTime ? endDateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "No time"}
+                            {endDateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
                           </Text>
                           <Ionicons name="time-outline" size={16} color="#666" />
                         </TouchableOpacity>
@@ -1412,19 +1345,23 @@ const CreateEventModal = ({
               )}
               keyExtractor={(item) => item.key}
             />
-          </View>
+            </View>
+          </TouchableWithoutFeedback>
+
+
 
           {/* Fixed Action Button - Always positioned at bottom */}
           <View className="absolute bottom-0 left-0 right-0 px-5 pt-5 pb-5 bg-transparent items-center">
             <TouchableOpacity
               className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
               onPress={handleCreateEvent}
-              activeOpacity={0.8}
               disabled={isCreating}
-              style={{ opacity: isCreating ? 0.6 : 1 }}
+              activeOpacity={0.8}
             >
               {isCreating ? (
-                <ActivityIndicator color="white" size="small" />
+                <View className="flex-row items-center ">
+                  <ActivityIndicator color="#ffffff" size="small" />
+                </View>
               ) : (
                 <Text className="text-white text-[16px] font-semibold">Create Event</Text>
               )}
@@ -1481,8 +1418,7 @@ const CreateEventModal = ({
             title={errorDialog.title}
             message={errorDialog.message}
           />
-        </KeyboardAvoidingView>
-      </TouchableWithoutFeedback>
+      </View>
     </Modal>
   );
 };

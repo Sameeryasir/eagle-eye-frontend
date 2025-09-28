@@ -23,6 +23,7 @@ export default function CustomBottomNav({
   onAddPress,
   handleFabPress,
   isLoading = false,
+  userRole: propUserRole = null, // Accept user role as prop to prevent FAB lag
 }) {
   const navigation = useNavigation();
   const route = useRoute(); // Get current route information
@@ -32,19 +33,27 @@ export default function CustomBottomNav({
 
   // --- Load User Role (MCP Context 7) ---
   // Business Rule: Get user role to determine FAB visibility based on current screen
+  // Use prop userRole if provided (prevents FAB lag on calendar screens), otherwise load internally
   React.useEffect(() => {
-    const loadUserRole = async () => {
-      try {
-        const role = await getUserRole();
-        setUserRole(role);
-        console.log(`CustomBottomNav - User role loaded: ${role} on screen: ${route.name}`);
-      } catch (error) {
-        console.error("CustomBottomNav - Error loading user role:", error);
-      }
-    };
-    
-    loadUserRole();
-  }, []);
+    if (propUserRole) {
+      // Use provided user role (prevents FAB lag)
+      setUserRole(propUserRole);
+      console.log(`CustomBottomNav - Using prop user role: ${propUserRole} on screen: ${route.name}`);
+    } else {
+      // Load user role internally for other screens
+      const loadUserRole = async () => {
+        try {
+          const role = await getUserRole();
+          setUserRole(role);
+          console.log(`CustomBottomNav - User role loaded: ${role} on screen: ${route.name}`);
+        } catch (error) {
+          console.error("CustomBottomNav - Error loading user role:", error);
+        }
+      };
+      
+      loadUserRole();
+    }
+  }, [propUserRole]); // Re-run when prop userRole changes
 
   // --- Check if FAB should be hidden (MCP Context 7) ---
   // Business Rule: Hide FAB for Employee users on ViewAllTasksScreen, HomeScreen, CalenderScreen, CalenderDetailScreen, and WeekView
@@ -90,7 +99,8 @@ export default function CustomBottomNav({
     (userRole === "Manager" || userRole === "Employee") && route.name === "WeekView"
   ) || (
     // Hide FAB on calendar screens until userRole is loaded to prevent flashing
-    isCalendarScreen && userRole === null
+    // But only if we don't have the userRole from props (prevents FAB lag)
+    isCalendarScreen && userRole === null && !propUserRole
   );
 
   // --- Route Change Detection ---

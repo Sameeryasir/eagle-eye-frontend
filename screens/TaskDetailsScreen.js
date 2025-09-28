@@ -941,7 +941,7 @@ function TaskDetailsScreen({ navigation, route }) {
             zIndex: 1000,
             justifyContent: 'flex-start',
             alignItems: 'center',
-            paddingTop: keyboardVisible ? screenHeight * 0.12 : screenHeight * 0.25, // Optimized for small screens
+            paddingTop: keyboardVisible ? screenHeight * 0.15 : screenHeight * 0.32, // Moved lower for better visibility, still safe for small screens
           }}>
             <View style={{
               backgroundColor: 'white',
@@ -952,7 +952,7 @@ function TaskDetailsScreen({ navigation, route }) {
               shadowRadius: Math.min(8, screenWidth * 0.02),
               elevation: 8,
               width: Math.min(screenWidth * 0.9, 400), // Increased from 85% to 90% for small screens
-              maxHeight: Math.min(screenHeight * 0.6, 400), // Increased from 50% to 60% and max from 350 to 400
+              maxHeight: Math.min(screenHeight * 0.45, 320), // Reduced height to make dropdown more compact
               overflow: 'hidden',
               marginHorizontal: Math.min(20, screenWidth * 0.05),
             }}>
@@ -1020,7 +1020,7 @@ function TaskDetailsScreen({ navigation, route }) {
                 </View>
               </View>
 
-              <ScrollView style={{ maxHeight: Math.min(250, screenHeight * 0.35) }} showsVerticalScrollIndicator={false}>
+              <ScrollView style={{ maxHeight: Math.min(180, screenHeight * 0.25) }} showsVerticalScrollIndicator={false}>
                 {loadingEmployees ? (
                   <View style={{ paddingVertical: Math.min(20, screenHeight * 0.025), alignItems: 'center' }}>
                     <ActivityIndicator size="small" color="#3B82F6" />
