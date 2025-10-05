@@ -14,7 +14,12 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { updateProjectById } from "../../services/projects/updateProjectById";
+
+// --- Redux Integration (MCP Context 7) ---
+// Import Redux hooks and actions for centralized project updates
+import { useDispatch } from 'react-redux';
+import { updateProject } from '../../store/slices/projectSlice';
+
 import NoChangesDialog from "./NoChangesDialog";
 
 export default function UpdateProjectModal({ 
@@ -23,6 +28,8 @@ export default function UpdateProjectModal({
   project, 
   onSuccess 
 }) {
+  // --- Redux Integration (MCP Context 7) ---
+  const dispatch = useDispatch();
   const [projectData, setProjectData] = useState({
     name: "",
     description: "",
@@ -145,7 +152,12 @@ export default function UpdateProjectModal({
     setIsLoading(true);
 
     try {
-      const response = await updateProjectById(project.id, projectPayload);
+      // --- Use Redux Action for Project Update ---
+      // This will update the project and automatically update the UI
+      await dispatch(updateProject({ 
+        projectId: project.id, 
+        projectData: projectPayload 
+      })).unwrap();
 
       // Close modal and trigger success callback without showing alert
       onClose();

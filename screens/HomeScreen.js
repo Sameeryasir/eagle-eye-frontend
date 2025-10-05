@@ -21,13 +21,24 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
+
+// --- Redux Integration (MCP Context 7) ---
+// Import Redux hooks and actions for centralized state management
+import { useSelector, useDispatch } from 'react-redux';
+import { 
+  fetchProjects, 
+  refreshProjects,
+  deleteProject,
+  selectProjects,
+  selectProjectLoading,
+  selectProjectError
+} from '../store/slices/projectSlice';
+
 import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
 import CreateProject from "./components/CreateProject";
 import UpdateProjectModal from "./components/UpdateProjectModal";
 import Header from "../components/Header";
-import { getMyProjects } from "../services/projects/getProjectsByLoginUserId";
-import { deleteProjectById } from "../services/projects/deleteProjectById";
 import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
 
@@ -77,22 +88,28 @@ const SearchBarHeader = React.memo(function SearchBarHeader({
 });
 
 function HomeScreen({ navigation, route }) {
-  const [sidebarVisible, setSidebarVisible] = useState(false);
-  const [projects, setProjects] = useState([]);
+  // --- Redux State Management (MCP Context 7) ---
+  // Use Redux for project data, keep search functionality local
+  const dispatch = useDispatch();
+  const projects = useSelector(selectProjects);
+  const loading = useSelector(selectProjectLoading);
+  const error = useSelector(selectProjectError);
+  
+  // --- Local State for Search and UI (MCP Context 7) ---
+  // Keep search functionality local as requested
   const [filteredProjects, setFilteredProjects] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [sidebarVisible, setSidebarVisible] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
-  const [createProjectModalVisible, setCreateProjectModalVisible] =
-    useState(false);
-  const [updateProjectModalVisible, setUpdateProjectModalVisible] =
-    useState(false);
+  const [createProjectModalVisible, setCreateProjectModalVisible] = useState(false);
+  const [updateProjectModalVisible, setUpdateProjectModalVisible] = useState(false);
   const [userRole, setUserRole] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState(null);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const { width: screenWidth } = useWindowDimensions();
 
   const numColumns = screenWidth >= 1024 ? 3 : screenWidth >= 768 ? 2 : 1;
@@ -102,10 +119,37 @@ function HomeScreen({ navigation, route }) {
     (screenWidth - horizontalPadding - (numColumns - 1) * interItemSpacing) /
     numColumns;
 
-  // Load data on component mount
+  // --- Load Data on Component Mount (MCP Context 7) ---
+  // Use Redux action to fetch projects with local loading state
   useEffect(() => {
-    fetchProjects({ silent: false });
-  }, []);
+    const loadProjects = async () => {
+      setIsLoading(true);
+      setIsInitialLoad(true);
+      
+      try {
+        await dispatch(fetchProjects());
+      } finally {
+        setIsLoading(false);
+        setIsInitialLoad(false);
+      }
+    };
+    loadProjects();
+  }, [dispatch]);
+
+  // --- Update Filtered Projects When Projects Change (MCP Context 7) ---
+  // Keep search functionality local as requested
+  useEffect(() => {
+    if (searchTerm.trim() === "") {
+      setFilteredProjects(projects);
+    } else {
+      const filtered = projects.filter(
+        (project) =>
+          project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          project.description.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredProjects(filtered);
+    }
+  }, [projects, searchTerm]);
 
   // NOTE: OTP verification success messages are now handled directly 
   // in OtpScreen using react-native-toast-message for consistent cross-platform experience
@@ -147,36 +191,17 @@ function HomeScreen({ navigation, route }) {
     };
   }, []);
 
-  const fetchProjects = async (options = { silent: false, isRefresh: false }) => {
-    const { silent, isRefresh } = options;
-    try {
-      if (isRefresh) {
-        setRefreshing(true);
-      } else if (!silent) {
-        setInitialLoading(true);
-      }
-      setError(null);
-
-      const projectsData = await getMyProjects();
-      setProjects(projectsData);
-      setFilteredProjects(projectsData);
-    } catch (err) {
-      console.error("Error fetching projects:", err);
-      if (!silent) {
-        setError("Failed to load projects");
-      }
-    } finally {
-      if (isRefresh) {
-        setRefreshing(false);
-      } else if (!silent) {
-        setInitialLoading(false);
-      }
-    }
-  };
-
+  // --- Refresh Handler (MCP Context 7) ---
+  // Use refreshProjects to bypass cache and fetch fresh data from API
   const onRefresh = React.useCallback(() => {
-    fetchProjects({ silent: true, isRefresh: true });
-  }, []);
+    setRefreshing(true);
+    setIsLoading(true);
+    
+    dispatch(refreshProjects()).finally(() => {
+      setRefreshing(false);
+      setIsLoading(false);
+    });
+  }, [dispatch]);
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
@@ -184,18 +209,10 @@ function HomeScreen({ navigation, route }) {
     return date.toLocaleDateString();
   };
 
+  // --- Search Handler (MCP Context 7) ---
+  // Handle search locally as requested
   const handleSearch = (text) => {
     setSearchTerm(text);
-    if (text.trim() === "") {
-      setFilteredProjects(projects);
-    } else {
-      const filtered = projects.filter(
-        (project) =>
-          project.name.toLowerCase().includes(text.toLowerCase()) ||
-          project.description.toLowerCase().includes(text.toLowerCase())
-      );
-      setFilteredProjects(filtered);
-    }
   };
 
   const handleUpdate = (project) => {
@@ -203,6 +220,8 @@ function HomeScreen({ navigation, route }) {
     setUpdateProjectModalVisible(true);
   };
 
+  // --- Delete Handler (MCP Context 7) ---
+  // Show confirmation dialog for project deletion
   const handleDelete = (project) => {
     const projectId = project?.id;
     const projectName = project?.name;
@@ -217,6 +236,8 @@ function HomeScreen({ navigation, route }) {
     setDeleteDialogVisible(true);
   };
 
+  // --- Confirm Delete (MCP Context 7) ---
+  // Use Redux action for deletion instead of direct API call
   const confirmDelete = async () => {
     if (!projectToDelete) return;
 
@@ -228,18 +249,22 @@ function HomeScreen({ navigation, route }) {
     setProjectToDelete(null);
 
     try {
-      await deleteProjectById(projectId);
-      await fetchProjects();
+      // Use Redux action for deletion
+      const resultAction = await dispatch(deleteProject(projectId));
       
-      // --- Show Success Toast Message ---
-      Toast.show({
-        type: 'success',
-        text1: 'Project Deleted Successfully!',
-        text2: `"${projectName}" has been permanently deleted`,
-        visibilityTime: 3000,
-        autoHide: true,
-        topOffset: 80,
-      });
+      if (deleteProject.fulfilled.match(resultAction)) {
+        // --- Show Success Toast Message ---
+        Toast.show({
+          type: 'success',
+          text1: 'Project Deleted Successfully!',
+          text2: `"${projectName}" has been permanently deleted`,
+          visibilityTime: 3000,
+          autoHide: true,
+          topOffset: 80,
+        });
+      } else {
+        throw new Error('Delete failed');
+      }
     } catch (error) {
       console.error("Error deleting project:", error);
       
@@ -260,6 +285,8 @@ function HomeScreen({ navigation, route }) {
     setProjectToDelete(null);
   };
 
+  // --- Create Project Success Handler (MCP Context 7) ---
+  // Close modal - Redux will automatically update the UI when project is created
   const handleCreateProjectSuccess = () => {
     setCreateProjectModalVisible(false);
     
@@ -273,16 +300,15 @@ function HomeScreen({ navigation, route }) {
       topOffset: 80,
     });
     
-    // Force refresh projects with a slight delay to ensure API has updated
-    setTimeout(() => {
-      fetchProjects({ silent: false });
-    }, 100);
+    // No need to manually refresh - Redux will automatically update the UI
   };
 
   const handleCreateProjectCancel = () => {
     setCreateProjectModalVisible(false);
   };
 
+  // --- Update Project Success Handler (MCP Context 7) ---
+  // Close modal - Redux will automatically update the UI when project is updated
   const handleUpdateProjectSuccess = () => {
     setUpdateProjectModalVisible(false);
     setSelectedProject(null);
@@ -297,7 +323,7 @@ function HomeScreen({ navigation, route }) {
       topOffset: 80,
     });
     
-    fetchProjects(); // Refresh the projects list
+    // No need to manually refresh - Redux will automatically update the UI
   };
 
   const handleUpdateProjectClose = () => {
@@ -407,62 +433,69 @@ function HomeScreen({ navigation, route }) {
     </TouchableOpacity>
   );
 
-  const renderContent = () => (
-    <FlatList
-      data={filteredProjects}
-      key={numColumns}
-      numColumns={numColumns}
-      keyExtractor={(item) => String(item.id)}
-      contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode="on-drag"
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={["#3155A1"]}
-          tintColor="#3155A1"
-        />
-      }
-      ListHeaderComponent={
-        <SearchBarHeader searchTerm={searchTerm} onChange={handleSearch} />
-      }
-      ListHeaderComponentStyle={{ marginHorizontal: -20 }}
-      ListEmptyComponent={() => (
-        <View className="flex-1 justify-center items-center p-5 min-h-[400px]">
-          {error ? (
-            <>
-              <Text className="text-[16px] text-[#dc3545] text-center mb-4 font-semibold">
-                {error}
-              </Text>
-              <TouchableOpacity
-                className="bg-black py-3 px-6 rounded-xl"
-                onPress={fetchProjects}
-              >
-                <Text className="text-white text-[16px] font-semibold">
-                  Retry
+  const renderContent = () => {
+    // Simple logic: Only render FlatList when we have data or an error
+    if (isLoading || (!error && projects.length === 0)) {
+      return null;
+    }
+
+    return (
+      <FlatList
+        data={filteredProjects}
+        key={numColumns}
+        numColumns={numColumns}
+        keyExtractor={(item) => String(item.id)}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#3155A1"]}
+            tintColor="#3155A1"
+          />
+        }
+        ListHeaderComponent={
+          <SearchBarHeader searchTerm={searchTerm} onChange={handleSearch} />
+        }
+        ListHeaderComponentStyle={{ marginHorizontal: -20 }}
+        ListEmptyComponent={() => (
+          <View className="flex-1 justify-center items-center p-5 min-h-[400px]">
+            {error ? (
+              <>
+                <Text className="text-[16px] text-[#dc3545] text-center mb-4 font-semibold">
+                  {error}
                 </Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <Text className="text-[16px] text-[#666] text-center font-medium">
-              {searchTerm.trim() !== ""
-                ? "No projects match your search"
-                : "No projects found"}
-            </Text>
-          )}
-        </View>
-      )}
-      renderItem={({ item }) => (
-        <ProjectCard project={item} cardWidth={cardWidth} userRole={userRole} />
-      )}
-    />
-  );
+                <TouchableOpacity
+                  className="bg-black py-3 px-6 rounded-xl"
+                  onPress={() => dispatch(fetchProjects())}
+                >
+                  <Text className="text-white text-[16px] font-semibold">
+                    Retry
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <Text className="text-[16px] text-[#666] text-center font-medium">
+                {searchTerm.trim() !== ""
+                  ? "No projects match your search"
+                  : "No projects found"}
+              </Text>
+            )}
+          </View>
+        )}
+        renderItem={({ item }) => (
+          <ProjectCard project={item} cardWidth={cardWidth} userRole={userRole} />
+        )}
+      />
+    );
+  };
 
   return (
     <View className="flex-1 bg-white">
       {/* Content (Header fixed; search bar scrolls inside list) */}
-      {initialLoading ? (
+      {isLoading || (!error && projects.length === 0) ? (
         <View className="flex-1 justify-center items-center p-5 min-h-[100px]">
           <Loader size="large" color="#000000" text="Loading Projects" />
         </View>

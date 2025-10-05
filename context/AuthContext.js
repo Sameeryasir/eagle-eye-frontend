@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setupNotifications, clearExpoToken } from '../services/notifications/expoTokenService';
 import { saveTokenToServer, removeTokenFromServer } from '../services/notifications/sendTokenToServer';
+// Import cache clearing function for projects (MCP Context 7)
+import { clearProjectsCache } from '../store/slices/projectSlice';
 
 const AuthContext = createContext();
 
@@ -153,6 +155,10 @@ export const AuthProvider = ({ children }) => {
       
       // Clear Expo token from notification service
       await clearExpoToken();
+
+      // --- Clear Projects Cache (MCP Context 7) ---
+      // Clear cached project data when user logs out to prevent data leakage
+      await clearProjectsCache();
 
       // Update state
       setIsAuthenticated(false);

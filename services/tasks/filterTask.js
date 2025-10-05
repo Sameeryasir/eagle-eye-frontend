@@ -110,42 +110,4 @@ export async function filterTask(filters, projectId) {
     }
 }
 
-// --- Client-Side Filtering Function (MCP Context 7) ---
-// Business Rule: Apply additional filtering logic that backend doesn't handle
-export function applyClientSideFilters(tasks, filters) {
-    if (!tasks || !Array.isArray(tasks)) {
-        return [];
-    }
-
-    let filteredTasks = [...tasks];
-
-    // Apply assignment filters that backend doesn't handle
-    if (filters.assignedTo) {
-        switch (filters.assignedTo) {
-            case 'all':
-                // No filtering needed - show all tasks
-                break;
-            case 'assigned-to-me':
-                // This is handled by backend, no additional filtering needed
-                break;
-            case 'assigned-to-others':
-                // Filter tasks assigned to other users (not current user)
-                filteredTasks = filteredTasks.filter(task => 
-                    task.assignedTo && task.assignedTo !== 'current-user-id'
-                );
-                break;
-            case 'unassigned':
-                // Filter tasks that are not assigned to anyone
-                filteredTasks = filteredTasks.filter(task => 
-                    !task.assignedTo || task.assignedTo === null || task.assignedTo === ''
-                );
-                break;
-        }
-    }
-
-    // Apply any additional client-side filters here if needed
-    // Note: Date sorting is handled by backend via sortBy parameter
-
-    return filteredTasks;
-}
 

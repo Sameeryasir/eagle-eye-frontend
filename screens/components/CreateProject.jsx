@@ -12,10 +12,17 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { createProject } from '../../services/projects/createProject';
 import Toast from 'react-native-toast-message';
 
+// --- Redux Integration (MCP Context 7) ---
+// Import Redux hooks and actions for centralized project creation
+import { useDispatch } from 'react-redux';
+import { createProject } from '../../store/slices/projectSlice';
+
 function CreateProject({ navigation, onSuccess, onCancel }) {
+  // --- Redux Integration ---
+  const dispatch = useDispatch();
+  
   // --- Get screen dimensions for responsive design ---
   const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
   
@@ -51,6 +58,8 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
     }
   };
 
+  // --- Create Project Handler ---
+  // Use Redux action for optimistic project creation
   const handleCreateProject = async () => {
     // Validate required fields
     if (!projectData.name.trim()) {
@@ -106,7 +115,9 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
         startDate: startDateISO,
       };
 
-      const response = await createProject(projectPayload);
+      // --- Use Redux Action for Project Creation ---
+      // This will create the project and automatically update the UI
+      await dispatch(createProject(projectPayload)).unwrap();
       
       // --- Show Success Toast Message ---
       Toast.show({

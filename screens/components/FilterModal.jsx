@@ -278,11 +278,13 @@ const FilterModal = ({
             >
               Assigned To
             </Text>
-            {(userRole === 'Owner' || userRole === 'Manager'
+            {(userRole === 'Owner'
               ? ['all', 'assigned-to-me', 'assigned-to-others', 'unassigned']
-              : userRole === 'Employee'
-                ? ['all', 'assigned-to-me']
-                : ['all', 'assigned-to-me', 'unassigned']
+              : userRole === 'Manager'
+                ? ['all', 'assigned-to-me', 'assigned-to-others', 'unassigned']
+                : userRole === 'Employee'
+                  ? ['all', 'assigned-to-me']
+                  : ['all', 'assigned-to-me', 'unassigned']
             ).map((assignedTo) => (
               <View key={assignedTo}>
                 {assignedTo === 'assigned-to-others' ? (
@@ -307,13 +309,21 @@ const FilterModal = ({
                       console.log('🎯 assignedTo = others - toggling popup');
                       setSelectedFilters((prev) => ({ ...prev, assignedTo }));
                       
-                      // --- Toggle Popup and Fetch Employees ---
+                      // --- Toggle Popup and Show Loading ---
                       if (!showEmployeePopup) {
+                        // Show popup first with loading state
+                        setShowEmployeePopup(true);
+                        setLoadingEmployees(true);
+                        
+                        // Then fetch employees
                         if (employees.length === 0) {
                           await fetchEmployees();
+                        } else {
+                          setLoadingEmployees(false);
                         }
+                      } else {
+                        setShowEmployeePopup(false);
                       }
-                      setShowEmployeePopup(!showEmployeePopup);
                     }}
                   >
                     <View
@@ -379,10 +389,14 @@ const FilterModal = ({
                           : 'transparent',
                       borderRadius: Math.min(8, screenWidth * 0.02),
                       marginBottom: Math.min(8, screenHeight * 0.01),
+                      opacity: (userRole === 'Owner' && assignedTo === 'assigned-to-me') ? 0.5 : 1,
                     }}
                     onPress={() => {
                       // Don't allow assigned to selection when closed tasks is selected
                       if (selectedFilters.status === 'closed') return;
+                      
+                      // Don't allow "assigned-to-me" selection for Owner role
+                      if (userRole === 'Owner' && assignedTo === 'assigned-to-me') return;
                       
                       if (assignedTo === 'assigned-to-me') {
                         console.log('assignedTo = me');
@@ -634,7 +648,7 @@ const FilterModal = ({
             zIndex: 1000,
             justifyContent: 'flex-start',
             alignItems: 'center',
-            paddingTop: keyboardVisible ? screenHeight * 0.15 : screenHeight * 0.35, // Shift popup upward when keyboard is visible
+            paddingTop: keyboardVisible ? screenHeight * 0.2 : screenHeight * 0.35, // Shift popup downward more
           }}>
             <View style={{
               backgroundColor: 'white',

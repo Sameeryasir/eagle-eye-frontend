@@ -21,7 +21,9 @@ import NoChangesDialog from './NoChangesDialog';
 import ErrorDialog from './ErrorDialog';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import DropDownPicker from "react-native-dropdown-picker";
-import { updateTask } from '../../services/tasks/updateTaskById';
+// --- Redux Integration (MCP Context 7) ---
+import { useDispatch, useSelector } from 'react-redux';
+import { updateExistingTask, selectTaskUpdating, selectTaskUpdateError } from '../../store/slices/taskSlice';
 import { getEmployeesToAssignTask } from '../../services/employees/getEmployeesOfTheCompany';
 
 export default function UpdateTaskModal({ 
@@ -31,6 +33,11 @@ export default function UpdateTaskModal({
   projectId,
   onSuccess 
 }) {
+  // --- Redux State (MCP Context 7) ---
+  const dispatch = useDispatch();
+  const updating = useSelector(selectTaskUpdating);
+  const updateError = useSelector(selectTaskUpdateError);
+
   const [taskData, setTaskData] = useState({
     title: '',
     description: '',
@@ -43,7 +50,6 @@ export default function UpdateTaskModal({
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [employees, setEmployees] = useState([]);
@@ -415,54 +421,48 @@ export default function UpdateTaskModal({
     // Always include projectId for the API
     taskPayload.projectId = projectId;
 
-    setIsLoading(true);
-    
     try {
-      const response = await updateTask(task.id, taskPayload);
+      // Use Redux action to update task (MCP Context 7)
+      const result = await dispatch(updateExistingTask({ taskId: task.id, taskData: taskPayload }));
       
-      // --- Show Success Toast Message ---
-      Toast.show({
-        type: 'success',
-        text1: 'Task Updated Successfully!',
-        text2: 'Your task changes have been saved',
-        visibilityTime: 3000,
-        autoHide: true,
-        topOffset: 80,
-      });
-      
-      // Close modal after a short delay to allow toast to be visible
-      setTimeout(() => {
-        onClose();
-        if (onSuccess) onSuccess();
-      }, 1000);
+      if (updateExistingTask.fulfilled.match(result)) {
+        // Success - task updated in Redux state automatically
+        Toast.show({
+          type: 'success',
+          text1: 'Task Updated Successfully!',
+          text2: 'Your task changes have been saved',
+          visibilityTime: 3000,
+          autoHide: true,
+          topOffset: 80,
+        });
+        
+        // Close modal after a short delay to allow toast to be visible
+        setTimeout(() => {
+          onClose();
+          if (onSuccess) onSuccess(result.payload); // Pass the updated task data
+        }, 1000);
+      } else {
+        // Error handling
+        const errorMessage = result.payload || 'Failed to update task. Please try again.';
+        Toast.show({
+          type: 'error',
+          text1: 'Update Failed',
+          text2: errorMessage,
+          visibilityTime: 4000,
+          autoHide: true,
+          topOffset: 80,
+        });
+      }
     } catch (error) {
       console.error('Error updating task:', error);
-      
-      let errorMessage = 'Failed to update task. Please try again.';
-      
-      // Handle different types of error responses
-      if (error.response?.data?.message) {
-        // If message is an array, join it, otherwise use as string
-        if (Array.isArray(error.response.data.message)) {
-          errorMessage = error.response.data.message.join(', ');
-        } else {
-          errorMessage = String(error.response.data.message);
-        }
-      } else if (error.message) {
-        errorMessage = String(error.message);
-      }
-      
-      // --- Show Error Toast Message ---
       Toast.show({
         type: 'error',
         text1: 'Update Failed',
-        text2: errorMessage,
+        text2: 'An unexpected error occurred',
         visibilityTime: 4000,
         autoHide: true,
         topOffset: 80,
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -850,10 +850,10 @@ export default function UpdateTaskModal({
           <TouchableOpacity
             className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
             onPress={handleUpdateTask}
-            disabled={isLoading}
+            disabled={updating}
             activeOpacity={0.8}
           >
-            {isLoading ? (
+            {updating ? (
               <View className="flex-row items-center ">
                 <ActivityIndicator color="#ffffff" size="small" />
               </View>

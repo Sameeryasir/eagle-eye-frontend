@@ -6,6 +6,12 @@ import { getUserRole } from '../../services/utils/userRole';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 
+// --- Redux Integration (MCP Context 7) ---
+// Import Redux hooks to clear project and task state on logout
+import { useDispatch } from 'react-redux';
+import { resetProjectsState } from '../../store/slices/projectSlice';
+import { resetTasksState } from '../../store/slices/taskSlice';
+
 const { width } = Dimensions.get('window');
 
 const Sidebar = ({ isVisible, onClose, onNavigate }) => {
@@ -19,6 +25,9 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
   const [activeMenuItem, setActiveMenuItem] = React.useState('chats'); // Track which menu item is active
   const navigation = useNavigation();
   const { logout } = useAuth();
+  
+  // --- Redux Integration (MCP Context 7) ---
+  const dispatch = useDispatch();
 
   React.useEffect(() => {
     if (isVisible) {
@@ -99,6 +108,11 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
       // Close dialog and sidebar
       setShowLogoutDialog(false);
       onClose();
+      
+      // --- Clear Redux State (MCP Context 7) ---
+      // Clear all project and task data, errors, and loading states
+      dispatch(resetProjectsState());
+      dispatch(resetTasksState());
       
       // Navigate to SignIn screen immediately
       navigation.reset({

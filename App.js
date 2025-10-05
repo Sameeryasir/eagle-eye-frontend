@@ -16,6 +16,11 @@ import { MenuProvider } from "react-native-popup-menu";
 import Toast from 'react-native-toast-message';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+// --- Redux Store Integration (MCP Context 7) ---
+// Import Redux store and provider for global state management
+import { Provider } from 'react-redux';
+import store from './store';
+
 // Error Boundary Component
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -501,9 +506,11 @@ const AppNavigator = () => {
 export default function App() {
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <AppNavigator />
-      </AuthProvider>
+      <Provider store={store}>
+        <AuthProvider>
+          <AppNavigator />
+        </AuthProvider>
+      </Provider>
     </ErrorBoundary>
   );
 }

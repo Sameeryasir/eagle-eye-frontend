@@ -15,11 +15,25 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import DropDownPicker from "react-native-dropdown-picker";
-import { createTask } from '../services/tasks/createTask';
-import { getEmployeesToAssignTask } from '../services/employees/getEmployeesOfTheCompany';
 import Toast from 'react-native-toast-message';
 
+// --- Redux Integration (MCP Context 7) ---
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  createNewTask,
+  fetchEmployeesForTaskAssignment,
+  selectTaskCreating,
+  selectTaskCreateError,
+  selectEmployeesForAssignment,
+} from '../store/slices/taskSlice';
+
 function CreateTaskScreen({ navigation, route }) {
+  // --- Redux State (MCP Context 7) ---
+  const dispatch = useDispatch();
+  const creating = useSelector(selectTaskCreating);
+  const createError = useSelector(selectTaskCreateError);
+  const employees = useSelector(selectEmployeesForAssignment);
+
   // Get projectId from route params if available
   const projectId = route?.params?.projectId;
   const [taskData, setTaskData] = useState({
@@ -46,10 +60,8 @@ function CreateTaskScreen({ navigation, route }) {
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [employees, setEmployees] = useState([]);
   const [filteredEmployees, setFilteredEmployees] = useState([]);
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [showAssignedDropdown, setShowAssignedDropdown] = useState(false);
@@ -118,8 +130,8 @@ function CreateTaskScreen({ navigation, route }) {
       }
     );
 
-    // Load employees when screen mounts
-    loadEmployees();
+    // Load employees when screen mounts using Redux
+    dispatch(fetchEmployeesForTaskAssignment());
 
     // Cleanup listeners
     return () => {
@@ -128,17 +140,12 @@ function CreateTaskScreen({ navigation, route }) {
     };
   }, []);
 
-  const loadEmployees = async () => {
-    try {
-      const response = await getEmployeesToAssignTask();
-      if (response && Array.isArray(response)) {
-        setEmployees(response);
-        setFilteredEmployees(response);
-      }
-    } catch (error) {
-      console.error("Error loading employees:", error);
+  // Update filtered employees when Redux employees change
+  useEffect(() => {
+    if (employees && Array.isArray(employees)) {
+      setFilteredEmployees(employees);
     }
-  };
+  }, [employees]);
 
   // --- Draft Task Management Functions ---
   // Business Rule: Create and manage draft tasks like ViewAllTasksScreen
@@ -365,8 +372,6 @@ function CreateTaskScreen({ navigation, route }) {
       return;
     }
 
-    setIsLoading(true);
-
     try {
       // --- FIXED: Proper timezone handling for task creation ---
       // Business Rule: Use same timezone conversion approach as event and project handling
@@ -386,7 +391,7 @@ function CreateTaskScreen({ navigation, route }) {
         String(localEndDate.getMonth() + 1).padStart(2, '0') + '-' + 
         String(localEndDate.getDate()).padStart(2, '0') : null;
 
-      // Prepare the data for API call
+      // Prepare the data for Redux action
       const taskPayload = {
         title: taskData.title.trim(),
         description: taskData.description.trim(),
@@ -410,42 +415,32 @@ function CreateTaskScreen({ navigation, route }) {
       console.log('Task Payload Being Sent:', taskPayload);
       console.log('=== End CreateTaskScreen Task Creation Debug ===');
 
-      const response = await createTask(taskPayload);
+      // Use Redux action to create task (MCP Context 7)
+      const result = await dispatch(createNewTask(taskPayload));
+      
+      if (createNewTask.fulfilled.match(result)) {
+        // Success - task created and added to Redux state automatically
+        Toast.show({
+          type: 'success',
+          text1: 'Task Created Successfully!',
+          text2: 'Your task has been created and saved',
+          visibilityTime: 3000,
+          autoHide: true,
+          topOffset: 80,
+        });
 
-      // --- Show Success Toast Message ---
-      Toast.show({
-        type: 'success',
-        text1: 'Task Created Successfully!',
-        text2: 'Your task has been created and saved',
-        visibilityTime: 3000,
-        autoHide: true,
-        topOffset: 80,
-      });
-
-      // Navigate back after a short delay to show the toast
-      setTimeout(() => {
-        navigation.goBack();
-      }, 1500);
+        // Navigate back after a short delay to show the toast
+        setTimeout(() => {
+          navigation.goBack();
+        }, 1500);
+      } else {
+        // Error handling
+        const errorMessage = result.payload || 'Failed to create task. Please try again.';
+        Alert.alert('Error', errorMessage);
+      }
     } catch (error) {
       console.error('Error creating task:', error);
-
-      let errorMessage = 'Failed to create task. Please try again.';
-
-      // Handle different types of error responses
-      if (error.response?.data?.message) {
-        // If message is an array, join it, otherwise use as string
-        if (Array.isArray(error.response.data.message)) {
-          errorMessage = error.response.data.message.join(', ');
-        } else {
-          errorMessage = String(error.response.data.message);
-        }
-      } else if (error.message) {
-        errorMessage = String(error.message);
-      }
-
-      Alert.alert('Error', errorMessage); 332
-    } finally {
-      setIsLoading(false);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     }
   };
 
@@ -687,10 +682,10 @@ function CreateTaskScreen({ navigation, route }) {
         <TouchableOpacity
           className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
           onPress={handleCreateTask}
-          disabled={isLoading}
+          disabled={creating}
           activeOpacity={0.8}
         >
-          {isLoading ? (
+          {creating ? (
             <View className="flex-row items-center ">
               <ActivityIndicator color="#ffffff" size="small" />
             </View>

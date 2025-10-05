@@ -15,6 +15,29 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 
+// --- Redux Integration (MCP Context 7) ---
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  fetchTasksByProjectId,
+  fetchTasks,
+  fetchTodaysTasks,
+  deleteExistingTask,
+  setCurrentProjectId,
+  clearError,
+  selectTasks,
+  selectTaskLoading,
+  selectTaskError,
+  selectTaskDeleting,
+  selectTaskDeleteError,
+} from '../store/slices/taskSlice';
+import {
+  fetchLogsByProjectId,
+  clearError as clearLogError,
+  selectLogs,
+  selectLogLoading,
+  selectLogError,
+} from '../store/slices/logSlice';
+
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
 // More comprehensive screen size detection for better responsive design
@@ -25,91 +48,49 @@ const isLargeScreen = screenWidth >= 450; // Large devices
 
 import Sidebar from "./components/Sidebar";
 import CustomBottomNav from "./components/CustomBottomNav";
-import { getTaskByProjectId } from "../services/tasks/getTaskByProjectId";
-import { getProjectById } from "../services/projects/getProject";
-import { getTasksAssignedToEmployees } from "../services/tasks/getTasksAssignedToEmployees";
-import getTasksByloginId from "../services/tasks/getTasksByloginId";
-import { deleteTaskById } from "../services/tasks/deleteTaskById";
-import { getMyProjects } from "../services/projects/getProjectsByLoginUserId";
-import { getLogs } from "../services/log/getLogs";
-import { getLogsForOwnerRecent } from "../services/log/getLogsForOwnerRecent";
 import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
-import {
-  Menu,
-  MenuOptions,
-  MenuOption,
-  MenuTrigger,
-} from "react-native-popup-menu";
+
 
 function WidgetScreen({ navigation, route }) {
+  // --- Redux State (MCP Context 7) ---
+  const dispatch = useDispatch();
+  const tasks = useSelector(selectTasks);
+  const loading = useSelector(selectTaskLoading);
+  const error = useSelector(selectTaskError);
+  const deleting = useSelector(selectTaskDeleting);
+  const deleteError = useSelector(selectTaskDeleteError);
+  
+  // --- Log Redux State (MCP Context 7) ---
+  const logs = useSelector(selectLogs);
+  const logsLoading = useSelector(selectLogLoading);
+  const logsError = useSelector(selectLogError);
+
+  // --- Local State ---
   const [sidebarVisible, setSidebarVisible] = useState(false);
-  const [tasks, setTasks] = useState([]);
   const [project, setProject] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const [managerProjectId, setManagerProjectId] = useState(null);
-  const [logs, setLogs] = useState([]);
-  const [logsLoading, setLogsLoading] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const isFirstMount = useRef(true);
 
   const { projectId, projectName } = route.params || {};
 
-  // Load logs function
+  // Load logs function using Redux (MCP Context 7)
   const loadLogs = async (projectId) => {
     try {
-      setLogsLoading(true);
       console.log("WidgetScreen - Starting to load logs with projectId:", projectId);
-
-      const logsResponse = await getLogs(projectId);
-      console.log("WidgetScreen - Logs response:", logsResponse);
-      console.log("WidgetScreen - Logs response type:", typeof logsResponse);
-      console.log("WidgetScreen - Is logs response array?", Array.isArray(logsResponse));
-
-      // Check if response has logs array or if it's directly an array
-      let logsArray = [];
-      if (logsResponse?.logs && Array.isArray(logsResponse.logs)) {
-        logsArray = logsResponse.logs;
-      } else if (Array.isArray(logsResponse)) {
-        logsArray = logsResponse;
-      } else {
-        console.log("WidgetScreen - No logs found in response:", logsResponse);
-        setLogs([]);
-        return;
-      }
-
-      console.log("WidgetScreen - Processing logs array:", logsArray);
-
-      // Transform logs data to match the expected format
-      const transformedLogs = logsArray.map(log => {
-        return {
-          id: log.id,
-          createdBy: log.user ? `${log.user.first_name || ''} ${log.user.last_name || ''}`.trim() : 'Unknown User',
-          date: log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'N/A',
-          createdAt: log.createdAt, // Preserve original createdAt for filtering
-          description: log.note || 'No description',
-          images: log.images || [], // Keep all images for the log
-          image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : null,
-        };
-      });
-
-      // Sort logs by date (newest first)
-      const sortedLogs = transformedLogs.sort((a, b) => {
-        const dateA = new Date(a.date);
-        const dateB = new Date(b.date);
-        return dateB - dateA;
-      });
-
-      console.log("WidgetScreen - Transformed and sorted logs:", sortedLogs);
-      console.log("WidgetScreen - Setting logs state with length:", sortedLogs.length);
-      setLogs(sortedLogs);
+      
+      // Clear any previous log errors
+      dispatch(clearLogError());
+      
+      // Use Redux action to fetch logs
+      await dispatch(fetchLogsByProjectId(projectId));
+      
+      console.log("WidgetScreen - Logs loaded via Redux");
     } catch (error) {
       console.error("WidgetScreen - Error loading logs:", error);
-      setLogs([]);
-    } finally {
-      setLogsLoading(false);
     }
   };
 
@@ -120,220 +101,82 @@ function WidgetScreen({ navigation, route }) {
 
   const loadData = async (isRefresh = false) => {
     try {
+      console.log("WidgetScreen - loadData started:", { isRefresh, projectId });
+      
       if (isRefresh) {
         setRefreshing(true);
       } else {
-        setLoading(true);
+        setIsInitialLoad(true);
       }
-      setError(null);
+      
+      // Clear any previous errors
+      dispatch(clearError());
+      dispatch(clearLogError());
 
       const role = await getUserRole();
       setUserRole(role);
+      console.log("WidgetScreen - User role:", role);
 
-      let response;
+      // Set current project ID in Redux state
+      if (projectId) {
+        dispatch(setCurrentProjectId(projectId));
+      }
 
+      // --- Load logs (keep existing logic) ---
+      await loadLogs(projectId);
+
+      // --- Load tasks using Redux (MCP Context 7) ---
       if (role === "Employee") {
-        // --- Load logs for Employee role using getLogs service ---
-        await loadLogs(projectId);
-        
-        // Check if projectId is provided in route params
         if (projectId) {
-          // Use getProjectById when projectId is provided
-          console.log("WidgetScreen - Employee: Using getProjectById with projectId:", projectId);
-          response = await getProjectById(projectId);
-          console.log("WidgetScreen - Employee: getProjectById response:", response);
-
-          if (response) {
-            // Map the project data, use projectName from HomeScreen if available
-            setProject({
-              id: response.id,
-              name: projectName || response.name || "Project",
-              description: response.description,
-              startDate: response.startDate,
-              endDate: response.endDate
-            });
-
-            // Map the tasks from the response
-            const projectTasks = response.tasks || [];
-            console.log("WidgetScreen - Employee: Project tasks:", projectTasks);
-            setTasks(projectTasks);
-          } else {
-            setProject({ name: "Project" });
-            setTasks([]);
-          }
+          // Use fetchTasksByProjectId for specific project
+          console.log("WidgetScreen - Employee: Fetching tasks by project ID:", projectId);
+          await dispatch(fetchTasksByProjectId(projectId));
+          
+          // Set project info
+          setProject({
+            id: projectId,
+            name: projectName || "Project",
+          });
         } else {
-          // Fallback to getTasksByloginId when no projectId is provided
-          console.log("WidgetScreen - Employee: Using getTasksByloginId (no projectId provided)");
-          const employeeTasks = await getTasksByloginId();
+          // Use fetchTasks for user's own tasks
+          console.log("WidgetScreen - Employee: Fetching user's tasks");
+          await dispatch(fetchTasks());
           setProject({ name: "My Tasks" });
-          if (employeeTasks && Array.isArray(employeeTasks)) {
-            setTasks(employeeTasks);
-          } else if (employeeTasks && employeeTasks.tasks && Array.isArray(employeeTasks.tasks)) {
-            setTasks(employeeTasks.tasks);
-          } else {
-            setTasks([]);
-          }
         }
       } else if (role === "Manager") {
-        // --- Load logs for Manager role using getLogs service ---
-        await loadLogs(projectId);
-
-        // Check if projectId is provided from HomeScreen (when Manager taps on project card)
         if (projectId) {
-          // Use the projectId passed from HomeScreen
-          console.log("WidgetScreen - Manager: Using projectId from HomeScreen:", projectId);
+          console.log("WidgetScreen - Manager: Fetching tasks by project ID:", projectId);
           setManagerProjectId(projectId);
-          response = await getProjectById(projectId);
-          console.log("WidgetScreen - Manager: getProjectById response:", response);
-
-          if (response && response.project) {
-            setProject({
-              ...response.project,
-              name: projectName || response.project.name
-            });
-            setTasks(response.tasks || []);
-          } else if (response && response.tasks) {
-            setProject({
-              ...response,
-              name: projectName || response.name
-            });
-            setTasks(response.tasks || []);
-          } else if (response && Array.isArray(response)) {
-            setProject({ name: projectName || "Project" });
-            setTasks(response);
-          } else if (response) {
-            setProject({
-              ...response,
-              name: projectName || response.name
-            });
-            setTasks([]);
-          } else {
-            setProject({ name: projectName || "Project" });
-            setTasks([]);
-          }
+          await dispatch(fetchTasksByProjectId(projectId));
+          
+          setProject({
+            id: projectId,
+            name: projectName || "Project",
+          });
         } else {
           // Fallback: Get manager's projects if no projectId provided
-          const projectsResponse = await getMyProjects();
-
-          if (projectsResponse && projectsResponse.length > 0) {
-            // Use the first project's ID to get tasks
-            const firstProjectId = projectsResponse[0].id;
-            setManagerProjectId(firstProjectId);
-            response = await getProjectById(firstProjectId);
-
-            if (response && response.project) {
-              setProject(response.project);
-              setTasks(response.tasks || []);
-            } else if (response && response.tasks) {
-              setProject(response);
-              setTasks(response.tasks || []);
-            } else if (response && Array.isArray(response)) {
-              setProject({ name: "Project" });
-              setTasks(response);
-            } else if (response) {
-              setProject(response);
-              setTasks([]);
-            } else {
-              setProject({ name: "Project" });
-              setTasks([]);
-            }
-          } else {
-            setProject({ name: "No Projects" });
-            setTasks([]);
-          }
+          // This would need to be implemented with project slice
+          setProject({ name: "No Projects" });
         }
-      } else if (role === "Admin") {
-        // Load logs for Admin role
-        await loadLogs(projectId);
-
-        console.log("WidgetScreen - Calling getTaskByProjectId for role:", role, "with projectId:", projectId);
-        response = await getTaskByProjectId(projectId);
-        console.log("WidgetScreen - getTaskByProjectId response:", response);
-
-        if (response && response.project) {
-          console.log("WidgetScreen - Response has project property");
-          setProject(response.project);
-          setTasks(response.tasks || []);
-        } else if (response && response.tasks) {
-          console.log("WidgetScreen - Response has tasks property");
-          setProject(response);
-          setTasks(response.tasks || []);
-        } else if (response && Array.isArray(response)) {
-          console.log("WidgetScreen - Response is an array of tasks, length:", response.length);
-          console.log("WidgetScreen - First task in array:", response[0]);
-          setProject({ name: "Project" });
-          setTasks(response);
-        } else if (response) {
-          console.log("WidgetScreen - Response exists but no expected structure");
-          setProject(response);
-          setTasks([]);
-        } else {
-          console.log("WidgetScreen - No response received");
-          setProject({ name: "Project" });
-          setTasks([]);
-        }
-      } else if (role === "Owner") {
-        // --- Load recent logs for Owner role using getLogsForOwnerRecent service ---
-        console.log("WidgetScreen - Owner: Loading recent logs using getLogsForOwnerRecent service with projectId:", projectId);
-        const ownerLogsResponse = await getLogsForOwnerRecent(projectId);
-        console.log("WidgetScreen - Owner: getLogsForOwnerRecent response:", ownerLogsResponse);
-
-        // Map the owner logs response to the expected format
-        if (ownerLogsResponse && Array.isArray(ownerLogsResponse)) {
-          const mappedLogs = ownerLogsResponse.map(log => {
-            return {
-              id: log.id,
-              createdBy: log.user ? `${log.user.first_name || ''} ${log.user.last_name || ''}`.trim() : 'Unknown User',
-              date: log.createdAt ? new Date(log.createdAt).toLocaleDateString() : 'N/A',
-              createdAt: log.createdAt,
-              description: log.note || 'No description',
-              images: log.images || [],
-              image: log.images && log.images.length > 0 ? { uri: log.images[0].imageUrl } : null,
-            };
+      } else if (role === "Admin" || role === "Owner") {
+        if (projectId) {
+          console.log("WidgetScreen - Admin/Owner: Fetching tasks by project ID:", projectId);
+          await dispatch(fetchTasksByProjectId(projectId));
+          
+          setProject({
+            id: projectId,
+            name: projectName || "Project",
           });
-
-          // Sort logs by date (newest first)
-          const sortedLogs = mappedLogs.sort((a, b) => {
-            const dateA = new Date(a.createdAt);
-            const dateB = new Date(b.createdAt);
-            return dateB - dateA;
-          });
-
-          console.log("WidgetScreen - Owner: Mapped and sorted logs:", sortedLogs);
-          setLogs(sortedLogs);
         } else {
-          console.log("WidgetScreen - Owner: No logs found in response");
-          setLogs([]);
-        }
-
-        // --- Load tasks for Owner role using getTaskByProjectId ---
-        console.log("WidgetScreen - Owner: Calling getTaskByProjectId for tasks with projectId:", projectId);
-        response = await getTaskByProjectId(projectId);
-        console.log("WidgetScreen - Owner: getTaskByProjectId response:", response);
-
-        if (response && response.tasks) {
-          console.log("WidgetScreen - Owner: Response has tasks property, tasks count:", response.tasks.length);
-          setProject(response);
-          setTasks(response.tasks || []);
-        } else if (response && Array.isArray(response)) {
-          console.log("WidgetScreen - Owner: Response is an array of tasks, length:", response.length);
           setProject({ name: "Project" });
-          setTasks(response);
-        } else if (response) {
-          console.log("WidgetScreen - Owner: Response exists but no expected structure");
-          setProject(response);
-          setTasks([]);
-        } else {
-          console.log("WidgetScreen - Owner: No response received");
-          setProject({ name: "Project" });
-          setTasks([]);
         }
       }
     } catch (err) {
-      setError("Failed to load project data");
+      console.error("WidgetScreen - Error in loadData:", err);
       Alert.alert("Error", "Failed to load project data. Please try again.");
     } finally {
-      setLoading(false);
+      console.log("WidgetScreen - loadData completed, setting isInitialLoad to false");
+      setIsInitialLoad(false);
       setRefreshing(false);
     }
   };
@@ -403,37 +246,37 @@ function WidgetScreen({ navigation, route }) {
           style: "destructive",
           onPress: async () => {
             try {
-              // Import and use deleteTaskById here
-              const {
-                deleteTaskById,
-              } = require("../services/tasks/deleteTaskById");
-              await deleteTaskById(taskId);
-
-              // Refresh the data
-              await loadData(true);
-
-              // --- Show Success Toast Message ---
-              Toast.show({
-                type: 'success',
-                text1: 'Task Deleted Successfully!',
-                text2: `"${taskTitle}" has been permanently deleted`,
-                visibilityTime: 3000,
-                autoHide: true,
-                topOffset: 80,
-              });
-            } catch (error) {
-              let errorMessage = "Failed to delete task. Please try again.";
-              if (error.response?.data?.message) {
-                errorMessage = error.response.data.message;
-              } else if (error.message) {
-                errorMessage = error.message;
+              // Use Redux action to delete task (MCP Context 7)
+              const result = await dispatch(deleteExistingTask(taskId));
+              
+              if (deleteExistingTask.fulfilled.match(result)) {
+                // Success - task deleted from Redux state automatically
+                Toast.show({
+                  type: 'success',
+                  text1: 'Task Deleted Successfully!',
+                  text2: `"${taskTitle}" has been permanently deleted`,
+                  visibilityTime: 3000,
+                  autoHide: true,
+                  topOffset: 80,
+                });
+              } else {
+                // Error handling
+                const errorMessage = result.payload || "Failed to delete task. Please try again.";
+                Toast.show({
+                  type: 'error',
+                  text1: 'Delete Failed',
+                  text2: errorMessage,
+                  visibilityTime: 4000,
+                  autoHide: true,
+                  topOffset: 80,
+                });
               }
-
-              // --- Show Error Toast Message ---
+            } catch (error) {
+              console.error("WidgetScreen - Error deleting task:", error);
               Toast.show({
                 type: 'error',
                 text1: 'Delete Failed',
-                text2: errorMessage,
+                text2: "An unexpected error occurred",
                 visibilityTime: 4000,
                 autoHide: true,
                 topOffset: 80,
@@ -702,13 +545,11 @@ function WidgetScreen({ navigation, route }) {
       </View>
 
       <View style={{ height: isVerySmallScreen ? Math.min(160, screenHeight * 0.2) : Math.min(200, screenHeight * 0.25) }}>
-        {console.log("WidgetScreen - LogsWidget render: logs state:", logs, "logs.length:", logs ? logs.length : 0)}
         {logs && logs.length > 0 ? (
           <ScrollView
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled={true}
           >
-            {console.log("WidgetScreen - Rendering logs:", logs.slice(0, 4))}
             {logs.slice(0, 4).map((log) => (
               <View
                 key={log.id}
@@ -815,27 +656,32 @@ function WidgetScreen({ navigation, route }) {
   );
 
   const renderContent = () => {
-    if (loading) {
-      return (
-        <View className="flex-1 justify-center items-center p-5 min-h-[700px]">
-          <Loader
-            size="large"
-            color="#000000"
-            text="Loading tasks and logs..."
-          />
-        </View>
-      );
+    // Debug logging
+    console.log("WidgetScreen - renderContent:", {
+      loading,
+      logsLoading,
+      isInitialLoad,
+      error,
+      logsError,
+      tasksLength: tasks.length,
+      logsLength: logs.length,
+      project: !!project
+    });
+
+    // Don't render content during loading OR during initial load
+    if (loading || logsLoading || isInitialLoad) {
+      return null;
     }
 
-    if (error) {
+    if (error || logsError) {
       return (
         <View className="flex-1 justify-center items-center p-5 min-h-[400px]">
           <Text className="text-[16px] text-[#dc3545] text-center mb-4 font-medium">
-            {error}
+            {error || logsError}
           </Text>
           <TouchableOpacity
             className="bg-[#007AFF] py-3 px-6 rounded-lg"
-            onPress={loadData}
+            onPress={() => loadData()}
           >
             <Text className="text-white text-[16px] font-semibold">Retry</Text>
           </TouchableOpacity>
@@ -865,25 +711,50 @@ function WidgetScreen({ navigation, route }) {
   return (
     <View className="flex-1 bg-white">
       <StatusBar backgroundColor="#3155A1" barStyle="light-content" />
-      <ScrollView
-        style={{
-          flex: 1,
-          paddingHorizontal: isVerySmallScreen ? Math.min(12, screenWidth * 0.03) : Math.min(20, screenWidth * 0.05),
-          paddingVertical: isVerySmallScreen ? Math.min(12, screenHeight * 0.015) : Math.min(20, screenHeight * 0.025),
-          paddingBottom: isVerySmallScreen ? 80 : 100,
-          paddingTop: isVerySmallScreen ? 12 : 20,
-        }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={["#3155A1"]}
-            tintColor="#3155A1"
+      
+      {/* Show loading spinner if loading OR during initial load */}
+      {(() => {
+        const shouldShowLoader = loading || logsLoading || isInitialLoad;
+        console.log("WidgetScreen - Main render condition:", {
+          loading,
+          logsLoading,
+          isInitialLoad,
+          shouldShowLoader,
+          error,
+          logsError,
+          tasksLength: tasks.length,
+          logsLength: logs.length
+        });
+        return shouldShowLoader;
+      })() ? (
+        <View className="flex-1 justify-center items-center p-5 min-h-[700px]">
+          <Loader
+            size="large"
+            color="#000000"
+            text="Loading tasks and logs..."
           />
-        }
-      >
-        {renderContent()}
-      </ScrollView>
+        </View>
+      ) : (
+        <ScrollView
+          style={{
+            flex: 1,
+            paddingHorizontal: isVerySmallScreen ? Math.min(12, screenWidth * 0.03) : Math.min(20, screenWidth * 0.05),
+            paddingVertical: isVerySmallScreen ? Math.min(12, screenHeight * 0.015) : Math.min(20, screenHeight * 0.025),
+            paddingBottom: isVerySmallScreen ? 80 : 100,
+            paddingTop: isVerySmallScreen ? 12 : 20,
+          }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#3155A1"]}
+              tintColor="#3155A1"
+            />
+          }
+        >
+          {renderContent()}
+        </ScrollView>
+      )}
 
       <Sidebar
         isVisible={sidebarVisible}

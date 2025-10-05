@@ -24,12 +24,7 @@ import CustomBottomNav from "./components/CustomBottomNav";
 import UpdateTaskModal from "./components/UpdateTaskModal";
 import FilterModal from "./components/FilterModal";
 import ErrorDialog from "./components/ErrorDialog";
-import { deleteTaskById } from "../services/tasks/deleteTaskById";
-import { getTaskByProjectId } from "../services/tasks/getTaskByProjectId";
-import { createTask } from "../services/tasks/createTask";
-import { getTasksAssignedToEmployees } from "../services/tasks/getTasksAssignedToEmployees";
-import { getEmployeesToAssignTask } from "../services/employees/getEmployeesOfTheCompany";
-import { filterTask, applyClientSideFilters } from "../services/tasks/filterTask";
+import { filterTask } from "../services/tasks/filterTask";
 import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
 import DropDownPicker from "react-native-dropdown-picker";
@@ -39,6 +34,26 @@ import {
   MenuOption,
   MenuTrigger,
 } from "react-native-popup-menu";
+
+// --- Redux Integration (MCP Context 7) ---
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  fetchTasksByProjectId,
+  fetchTasks,
+  createNewTask,
+  deleteExistingTask,
+  fetchEmployeesForTaskAssignment,
+  setCurrentProjectId,
+  clearError,
+  selectTasks,
+  selectTaskLoading,
+  selectTaskError,
+  selectTaskCreating,
+  selectTaskDeleting,
+  selectTaskCreateError,
+  selectTaskDeleteError,
+  selectEmployeesForAssignment,
+} from '../store/slices/taskSlice';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
@@ -120,12 +135,22 @@ const SearchBarHeader = React.memo(function SearchBarHeader({
 });
 
 function ViewAllTasksScreen({ navigation, route }) {
+  // --- Redux State (MCP Context 7) ---
+  const dispatch = useDispatch();
+  const tasks = useSelector(selectTasks);
+  const loading = useSelector(selectTaskLoading);
+  const error = useSelector(selectTaskError);
+  const creating = useSelector(selectTaskCreating);
+  const deleting = useSelector(selectTaskDeleting);
+  const createError = useSelector(selectTaskCreateError);
+  const deleteError = useSelector(selectTaskDeleteError);
+  const employees = useSelector(selectEmployeesForAssignment);
+
+  // --- Local State ---
   const [sidebarVisible, setSidebarVisible] = useState(false);
-  const [tasks, setTasks] = useState([]);
   const [filteredTasks, setFilteredTasks] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [initialLoading, setInitialLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [project, setProject] = useState(null);
@@ -140,7 +165,6 @@ function ViewAllTasksScreen({ navigation, route }) {
   const [datePickerValue, setDatePickerValue] = useState(new Date());
   const [isDateConfirmed, setIsDateConfirmed] = useState(false);
 
-  const [employees, setEmployees] = useState([]);
   const [filteredEmployees, setFilteredEmployees] = useState([]);
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [activePriorityDraftId, setActivePriorityDraftId] = useState(null);
@@ -210,17 +234,30 @@ function ViewAllTasksScreen({ navigation, route }) {
   // Removed useFocusEffect to prevent duplicate reloads
 
   useEffect(() => {
-    if (tasks.length > 0) {
+    // Only update filteredTasks when tasks change AND no filters are applied
+    // When filters are applied, filteredTasks should not be updated from Redux tasks
+    // because Redux tasks are the original unfiltered data
+    if (!filtersApplied) {
+      console.log('ViewAllTasksScreen - No filters applied, updating filteredTasks with Redux tasks');
       setFilteredTasks(tasks);
+    } else {
+      console.log('ViewAllTasksScreen - Filters applied, not updating filteredTasks from Redux tasks');
     }
-  }, [tasks]);
+  }, [tasks, filtersApplied]);
 
   // Load employees when userRole becomes available and user is not an Employee
   useEffect(() => {
     if (userRole && userRole !== "Employee") {
-      loadEmployees();
+      dispatch(fetchEmployeesForTaskAssignment());
     }
-  }, [userRole]);
+  }, [userRole, dispatch]);
+
+  // Update filtered employees when Redux employees change
+  useEffect(() => {
+    if (employees && Array.isArray(employees)) {
+      setFilteredEmployees(employees);
+    }
+  }, [employees]);
 
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
@@ -268,17 +305,6 @@ function ViewAllTasksScreen({ navigation, route }) {
     );
   };
 
-  const loadEmployees = async () => {
-    try {
-      const response = await getEmployeesToAssignTask();
-      if (response && Array.isArray(response)) {
-        setEmployees(response);
-        setFilteredEmployees(response);
-      }
-    } catch (error) {
-      console.error("Error loading employees:", error);
-    }
-  };
 
   const removeDraftTask = (draftId) => {
     setDraftTasks((prev) => prev.filter((draft) => draft.id !== draftId));
@@ -519,23 +545,28 @@ function ViewAllTasksScreen({ navigation, route }) {
       console.log('Task Payload Being Sent:', taskPayload);
       console.log('=== End Task Creation Debug ===');
 
-      const response = await createTask(taskPayload);
+      // Use Redux action to create task (MCP Context 7)
+      const result = await dispatch(createNewTask(taskPayload));
+      
+      if (createNewTask.fulfilled.match(result)) {
+        // Success - task created and added to Redux state automatically
+        // Remove the draft task after successful creation
+        removeDraftTask(draftTask.id);
 
-      // Remove the draft task after successful creation
-      removeDraftTask(draftTask.id);
-
-      // Reload the tasks to show the newly created task
-      await loadProjectData();
-
-      // --- Show Success Toast Message ---
-      Toast.show({
-        type: 'success',
-        text1: 'Task Created Successfully!',
-        text2: 'Your new task has been added to the project',
-        visibilityTime: 3000,
-        autoHide: true,
-        topOffset: 80,
-      });
+        // --- Show Success Toast Message ---
+        Toast.show({
+          type: 'success',
+          text1: 'Task Created Successfully!',
+          text2: 'Your new task has been added to the project',
+          visibilityTime: 3000,
+          autoHide: true,
+          topOffset: 80,
+        });
+      } else {
+        // Error handling
+        const errorMessage = result.payload || 'Failed to create task. Please try again.';
+        throw new Error(errorMessage);
+      }
     } catch (error) {
       console.error("Error creating task:", error);
 
@@ -569,87 +600,42 @@ function ViewAllTasksScreen({ navigation, route }) {
 
   const loadProjectData = async (isRefresh = false) => {
     try {
-      if (!isRefresh) {
-        setInitialLoading(true);
-      }
-      setError(null);
-
       // Get user role first
       const role = await getUserRole();
       console.log("ViewAllTasksScreen - User Role:", role);
       setUserRole(role);
 
-      let response;
-
-      if (role === "Employee") {
-        // For employees, get tasks by project ID (same as other roles)
-        console.log(
-          "ViewAllTasksScreen - Calling getTaskByProjectId for Employee with projectId:",
-          projectId
-        );
-        
-        // Validate projectId before making API call
-        if (!projectId) {
-          console.error("ViewAllTasksScreen - No projectId provided for Employee");
-          setError("Project ID is required");
-          return;
-        }
-        
-        response = await getTaskByProjectId(projectId);
-        console.log("ViewAllTasksScreen - Employee tasks response:", response);
-        
-        if (response && response.project) {
-          setProject(response.project);
-        } else if (response) {
-          setProject(response);
-        }
-        
-        if (response && response.tasks) {
-          setTasks(response.tasks);
-          setFilteredTasks(response.tasks);
-        } else if (response && Array.isArray(response)) {
-          setTasks(response);
-          setFilteredTasks(response);
-        } else {
-          setTasks([]);
-          setFilteredTasks([]);
-        }
-      } else {
-        // For other roles, get tasks by project ID
-        console.log(
-          "ViewAllTasksScreen - Calling getTaskByProjectId for role:",
-          role,
-          "projectId:",
-          projectId
-        );
-
-        // Validate projectId before making API call
-        if (!projectId) {
-          console.error("ViewAllTasksScreen - No projectId provided");
-          setError("Project ID is required");
-          return;
-        }
-
-        response = await getTaskByProjectId(projectId);
-        console.log("ViewAllTasksScreen - API response:", response);
-
-        if (response && response.project) {
-          setProject(response.project);
-        } else if (response) {
-          setProject(response);
-        }
-
-        if (response && response.tasks) {
-          setTasks(response.tasks);
-          setFilteredTasks(response.tasks);
-        } else if (response && Array.isArray(response)) {
-          setTasks(response);
-          setFilteredTasks(response);
-        } else {
-          setTasks([]);
-          setFilteredTasks([]);
-        }
+      // Set current project ID in Redux state
+      if (projectId) {
+        dispatch(setCurrentProjectId(projectId));
       }
+
+      // Validate projectId
+      if (!projectId) {
+        console.error("ViewAllTasksScreen - No projectId provided");
+        return;
+      }
+
+      // Check if tasks are already loaded in Redux for this project
+      // If not, fetch them (this should rarely happen since WidgetScreen loads them first)
+      if (tasks.length === 0) {
+        // Only show loading when we need to fetch from API
+        if (!isRefresh) {
+          setInitialLoading(true);
+        }
+        console.log("ViewAllTasksScreen - No tasks in Redux, fetching from API");
+        await dispatch(fetchTasksByProjectId(projectId));
+      } else {
+        // Using existing Redux data - no loading needed
+        console.log("ViewAllTasksScreen - Using existing tasks from Redux:", tasks.length);
+        // Don't set loading state when using existing data
+      }
+
+      // Set project info (keep local state for project details)
+      setProject({
+        id: projectId,
+        name: "Project", // You can get this from route params if needed
+      });
 
       setSearchTerm("");
       
@@ -670,15 +656,6 @@ function ViewAllTasksScreen({ navigation, route }) {
         status: err.response?.status,
         projectId: projectId
       });
-
-      let errorMessage = "Failed to load project data";
-      if (err.response?.data?.message) {
-        errorMessage = err.response.data.message;
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-
-      setError(errorMessage);
     } finally {
       if (!isRefresh) {
         setInitialLoading(false);
@@ -829,38 +806,44 @@ function ViewAllTasksScreen({ navigation, route }) {
     setTaskToDelete(null);
 
     try {
-      await deleteTaskById(taskId);
-
-      const updatedTasks = tasks.filter((task) => task.id !== taskId);
-      const updatedFilteredTasks = filteredTasks.filter(
-        (task) => task.id !== taskId
-      );
-
-      setTasks(updatedTasks);
-      setFilteredTasks(updatedFilteredTasks);
-
-      // --- Show Success Toast Message ---
-      Toast.show({
-        type: 'success',
-        text1: 'Task Deleted Successfully!',
-        text2: 'The task has been permanently removed',
-        visibilityTime: 3000,
-        autoHide: true,
-        topOffset: 80,
-      });
-    } catch (error) {
-      let errorMessage = "Failed to delete task. Please try again.";
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.message) {
-        errorMessage = error.message;
+      // Use Redux action to delete task (MCP Context 7)
+      const result = await dispatch(deleteExistingTask(taskId));
+      
+      if (deleteExistingTask.fulfilled.match(result)) {
+        // Success - task deleted from Redux state automatically
+        // Also remove from filteredTasks if filters are applied
+        if (filtersApplied) {
+          setFilteredTasks(prevFilteredTasks => 
+            prevFilteredTasks.filter(task => task.id !== taskId)
+          );
+        }
+        
+        Toast.show({
+          type: 'success',
+          text1: 'Task Deleted Successfully!',
+          text2: 'The task has been permanently removed',
+          visibilityTime: 3000,
+          autoHide: true,
+          topOffset: 80,
+        });
+      } else {
+        // Error handling
+        const errorMessage = result.payload || "Failed to delete task. Please try again.";
+        Toast.show({
+          type: 'error',
+          text1: 'Delete Failed',
+          text2: errorMessage,
+          visibilityTime: 4000,
+          autoHide: true,
+          topOffset: 80,
+        });
       }
-
-      // --- Show Error Toast Message ---
+    } catch (error) {
+      console.error("ViewAllTasksScreen - Error deleting task:", error);
       Toast.show({
         type: 'error',
         text1: 'Delete Failed',
-        text2: errorMessage,
+        text2: "An unexpected error occurred",
         visibilityTime: 4000,
         autoHide: true,
         topOffset: 80,
@@ -873,10 +856,19 @@ function ViewAllTasksScreen({ navigation, route }) {
     setTaskToDelete(null);
   };
 
-  const handleUpdateTaskSuccess = () => {
+  const handleUpdateTaskSuccess = (updatedTask) => {
     setUpdateTaskModalVisible(false);
     setSelectedTask(null);
-    loadProjectData(); // Refresh the tasks list
+    
+    // If filters are applied, update the filteredTasks with the updated task
+    if (filtersApplied && updatedTask) {
+      setFilteredTasks(prevFilteredTasks => 
+        prevFilteredTasks.map(task => 
+          task.id === updatedTask.id ? updatedTask : task
+        )
+      );
+    }
+    // Redux will handle state updates automatically for the main tasks
   };
 
   const handleUpdateTaskClose = () => {
@@ -903,45 +895,26 @@ function ViewAllTasksScreen({ navigation, route }) {
     
     try {
       setInitialLoading(true);
-      setError(null);
+      dispatch(clearError()); // Use Redux error clearing
 
-      // --- Apply Filters Based on User Role (MCP Context 7) ---
-      // Business Rule: All roles now use the same filtering logic with projectId
-      if (userRole === "Employee") {
-        // For employees, use the same filtering logic as other roles with projectId
-        if (!projectId) {
-          console.error('ViewAllTasksScreen - No projectId available for Employee filtering');
-          setError('Project ID is required for filtering');
-          return;
-        }
-        
-        const backendFilteredTasks = await filterTask(filters, projectId);
-        const fullyFilteredTasks = applyClientSideFilters(backendFilteredTasks || [], filters);
-        
-        setTasks(fullyFilteredTasks);
-        setFilteredTasks(fullyFilteredTasks);
+      // --- Apply Filters Using Direct Service Call (MCP Context 7) ---
+      // Business Rule: All roles now use direct filterTask service with projectId
+      if (!projectId) {
+        console.error('ViewAllTasksScreen - No projectId available for filtering');
+        showErrorDialog('Error', 'Project ID is required for filtering');
+        return;
+      }
+
+      // Check if FilterModal already provided filtered tasks
+      if (preFilteredTasks) {
+        // Use pre-filtered tasks from FilterModal
+        console.log('Using pre-filtered tasks from FilterModal');
+        setFilteredTasks(preFilteredTasks || []);
       } else {
-        // Check if FilterModal already provided filtered tasks
-        if (preFilteredTasks) {
-          // Use pre-filtered tasks from FilterModal
-          console.log('Using pre-filtered tasks from FilterModal');
-          const fullyFilteredTasks = applyClientSideFilters(preFilteredTasks, filters);
-          setTasks(fullyFilteredTasks);
-          setFilteredTasks(fullyFilteredTasks);
-        } else {
-          // Fallback: Call backend filter service directly
-          if (!projectId) {
-            console.error('ViewAllTasksScreen - No projectId available for filtering');
-            setError('Project ID is required for filtering');
-            return;
-          }
-
-          const backendFilteredTasks = await filterTask(filters, projectId);
-          const fullyFilteredTasks = applyClientSideFilters(backendFilteredTasks || [], filters);
-          
-          setTasks(fullyFilteredTasks);
-          setFilteredTasks(fullyFilteredTasks);
-        }
+        // Call filterTask service directly
+        console.log('Calling filterTask service directly');
+        const backendFilteredTasks = await filterTask(filters, projectId);
+        setFilteredTasks(backendFilteredTasks || []);
       }
 
       // --- Update Filter State (MCP Context 7) ---
@@ -954,7 +927,7 @@ function ViewAllTasksScreen({ navigation, route }) {
       
     } catch (err) {
       console.error('ViewAllTasksScreen - Error applying filters:', err);
-      setError('Failed to apply filters. Please try again.');
+      showErrorDialog('Error', 'Failed to apply filters. Please try again.');
     } finally {
       setInitialLoading(false);
     }
@@ -1544,7 +1517,7 @@ function ViewAllTasksScreen({ navigation, route }) {
       <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
 
       {/* Content */}
-      {initialLoading ? (
+      {initialLoading || loading ? (
         <View className="flex-1 justify-center items-center p-5 min-h-[300px]">
           <Loader size="large" color="#000000" text="Loading tasks..." />
         </View>
