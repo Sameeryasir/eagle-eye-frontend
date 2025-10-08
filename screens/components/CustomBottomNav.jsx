@@ -115,9 +115,10 @@ export default function CustomBottomNav({
         case "CalenderDetailScreen":
         case "WeekView":
           return "profile"; // Calendar icon highlighted for calendar screens
-   
-
+        case "ChatScreen":
+          return "chats"; // Chat icon highlighted for chat screen
         default:
+          return null; // No tab highlighted for other screens
       }
     };
 
@@ -168,7 +169,8 @@ export default function CustomBottomNav({
   };
 
   const navigateToChats = () => {
-    // Navigate to  screen when chats icon is pressed
+    // Navigate to ChatScreen when chats icon is pressed
+    navigation.navigate("ChatScreen");
   };
 
   const navigateToNotifications = () => {

@@ -1,0 +1,97 @@
+// --- Get User Conversations Service (MCP Context 7) ---
+// This service fetches all conversations for the authenticated user
+// API Endpoint: GET /chat/conversations
+// Requires: JWT Authentication
+
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_URL } from '../../config/api.js';
+import refreshToken from '../utils/tokenRefresh';
+
+/**
+ * Get all conversations for the authenticated user
+ * @returns {Promise<Array>} Array of conversation objects
+ */
+export const getUserConversations = async () => {
+  let token = await AsyncStorage.getItem('token');
+  let refreshTokenValue = await AsyncStorage.getItem('refreshToken');
+
+  if (!token) {
+    throw new Error('No token found');
+  }
+  
+  try {
+    const response = await axios.get(`${API_URL}/chat/conversations`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    return response.data;
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 401 && refreshTokenValue) {
+      // Refresh the token
+      const newToken = await refreshToken(refreshTokenValue);
+
+      if (!newToken) throw new Error('Unable to refresh token.');
+
+      // Retry the original request with new token
+      const retryResponse = await axios.get(`${API_URL}/chat/conversations`, {
+        headers: {
+          'Authorization': `Bearer ${newToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      return retryResponse.data;
+    }
+
+    console.error('Error fetching user conversations:', err);
+    throw err;
+  }
+};
+
+/**
+ * Get a specific conversation by ID
+ * @param {string} conversationId - The ID of the conversation to fetch
+ * @returns {Promise<Object>} Conversation object with messages
+ */
+export const getConversationById = async (conversationId) => {
+  let token = await AsyncStorage.getItem('token');
+  let refreshTokenValue = await AsyncStorage.getItem('refreshToken');
+
+  if (!token) {
+    throw new Error('No token found');
+  }
+  
+  try {
+    const response = await axios.get(`${API_URL}/chat/conversations/${conversationId}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    return response.data;
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 401 && refreshTokenValue) {
+      // Refresh the token
+      const newToken = await refreshToken(refreshTokenValue);
+
+      if (!newToken) throw new Error('Unable to refresh token.');
+
+      // Retry the original request with new token
+      const retryResponse = await axios.get(`${API_URL}/chat/conversations/${conversationId}`, {
+        headers: {
+          'Authorization': `Bearer ${newToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      return retryResponse.data;
+    }
+
+    console.error('Error fetching conversation:', err);
+    throw err;
+  }
+};
+

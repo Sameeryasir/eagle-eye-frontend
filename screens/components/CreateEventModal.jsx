@@ -5,9 +5,9 @@ import Toast from 'react-native-toast-message';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import DropDownPicker from 'react-native-dropdown-picker';
 import * as Localization from 'expo-localization';
-import { createEvent } from "../../services/event/createEvent";
 import { getEmployeesToAssignTask } from "../../services/employees/getEmployeesOfTheCompany";
 import { getMyProjects } from "../../services/projects/getProjectsByLoginUserId";
+import { createEvent } from "../../services/event/createEvent";
 import ErrorDialog from './ErrorDialog';
 
 const CreateEventModal = ({ 
@@ -16,6 +16,10 @@ const CreateEventModal = ({
   selectedDate, 
   onEventCreated 
 }) => {
+  // --- Local State Management ---
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState(null);
+  
   // --- State for event form ---
   const [eventForm, setEventForm] = useState({
     title: '',
@@ -34,7 +38,7 @@ const CreateEventModal = ({
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [startDateTime, setStartDateTime] = useState(new Date());
   const [endDateTime, setEndDateTime] = useState(new Date());
-  const [isCreating, setIsCreating] = useState(false);
+  // Note: isCreating state removed - now using Redux 'creating' state
 
   // --- State for keyboard handling (following UpdateTaskModal pattern) ---
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -65,6 +69,27 @@ const CreateEventModal = ({
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
   const [selectedProjectValues, setSelectedProjectValues] = useState([]);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+
+  // --- Handle Create Error (MCP Context 7) ---
+  // Monitor create errors and show appropriate user feedback
+  useEffect(() => {
+    if (createError) {
+      console.error('Create error:', createError);
+      
+      // Show error toast message
+      Toast.show({
+        type: 'error',
+        text1: 'Event Creation Failed',
+        text2: createError,
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
+
+      // Clear the error after showing it
+      setCreateError(null);
+    }
+  }, [createError]);
 
   // --- Set current time when modal opens (following task creation pattern) ---
   useEffect(() => {
@@ -514,6 +539,11 @@ const CreateEventModal = ({
   };
 
   const handleCreateEvent = async () => {
+    console.log('=== handleCreateEvent called ===');
+    console.log('Event form data:', eventForm);
+    console.log('Start DateTime:', startDateTime);
+    console.log('End DateTime:', endDateTime);
+    
     // Basic validation
     if (!eventForm.title.trim()) {
       showErrorDialog('Error', 'Please enter a title for the event');
@@ -553,7 +583,9 @@ const CreateEventModal = ({
       return;
     }
 
-    setIsCreating(true);
+    // Clear any previous create errors
+    setCreateError(null);
+    setCreating(true);
 
     try {
       // --- FIXED: Proper timezone handling for event creation (following task pattern) ---
@@ -647,60 +679,39 @@ const CreateEventModal = ({
       console.log('Project Count:', eventData.projects.length);
       console.log('=== End Event Creation Debug ===');
 
-      // Call the createEvent service
-      const result = await createEvent(eventData);
+      // Call API directly
+      const response = await createEvent(eventData);
+      
+      // Check if the create was successful (API returns the created event data)
+      if (response) {
+        console.log('Event created successfully:', response);
+        
+        // Show success toast message
+        Toast.show({
+          type: 'success',
+          text1: 'Event Created Successfully!',
+          text2: 'Your new event has been added to the calendar',
+          visibilityTime: 3000,
+          autoHide: true,
+          topOffset: 80,
+        });
 
-      // Show success toast message
-      Toast.show({
-        type: 'success',
-        text1: 'Event Created Successfully!',
-        text2: 'Your new event has been added to the calendar',
-        visibilityTime: 3000,
-        autoHide: true,
-        topOffset: 80,
-      });
-
-      // Close modal and refresh events list
-      onClose();
-      resetEventForm();
-      if (onEventCreated) {
-        onEventCreated();
+        // Close modal and refresh events list
+        onClose();
+        resetEventForm();
+        if (onEventCreated) {
+          onEventCreated();
+        }
+      } else {
+        // Handle API error
+        setCreateError('Failed to create event. Please try again.');
       }
 
     } catch (error) {
-      console.error('Error creating event:', error);
-      console.error('Error response:', error.response?.data);
-      
-      let errorMessage = 'Failed to create event. Please try again.';
-      
-      if (error.response?.status === 400) {
-        // Handle validation errors
-        if (error.response?.data?.message) {
-          errorMessage = error.response.data.message;
-        } else if (error.response?.data?.error) {
-          errorMessage = error.response.data.error;
-        } else {
-          errorMessage = 'Invalid event data. Please check your inputs.';
-        }
-      } else if (error.response?.status === 401) {
-        errorMessage = 'Session expired. Please log in again.';
-      } else if (error.response?.status === 403) {
-        errorMessage = 'You do not have permission to create events.';
-      } else if (error.response?.status === 500) {
-        errorMessage = 'Server error. Please try again later.';
-      }
-      
-      // Show error toast message
-      Toast.show({
-        type: 'error',
-        text1: 'Event Creation Failed',
-        text2: errorMessage,
-        visibilityTime: 4000,
-        autoHide: true,
-        topOffset: 80,
-      });
+      console.error('Unexpected error in handleCreateEvent:', error);
+      setCreateError('An unexpected error occurred. Please try again.');
     } finally {
-      setIsCreating(false);
+      setCreating(false);
     }
   };
 
@@ -742,7 +753,7 @@ const CreateEventModal = ({
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 20 }}
                 keyboardShouldPersistTaps="handled"
-                scrollEnabled={true}
+                scrollEnabled={!isDropdownInteracting || isSearching}
                 data={[{ key: 'form' }]}
                 renderItem={() => (
                 <View>
@@ -938,7 +949,7 @@ const CreateEventModal = ({
                     zIndex: 999999,
                     // Position dropdown above keyboard when keyboard is visible
                     ...(keyboardVisible && {
-                      marginBottom: keyboardHeight + 10, // Position above keyboard with padding
+                      marginBottom: keyboardHeight - 50, // Adjust position to stay above keyboard
                     }),
                   }}
                   listMode="SCROLLVIEW"
@@ -947,8 +958,23 @@ const CreateEventModal = ({
                     showsVerticalScrollIndicator: true,
                     bounces: true,
                     scrollEnabled: true,
-                    keyboardShouldPersistTaps: "handled",
+                    onScrollBeginDrag: () => {
+                      setIsDropdownInteracting(true);
+                    },
+                    onScrollEndDrag: () => {
+                      if (projectDropdownOpen) {
+                        setIsDropdownInteracting(true);
+                      }
+                    },
                     scrollEventThrottle: 16,
+                    onTouchStart: () => {
+                      setIsDropdownInteracting(true);
+                    },
+                    onTouchEnd: () => {
+                      if (!projectDropdownOpen) {
+                        setIsDropdownInteracting(false);
+                      }
+                    },
                   }}
                   labelProps={{
                     numberOfLines: 1,
@@ -1166,7 +1192,7 @@ const CreateEventModal = ({
                       zIndex: 999999,
                       // Position dropdown above keyboard when keyboard is visible
                       ...(keyboardVisible && {
-                        marginBottom: keyboardHeight + 10, // Position above keyboard with padding
+                        marginBottom: keyboardHeight - 50, // Adjust position to stay above keyboard
                       }),
                     }}
                     listMode="SCROLLVIEW"
@@ -1175,8 +1201,23 @@ const CreateEventModal = ({
                       showsVerticalScrollIndicator: true,
                       bounces: true,
                       scrollEnabled: true,
-                      keyboardShouldPersistTaps: "handled",
+                      onScrollBeginDrag: () => {
+                        setIsDropdownInteracting(true);
+                      },
+                      onScrollEndDrag: () => {
+                        if (employeeDropdownOpen) {
+                          setIsDropdownInteracting(true);
+                        }
+                      },
                       scrollEventThrottle: 16,
+                      onTouchStart: () => {
+                        setIsDropdownInteracting(true);
+                      },
+                      onTouchEnd: () => {
+                        if (!employeeDropdownOpen) {
+                          setIsDropdownInteracting(false);
+                        }
+                      },
                     }}
                     labelProps={{
                       numberOfLines: 1,
@@ -1314,7 +1355,7 @@ const CreateEventModal = ({
                     </View>
 
                     {/* End Date & Time */}
-                    <View style={{ marginBottom: 50 }}>
+                    <View className="mb-5">
                       <View className="flex-row items-center mb-2">
                         <Ionicons name="calendar" size={16} color="#374151" style={{ marginRight: 6 }} />
                         <Text className="text-[16px] font-semibold text-[#333]">End Date & Time *</Text>
@@ -1355,10 +1396,10 @@ const CreateEventModal = ({
             <TouchableOpacity
               className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
               onPress={handleCreateEvent}
-              disabled={isCreating}
+              disabled={creating}
               activeOpacity={0.8}
             >
-              {isCreating ? (
+              {creating ? (
                 <View className="flex-row items-center ">
                   <ActivityIndicator color="#ffffff" size="small" />
                 </View>

@@ -616,19 +616,20 @@ function ViewAllTasksScreen({ navigation, route }) {
         return;
       }
 
-      // Check if tasks are already loaded in Redux for this project
-      // If not, fetch them (this should rarely happen since WidgetScreen loads them first)
-      if (tasks.length === 0) {
-        // Only show loading when we need to fetch from API
-        if (!isRefresh) {
-          setInitialLoading(true);
-        }
-        console.log("ViewAllTasksScreen - No tasks in Redux, fetching from API");
+      // --- FIXED: Always fetch from API during refresh (MCP Context 7) ---
+      // Business Rule: During refresh, always call API to get fresh data from server
+      // Initial load: Only show loading spinner when not refreshing
+      if (!isRefresh) {
+        setInitialLoading(true);
+      }
+      
+      if (isRefresh || tasks.length === 0) {
+        // Always fetch from API during refresh OR if no tasks in Redux
+        console.log("ViewAllTasksScreen - Fetching fresh data from API", isRefresh ? "(refresh)" : "(initial load)");
         await dispatch(fetchTasksByProjectId(projectId));
       } else {
-        // Using existing Redux data - no loading needed
+        // Using existing Redux data for initial load only
         console.log("ViewAllTasksScreen - Using existing tasks from Redux:", tasks.length);
-        // Don't set loading state when using existing data
       }
 
       // Set project info (keep local state for project details)
@@ -669,17 +670,19 @@ function ViewAllTasksScreen({ navigation, route }) {
     try {
       // --- Smart Refresh Logic (MCP Context 7) ---
       // Business Rule: If filters are applied, refresh with those filters. Otherwise, load all tasks.
+      // IMPORTANT: Always calls API to get fresh data from server
       if (filtersApplied) {
-        console.log('ViewAllTasksScreen - Refreshing with applied filters:', selectedFilters);
+        console.log('ViewAllTasksScreen - Refreshing with applied filters (calling API):', selectedFilters);
         await handleApplyFilters(selectedFilters);
       } else {
-        console.log('ViewAllTasksScreen - Refreshing with getTaskByProjectId (no filters applied)');
-        await loadProjectData(true);
+        console.log('ViewAllTasksScreen - Refreshing with getTaskByProjectId API call (no filters applied)');
+        await loadProjectData(true); // isRefresh = true ensures API call
       }
     } catch (error) {
       console.error('ViewAllTasksScreen - Error during refresh:', error);
       // Fallback to loading all data if filter refresh fails
-      await loadProjectData(true);
+      console.log('ViewAllTasksScreen - Fallback: Refreshing with getTaskByProjectId API call');
+      await loadProjectData(true); // isRefresh = true ensures API call
     }
     
     setRefreshing(false);

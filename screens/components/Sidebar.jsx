@@ -5,12 +5,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getUserRole } from '../../services/utils/userRole';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
+import { logoutUser } from '../../services/auth/Logout';
 
 // --- Redux Integration (MCP Context 7) ---
-// Import Redux hooks to clear project and task state on logout
+// Import Redux hooks to clear ALL states and caches on logout
 import { useDispatch } from 'react-redux';
-import { resetProjectsState } from '../../store/slices/projectSlice';
+import { resetProjectsState, clearProjectsCache } from '../../store/slices/projectSlice';
 import { resetTasksState } from '../../store/slices/taskSlice';
+import { clearLogs, clearError as clearLogsError } from '../../store/slices/logSlice';
 
 const { width } = Dimensions.get('window');
 
@@ -109,10 +111,36 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
       setShowLogoutDialog(false);
       onClose();
       
-      // --- Clear Redux State (MCP Context 7) ---
-      // Clear all project and task data, errors, and loading states
+      // --- Clear ALL Redux States and Caches (MCP Context 7) ---
+      // Clear all project data, errors, loading states, and caches
       dispatch(resetProjectsState());
+      await clearProjectsCache();
+      
+      // Clear all task data, errors, and loading states
       dispatch(resetTasksState());
+      
+     
+      // Clear all log data and errors
+      dispatch(clearLogs());
+      dispatch(clearLogsError());
+      
+      // --- Clear AsyncStorage User Data (MCP Context 7) ---
+      // Clear user-related data from AsyncStorage
+      await AsyncStorage.multiRemove([
+        'userFirstName',
+        'userLastName',
+        'userRole',
+        'authToken',
+        'refreshToken',
+        'userId'
+      ]);
+      
+      console.log('✅ All Redux states, caches, and user data cleared on logout');
+      
+      // --- Call Server Logout Service (MCP Context 7) ---
+      // Clear server-side caches and invalidate session
+      const logoutResult = await logoutUser();
+      console.log('🖥️ Server logout result:', logoutResult.message);
       
       // Navigate to SignIn screen immediately
       navigation.reset({
@@ -120,9 +148,9 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
         routes: [{ name: 'SignIn' }],
       });
       
-      // Handle logout in background
+      // Handle AuthContext logout in background (if needed)
       logout().catch(error => {
-        console.error('Logout error:', error);
+        console.error('AuthContext logout error:', error);
       });
       
     } catch (error) {

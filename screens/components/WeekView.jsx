@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, ScrollView, Dimensions, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Text, ScrollView, Dimensions, TouchableOpacity, RefreshControl } from 'react-native';
 import WeekView from 'react-native-week-view';
 import Toast from 'react-native-toast-message';
 import getAllTasks from "../../services/tasks/getAllTasks";
@@ -15,6 +15,7 @@ export default function MyWeekView({ navigation }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState([]);
   const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   
   // --- State for modals (same pattern as CalenderDetailScreen) ---
   const [dialogTask, setDialogTask] = useState(null);
@@ -148,6 +149,24 @@ export default function MyWeekView({ navigation }) {
     fetchData();
   };
 
+  // --- Handle refresh (same pattern as CalenderScreen) ---
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchData();
+    } catch (err) {
+      console.error('WeekView - Error during refresh:', err);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to refresh calendar data',
+        visibilityTime: 3000,
+      });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   // --- Handler for FAB press (same pattern as CalenderScreen) ---
   const handleFabPress = async () => {
     // Check user role and only show event creation dialog for Owner
@@ -205,39 +224,52 @@ export default function MyWeekView({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* --- WeekView with proper bottom spacing --- */}
+      {/* --- WeekView with RefreshControl - maintaining original size --- */}
       <View style={styles.weekViewContainer}>
-        <WeekView
-          events={events}
-          selectedDate={currentDate}     // Controls which week to show
-          numberOfDays={7}              // Show full week
-          formatDateHeader="ddd M/D"    // Day format (e.g. Sun 9/21, Mon 9/22)
-          hoursInDisplay={8}  // Reduced from 12 to 8 hours for better fit in smaller height
-          startHour={6}        // Start from 6 AM instead of midnight
-          endHour={22}         // End at 10 PM instead of midnight
-          formatTimeLabel="h:mm a"
+        <ScrollView 
+          style={styles.scrollView}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[ "#3155A1"]}
+              tintColor="#3155A1"
+              progressBackgroundColor="#ffffff"
+            />
+          }
+        >
+          <WeekView
+            events={events}
+            selectedDate={currentDate}     // Controls which week to show
+            numberOfDays={7}              // Show full week
+            formatDateHeader="ddd M/D"    // Day format (e.g. Sun 9/21, Mon 9/22)
+            hoursInDisplay={8}  // Reduced from 12 to 8 hours for better fit in smaller height
+            startHour={6}        // Start from 6 AM instead of midnight
+            endHour={22}         // End at 10 PM instead of midnight
+            formatTimeLabel="h:mm a"
 
-          // Navigation
-          onSwipeNext={() => {
-            const next = new Date(currentDate);
-            next.setDate(currentDate.getDate() + 7);
-            setCurrentDate(next);
-          }}
-          onSwipePrev={() => {
-            const prev = new Date(currentDate);
-            prev.setDate(currentDate.getDate() - 7);
-            setCurrentDate(prev);
-          }}
+            // Navigation
+            onSwipeNext={() => {
+              const next = new Date(currentDate);
+              next.setDate(currentDate.getDate() + 7);
+              setCurrentDate(next);
+            }}
+            onSwipePrev={() => {
+              const prev = new Date(currentDate);
+              prev.setDate(currentDate.getDate() - 7);
+              setCurrentDate(prev);
+            }}
 
-          // Event click
-          onEventPress={onEventPress}
+            // Event click
+            onEventPress={onEventPress}
 
-          // Styles (same as CalenderDetailScreen)
-          headerStyle={styles.header}
-          todayHeaderStyle={styles.todayHeader}
-          hourTextStyle={styles.hourText}
-          eventContainerStyle={styles.eventContainer}
-        />
+            // Styles (same as CalenderDetailScreen)
+            headerStyle={styles.header}
+            todayHeaderStyle={styles.todayHeader}
+            hourTextStyle={styles.hourText}
+            eventContainerStyle={styles.eventContainer}
+          />
+        </ScrollView>
       </View>
       
       <CustomBottomNav handleFabPress={handleFabPress} />
@@ -279,6 +311,10 @@ const styles = StyleSheet.create({
   // --- WeekView Container with Natural Flexible Height ---
   weekViewContainer: {
     flex: 0.85, // Takes all available space since no toggle buttons above
+  },
+  // --- ScrollView style to maintain original WeekView size ---
+  scrollView: {
+    flex: 1, // Fill the container completely
   },
   header: { 
     backgroundColor: '#f8f9fa',

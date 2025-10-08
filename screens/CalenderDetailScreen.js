@@ -5,8 +5,10 @@ import Timetable from "react-native-calendar-timetable";
 import CustomBottomNav from "./components/CustomBottomNav";
 import { Ionicons } from "@expo/vector-icons";
 import * as Localization from 'expo-localization';
-import { getEventsForLogInUser } from "../services/event/getEventsForLogInUser";
+import { useDispatch } from 'react-redux';
+// --- REMOVED: eventSlice import (file doesn't exist) ---
 import { getUserRole } from "../services/utils/userRole";
+import { getEventsForLogInUser } from "../services/event/getEventsForLogInUser";
 import CreateEventModal from "./components/CreateEventModal";
 import EventDetailsModal from "./components/EventDetailsModal";
 import PastDateDialog from "./components/PastDateDialog";
@@ -16,6 +18,16 @@ const { width, height } = Dimensions.get("window");
 
 
 const CalenderDetailScreen = ({ route, navigation }) => {
+  // --- FIXED: Removed Redux hooks (eventSlice doesn't exist) ---
+  // Using local state instead of Redux since eventSlice is not available
+  const dispatch = useDispatch();
+  
+  // --- Local state for events (replacing Redux state) ---
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [isFromCache, setIsFromCache] = useState(false);
+  
   // --- Extract data passed from CalenderScreen ---
   const { selectedDate, tasks, selectedTask } = route.params || {};
   
@@ -26,6 +38,9 @@ const CalenderDetailScreen = ({ route, navigation }) => {
   console.log('Tasks Length:', tasks?.length);
   console.log('Selected Task:', selectedTask);
   console.log('Route Params:', route.params);
+  console.log('Redux Events:', events);
+  console.log('Redux Loading:', loading);
+  console.log('Redux Error:', error);
   console.log('=====================================');
   
   // --- State for timetable items ---
@@ -41,10 +56,6 @@ const CalenderDetailScreen = ({ route, navigation }) => {
   const [showPastDateDialog, setShowPastDateDialog] = useState(false);
   const [dialogEvent, setDialogEvent] = useState(null);
   const [showEventDetailsDialog, setShowEventDetailsDialog] = useState(false);
-
-  // --- State for events ---
-  const [events, setEvents] = useState([]);
-  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
 
   // --- Priority-based color mapping function ---
   const getPriorityColor = (priority) => {
@@ -64,10 +75,12 @@ const CalenderDetailScreen = ({ route, navigation }) => {
     }
   };
 
-  // --- Fetch events function ---
-  const fetchEvents = async () => {
+  // --- FIXED: Direct API Event Fetch Handler (eventSlice doesn't exist) ---
+  // Using direct API calls and local state instead of Redux since eventSlice is not available
+  const fetchEventsForDate = async () => {
     try {
-      setIsLoadingEvents(true);
+      setLoading(true);
+      setError(null);
       
       // Check user role - Owner, Employee, and Manager can fetch events
       const userRole = await getUserRole();
@@ -76,65 +89,36 @@ const CalenderDetailScreen = ({ route, navigation }) => {
       if (!allowedRoles.includes(userRole)) {
         console.log('User role is not allowed, skipping event fetch. User role:', userRole);
         setEvents([]);
+        setLoading(false);
         return;
       }
       
-      const response = await getEventsForLogInUser(); // Fetch all events like tasks service
-      console.log('=== fetchEvents Response ===');
-      console.log('Response:', response);
-      console.log('Response success:', response.success);
-      console.log('Response data:', response.data);
-      console.log('Response data length:', response.data?.length);
+      // Call events API directly
+      const eventsResponse = await getEventsForLogInUser();
       
-      if (response.success && response.data) {
-        console.log('=== Filtering Events by Selected Date ===');
-        console.log('All events:', response.data);
-        console.log('Selected date:', selectedDate);
-        
-        // --- Filter events by selected date (including multi-day events) ---
-        // Business Rule: Show events that start, end, or span across the selected date
-        const filteredEvents = response.data.filter(event => {
-          if (!event.startTime) return false;
-          
-          // Convert event dates to local timezone
-          const eventStartDate = new Date(event.startTime);
-          const eventEndDate = event.endTime ? new Date(event.endTime) : eventStartDate;
-          const selectedDateObj = new Date(selectedDate);
-          
-          // Get date strings for comparison (YYYY-MM-DD format)
-          const eventStartDateString = eventStartDate.getFullYear() + '-' + 
-            String(eventStartDate.getMonth() + 1).padStart(2, '0') + '-' + 
-            String(eventStartDate.getDate()).padStart(2, '0');
-          
-          const eventEndDateString = eventEndDate.getFullYear() + '-' + 
-            String(eventEndDate.getMonth() + 1).padStart(2, '0') + '-' + 
-            String(eventEndDate.getDate()).padStart(2, '0');
-          
-          // Check if selected date falls within the event's date range
-          const isEventOnSelectedDate = selectedDate >= eventStartDateString && selectedDate <= eventEndDateString;
-          
-          console.log(`Event "${event.title}" - Start: ${eventStartDateString}, End: ${eventEndDateString}, Selected: ${selectedDate}, Show: ${isEventOnSelectedDate}`);
-          
-          return isEventOnSelectedDate;
-        });
-        
-        console.log('Filtered events for selected date:', filteredEvents);
-        setEvents(filteredEvents);
-        console.log('Events set successfully');
+      // Update local state with fetched events
+      if (eventsResponse && eventsResponse.data) {
+        setEvents(eventsResponse.data);
+      } else if (eventsResponse && Array.isArray(eventsResponse)) {
+        setEvents(eventsResponse);
       } else {
-        console.log('No events to set - response.success:', response.success, 'response.data:', response.data);
+        setEvents([]);
       }
+      
+      setIsFromCache(false); // Direct API call, not from cache
+      console.log('Events fetched successfully:', eventsResponse);
     } catch (error) {
       console.error('Error fetching events:', error);
-      Alert.alert('Error', 'Failed to load events. Please try again.');
+      setError(error.message || 'Failed to load events');
+      setEvents([]);
     } finally {
-      setIsLoadingEvents(false);
+      setLoading(false);
     }
   };
 
-  // --- Handler for when event is created ---
+  // --- Handler for when event is created/updated/deleted ---
   const handleEventCreated = () => {
-    fetchEvents();
+    fetchEventsForDate();
   };
 
   // --- Handler for task navigation ---
@@ -143,9 +127,20 @@ const CalenderDetailScreen = ({ route, navigation }) => {
   };
 
 
+  // --- Handle Redux Error (MCP Context 7) ---
+  // Monitor errors from local state and show appropriate user feedback
+  useEffect(() => {
+    if (error) {
+      console.error('Events error:', error);
+      Alert.alert('Error', error);
+      // Clear error after showing it
+      setError(null);
+    }
+  }, [error]);
+
   // --- Fetch events on component mount and when selectedDate changes ---
   useEffect(() => {
-    fetchEvents();
+    fetchEventsForDate();
   }, [selectedDate]);
 
   // --- Convert task and event data to Timetable format ---
@@ -153,10 +148,46 @@ const CalenderDetailScreen = ({ route, navigation }) => {
     console.log('=== useEffect triggered ===');
     console.log('Tasks in useEffect:', tasks);
     console.log('Tasks length in useEffect:', tasks?.length);
-    console.log('Events in useEffect:', events);
-    console.log('Events length in useEffect:', events?.length);
+    console.log('Redux Events in useEffect:', events);
+    console.log('Redux Events length in useEffect:', events?.length);
+    console.log('Selected date for filtering:', selectedDate);
     
     const allItems = [];
+    
+    // --- Filter Redux events by selected date (including multi-day events) ---
+    // Business Rule: Show events that start, end, or span across the selected date
+    let filteredEvents = [];
+    if (events && events.length > 0 && selectedDate) {
+      console.log('=== Filtering Redux Events by Selected Date ===');
+      console.log('All Redux events:', events);
+      console.log('Selected date:', selectedDate);
+      
+      filteredEvents = events.filter(event => {
+        if (!event.startTime) return false;
+        
+        // Convert event dates to local timezone
+        const eventStartDate = new Date(event.startTime);
+        const eventEndDate = event.endTime ? new Date(event.endTime) : eventStartDate;
+        
+        // Get date strings for comparison (YYYY-MM-DD format)
+        const eventStartDateString = eventStartDate.getFullYear() + '-' + 
+          String(eventStartDate.getMonth() + 1).padStart(2, '0') + '-' + 
+          String(eventStartDate.getDate()).padStart(2, '0');
+        
+        const eventEndDateString = eventEndDate.getFullYear() + '-' + 
+          String(eventEndDate.getMonth() + 1).padStart(2, '0') + '-' + 
+          String(eventEndDate.getDate()).padStart(2, '0');
+        
+        // Check if selected date falls within the event's date range
+        const isEventOnSelectedDate = selectedDate >= eventStartDateString && selectedDate <= eventEndDateString;
+        
+        console.log(`Event "${event.title}" - Start: ${eventStartDateString}, End: ${eventEndDateString}, Selected: ${selectedDate}, Show: ${isEventOnSelectedDate}`);
+        
+        return isEventOnSelectedDate;
+      });
+      
+      console.log('Filtered Redux events for selected date:', filteredEvents);
+    }
     
     // --- Process tasks ---
     if (tasks && tasks.length > 0) {
@@ -245,11 +276,11 @@ const CalenderDetailScreen = ({ route, navigation }) => {
       allItems.push(...taskItems);
     }
     
-    // --- Process events ---
-    if (events && events.length > 0) {
-      console.log('Processing events for timetable...');
+    // --- Process filtered Redux events ---
+    if (filteredEvents && filteredEvents.length > 0) {
+      console.log('Processing filtered Redux events for timetable...');
       
-      const eventItems = events.map((event, index) => {
+      const eventItems = filteredEvents.map((event, index) => {
         console.log(`Processing event ${index}:`, {
           id: event.id,
           title: event.title,
@@ -410,12 +441,12 @@ const CalenderDetailScreen = ({ route, navigation }) => {
       allItems.push(...eventItems);
     }
     
-    console.log('Final timetable items (tasks + events):', allItems);
+    console.log('Final timetable items (tasks + filtered Redux events):', allItems);
     console.log('Total items count:', allItems.length);
     console.log('Selected date for timetable:', selectedDate ? new Date(selectedDate) : new Date());
     
     setItems(allItems);
-  }, [tasks, events]);
+  }, [tasks, events, selectedDate]);
 
   // --- Always show CalenderDetailScreen regardless of task count ---
   // Removed the early return for no tasks - now always displays the screen

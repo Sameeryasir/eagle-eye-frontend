@@ -18,6 +18,8 @@ export const store = configureStore({
     // Log management slice for all CRUD operations
     logs: logReducer,
     
+    // Event management slice for all CRUD operations
+    
     // Future slices can be added here:
     // auth: authReducer,
   },

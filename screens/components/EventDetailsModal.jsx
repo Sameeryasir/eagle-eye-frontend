@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Modal, FlatList } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, FlatList, Alert } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import Toast from 'react-native-toast-message';
+import { useDispatch } from 'react-redux';
 import UpdateEventModal from './UpdateEventModal';
 import AccessDeniedDialog from './AccessDeniedDialog';
-import { deleteEventById } from '../../services/event/deleteById';
+// --- REMOVED: eventSlice import (file doesn't exist) ---
 import { getUserRole } from '../../services/utils/userRole';
+import { deleteEventById } from '../../services/event/deleteById';
 
 const EventDetailsModal = ({ 
   visible, 
@@ -13,6 +15,15 @@ const EventDetailsModal = ({
   event,
   onEventUpdated 
 }) => {
+  // --- FIXED: Removed Redux hooks (eventSlice doesn't exist) ---
+  // Using local state instead of Redux since eventSlice is not available
+  const dispatch = useDispatch();
+  
+  // --- Local state for delete operations (replacing Redux state) ---
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+  
+  // --- Component State ---
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [userRole, setUserRole] = useState(null);
@@ -45,6 +56,31 @@ const EventDetailsModal = ({
 
     fetchUserRole();
   }, [visible]);
+
+  // --- FIXED: Handle Local Delete Error (eventSlice doesn't exist) ---
+  // Monitor delete errors from local state and show appropriate user feedback
+  useEffect(() => {
+    if (deleteError) {
+      console.error('Delete error:', deleteError);
+      
+      // Show error toast message
+      Toast.show({
+        type: 'error',
+        text1: 'Delete Failed',
+        text2: deleteError,
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
+
+      // Clear error after showing it
+      setDeleteError(null);
+      
+      // Close delete dialog and modal after showing error
+      setDeleteDialogVisible(false);
+      onClose();
+    }
+  }, [deleteError, onClose]);
 
   const handleUpdate = () => {
     // Check if user is Employee and show alert
@@ -84,12 +120,16 @@ const EventDetailsModal = ({
     setDeleteDialogVisible(true);
   };
 
+  // --- FIXED: Direct API Delete Handler (eventSlice doesn't exist) ---
+  // Using direct API calls and local state instead of Redux since eventSlice is not available
   const confirmDelete = async () => {
-    // Keep dialog open during API call - close it after response
     try {
-      // Call the delete service
-      await deleteEventById(event.originalEventId || event.id);
-
+      setDeleting(true);
+      setDeleteError(null);
+      
+      // Call delete API directly
+      const result = await deleteEventById(event.originalEventId || event.id);
+      
       // Show success toast message
       Toast.show({
         type: 'success',
@@ -106,38 +146,24 @@ const EventDetailsModal = ({
       if (onEventUpdated) {
         onEventUpdated();
       }
-
     } catch (error) {
-      console.error('Error deleting event:', error);
-      console.error('Error response:', error.response?.data);
+      console.error('Error during delete confirmation:', error);
+      setDeleteError(error.message || 'Failed to delete event');
       
-      let errorMessage = 'Failed to delete event. Please try again.';
-      
-      if (error.response?.status === 400) {
-        errorMessage = 'Invalid request. Please try again.';
-      } else if (error.response?.status === 401) {
-        errorMessage = 'Session expired. Please log in again.';
-      } else if (error.response?.status === 403) {
-        errorMessage = 'You do not have permission to delete this event.';
-      } else if (error.response?.status === 404) {
-        errorMessage = 'Event not found.';
-      } else if (error.response?.status === 500) {
-        errorMessage = 'Server error. Please try again later.';
-      }
-      
-      // Show error toast message
+      // Show error toast
       Toast.show({
         type: 'error',
         text1: 'Delete Failed',
-        text2: errorMessage,
-        visibilityTime: 4000,
+        text2: error.message || 'Failed to delete event. Please try again.',
+        visibilityTime: 3000,
         autoHide: true,
         topOffset: 80,
       });
-
-      // Close delete dialog and modal after showing error toast
+      
+      // Close delete dialog after showing error
       setDeleteDialogVisible(false);
-      onClose();
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -377,20 +403,20 @@ const EventDetailsModal = ({
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleDelete}
-                  disabled={isLoadingRole}
+                  disabled={isLoadingRole || deleting}
                   className={`flex-1 py-3 rounded-xl ${
-                    isLoadingRole 
+                    isLoadingRole || deleting
                       ? 'bg-gray-100' 
                       : 'bg-black'
                   }`}
-                  style={{ opacity: isLoadingRole ? 0.5 : 1 }}
+                  style={{ opacity: isLoadingRole || deleting ? 0.5 : 1 }}
                 >
                   <Text className={`text-center font-semibold text-base ${
-                    isLoadingRole 
+                    isLoadingRole || deleting
                       ? 'text-gray-400' 
                       : 'text-white'
                   }`}>
-                    Delete
+                    {deleting ? 'Deleting...' : 'Delete'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -515,20 +541,22 @@ const EventDetailsModal = ({
             <TouchableOpacity
               style={{
                 flex: 1,
-                backgroundColor: '#EF4444',
+                backgroundColor: deleting ? '#F87171' : '#EF4444',
                 paddingVertical: 12,
                 borderRadius: 10,
                 alignItems: 'center',
+                opacity: deleting ? 0.7 : 1,
               }}
               onPress={confirmDelete}
               activeOpacity={0.8}
+              disabled={deleting}
             >
               <Text style={{
                 fontSize: 15,
                 fontWeight: '600',
                 color: 'white',
               }}>
-                Delete
+                {deleting ? 'Deleting...' : 'Delete'}
               </Text>
             </TouchableOpacity>
           </View>

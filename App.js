@@ -74,6 +74,8 @@ import CreatLogScreen from "./screens/CreatLogScreen";
 import PersonalScreen from "./screens/PersonalScreen";
 import ProjectAssignment from "./screens/ProjectAssignment";
 import WeekView from "./screens/WeekView";
+import ChatScreen from "./screens/ChatScreen";
+import UserChatScreen from "./screens/UserChatScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -113,6 +115,67 @@ const CustomHeaderForScreens = ({ onMenuPress, title = "Screen" }) => {
   );
 };
 
+// Custom Header Component for ChatScreen
+const CustomHeaderForChat = ({ onMenuPress }) => {
+  return (
+    <SafeAreaView style={{ backgroundColor: "#3155A1" }} edges={["top"]}>
+      <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
+      <View className="border-b border-gray-200" style={{ backgroundColor: "#3155A1" }}>
+        {/* Main Header */}
+        <View className="flex-row items-center justify-between px-5 py-4">
+          <Text className="text-3xl font-bold text-white">Messages</Text>
+          <View className="flex-row items-center">
+            <TouchableOpacity className="w-10 h-10 items-center justify-center mr-3">
+              <Ionicons name="create-outline" size={28} color="#FFFFFF" />
+            </TouchableOpacity>
+            <TouchableOpacity className="w-10 h-10 items-center justify-center">
+              <Ionicons name="ellipsis-horizontal" size={28} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+};
+
+// Custom Header Component for UserChatScreen
+const CustomHeaderForUserChat = ({ navigation, route }) => {
+  const { userName = 'Chat', userData } = route.params || {};
+  
+  return (
+    <SafeAreaView style={{ backgroundColor: "#3155A1" }} edges={["top"]}>
+      <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
+      <View className="border-b border-gray-200" style={{ backgroundColor: "#3155A1" }}>
+        {/* Main Header */}
+        <View className="flex-row items-center px-4 py-3">
+          <TouchableOpacity
+            className="w-10 items-start"
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          
+          <View className="flex-1 items-center justify-center">
+            <Text className="text-xl font-semibold text-white">{userName}</Text>
+            <View className="flex-row items-center mt-0.5">
+              {userData?.isOnline && <View className="w-2 h-2 rounded-full bg-green-500 mr-1.5" />}
+              <Text className="text-sm text-gray-200">
+                {userData?.isOnline ? 'Online' : 'Last seen recently'}
+              </Text>
+            </View>
+          </View>
+          
+          <View className="w-10 items-end">
+            <TouchableOpacity className="w-8 h-8 items-center justify-center">
+              <Ionicons name="call" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+};
+
 // Loading Screen Component
 const LoadingScreen = () => (
   <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffffff' }}>
@@ -144,7 +207,7 @@ const AppNavigator = () => {
       // Add navigation logic here based on itemId
       switch (itemId) {
         case "chats":
-          navigationRef.navigate("WidgetScreen");
+          navigationRef.navigate("ChatScreen");
           break;
         case "files":
           // Navigate to files screen
@@ -484,6 +547,32 @@ const AppNavigator = () => {
                 },
                 headerShadowVisible: false,
               }}
+            />
+            <Stack.Screen
+              name="ChatScreen"
+              component={ChatScreen}
+              options={{
+                headerShown: true,
+                header: () => <CustomHeaderForChat onMenuPress={handleMenuPress} />,
+                headerBackTitleVisible: false,
+                headerStyle: {
+                  backgroundColor: "white",
+                },
+                headerShadowVisible: false,
+              }}
+            />
+            <Stack.Screen
+              name="UserChatScreen"
+              component={UserChatScreen}
+              options={({ navigation, route }) => ({
+                headerShown: true,
+                header: () => <CustomHeaderForUserChat navigation={navigation} route={route} />,
+                headerBackTitleVisible: false,
+                headerStyle: {
+                  backgroundColor: "white",
+                },
+                headerShadowVisible: false,
+              })}
             />
           
           </Stack.Navigator>

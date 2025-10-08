@@ -164,11 +164,24 @@ export const assignTaskToUserAction = createAsyncThunk(
   'tasks/assignTaskToUserAction',
   async ({ taskId, userId }, { rejectWithValue }) => {
     try {
+      // --- FIXED: Better handling of assignment API response (MCP Context 7) ---
+      // Business Rule: API should return updated task data with complete assignedTo user object
       const result = await assignTaskToUser(taskId, userId);
-      return { taskId, userId, result };
+      
+      console.log('🔧 assignTaskToUserAction - API Response:', result);
+      
+      // Validate the response structure
+      if (result && typeof result === 'object') {
+        // Return the complete response for Redux state update
+        return { taskId, userId, result };
+      } else {
+        console.warn('⚠️ Unexpected API response format:', result);
+        // Return minimal data if API response is unexpected
+        return { taskId, userId, result: { assignedToUserId: userId } };
+      }
     } catch (error) {
-      console.error('Error assigning task:', error);
-      return rejectWithValue(error.response?.data?.message || 'Failed to assign task');
+      console.error('❌ Error assigning task:', error);
+      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to assign task');
     }
   }
 );
@@ -242,6 +255,11 @@ const initialState = {
   currentTask: null,
   filteredTasks: [],
   employeesForAssignment: [],
+  
+  // --- Project-based Caching (MCP Context 7) ---
+  // Cache tasks by project ID for better performance and offline support
+  tasksByProject: {}, // { projectId: { tasks: [], timestamp: number, isFromCache: boolean } }
+  currentProjectId: null,
   
   // Loading states
   loading: false,
@@ -472,17 +490,39 @@ const taskSlice = createSlice({
       })
       .addCase(assignTaskToUserAction.fulfilled, (state, action) => {
         state.assigning = false;
-        const { taskId, userId } = action.payload;
+        const { taskId, userId, result } = action.payload;
         
         // Update the task in the tasks array
         const taskIndex = state.tasks.findIndex(task => task.id === taskId);
         if (taskIndex !== -1) {
-          // Update the assignedTo field (assuming the API returns updated task data)
-          // This might need adjustment based on actual API response
-          state.tasks[taskIndex] = {
-            ...state.tasks[taskIndex],
-            assignedToUserId: userId
-          };
+          // --- FIXED: Properly update assignedTo field with complete user object (MCP Context 7) ---
+          // Business Rule: API returns complete task data with assignedTo user object
+          if (result && result.assignedTo) {
+            // API returned updated task with complete assignedTo user object
+            state.tasks[taskIndex] = {
+              ...state.tasks[taskIndex],
+              assignedTo: result.assignedTo,
+              assignedToUserId: result.assignedTo?.id || userId
+            };
+            console.log('✅ Task assignment updated with complete user object:', result.assignedTo);
+          } else {
+            // Fallback: Update with userId only if API doesn't return complete user object
+            state.tasks[taskIndex] = {
+              ...state.tasks[taskIndex],
+              assignedToUserId: userId,
+              assignedTo: { id: userId } // Minimal user object
+            };
+            console.log('⚠️ Task assignment updated with userId only (fallback):', userId);
+          }
+          
+          // Update current task if it's the same task being assigned
+          if (state.currentTask && state.currentTask.id === taskId) {
+            state.currentTask = {
+              ...state.currentTask,
+              assignedTo: result?.assignedTo || { id: userId },
+              assignedToUserId: result?.assignedTo?.id || userId
+            };
+          }
         }
         
         state.assignError = null;

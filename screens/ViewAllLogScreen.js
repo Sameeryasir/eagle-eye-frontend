@@ -17,6 +17,7 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from "react-native";
+import { useSelector, useDispatch } from 'react-redux';
 import Toast from 'react-native-toast-message';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
@@ -26,7 +27,6 @@ import CustomBottomNav from "./components/CustomBottomNav";
 import { getUserRole } from "../services/utils/userRole";
 import { deleteLogById } from "../services/log/deleteLogById";
 import { updateLogById } from "../services/log/updateLogById";
-import { getMyProjects } from "../services/projects/getProjectsByLoginUserId";
 import { getLogs } from "../services/log/getLogs";
 import UpdateLogModal from "./components/UpdateLogModal";
 import {
@@ -36,10 +36,27 @@ import {
   MenuTrigger,
 } from "react-native-popup-menu";
 
+// --- Redux Imports (MCP Context 7) ---
+// Import project selectors and actions from Redux store
+import { 
+  selectProjects, 
+  selectProjectLoading, 
+  selectProjectError,
+  fetchProjects,
+  refreshProjects 
+} from '../store/slices/projectSlice';
+
 const searchBarClasses = `flex-row items-center rounded-2xl px-4 py-3 bg-[#F8FAFC] border border-[#EAECF0]`;
 
 const ViewAllLogScreen = ({ route, navigation }) => {
   const { logs, projectName } = route.params || [];
+
+  // --- Redux Hooks (MCP Context 7) ---
+  // Access Redux store for projects data instead of making API calls
+  const dispatch = useDispatch();
+  const projects = useSelector(selectProjects);
+  const projectsLoading = useSelector(selectProjectLoading);
+  const projectsError = useSelector(selectProjectError);
 
   // Debug: Log the received parameters from navigation
   console.log("=== ViewAllLogScreen - Navigation Parameters Debug ===");
@@ -49,6 +66,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   console.log("ViewAllLogScreen - managerProjectId:", route.params?.managerProjectId);
   console.log("ViewAllLogScreen - projectId:", route.params?.projectId);
   console.log("ViewAllLogScreen - projectName:", route.params?.projectName);
+  console.log("ViewAllLogScreen - Projects from Redux store:", projects.length);
   console.log("======================================================");
 
   // Debug: Log the received logs data to check createdAt field
@@ -81,7 +99,8 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   const [userRole, setUserRole] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingLogs, setLoadingLogs] = useState(false);
-  const [loadingProjects, setLoadingProjects] = useState(false);
+  // --- Removed loadingProjects state (MCP Context 7) ---
+  // Now using projectsLoading from Redux store instead of local state
   const [loadingProjectLogs, setLoadingProjectLogs] = useState(false);
   const [loadingTimeFilter, setLoadingTimeFilter] = useState(false);
 
@@ -100,10 +119,44 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     fetchUserRole();
   }, []);
 
-  // Load project options on component mount
+  // --- Load Projects from Redux Store (MCP Context 7) ---
+  // Fetch projects from Redux store instead of making direct API calls
   React.useEffect(() => {
-    const loadProjectOptions = async () => {
-      const { options, projects } = await generateProjectOptions();
+    const loadProjectsFromStore = () => {
+      // If projects are not loaded yet, dispatch the fetch action
+      if (projects.length === 0 && !projectsLoading) {
+        console.log("ViewAllLogScreen - No projects in store, fetching...");
+        dispatch(fetchProjects());
+      } else if (projects.length > 0) {
+        console.log("ViewAllLogScreen - Projects already loaded from store:", projects.length);
+        generateProjectOptionsFromStore();
+      }
+    };
+
+    loadProjectsFromStore();
+  }, [projects.length, projectsLoading, dispatch]);
+
+  // --- Generate Project Options When Projects Load (MCP Context 7) ---
+  // Trigger project options generation when projects are loaded from Redux store
+  React.useEffect(() => {
+    if (projects.length > 0 && !projectsLoading) {
+      generateProjectOptionsFromStore();
+    }
+  }, [projects, projectsLoading]);
+
+  // --- Generate Project Options from Redux Store (MCP Context 7) ---
+  // Create project filter options from Redux store data instead of API
+  const generateProjectOptionsFromStore = () => {
+    console.log("ViewAllLogScreen - Generating project options from Redux store");
+    
+    if (projects && projects.length > 0) {
+      // Create project filter options
+      const projectOptions = projects.map(project => ({
+        label: project.name,
+        value: project.name,
+      }));
+      
+      const options = [{ label: "All Logs", value: "All Logs" }, ...projectOptions];
       setProjectFilterOptions(options);
       setProjectsData(projects);
 
@@ -149,9 +202,13 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       }
 
       setAllLogsFromProjects(allLogs);
-    };
-    loadProjectOptions();
-  }, []);
+    } else {
+      console.log("ViewAllLogScreen - No projects available in store");
+      // Set default options if no projects
+      setProjectFilterOptions([{ label: "All Logs", value: "All Logs" }]);
+      setProjectsData([]);
+    }
+  };
 
   // Re-apply filters when projectsData or allLogsFromProjects changes
   React.useEffect(() => {
@@ -462,69 +519,9 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     }
   };
 
-  const generateProjectOptions = async () => {
-    console.log("generateProjectOptions - Starting to fetch projects...");
-    setLoadingProjects(true);
-
-    try {
-      const projects = await getMyProjects();
-      console.log("generateProjectOptions - Projects fetched from API:", projects);
-
-      if (projects && projects.length > 0) {
-        // Extract project names from the response structure you provided
-        const projectNames = projects.map((project) => project.name);
-        console.log("generateProjectOptions - Project names extracted:", projectNames);
-
-        const projectOptions = projectNames.map((projectName) => ({
-          label: projectName,
-          value: projectName,
-        }));
-        console.log("generateProjectOptions - Final project options:", projectOptions);
-        return {
-          options: [{ label: "All Logs", value: "All Logs" }, ...projectOptions],
-          projects: projects
-        };
-      } else {
-        console.log("generateProjectOptions - No real projects found, using dummy projects");
-        const dummyProjects = [
-          "Project 1",
-          "Project 2",
-          "Project 3",
-          "Project 4",
-          "Project 5",
-          "Project 6"
-        ];
-
-        return {
-          options: [{ label: "All Logs", value: "All Logs" }, ...dummyProjects.map(project => ({
-            label: project,
-            value: project,
-          }))],
-          projects: []
-        };
-      }
-    } catch (error) {
-      console.error("Error fetching projects:", error);
-      const dummyProjects = [
-        "Project 1",
-        "Project 2",
-        "Project 3",
-        "Project 4",
-        "Project 5",
-        "Project 6"
-      ];
-
-      return {
-        options: [{ label: "All Logs", value: "All Logs" }, ...dummyProjects.map(project => ({
-          label: project,
-          value: project,
-        }))],
-        projects: []
-      };
-    } finally {
-      setLoadingProjects(false);
-    }
-  };
+  // --- Removed generateProjectOptions function (MCP Context 7) ---
+  // This function is replaced by generateProjectOptionsFromStore() which uses Redux store
+  // No direct API calls needed as projects are managed by Redux store
 
   const handleSearch = async (query) => {
     setSearchQuery(query);
@@ -758,12 +755,13 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     try {
       console.log("ViewAllLogScreen - Starting refresh for user role:", userRole);
 
-      // Reload project options (this calls getMyProjects internally)
-      const { options, projects } = await generateProjectOptions();
-      setProjectFilterOptions(options);
-      setProjectsData(projects);
-
-      console.log("ViewAllLogScreen - Projects refreshed:", projects.length);
+      // --- Refresh Projects from Redux Store (MCP Context 7) ---
+      // Use Redux refresh action instead of direct API calls
+      console.log("ViewAllLogScreen - Refreshing projects from Redux store...");
+      await dispatch(refreshProjects());
+      
+      // Projects will be updated automatically via Redux state
+      console.log("ViewAllLogScreen - Projects refreshed via Redux:", projects.length);
 
       // Extract all logs from all projects
       const allLogs = [];
@@ -1497,12 +1495,12 @@ const ViewAllLogScreen = ({ route, navigation }) => {
           <View style={{ flex: 1, position: "relative" }}>
             <TouchableOpacity
               onPress={() => {
-                if (!loadingProjects) {
+                if (!projectsLoading) {
                   setShowProjectDropdown(!showProjectDropdown);
                   setShowTimeDropdown(false);
                 }
               }}
-              disabled={loadingProjects}
+              disabled={projectsLoading}
               style={{
                 flexDirection: "row",
                 alignItems: "center",
@@ -1532,7 +1530,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                   numberOfLines={1}
                   ellipsizeMode="tail"
                 >
-                  {loadingProjects ? "Loading projects..." : (projectFilterOptions.find(
+                  {projectsLoading ? "Loading projects..." : (projectFilterOptions.find(
                     (option) => option.value === selectedProjectFilter
                   )?.label || "All Logs")}
                 </Text>
@@ -1597,9 +1595,9 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                         </Text>
                       </View>
                     )}
-                    {projectFilterOptions.map((option) => (
+                    {projectFilterOptions.map((option, index) => (
                       <TouchableOpacity
-                        key={option.value}
+                        key={`project-${option.value}-${index}`}
                         onPress={() => handleProjectFilterChange(option.value)}
                         style={{
                           paddingHorizontal: Math.min(16, screenWidth * 0.04),
@@ -1736,9 +1734,9 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                         </Text>
                       </View>
                     )}
-                    {timeFilterOptions.map((option) => (
+                    {timeFilterOptions.map((option, index) => (
                       <TouchableOpacity
-                        key={option.value}
+                        key={`time-${option.value}-${index}`}
                         onPress={() => handleTimeFilterChange(option.value)}
                         style={{
                           paddingHorizontal: Math.min(16, screenWidth * 0.04),
@@ -1860,7 +1858,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       ) : (
         <View>
           {filteredLogs.map((log, index) => (
-            <View key={`log-${log.id}-${index}-${log.createdBy?.replace(/\s+/g, '') || 'unknown'}-${log.description?.substring(0, 10)?.replace(/\s+/g, '') || 'no-desc'}`} style={{ marginBottom: index < filteredLogs.length - 1 ? 20 : 0 }}>
+            <View key={`log-${log.id}`} style={{ marginBottom: index < filteredLogs.length - 1 ? 20 : 0 }}>
               {userRole === "Manager" || userRole === "Owner" ? (
                 <ManagerLogCard log={log} projectName={projectName} selectedProjectFilter={selectedProjectFilter} />
               ) : (

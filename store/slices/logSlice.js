@@ -108,6 +108,10 @@ const initialState = {
   loading: false,
   error: null,
   currentProjectId: null,
+  
+  // --- Project-based Caching (MCP Context 7) ---
+  // Cache logs by project ID for better performance and offline support
+  logsByProject: {}, // { projectId: { logs: [], timestamp: number, isFromCache: boolean } }
 };
 
 // --- Log Slice (MCP Context 7) ---

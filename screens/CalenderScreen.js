@@ -12,20 +12,21 @@ import {
 } from "react-native";
 import { Calendar } from "react-native-calendars";
 import Toast from 'react-native-toast-message';
-import getAllTasks from "../services/tasks/getAllTasks";
-import { getEventsForLogInUser } from "../services/event/getEventsForLogInUser";
 import { getUserRole } from "../services/utils/userRole";
 import CustomBottomNav from "./components/CustomBottomNav";
 import MyWeekView from "./components/WeekView";
 import CalendarToggle from "./components/CalendarToggle";
 import CreateEventModal from "./components/CreateEventModal";
+// --- API Services ---
+import { getEventsForLogInUser } from "../services/event/getEventsForLogInUser";
+import getAllTasks from "../services/tasks/getAllTasks";
 
 const { height } = Dimensions.get("window");
 
 function CalenderScreen({ navigation }) {
-  // --- State Management ---
+  // --- Local State Management ---
   const [tasks, setTasks] = useState({});
-  const [events, setEvents] = useState({});
+  const [localEvents, setLocalEvents] = useState({}); // Processed events grouped by date
   const [combinedItems, setCombinedItems] = useState({}); // Combined tasks and events
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -56,17 +57,16 @@ function CalenderScreen({ navigation }) {
   };
 
 
-  // --- Fetch Tasks from API ---
-  const fetchTasks = async () => {
+  // --- Process Redux Tasks ---
+  const processTasks = (tasksArray) => {
     try {
-      setError(null);
-      const response = await getAllTasks();
+      console.log('CalenderScreen - Processing tasks from Redux:', tasksArray.length);
       
-      if (response.success && response.data) {
+      if (tasksArray && tasksArray.length > 0) {
         // --- Group tasks by date ---
         const tasksByDate = {};
         
-        response.data.forEach(task => {
+        tasksArray.forEach(task => {
           // Extract date from startTime only
           if (!task.startTime) {
             return; // Skip tasks without startTime
@@ -104,52 +104,43 @@ function CalenderScreen({ navigation }) {
         });
         
         setTasks(tasksByDate);
+      } else {
+        setTasks({});
       }
     } catch (err) {
-      console.error('CalenderScreen - Error fetching tasks:', err);
-      setError(err.message);
-      
-      // --- Show Error Toast Message ---
-      Toast.show({
-        type: 'error',
-        text1: 'Error Loading Tasks',
-        text2: err.message || 'Failed to load tasks from server',
-        visibilityTime: 4000,
-        autoHide: true,
-        topOffset: 80,
-      });
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      console.error('CalenderScreen - Error processing tasks:', err);
+      setTasks({});
     }
   };
 
-  // --- Fetch Events from API ---
-  const fetchEvents = async () => {
+  // --- Process Events from Redux ---
+  const processEvents = (eventsArray) => {
     try {
+      // --- ENHANCED DEBUGGING: Log all input parameters ---
+      console.log('=== CalenderScreen processEvents Debug ===');
+      console.log('User role:', userRole);
+      console.log('Events array:', eventsArray);
+      console.log('Events array type:', typeof eventsArray);
+      console.log('Events array length:', eventsArray ? eventsArray.length : 'N/A');
+      console.log('==========================================');
+      
       // Check user role - Owner, Employee, and Manager can access events
-      const userRole = await getUserRole();
       const allowedRoles = ["Owner", "Employee", "Manager"];
       
-      if (!allowedRoles.includes(userRole)) {
-        console.log('CalenderScreen - User role is not allowed, skipping event fetch. User role:', userRole);
-        setEvents({});
+      if (!userRole || !allowedRoles.includes(userRole)) {
+        console.log('CalenderScreen - User role is not allowed, skipping event processing. User role:', userRole);
+        console.log('CalenderScreen - Allowed roles:', allowedRoles);
+        setLocalEvents({});
         return;
       }
 
-      // ✅ FIXED: Fetch ALL events like tasks service
-      // Business Rule: Get all events and let the calendar group them by local date
-      // This matches how tasks are handled - fetch all data and group on frontend
-      console.log('CalenderScreen - Fetching all events like tasks service');
+      console.log('CalenderScreen - Processing events from Redux:', eventsArray.length);
       
-      // --- Fetch ALL events (no date parameter needed) ---
-      const response = await getEventsForLogInUser();
-      
-      if (response.success && response.data) {
+      if (eventsArray && eventsArray.length > 0) {
         // --- Group events by date ---
         const eventsByDate = {};
         
-        response.data.forEach(event => {
+        eventsArray.forEach(event => {
           // Extract date from startTime only
           if (!event.startTime) {
             return; // Skip events without startTime
@@ -236,23 +227,13 @@ function CalenderScreen({ navigation }) {
           }
         });
         
-        setEvents(eventsByDate);
+        setLocalEvents(eventsByDate);
+      } else {
+        setLocalEvents({});
       }
     } catch (err) {
-      console.error('CalenderScreen - Error fetching events:', err);
-      
-      // --- Show Error Toast Message for events ---
-      Toast.show({
-        type: 'error',
-        text1: 'Error Loading Events',
-        text2: err.message || 'Failed to load events from server',
-        visibilityTime: 4000,
-        autoHide: true,
-        topOffset: 80,
-      });
-      
-      // Don't set main error state for events, just show toast
-      setEvents({});
+      console.error('CalenderScreen - Error processing events:', err);
+      setLocalEvents({});
     }
   };
 
@@ -263,12 +244,12 @@ function CalenderScreen({ navigation }) {
     // --- Process all unique dates from both tasks and events ---
     const allDates = new Set([
       ...Object.keys(tasks),
-      ...Object.keys(events)
+      ...Object.keys(localEvents)
     ]);
     
     allDates.forEach(date => {
       const taskList = tasks[date] || [];
-      const eventList = events[date] || [];
+      const eventList = localEvents[date] || [];
       
       // --- Mark tasks with type for identification ---
       const markedTasks = taskList.map(task => ({ ...task, type: 'task' }));
@@ -307,35 +288,115 @@ function CalenderScreen({ navigation }) {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
+      setError(null);
       try {
-        await Promise.all([fetchTasks(), fetchEvents()]);
+        console.log('CalenderScreen - Starting to load data...');
+        console.log('CalenderScreen - User role:', userRole);
+        
+        // Fetch tasks and events directly from API
+        const [tasksResponse, eventsResponse] = await Promise.all([
+          getAllTasks(),
+          getEventsForLogInUser()
+        ]);
+        
+        console.log('CalenderScreen - Tasks response:', tasksResponse);
+        console.log('CalenderScreen - Events response:', eventsResponse);
+        
+        // Process the API responses
+        if (tasksResponse && tasksResponse.data) {
+          console.log('CalenderScreen - Processing tasks:', tasksResponse.data.length);
+          processTasks(tasksResponse.data);
+        }
+        
+        // --- FIXED: Correct API response structure access ---
+        // Business Rule: getEventsForLogInUser returns response.data directly, not nested
+        if (eventsResponse && eventsResponse.data) {
+          console.log('CalenderScreen - Processing events:', eventsResponse.data.length);
+          processEvents(eventsResponse.data);
+        } else if (eventsResponse && Array.isArray(eventsResponse)) {
+          // --- FALLBACK: Handle case where response is already the data array ---
+          console.log('CalenderScreen - Processing events (fallback):', eventsResponse.length);
+          processEvents(eventsResponse);
+        } else {
+          console.log('CalenderScreen - No events data found in response:', eventsResponse);
+          setLocalEvents({});
+        }
       } catch (err) {
         console.error('CalenderScreen - Error loading initial data:', err);
+        console.error('CalenderScreen - Error details:', err.message);
+        
+        // --- ENHANCED ERROR HANDLING: Show specific error messages ---
+        if (err.message.includes('Access denied')) {
+          setError(`Access denied: ${err.message}`);
+        } else if (err.message.includes('No token found')) {
+          setError('Authentication required. Please log in again.');
+        } else {
+          setError(`Failed to load calendar data: ${err.message}`);
+        }
       } finally {
         setLoading(false);
       }
     };
     
-    loadData();
-  }, []);
+    // --- FIXED: Only load data when userRole is available ---
+    // Business Rule: Prevent loading data before user role is determined
+    if (userRole !== null) {
+      loadData();
+    }
+  }, [userRole]); // Add userRole as dependency
+
+  // --- Process events when user role changes ---
+  useEffect(() => {
+    // Re-process events when user role is loaded
+    if (userRole) {
+      // Events will be processed when data is loaded
+    }
+  }, [userRole]);
 
   // --- Combine tasks and events when either changes ---
   useEffect(() => {
     combineTasksAndEvents();
-  }, [tasks, events]);
+  }, [tasks, localEvents]);
 
   // --- Handler for when event is created ---
-  const handleEventCreated = () => {
+  const handleEventCreated = async () => {
     // Refresh both tasks and events when a new event is created
-    fetchEvents();
-    fetchTasks();
+    try {
+      const [tasksResponse, eventsResponse] = await Promise.all([
+        getAllTasks(),
+        getEventsForLogInUser()
+      ]);
+      
+      // Process the API responses
+      if (tasksResponse && tasksResponse.data) {
+        processTasks(tasksResponse.data);
+      }
+      
+      // --- FIXED: Use same corrected API response structure access ---
+      if (eventsResponse && eventsResponse.data) {
+        processEvents(eventsResponse.data);
+      } else if (eventsResponse && Array.isArray(eventsResponse)) {
+        processEvents(eventsResponse);
+      } else {
+        console.log('CalenderScreen - No events data found after event creation:', eventsResponse);
+        setLocalEvents({});
+      }
+    } catch (err) {
+      console.error('CalenderScreen - Error refreshing data after event creation:', err);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to refresh calendar data',
+        visibilityTime: 3000,
+      });
+    }
   };
 
   // --- Handle day press ---
   const onDayPress = (day) => {
     const combinedList = combinedItems[day.dateString] || [];
     const taskList = tasks[day.dateString] || [];
-    const eventList = events[day.dateString] || [];
+    const eventList = localEvents[day.dateString] || [];
     
     // --- Debug: Log the day press data ---
     console.log('=== CalenderScreen onDayPress Debug ===');
@@ -347,21 +408,12 @@ function CalenderScreen({ navigation }) {
     console.log('Combined List length:', combinedList.length);
     console.log('=====================================');
     
-    // --- Show Navigation Toast Message ---
+    // --- Navigation to CalenderDetailScreen (Toast removed as requested) ---
     const totalItems = combinedList.length;
     const taskCount = taskList.length;
     const eventCount = eventList.length;
     
-    Toast.show({
-      type: 'success',
-      text1: 'Opening Schedule',
-      text2: totalItems > 0 
-        ? `Found ${taskCount} task(s) and ${eventCount} event(s) for ${day.dateString}`
-        : `Viewing schedule for ${day.dateString}`,
-      visibilityTime: 2000,
-      autoHide: true,
-      topOffset: 80,
-    });
+    // Toast notification removed - no longer showing "Found X task(s) and X event(s)"
     
     // --- Always navigate to CalenderDetailScreen regardless of item count ---
     // Pass date in YYYY-MM-DD format as expected by backend
@@ -377,9 +429,34 @@ function CalenderScreen({ navigation }) {
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([fetchTasks(), fetchEvents()]);
+      // Fetch fresh data from API
+      const [tasksResponse, eventsResponse] = await Promise.all([
+        getAllTasks(),
+        getEventsForLogInUser()
+      ]);
+      
+      // Process the API responses
+      if (tasksResponse && tasksResponse.data) {
+        processTasks(tasksResponse.data);
+      }
+      
+      // --- FIXED: Use same corrected API response structure access ---
+      if (eventsResponse && eventsResponse.data) {
+        processEvents(eventsResponse.data);
+      } else if (eventsResponse && Array.isArray(eventsResponse)) {
+        processEvents(eventsResponse);
+      } else {
+        console.log('CalenderScreen - No events data found during refresh:', eventsResponse);
+        setLocalEvents({});
+      }
     } catch (err) {
       console.error('CalenderScreen - Error refreshing data:', err);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to refresh calendar data',
+        visibilityTime: 3000,
+      });
     } finally {
       setRefreshing(false);
     }
@@ -428,7 +505,7 @@ function CalenderScreen({ navigation }) {
       <View className="flex-1 bg-white">
         <View className="flex-1 justify-center items-center">
           <ActivityIndicator size="large" color="black" />
-          <Text className="text-base text-gray-600 mt-4 text-center">Loading your tasks...</Text>
+          <Text className="text-base text-gray-600 mt-4 text-center">Loading your tasks and events...</Text>
         </View>
         {/* --- Custom Bottom Navigation - Always Visible --- */}
         <CustomBottomNav />
@@ -442,7 +519,38 @@ function CalenderScreen({ navigation }) {
       <View className="flex-1 bg-white">
         <View className="flex-1 justify-center items-center">
           <Text className="text-base text-red-600 text-center mb-5 px-5">❌ {error}</Text>
-          <TouchableOpacity className="bg-blue-500 px-6 py-3 rounded-lg" onPress={fetchTasks}>
+          <TouchableOpacity 
+            className="bg-blue-500 px-6 py-3 rounded-lg" 
+            onPress={async () => {
+              setError(null);
+              setLoading(true);
+              try {
+                const [tasksResponse, eventsResponse] = await Promise.all([
+                  getAllTasks(),
+                  getEventsForLogInUser()
+                ]);
+                
+                if (tasksResponse && tasksResponse.data) {
+                  processTasks(tasksResponse.data);
+                }
+                
+                // --- FIXED: Use same corrected API response structure access ---
+                if (eventsResponse && eventsResponse.data) {
+                  processEvents(eventsResponse.data);
+                } else if (eventsResponse && Array.isArray(eventsResponse)) {
+                  processEvents(eventsResponse);
+                } else {
+                  console.log('CalenderScreen - No events data found during retry:', eventsResponse);
+                  setLocalEvents({});
+                }
+              } catch (err) {
+                console.error('CalenderScreen - Error retrying data load:', err);
+                setError('Failed to load calendar data. Please try again.');
+              } finally {
+                setLoading(false);
+              }
+            }}
+          >
             <Text className="text-white text-base font-semibold">Retry</Text>
           </TouchableOpacity>
         </View>
@@ -482,7 +590,7 @@ function CalenderScreen({ navigation }) {
             dayComponent={({ date, state }) => {
               // --- Get both tasks and events for this date ---
               const taskList = tasks[date.dateString] || [];
-              const eventList = events[date.dateString] || [];
+              const eventList = localEvents[date.dateString] || [];
               const combinedList = [...taskList, ...eventList];
               
               // --- Show first item (task or event) ---

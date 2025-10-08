@@ -41,6 +41,7 @@ import UpdateProjectModal from "./components/UpdateProjectModal";
 import Header from "../components/Header";
 import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
+import { sendInvite } from "../services/auth/SendInvite";
 
 // --- Responsive Design Constants (MCP Context 7) ---
 // More comprehensive screen size detection for better responsive design
@@ -110,6 +111,10 @@ function HomeScreen({ navigation, route }) {
   const [projectToDelete, setProjectToDelete] = useState(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [invitePopupVisible, setInvitePopupVisible] = useState(false);
+  const [projectToInvite, setProjectToInvite] = useState(null);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
   const { width: screenWidth } = useWindowDimensions();
 
   const numColumns = screenWidth >= 1024 ? 3 : screenWidth >= 768 ? 2 : 1;
@@ -220,6 +225,23 @@ function HomeScreen({ navigation, route }) {
     setUpdateProjectModalVisible(true);
   };
 
+  // --- Invite Handler (MCP Context 7) ---
+  // Handle project invitation functionality
+  const handleInvite = (project) => {
+    const projectId = project?.id;
+    const projectName = project?.name;
+
+    if (!projectId) {
+      console.error("No project ID found");
+      return;
+    }
+
+    // Set the project to invite and show popup
+    setProjectToInvite(project);
+    setInviteEmail(''); // Clear previous email
+    setInvitePopupVisible(true);
+  };
+
   // --- Delete Handler (MCP Context 7) ---
   // Show confirmation dialog for project deletion
   const handleDelete = (project) => {
@@ -283,6 +305,90 @@ function HomeScreen({ navigation, route }) {
   const cancelDelete = () => {
     setDeleteDialogVisible(false);
     setProjectToDelete(null);
+  };
+
+  // --- Invite Popup Handlers (MCP Context 7) ---
+  // Handle sending invite via email
+  const handleSendInvite = async () => {
+    if (!inviteEmail.trim()) {
+      Toast.show({
+        type: 'error',
+        text1: 'Email Required',
+        text2: 'Please enter an email address',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(inviteEmail.trim())) {
+      Toast.show({
+        type: 'error',
+        text1: 'Invalid Email',
+        text2: 'Please enter a valid email address',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
+      return;
+    }
+
+    // Ensure we have a valid project ID
+    if (!projectToInvite?.id) {
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Project information is missing',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
+      return;
+    }
+
+    try {
+      // Call the sendInvite service with email and projectId
+      await sendInvite(inviteEmail.trim(), projectToInvite.id);
+      
+      // Close popup and show success message
+      setInvitePopupVisible(false);
+      const sentEmail = inviteEmail; // Store before clearing
+      setProjectToInvite(null);
+      setInviteEmail('');
+      
+      Toast.show({
+        type: 'success',
+        text1: 'Invite Sent Successfully!',
+        text2: `Invitation sent to ${sentEmail}`,
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
+    } catch (error) {
+      console.error('Error sending invite:', error);
+      
+      // Parse error message from backend if available
+      const errorMessage = error?.response?.data?.message || 'Failed to send invitation. Please try again.';
+      
+      Toast.show({
+        type: 'error',
+        text1: 'Invite Failed',
+        text2: errorMessage,
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
+    }
+  };
+
+  // Handle canceling invite popup
+  const handleCancelInvitePopup = () => {
+    setInvitePopupVisible(false);
+    setProjectToInvite(null);
+    setInviteEmail('');
   };
 
   // --- Create Project Success Handler (MCP Context 7) ---
@@ -369,7 +475,7 @@ function HomeScreen({ navigation, route }) {
                 backgroundColor: 'white',
                 borderRadius: 8,
                 padding: 8,
-                width: 120,
+                width: 140,
                 marginRight: -40,
                 marginTop: 15,
                 shadowColor: "#000",
@@ -383,8 +489,8 @@ function HomeScreen({ navigation, route }) {
                 optionWrapper: {
                   flexDirection: 'row',
                   alignItems: 'center',
-                  paddingVertical: 10,
-                  paddingHorizontal: 16,
+                  paddingVertical: 6,
+                  paddingHorizontal: 12,
                   borderRadius: 4,
                 }
               }}>
@@ -393,12 +499,26 @@ function HomeScreen({ navigation, route }) {
                   Update
                 </Text>
               </MenuOption>
+              <MenuOption onSelect={() => handleInvite(project)} customStyles={{
+                optionWrapper: {
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingVertical: 6,
+                  paddingHorizontal: 12,
+                  borderRadius: 4,
+                }
+              }}>
+                <Ionicons name="person-add-outline" size={18} color="#000000" />
+                <Text style={{ marginLeft: 10, fontSize: 14, fontWeight: '600', color: '#000000' }}>
+                  Invite
+                </Text>
+              </MenuOption>
               <MenuOption onSelect={() => handleDelete(project)} customStyles={{
                 optionWrapper: {
                   flexDirection: 'row',
                   alignItems: 'center',
-                  paddingVertical: 10,
-                  paddingHorizontal: 16,
+                  paddingVertical: 6,
+                  paddingHorizontal: 12,
                   borderRadius: 4,
                 }
               }}>
@@ -678,6 +798,141 @@ function HomeScreen({ navigation, route }) {
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* Invite Popup Menu */}
+      <Modal
+        visible={invitePopupVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCancelInvitePopup}
+      >
+        <TouchableWithoutFeedback onPress={handleCancelInvitePopup}>
+          <View style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.3)',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}>
+            <TouchableWithoutFeedback>
+              <View style={{
+                backgroundColor: 'white',
+                borderRadius: 12,
+                padding: 16,
+                width: 280,
+                shadowColor: "#000",
+                shadowOpacity: 0.15,
+                shadowRadius: 6,
+                shadowOffset: { width: 0, height: 3 },
+                elevation: 3,
+              }}>
+                {/* Header */}
+                <View style={{
+                  alignItems: 'center',
+                  marginBottom: 16,
+                }}>
+                  <View style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: '#F3F4F6',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginBottom: 8,
+                  }}>
+                    <Ionicons name="person-add" size={20} color="#000000" />
+                  </View>
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '600',
+                    color: '#374151',
+                    textAlign: 'center',
+                  }}>
+                    Invite to {projectToInvite?.name}
+                  </Text>
+                </View>
+
+                 {/* Email Input */}
+                 <View style={{ marginBottom: 16 }}>
+                   <Text style={{
+                     fontSize: 14,
+                     fontWeight: '500',
+                     color: '#374151',
+                     marginBottom: 8,
+                   }}>
+                     Enter the owner email address
+                   </Text>
+                   <TextInput
+                    style={{
+                      borderWidth: 1,
+                      borderColor: '#D1D5DB',
+                      borderRadius: 8,
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      fontSize: 14,
+                      backgroundColor: '#F9FAFB',
+                    }}
+                    placeholder="Enter email address"
+                    placeholderTextColor="#9CA3AF"
+                    value={inviteEmail}
+                    onChangeText={setInviteEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="send"
+                    onSubmitEditing={handleSendInvite}
+                  />
+                </View>
+
+                {/* Action Buttons */}
+                <View style={{
+                  flexDirection: 'row',
+                  gap: 8,
+                }}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#F3F4F6',
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                    }}
+                    onPress={handleCancelInvitePopup}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={{
+                      fontSize: 14,
+                      fontWeight: '600',
+                      color: '#374151',
+                    }}>
+                      Cancel
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#000000',
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                    }}
+                    onPress={handleSendInvite}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={{
+                      fontSize: 14,
+                      fontWeight: '600',
+                      color: 'white',
+                    }}>
+                      Send Invite
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </View>
   );
