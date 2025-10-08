@@ -920,8 +920,8 @@ function TaskDetailsScreen({ navigation, route }) {
           </View>
         </Modal>
 
-        {/* --- Enhanced Employee Assignment Modal (MCP Context 7) --- */}
-        {/* Business Rule: Beautiful, modern modal design with premium visual elements */}
+        {/* --- Simple Employee Assignment Modal (MCP Context 7) --- */}
+        {/* Business Rule: Clean, simple modal for employee assignment */}
         <Modal
           visible={showAssignmentModal}
           transparent={true}
@@ -934,228 +934,113 @@ function TaskDetailsScreen({ navigation, route }) {
         >
           <View style={{
             flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
             justifyContent: 'center',
             alignItems: 'center',
             paddingHorizontal: 20,
           }}>
-            {/* --- Premium Modal Container --- */}
+            {/* Modal Container */}
             <View style={{
               backgroundColor: 'white',
-              borderRadius: 24,
-              width: '95%',
+              borderRadius: 16,
+              width: '100%',
               maxWidth: 400,
-              maxHeight: '75%',
+              maxHeight: '70%',
               shadowColor: '#000',
-              shadowOffset: { width: 0, height: 20 },
-              shadowOpacity: 0.25,
-              shadowRadius: 25,
-              elevation: 20,
-              overflow: 'hidden',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.2,
+              shadowRadius: 8,
+              elevation: 8,
             }}>
-              {/* --- Stunning Header with Gradient --- */}
+              {/* Header */}
               <View style={{
-                paddingHorizontal: 24,
-                paddingVertical: 20,
-                backgroundColor: '#FFFFFF',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingHorizontal: 20,
+                paddingVertical: 16,
                 borderBottomWidth: 1,
-                borderBottomColor: '#F1F5F9',
-                position: 'relative',
+                borderBottomColor: '#E5E7EB',
               }}>
-                {/* Header Background Pattern */}
-                <View style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: 80,
-                  backgroundColor: '#F8FAFC',
-                  borderBottomLeftRadius: 20,
-                  borderBottomRightRadius: 20,
-                }} />
-                
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  zIndex: 1,
+                <Text style={{
+                  fontSize: 18,
+                  fontWeight: '600',
+                  color: '#111827',
                 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                    {/* Icon Container */}
-                    <View style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 16,
-                      backgroundColor: '#3B82F6',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginRight: 16,
-                      shadowColor: '#3B82F6',
-                      shadowOffset: { width: 0, height: 4 },
-                      shadowOpacity: 0.3,
-                      shadowRadius: 8,
-                      elevation: 6,
-                    }}>
-                      <Ionicons name="people" size={24} color="white" />
-                    </View>
-                    
-                    <View style={{ flex: 1 }}>
-                      <Text style={{
-                        fontSize: 20,
-                        fontWeight: '700',
-                        color: '#1E293B',
-                        marginBottom: 4,
-                      }}>
-                        Assign Task
-                      </Text>
-                      <Text style={{
-                        fontSize: 14,
-                        color: '#64748B',
-                        fontWeight: '500',
-                      }}>
-                        Select an employee to assign this task
-                      </Text>
-                    </View>
-                  </View>
-                  
-                  {/* Close Button */}
-                  <TouchableOpacity 
-                    onPress={() => {
-                      setShowAssignmentModal(false);
-                      setSelectedEmployee(null);
-                      setSearchQuery('');
-                    }}
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 18,
-                      backgroundColor: '#F1F5F9',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginLeft: 12,
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="close" size={20} color="#64748B" />
-                  </TouchableOpacity>
-                </View>
+                  Assign Employee
+                </Text>
+                <TouchableOpacity 
+                  onPress={() => {
+                    setShowAssignmentModal(false);
+                    setSelectedEmployee(null);
+                    setSearchQuery('');
+                  }}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: '#F3F4F6',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="close" size={20} color="#6B7280" />
+                </TouchableOpacity>
               </View>
 
-              {/* --- Enhanced Search Bar --- */}
+              {/* Search Bar */}
               <View style={{
-                paddingHorizontal: 24,
-                paddingVertical: 20,
+                paddingHorizontal: 20,
+                paddingVertical: 16,
                 backgroundColor: 'white',
               }}>
                 <View style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  backgroundColor: '#F8FAFC',
-                  borderRadius: 16,
-                  paddingHorizontal: 16,
-                  paddingVertical: 12,
-                  borderWidth: 2,
-                  borderColor: searchQuery.length > 0 ? '#3B82F6' : '#E2E8F0',
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.05,
-                  shadowRadius: 4,
-                  elevation: 2,
+                  backgroundColor: '#F9FAFB',
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderWidth: 1,
+                  borderColor: '#E5E7EB',
                 }}>
-                  <Ionicons 
-                    name="search" 
-                    size={20} 
-                    color={searchQuery.length > 0 ? '#3B82F6' : '#94A3B8'} 
-                    style={{ marginRight: 12 }} 
-                  />
+                  <Ionicons name="search" size={18} color="#9CA3AF" style={{ marginRight: 8 }} />
                   <TextInput
-                    placeholder="Search employees by name or email..."
+                    placeholder="Search employees..."
                     value={searchQuery}
                     onChangeText={setSearchQuery}
                     style={{
                       flex: 1,
-                      fontSize: 16,
-                      color: '#1E293B',
-                      fontWeight: '500',
+                      fontSize: 15,
+                      color: '#111827',
                     }}
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor="#9CA3AF"
                   />
                   {searchQuery.length > 0 && (
-                    <TouchableOpacity 
-                      onPress={() => setSearchQuery('')} 
-                      style={{ 
-                        padding: 4,
-                        borderRadius: 12,
-                        backgroundColor: '#E2E8F0',
-                        marginLeft: 8,
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="close" size={16} color="#64748B" />
+                    <TouchableOpacity onPress={() => setSearchQuery('')}>
+                      <Ionicons name="close-circle" size={18} color="#9CA3AF" />
                     </TouchableOpacity>
                   )}
                 </View>
               </View>
 
-              {/* --- Premium Employee List --- */}
+              {/* Employee List */}
               <ScrollView 
-                style={{ maxHeight: 280 }} 
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 20 }}
+                style={{ maxHeight: 300 }} 
+                showsVerticalScrollIndicator={true}
               >
                 {loadingEmployees ? (
-                  <View style={{ 
-                    paddingVertical: 40, 
-                    alignItems: 'center',
-                    backgroundColor: '#FAFAFA',
-                    margin: 20,
-                    borderRadius: 16,
-                  }}>
-                    <ActivityIndicator size="large" color="#3B82F6" />
-                    <Text style={{ 
-                      color: '#64748B', 
-                      marginTop: 12, 
-                      fontSize: 16, 
-                      fontWeight: '600' 
-                    }}>
+                  <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color="#000000" />
+                    <Text style={{ color: '#6B7280', marginTop: 12, fontSize: 14 }}>
                       Loading employees...
                     </Text>
                   </View>
                 ) : filteredEmployees.length === 0 ? (
-                  <View style={{ 
-                    paddingVertical: 40, 
-                    alignItems: 'center',
-                    backgroundColor: '#FAFAFA',
-                    margin: 20,
-                    borderRadius: 16,
-                  }}>
-                    <View style={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: 32,
-                      backgroundColor: '#E2E8F0',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginBottom: 16,
-                    }}>
-                      <Ionicons name="people-outline" size={28} color="#94A3B8" />
-                    </View>
-                    <Text style={{ 
-                      color: '#64748B', 
-                      fontSize: 16, 
-                      fontWeight: '600', 
-                      textAlign: 'center',
-                      marginBottom: 4,
-                    }}>
+                  <View style={{ paddingVertical: 40, alignItems: 'center', paddingHorizontal: 20 }}>
+                    <Ionicons name="people-outline" size={48} color="#D1D5DB" />
+                    <Text style={{ color: '#6B7280', fontSize: 15, fontWeight: '600', marginTop: 12, textAlign: 'center' }}>
                       {searchQuery ? 'No employees found' : 'No employees available'}
-                    </Text>
-                    <Text style={{ 
-                      color: '#94A3B8', 
-                      fontSize: 14, 
-                      textAlign: 'center',
-                      paddingHorizontal: 20,
-                    }}>
-                      {searchQuery ? 'Try adjusting your search terms' : 'Employees will appear here once added to the system'}
                     </Text>
                   </View>
                 ) : (
@@ -1164,55 +1049,42 @@ function TaskDetailsScreen({ navigation, route }) {
                       key={employee.id || index}
                       onPress={() => handleEmployeeSelect(employee)}
                       style={{
-                        marginHorizontal: 20,
-                        marginBottom: 12,
-                        paddingVertical: 16,
-                        paddingHorizontal: 20,
-                        backgroundColor: selectedEmployee?.id === employee.id ? '#EFF6FF' : '#FFFFFF',
-                        borderRadius: 16,
-                        borderWidth: 2,
-                        borderColor: selectedEmployee?.id === employee.id ? '#3B82F6' : '#F1F5F9',
-                        shadowColor: selectedEmployee?.id === employee.id ? '#3B82F6' : '#000',
-                        shadowOffset: { width: 0, height: 4 },
-                        shadowOpacity: selectedEmployee?.id === employee.id ? 0.15 : 0.05,
-                        shadowRadius: 8,
-                        elevation: selectedEmployee?.id === employee.id ? 6 : 2,
+                        marginHorizontal: 16,
+                        marginBottom: 10,
+                        padding: 12,
+                        backgroundColor: selectedEmployee?.id === employee.id ? '#F3F4F6' : '#FFFFFF',
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: selectedEmployee?.id === employee.id ? '#000000' : '#E5E7EB',
                         flexDirection: 'row',
                         alignItems: 'center',
                       }}
-                      activeOpacity={0.8}
                     >
-                      {/* --- Enhanced Avatar --- */}
+                      {/* Avatar */}
                       <View style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 24,
-                        backgroundColor: selectedEmployee?.id === employee.id ? '#3B82F6' : '#E2E8F0',
+                        width: 40,
+                        height: 40,
+                        borderRadius: 20,
+                        backgroundColor: selectedEmployee?.id === employee.id ? '#000000' : '#E5E7EB',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        marginRight: 16,
-                        shadowColor: selectedEmployee?.id === employee.id ? '#3B82F6' : '#000',
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.2,
-                        shadowRadius: 4,
-                        elevation: 3,
+                        marginRight: 12,
                       }}>
                         <Text style={{
-                          fontSize: 18,
-                          fontWeight: '700',
-                          color: selectedEmployee?.id === employee.id ? 'white' : '#64748B'
+                          fontSize: 16,
+                          fontWeight: '600',
+                          color: selectedEmployee?.id === employee.id ? '#FFFFFF' : '#6B7280'
                         }}>
                           {employee.first_name?.charAt(0)?.toUpperCase() || employee.email?.charAt(0)?.toUpperCase() || 'U'}
                         </Text>
                       </View>
                       
-                      {/* --- Employee Info --- */}
+                      {/* Employee Info */}
                       <View style={{ flex: 1 }}>
                         <Text style={{
-                          fontSize: 16,
+                          fontSize: 15,
                           fontWeight: '600',
-                          color: selectedEmployee?.id === employee.id ? '#1E40AF' : '#1E293B',
-                          marginBottom: 4,
+                          color: '#111827',
                         }}>
                           {employee.first_name && employee.last_name
                             ? `${employee.first_name} ${employee.last_name}`
@@ -1220,46 +1092,19 @@ function TaskDetailsScreen({ navigation, route }) {
                           }
                         </Text>
                         {employee.email && employee.first_name && (
-                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Ionicons 
-                              name="mail" 
-                              size={12} 
-                              color={selectedEmployee?.id === employee.id ? '#3B82F6' : '#94A3B8'} 
-                              style={{ marginRight: 4 }}
-                            />
-                            <Text style={{
-                              fontSize: 14,
-                              color: selectedEmployee?.id === employee.id ? '#3B82F6' : '#64748B',
-                              fontWeight: '500'
-                            }}>
-                              {employee.email}
-                            </Text>
-                          </View>
+                          <Text style={{
+                            fontSize: 13,
+                            color: '#6B7280',
+                            marginTop: 2,
+                          }}>
+                            {employee.email}
+                          </Text>
                         )}
                       </View>
                       
-                      {/* --- Selection Indicator --- */}
-                      {selectedEmployee?.id === employee.id ? (
-                        <View style={{
-                          width: 24,
-                          height: 24,
-                          borderRadius: 12,
-                          backgroundColor: '#3B82F6',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginLeft: 12,
-                        }}>
-                          <Ionicons name="checkmark" size={16} color="white" />
-                        </View>
-                      ) : (
-                        <View style={{
-                          width: 24,
-                          height: 24,
-                          borderRadius: 12,
-                          borderWidth: 2,
-                          borderColor: '#E2E8F0',
-                          marginLeft: 12,
-                        }} />
+                      {/* Checkmark */}
+                      {selectedEmployee?.id === employee.id && (
+                        <Ionicons name="checkmark-circle" size={24} color="#000000" />
                       )}
                     </TouchableOpacity>
                   ))

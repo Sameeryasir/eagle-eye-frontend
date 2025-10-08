@@ -165,11 +165,7 @@ const CustomHeaderForUserChat = ({ navigation, route }) => {
             </View>
           </View>
           
-          <View className="w-10 items-end">
-            <TouchableOpacity className="w-8 h-8 items-center justify-center">
-              <Ionicons name="call" size={20} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
+          <View className="w-10" />
         </View>
       </View>
     </SafeAreaView>

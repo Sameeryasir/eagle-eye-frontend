@@ -534,6 +534,18 @@ function HomeScreen({ navigation, route }) {
 
       {/* Rest of the card content */}
       <View className="p-6 py-8">
+        {/* Company Tag - Show if company exists */}
+        {project.company && (
+          <View className="mb-3">
+            <View className="flex-row items-center self-start">
+              <Ionicons name="business" size={14} color="black" />
+              <Text className="text-[14px] text-black font-semibold ml-1.5">
+                {project.company.name}
+              </Text>
+            </View>
+          </View>
+        )}
+        
         <View className="flex-row items-start justify-between">
           <Text 
             className="text-[14px] text-[#666] leading-[22px] flex-1 mr-3"

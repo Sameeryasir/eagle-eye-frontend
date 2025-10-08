@@ -6,19 +6,16 @@ import {
   TouchableOpacity,
   SafeAreaView,
   TextInput,
-  StatusBar,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
   Keyboard,
-  Image,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getUserConversations } from '../services/chats/getConversation';
-
-const { width, height } = Dimensions.get('window');
+import SelectUserModal from './components/SelectUserModal';
+import Toast from 'react-native-toast-message';
+import { useAuth } from '../context/AuthContext';
 
 // --- Helper Function to Generate Initials (MCP Context 7) ---
 // Extract first letter of first name and first letter of last name
@@ -54,124 +51,137 @@ const getAvatarColor = (name) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
-// --- Mock Users Data (MCP Context 7) ---
-// In a real app, this would come from your API/Redux store
-const mockUsers = [
-  {
-    id: '1',
-    name: 'Sarah Johnson',
-    lastMessage: 'Hey! How was your weekend?',
-    timestamp: '2 min ago',
-    unreadCount: 2,
-    isOnline: true,
-    isTyping: false,
-  },
-  {
-    id: '3',
-    name: 'Emily Rodriguez',
-    lastMessage: 'Thanks for the help with the presentation!',
-    timestamp: '1 hour ago',
-    unreadCount: 0,
-    isOnline: true,
-    isTyping: false,
-  },
-  {
-    id: '4',
-    name: 'David Kim',
-    lastMessage: 'Can we reschedule the meeting?',
-    timestamp: '2 hours ago',
-    unreadCount: 1,
-    isOnline: false,
-    isTyping: false,
-  },
-  {
-    id: '5',
-    name: 'Lisa Wang',
-    lastMessage: 'The new design looks amazing!',
-    timestamp: '3 hours ago',
-    unreadCount: 0,
-    isOnline: true,
-    isTyping: false,
-  },
-  {
-    id: '6',
-    name: 'Alex Thompson',
-    lastMessage: 'See you at the conference next week',
-    timestamp: '1 day ago',
-    unreadCount: 0,
-    isOnline: false,
-    isTyping: false,
-  },
-  {
-    id: '7',
-    name: 'Jessica Brown',
-    lastMessage: 'Happy birthday! 🎉',
-    timestamp: '2 days ago',
-    unreadCount: 0,
-    isOnline: true,
-    isTyping: false,
-  },
-  {
-    id: '8',
-    name: 'Ryan Davis',
-    lastMessage: 'The code review is ready',
-    timestamp: '3 days ago',
-    unreadCount: 0,
-    isOnline: false,
-    isTyping: false,
-  },
-];
-
-// --- Mock Messages Data (MCP Context 7) ---
-// Individual conversation messages for each user
-const getMockMessages = (userId) => {
-  const mockConversations = {
-    '1': [
-      { id: '1', text: 'Hey! How was your weekend?', isMe: false, timestamp: '2 min ago' },
-      { id: '2', text: 'It was great! Went hiking with friends. How about you?', isMe: true, timestamp: '1 min ago' },
-      { id: '3', text: 'That sounds amazing! I just relaxed at home and caught up on some reading.', isMe: false, timestamp: '1 min ago' },
-    ],
-    '3': [
-      { id: '1', text: 'Thanks for the help with the presentation!', isMe: false, timestamp: '1 hour ago' },
-      { id: '2', text: 'You\'re welcome! It turned out really well', isMe: true, timestamp: '1 hour ago' },
-    ],
-    '4': [
-      { id: '1', text: 'Can we reschedule the meeting?', isMe: false, timestamp: '2 hours ago' },
-      { id: '2', text: 'Sure, what time works better for you?', isMe: true, timestamp: '2 hours ago' },
-      { id: '3', text: 'How about tomorrow at 2 PM?', isMe: false, timestamp: '1 hour ago' },
-    ],
-    '5': [
-      { id: '1', text: 'The new design looks amazing!', isMe: false, timestamp: '3 hours ago' },
-      { id: '2', text: 'Thank you! I\'m really happy with how it turned out', isMe: true, timestamp: '3 hours ago' },
-    ],
-    '6': [
-      { id: '1', text: 'See you at the conference next week', isMe: false, timestamp: '1 day ago' },
-      { id: '2', text: 'Looking forward to it! Safe travels', isMe: true, timestamp: '1 day ago' },
-    ],
-    '7': [
-      { id: '1', text: 'Happy birthday! 🎉', isMe: false, timestamp: '2 days ago' },
-      { id: '2', text: 'Thank you so much! 🎂', isMe: true, timestamp: '2 days ago' },
-    ],
-    '8': [
-      { id: '1', text: 'The code review is ready', isMe: false, timestamp: '3 days ago' },
-      { id: '2', text: 'Perfect! I\'ll take a look at it today', isMe: true, timestamp: '3 days ago' },
-    ],
-  };
-  return mockConversations[userId] || [];
-};
-
 const ChatScreen = ({ navigation }) => {
-  const [users, setUsers] = useState(mockUsers);
+  // --- State Management (MCP Context 7) ---
+  const [users, setUsers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [isSelectUserModalVisible, setIsSelectUserModalVisible] = useState(false);
+  const [isLoadingConversations, setIsLoadingConversations] = useState(false);
+  const [conversationsError, setConversationsError] = useState(null);
   const searchInputRef = useRef(null);
+  
+  // --- Get Current User (MCP Context 7) ---
+  // Used to filter out current user from conversation participants
+  const { userInfo } = useAuth();
+  const currentUserId = userInfo?.id;
+
+  // --- Fetch Conversations from API (MCP Context 7) ---
+  // Business Rule: Load all user conversations when screen mounts
+  const fetchConversations = async () => {
+    setIsLoadingConversations(true);
+    setConversationsError(null);
+    
+    try {
+      console.log('=== Fetching Conversations ===');
+      const response = await getUserConversations();
+      
+      console.log('Conversations received:', response);
+      console.log('Response structure:', JSON.stringify(response, null, 2));
+      
+      if (response && Array.isArray(response)) {
+        // Transform API response to match our UI format
+        const formattedConversations = response.map(conversation => {
+          console.log('Processing conversation:', conversation.id);
+          console.log('Conversation type:', conversation.type);
+          console.log('Participants:', conversation.participants);
+          console.log('Project:', conversation.project);
+          
+          let displayName = 'Unknown User';
+          
+          // Business Rule: For group conversations, use project name
+          // For private conversations, show the other person's name
+          if (conversation.type === 'group' && conversation.project?.name) {
+            // Group conversation - use project name
+            displayName = conversation.project.name;
+            console.log('Group conversation - using project name:', displayName);
+          } else {
+            // Private conversation - find the "other" participant (not the current logged-in user)
+            // API Structure: participants[].user.{first_name, last_name, email}
+            
+            let otherParticipantUser = null;
+            
+            if (conversation.participants && conversation.participants.length > 0) {
+              // Filter out current user to get the "other" participant
+              const otherParticipant = conversation.participants.find(
+                participant => participant.user?.id?.toString() !== currentUserId?.toString()
+              );
+              
+              // If we found the other participant, use their user data
+              // Otherwise fallback to first participant
+              otherParticipantUser = otherParticipant?.user || conversation.participants[0]?.user;
+              
+              console.log('Current user ID:', currentUserId);
+              console.log('Other participant user:', otherParticipantUser);
+            }
+            
+            const firstName = otherParticipantUser?.first_name || '';
+            const lastName = otherParticipantUser?.last_name || '';
+            const email = otherParticipantUser?.email || '';
+            displayName = `${firstName} ${lastName}`.trim() || email || 'Unknown User';
+          }
+          
+          // Get last message (if messages array has items)
+          const lastMessage = conversation.messages?.[conversation.messages?.length - 1];
+          const lastMessageText = lastMessage?.content || 'No messages yet';
+          
+          // Format timestamp
+          const timestamp = conversation.createdAt 
+            ? new Date(conversation.createdAt).toLocaleString()
+            : 'Just now';
+          
+          console.log('Formatted conversation name:', displayName);
+          
+          return {
+            id: conversation.id?.toString(),
+            name: displayName,
+            lastMessage: lastMessageText,
+            timestamp: timestamp,
+            unreadCount: 0, // TODO: Add unread count from API
+            isOnline: false, // TODO: Add real online status
+            isTyping: false,
+            conversation: conversation, // Keep full conversation data
+          };
+        });
+        
+        console.log('Total conversations formatted:', formattedConversations.length);
+        console.log('Formatted conversations:', formattedConversations);
+        setUsers(formattedConversations);
+      } else {
+        console.log('No conversations data or empty array');
+        setUsers([]);
+      }
+    } catch (err) {
+      console.error('Error fetching conversations:', err);
+      console.error('Error details:', err.message);
+      setConversationsError('Failed to load conversations');
+      
+      // Show error toast
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to load conversations. Please try again.',
+        visibilityTime: 3000,
+        position: 'top',
+      });
+    } finally {
+      setIsLoadingConversations(false);
+    }
+  };
+
+  // --- Load Conversations on Mount (MCP Context 7) ---
+  // Fetch conversations when component mounts
+  useEffect(() => {
+    fetchConversations();
+  }, []);
 
   // --- Navigation Focus Listener (MCP Context 7) ---
-  // Prevent keyboard dismissal when screen comes into focus
+  // Reload conversations when screen comes into focus
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      // Don't dismiss keyboard when screen focuses
-      console.log('ChatScreen focused - keeping keyboard state');
+      // Reload conversations when returning to this screen
+      console.log('ChatScreen focused - reloading conversations');
+      fetchConversations();
     });
 
     const unsubscribeBlur = navigation.addListener('blur', () => {
@@ -217,14 +227,121 @@ const ChatScreen = ({ navigation }) => {
   }, []);
 
   // --- Navigate to User Chat (MCP Context 7) ---
-  // Navigate to individual chat screen with user data
+  // Navigate to individual chat screen with user data from API
+  // Business Rule: Pass conversation ID for fetching/sending messages
   const handleUserPress = (user) => {
+    console.log('=== Opening Conversation ===');
+    console.log('User:', user);
+    console.log('Conversation ID:', user.conversation?.id);
+    console.log('Full conversation:', user.conversation);
+    
+    // Ensure we have a conversation ID before navigating
+    const conversationId = user.conversation?.id;
+    
+    if (!conversationId) {
+      console.warn('⚠️ Warning: No conversation ID found for user:', user.name);
+    } else {
+      console.log('✅ Navigating with conversation ID:', conversationId);
+    }
+    
     navigation.navigate('UserChatScreen', {
       userId: user.id,
       userName: user.name,
       userData: user,
-      messages: getMockMessages(user.id),
+      conversationId: conversationId, // Pass conversation ID
+      conversation: user.conversation, // Pass full conversation object
+      messages: user.conversation?.messages || [], // Use messages from API
     });
+    
+    console.log('=== End Opening Conversation ===');
+  };
+
+  // --- Open Select User Modal (MCP Context 7) ---
+  // Opens modal to select a team member for new conversation
+  const handleOpenSelectUserModal = () => {
+    // Dismiss keyboard before opening modal
+    Keyboard.dismiss();
+    setIsSelectUserModalVisible(true);
+  };
+
+  // --- Close Select User Modal (MCP Context 7) ---
+  // Closes the select user modal
+  const handleCloseSelectUserModal = () => {
+    setIsSelectUserModalVisible(false);
+  };
+
+  // --- Handle User Selection from Modal (MCP Context 7) ---
+  // When user selects a team member from modal, navigate to chat with them
+  const handleUserSelectFromModal = (data) => {
+    console.log('=== User Selected from Modal ===');
+    console.log('Data received:', data);
+    
+    const { employee, conversation, isGroupChat, project } = data;
+    
+    // Business Rule: Handle group chat vs private chat differently
+    if (isGroupChat) {
+      // Group conversation - use project name
+      console.log('Navigating to group chat with project:', project);
+      
+      const groupData = {
+        id: conversation?.id?.toString(),
+        name: project?.name || 'Project Group Chat',
+        lastMessage: '', // Empty for new conversation
+        timestamp: 'Just now',
+        unreadCount: 0,
+        isOnline: false,
+        isTyping: false,
+      };
+      
+      // Navigate to chat screen with group conversation
+      navigation.navigate('UserChatScreen', {
+        userId: conversation?.id?.toString(),
+        userName: groupData.name,
+        userData: groupData,
+        messages: [], // Start with empty messages for new conversation
+        conversationId: conversation?.id, // Pass conversation ID from API
+        conversation: conversation, // Pass full conversation object
+        isGroupChat: true,
+        project: project,
+      });
+    } else {
+      // Private conversation - use employee name
+      const firstName = employee.first_name || '';
+      const lastName = employee.last_name || '';
+      const fullName = `${firstName} ${lastName}`.trim() || 'Unknown User';
+      
+      const userData = {
+        id: employee.id?.toString(),
+        name: fullName,
+        email: employee.email,
+        lastMessage: '', // Empty for new conversation
+        timestamp: 'Just now',
+        unreadCount: 0,
+        isOnline: false, // Could be enhanced with real online status later
+        isTyping: false,
+      };
+      
+      console.log('Navigating to UserChatScreen with:', userData);
+      console.log('Conversation data:', conversation);
+      
+      // Navigate to chat screen with new user and conversation
+      navigation.navigate('UserChatScreen', {
+        userId: userData.id,
+        userName: userData.name,
+        userData: userData,
+        messages: [], // Start with empty messages for new conversation
+        conversationId: conversation?.id, // Pass conversation ID from API
+        conversation: conversation, // Pass full conversation object
+      });
+    }
+    
+    // Reload conversations after creating new one
+    // This will update the list when user returns to this screen
+    setTimeout(() => {
+      fetchConversations();
+    }, 500);
+    
+    console.log('=== End User Selection ===');
   };
 
   // --- User Item Component (MCP Context 7) ---
@@ -258,12 +375,9 @@ const ChatScreen = ({ navigation }) => {
 
       {/* User Info */}
       <View className="flex-1 ml-4">
-        <View className="flex-row items-center justify-between mb-2">
+        <View className="flex-row items-center mb-2">
           <Text className="text-lg font-semibold text-black flex-1" numberOfLines={1}>
             {item.name}
-          </Text>
-          <Text className="text-sm text-gray-500 ml-2">
-            {item.timestamp}
           </Text>
         </View>
         
@@ -362,18 +476,43 @@ const ChatScreen = ({ navigation }) => {
   );
 
   // --- Empty State Component (MCP Context 7) ---
-  // Show when no users match search criteria
-  const renderEmptyState = () => (
-    <View className="flex-1 items-center justify-center px-8">
-      <Ionicons name="chatbubbles-outline" size={80} color="#C7C7CC" />
-      <Text className="text-xl font-semibold text-gray-500 mt-6 text-center">
-        No conversations found
-      </Text>
-      <Text className="text-base text-gray-400 mt-3 text-center">
-        Try adjusting your search terms
-      </Text>
-    </View>
-  );
+  // Show when no conversations exist or no search results
+  const renderEmptyState = () => {
+    // Business Rule: Different empty states for "no conversations" vs "no search results"
+    const hasNoConversations = users.length === 0;
+    const hasNoSearchResults = users.length > 0 && filteredUsers.length === 0;
+    
+    if (hasNoConversations) {
+      // True empty state - no conversations at all
+      return (
+        <View className="flex-1 items-center justify-center px-8">
+          <Ionicons name="chatbubbles-outline" size={100} color="#C7C7CC" />
+          <Text className="text-2xl font-bold text-gray-700 mt-6 text-center">
+            No conversations yet
+          </Text>
+          <Text className="text-base text-gray-400 mt-3 text-center">
+            Tap the + button below to start chatting
+          </Text>
+          
+          {/* Note: FAB button (bottom-right) handles conversation creation */}
+          {/* Removed duplicate button to keep UI clean */}
+        </View>
+      );
+    }
+    
+    // No search results
+    return (
+      <View className="flex-1 items-center justify-center px-8">
+        <Ionicons name="search-outline" size={80} color="#C7C7CC" />
+        <Text className="text-xl font-semibold text-gray-500 mt-6 text-center">
+          No conversations found
+        </Text>
+        <Text className="text-base text-gray-400 mt-3 text-center">
+          Try adjusting your search terms
+        </Text>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={['bottom', 'left', 'right']}>
@@ -388,7 +527,13 @@ const ChatScreen = ({ navigation }) => {
         enabled={true}
         keyboardShouldPersistTaps="handled"
       >
-        {filteredUsers.length > 0 ? (
+        {/* Loading State (MCP Context 7) */}
+        {isLoadingConversations ? (
+          <View className="flex-1 items-center justify-center">
+            <ActivityIndicator size="large" color="#000000" />
+            <Text className="text-base text-gray-500 mt-4">Loading conversations...</Text>
+          </View>
+        ) : filteredUsers.length > 0 ? (
           <FlatList
             data={filteredUsers}
             renderItem={renderUserItem}
@@ -398,6 +543,8 @@ const ChatScreen = ({ navigation }) => {
             contentContainerStyle={{ paddingBottom: isKeyboardVisible ? 20 : 0 }}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="none"
+            refreshing={isLoadingConversations}
+            onRefresh={fetchConversations}
           />
         ) : (
           <View className="flex-1">
@@ -405,6 +552,32 @@ const ChatScreen = ({ navigation }) => {
           </View>
         )}
       </KeyboardAvoidingView>
+
+      {/* FAB - Floating Action Button (MCP Context 7) */}
+      {/* Business Rule: Always visible for quick access to start new conversation */}
+      {/* Shows in all states - empty or with conversations */}
+      <TouchableOpacity
+        className="absolute bottom-6 right-6 w-16 h-16 bg-black rounded-full items-center justify-center shadow-lg"
+        onPress={handleOpenSelectUserModal}
+        activeOpacity={0.8}
+        style={{
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 6,
+          elevation: 8,
+        }}
+      >
+        <Ionicons name="add" size={32} color="white" />
+      </TouchableOpacity>
+
+      {/* Select User Modal (MCP Context 7) */}
+      {/* Modal for selecting team member to start conversation */}
+      <SelectUserModal
+        visible={isSelectUserModalVisible}
+        onClose={handleCloseSelectUserModal}
+        onUserSelect={handleUserSelectFromModal}
+      />
     </SafeAreaView>
   );
 };
