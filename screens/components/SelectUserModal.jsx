@@ -68,6 +68,11 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
   // --- Keyboard State for Popup Positioning (MCP Context 7) ---
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   
+  // --- Custom Dialog State (MCP Context 7) ---
+  // State for showing conversation already exists dialog
+  const [showConversationExistsDialog, setShowConversationExistsDialog] = useState(false);
+  const [existingConversationData, setExistingConversationData] = useState(null);
+  
   // --- Get current user from auth context (MCP Context 7) ---
   // Business Rule: Don't show current user in the list (can't chat with yourself)
   const { userInfo } = useAuth();
@@ -204,6 +209,18 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
     console.log('Employee ID Type:', typeof employee.id);
     console.log('Selected Project:', selectedProject);
     
+    // Business Rule: If project is selected, don't allow individual conversations
+    // User should use "Create Project Chat" button instead
+    if (selectedProject) {
+      console.log('⚠️ Project is selected - preventing individual conversation');
+      Alert.alert(
+        'Use Project Chat',
+        'When a project is selected, please use the "Create Project Chat" button to start a group conversation with all team members.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    
     // Business Rule: Ensure employee ID exists
     if (!employee.id) {
       Alert.alert(
@@ -252,14 +269,29 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
       console.error('Error response data:', err.response?.data);
       console.error('Error response status:', err.response?.status);
       
-      // Show detailed error message to user
-      const errorMessage = err.response?.data?.message || err.message || 'Failed to create conversation. Please try again.';
-      
-      Alert.alert(
-        'Error',
-        errorMessage,
-        [{ text: 'OK' }]
-      );
+      // --- Business Rule: Handle 400 Error (Conversation Already Exists) (MCP Context 7) ---
+      // When API returns 400, it means conversation already exists with this user
+      // Show a friendly custom dialog and navigate to the existing conversation if data is available
+      if (err.response?.status === 400) {
+        console.log('Conversation already exists with this user');
+        
+        // Extract existing conversation data from error response (if backend provides it)
+        const existingConversation = err.response?.data?.conversation;
+        
+        // Store conversation data and show custom dialog
+        setExistingConversationData(existingConversation);
+        setShowConversationExistsDialog(true);
+      } else {
+        // --- Other Errors (Not 400) (MCP Context 7) ---
+        // Show generic error message for other types of errors
+        const errorMessage = err.response?.data?.message || err.message || 'Failed to create conversation. Please try again.';
+        
+        Alert.alert(
+          'Error',
+          errorMessage,
+          [{ text: 'OK' }]
+        );
+      }
       
     } finally {
       setIsCreatingConversation(false);
@@ -308,18 +340,79 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
     } catch (err) {
       console.error('Error creating project group chat:', err);
       console.error('Error response data:', err.response?.data);
+      console.error('Error status:', err.response?.status);
       
-      const errorMessage = err.response?.data?.message || err.message || 'Failed to create project chat. Please try again.';
-      
-      Alert.alert(
-        'Error',
-        errorMessage,
-        [{ text: 'OK' }]
-      );
+      // --- Business Rule: Handle 400 Error (Conversation Already Exists) (MCP Context 7) ---
+      // When API returns 400, it means conversation already exists for this project
+      // Show a friendly message and navigate to the existing conversation if data is available
+      if (err.response?.status === 400) {
+        console.log('Conversation already exists for this project');
+        
+        // Extract existing conversation data from error response (if backend provides it)
+        const existingConversation = err.response?.data?.conversation;
+        
+        // Store conversation data and show custom dialog
+        setExistingConversationData(existingConversation);
+        setShowConversationExistsDialog(true);
+      } else {
+        // --- Other Errors (Not 400) (MCP Context 7) ---
+        // Show generic error message for other types of errors
+        const errorMessage = err.response?.data?.message || err.message || 'Failed to create project chat. Please try again.';
+        
+        Alert.alert(
+          'Error',
+          errorMessage,
+          [{ text: 'OK' }]
+        );
+      }
       
     } finally {
       setIsCreatingConversation(false);
     }
+  };
+
+  // --- Handle Conversation Exists Dialog OK Button (MCP Context 7) ---
+  // When user clicks OK on the "Conversation Already Exists" dialog
+  // Business Rule: Works for both private and group conversations
+  const handleConversationExistsDialogOk = () => {
+    console.log('User confirmed existing conversation dialog');
+    
+    // If backend provided existing conversation data, navigate to it
+    if (existingConversationData && onUserSelect) {
+      console.log('Navigating to existing conversation:', existingConversationData);
+      
+      // Check if this is a group chat (project conversation) or private chat
+      const isGroupChat = existingConversationData.type === 'group' || selectedProject != null;
+      
+      // Prepare navigation data
+      const navigationData = {
+        conversation: existingConversationData,
+        isGroupChat: isGroupChat,
+      };
+      
+      // Add project data if it's a group chat
+      if (isGroupChat && selectedProject) {
+        navigationData.project = selectedProject;
+      }
+      
+      // Add employee data if it's a private chat
+      if (!isGroupChat && existingConversationData.participants) {
+        // Find the other participant (not current user)
+        const otherParticipant = existingConversationData.participants.find(
+          p => p.user?.id?.toString() !== currentUserId?.toString()
+        );
+        navigationData.employee = otherParticipant?.user;
+      }
+      
+      onUserSelect(navigationData);
+    }
+    
+    // Close the dialog
+    setShowConversationExistsDialog(false);
+    setExistingConversationData(null);
+    
+    // Close the modal
+    handleClose();
   };
 
   // --- Handle Modal Close (MCP Context 7) ---
@@ -384,11 +477,15 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
 
   // --- Render Employee Item (MCP Context 7) ---
   // Individual employee list item with avatar and info - Premium card design
+  // Business Rule: Disable individual chat when project is selected
   const renderEmployeeItem = ({ item }) => {
     const firstName = item.first_name || '';
     const lastName = item.last_name || '';
     const fullName = `${firstName} ${lastName}`.trim() || 'Unknown User';
     const email = item.email || '';
+    
+    // Check if project is selected - if yes, disable individual conversations
+    const isDisabled = !!selectedProject;
     
     return (
       <View className="px-5 mb-3">
@@ -396,6 +493,7 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
           className="flex-row items-center bg-white rounded-2xl p-4 shadow-sm border border-gray-100"
           onPress={() => handleUserSelect(item)}
           activeOpacity={0.7}
+          disabled={isDisabled}
         >
           {/* Avatar with Initials - Enhanced Design */}
           <View 
@@ -417,11 +515,6 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
                 {email}
               </Text>
             )}
-          </View>
-
-          {/* Arrow Button */}
-          <View className="w-8 h-8 rounded-full bg-gray-50 items-center justify-center ml-2">
-            <Ionicons name="arrow-forward" size={18} color="#374151" />
           </View>
         </TouchableOpacity>
       </View>
@@ -868,6 +961,51 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
               <Text className="text-base font-semibold text-gray-800 mt-4">
                 Creating conversation...
               </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Custom Dialog: Conversation Already Exists (MCP Context 7) */}
+        {/* Shows when trying to create a conversation that already exists (400 error) */}
+        {showConversationExistsDialog && (
+          <View 
+            className="absolute inset-0 bg-black/50 items-center justify-center"
+            style={{ zIndex: 1000 }}
+          >
+            <View className="bg-white rounded-3xl mx-6 w-11/12 max-w-md shadow-2xl">
+              {/* Dialog Icon */}
+              <View className="items-center pt-8 pb-4">
+                <View className="w-20 h-20 rounded-full bg-blue-100 items-center justify-center">
+                  <Ionicons name="chatbubbles" size={40} color="#3B82F6" />
+                </View>
+              </View>
+
+              {/* Dialog Title */}
+              <Text className="text-2xl font-bold text-gray-900 text-center px-6 mb-3">
+                Conversation Already Exists
+              </Text>
+
+              {/* Dialog Message */}
+              {/* Business Rule: Dynamic message for project vs private conversations */}
+              <Text className="text-base text-gray-600 text-center px-8 mb-8 leading-6">
+                {selectedProject 
+                  ? 'A conversation has already been created for this project. You will be redirected to it.'
+                  : 'A conversation already exists with this person. You will be redirected to it.'
+                }
+              </Text>
+
+              {/* Dialog Button */}
+              <View className="border-t border-gray-200">
+                <TouchableOpacity
+                  onPress={handleConversationExistsDialogOk}
+                  className="py-4 items-center active:bg-gray-50"
+                  activeOpacity={0.7}
+                >
+                  <Text className="text-lg font-semibold text-blue-500">
+                    OK
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         )}

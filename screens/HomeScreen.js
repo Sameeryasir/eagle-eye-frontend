@@ -15,6 +15,7 @@ import {
   RefreshControl,
   ToastAndroid,
   Dimensions,
+  ActivityIndicator,
 } from "react-native";
 import Toast from 'react-native-toast-message';
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -115,6 +116,8 @@ function HomeScreen({ navigation, route }) {
   const [projectToInvite, setProjectToInvite] = useState(null);
   const [inviteEmail, setInviteEmail] = useState('');
   const [isSendingInvite, setIsSendingInvite] = useState(false);
+  const [inviteErrorDialogVisible, setInviteErrorDialogVisible] = useState(false);
+  const [inviteErrorMessage, setInviteErrorMessage] = useState('');
   const { width: screenWidth } = useWindowDimensions();
 
   const numColumns = screenWidth >= 1024 ? 3 : screenWidth >= 768 ? 2 : 1;
@@ -349,6 +352,9 @@ function HomeScreen({ navigation, route }) {
       return;
     }
 
+    // Show loading indicator
+    setIsSendingInvite(true);
+
     try {
       // Call the sendInvite service with email and projectId
       await sendInvite(inviteEmail.trim(), projectToInvite.id);
@@ -371,16 +377,23 @@ function HomeScreen({ navigation, route }) {
       console.error('Error sending invite:', error);
       
       // Parse error message from backend if available
-      const errorMessage = error?.response?.data?.message || 'Failed to send invitation. Please try again.';
+      // Business Rule: Check multiple error formats
+      // 1. error.message (when SendInvite service throws new Error)
+      // 2. error.response?.data?.message (direct axios error)
+      // 3. Default fallback message
+      const errorMessage = error?.message || 
+                          error?.response?.data?.message || 
+                          'Failed to send invitation. Please try again.';
       
-      Toast.show({
-        type: 'error',
-        text1: 'Invite Failed',
-        text2: errorMessage,
-        visibilityTime: 4000,
-        autoHide: true,
-        topOffset: 80,
-      });
+      // Close the invite popup first
+      setInvitePopupVisible(false);
+      
+      // Show custom error dialog instead of toast
+      setInviteErrorMessage(errorMessage);
+      setInviteErrorDialogVisible(true);
+    } finally {
+      // Hide loading indicator
+      setIsSendingInvite(false);
     }
   };
 
@@ -389,6 +402,7 @@ function HomeScreen({ navigation, route }) {
     setInvitePopupVisible(false);
     setProjectToInvite(null);
     setInviteEmail('');
+    setIsSendingInvite(false);
   };
 
   // --- Create Project Success Handler (MCP Context 7) ---
@@ -904,18 +918,19 @@ function HomeScreen({ navigation, route }) {
                   <TouchableOpacity
                     style={{
                       flex: 1,
-                      backgroundColor: '#F3F4F6',
+                      backgroundColor: isSendingInvite ? '#E5E7EB' : '#F3F4F6',
                       paddingVertical: 10,
                       borderRadius: 8,
                       alignItems: 'center',
                     }}
                     onPress={handleCancelInvitePopup}
                     activeOpacity={0.8}
+                    disabled={isSendingInvite}
                   >
                     <Text style={{
                       fontSize: 14,
                       fontWeight: '600',
-                      color: '#374151',
+                      color: isSendingInvite ? '#9CA3AF' : '#374151',
                     }}>
                       Cancel
                     </Text>
@@ -924,27 +939,123 @@ function HomeScreen({ navigation, route }) {
                   <TouchableOpacity
                     style={{
                       flex: 1,
-                      backgroundColor: '#000000',
+                      backgroundColor: isSendingInvite ? '#4B5563' : '#000000',
                       paddingVertical: 10,
                       borderRadius: 8,
                       alignItems: 'center',
+                      justifyContent: 'center',
                     }}
                     onPress={handleSendInvite}
                     activeOpacity={0.8}
+                    disabled={isSendingInvite}
                   >
-                    <Text style={{
-                      fontSize: 14,
-                      fontWeight: '600',
-                      color: 'white',
-                    }}>
-                      Send Invite
-                    </Text>
+                    {isSendingInvite ? (
+                      <ActivityIndicator size="small" color="white" />
+                    ) : (
+                      <Text style={{
+                        fontSize: 14,
+                        fontWeight: '600',
+                        color: 'white',
+                      }}>
+                        Send Invite
+                      </Text>
+                    )}
                   </TouchableOpacity>
                 </View>
               </View>
             </TouchableWithoutFeedback>
           </View>
         </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* Invite Error Dialog */}
+      <Modal
+        visible={inviteErrorDialogVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setInviteErrorDialogVisible(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingHorizontal: 20,
+        }}>
+          <View style={{
+            backgroundColor: 'white',
+            borderRadius: 16,
+            padding: 20,
+            width: '100%',
+            maxWidth: 320,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.2,
+            shadowRadius: 16,
+            elevation: 8,
+          }}>
+            {/* Error Icon */}
+            <View style={{
+              alignItems: 'center',
+              marginBottom: 16,
+            }}>
+              <View style={{
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor: '#FEF2F2',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: 12,
+              }}>
+                <Ionicons name="close-circle" size={28} color="#EF4444" />
+              </View>
+              <Text style={{
+                fontSize: 18,
+                fontWeight: 'bold',
+                color: '#1F2937',
+                textAlign: 'center',
+                marginBottom: 4,
+              }}>
+                Invite Failed
+              </Text>
+            </View>
+
+            {/* Error Message */}
+            <Text style={{
+              fontSize: 15,
+              color: '#6B7280',
+              textAlign: 'center',
+              lineHeight: 22,
+              marginBottom: 20,
+            }}>
+              {inviteErrorMessage}
+            </Text>
+
+            {/* OK Button */}
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#000000',
+                paddingVertical: 12,
+                borderRadius: 10,
+                alignItems: 'center',
+              }}
+              onPress={() => {
+                setInviteErrorDialogVisible(false);
+                setInviteErrorMessage('');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={{
+                fontSize: 15,
+                fontWeight: '600',
+                color: 'white',
+              }}>
+                OK
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </View>
   );
