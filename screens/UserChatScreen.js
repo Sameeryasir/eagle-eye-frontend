@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,21 +11,24 @@ import {
   Platform,
   Keyboard,
   Image,
-  Linking,
   Modal,
   Dimensions,
   StyleSheet,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+  Linking,
+  Alert,
+} from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from "@expo/vector-icons";
 import { MaterialIcons } from '@expo/vector-icons';
-import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { getMessagesByConversationId } from '../services/chats/getMessagesByConversationId';
-import { sendMessage } from '../services/chats/sendMessage';
-import Toast from 'react-native-toast-message';
-import { useAuth } from '../context/AuthContext';
-import pusher from '../pusherClient';
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
+import { useAuth } from "../context/AuthContext";
+import { getMessagesByConversationId } from "../services/chats/getMessagesByConversationId";
+import { sendMessage } from "../services/chats/sendMessage";
+import pusher from "../pusherClient";
 
 // --- Helper Function to Generate Initials (MCP Context 7) ---
 // Extract first letter of first name and first letter of last name
@@ -59,82 +62,72 @@ const getAvatarColor = (name) => {
 };
 
 const UserChatScreen = ({ navigation, route }) => {
-  const { 
-    userId = '1', 
-    userName = 'Sarah Johnson', 
-    userData,
+  const {
+    userId = "1",
+    userName = "User",
     conversationId,
-    conversation,
     messages: initialMessages = [],
-    isGroupChat: isGroupChatParam = false, // Determine if this is a group chat from navigation
-    project
+    isGroupChat: isGroupChatParam = false,
+    conversation,
   } = route.params || {};
-  
+
   // --- Determine if Group Chat (MCP Context 7) ---
-  // Business Rule: Detect group chat from route params or conversation.type
-  // This ensures sender names show up in group chats even if isGroupChat isn't explicitly passed
+  // Business Rule: Only show sender names in group chats, not in individual chats
   const isGroupChat = isGroupChatParam || conversation?.type === 'group';
-  
+
+  const { user, userInfo } = useAuth();
+  const insets = useSafeAreaInsets(); // Get safe area insets for notch/navigation bar handling
   const [messages, setMessages] = useState([]);
-  const [isTyping, setIsTyping] = useState(false);
+  const [inputText, setInputText] = useState("");
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
-  const [inputText, setInputText] = useState('');
   const [isSendingMessage, setIsSendingMessage] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [selectedFile, setSelectedFile] = useState(null);
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
   const [selectedImageUrl, setSelectedImageUrl] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null); // For file uploads
+  const [attachmentMenuVisible, setAttachmentMenuVisible] = useState(false); // For attachment options
   const flatListRef = useRef(null);
-  
-  // --- Get Current User (MCP Context 7) ---
-  // Used to determine if message is from current user or other person
-  const { userInfo } = useAuth();
-  const currentUserId = userInfo?.id;
+
+  // --- Get Current User ID from AsyncStorage (MCP Context 7) ---
+  // Business Rule: Retrieve user ID from local storage to compare with message sender
+  // This ensures we're using the exact same ID that was stored during login
+  const [currentUserId, setCurrentUserId] = useState(null);
   const currentUserIdRef = useRef(currentUserId);
-  
+
   // Update ref when currentUserId changes
   useEffect(() => {
     currentUserIdRef.current = currentUserId;
   }, [currentUserId]);
 
-  // --- Listen to Keyboard Events (MCP Context 7) ---
-  // Business Rule: Manually adjust input bar position when keyboard opens/closes
-  // This prevents the entire content from being pushed upward
+  // --- Fetch User ID from AsyncStorage (MCP Context 7) ---
   useEffect(() => {
-    const keyboardWillShowListener = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      (event) => {
-        setKeyboardHeight(event.endCoordinates.height);
+    const getUserIdFromStorage = async () => {
+      try {
+        const storedUserId = await AsyncStorage.getItem('userId');
+        
+        if (storedUserId) {
+          // Convert to number since sender.id comes as number from API
+          const userIdNumber = parseInt(storedUserId);
+          setCurrentUserId(userIdNumber);
+        }
+      } catch (error) {
+        console.error('Error reading userId from AsyncStorage:', error);
       }
-    );
-    
-    const keyboardWillHideListener = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      () => {
-        setKeyboardHeight(0);
-      }
-    );
-
-    return () => {
-      keyboardWillShowListener?.remove();
-      keyboardWillHideListener?.remove();
     };
+
+    getUserIdFromStorage();
   }, []);
 
-  // --- Console Log Conversation ID (MCP Context 7) ---
-  // Log conversation ID for debugging
-  useEffect(() => {
-    console.log('=== UserChatScreen Loaded ===');
-    console.log('Conversation ID:', conversationId);
-    console.log('User ID:', userId);
-    console.log('User Name:', userName);
-    console.log('Is Group Chat:', isGroupChat);
-    console.log('Project:', project);
-    console.log('Current User ID (for message comparison):', currentUserId);
-    console.log('Full conversation:', conversation);
-    console.log('Initial messages:', initialMessages);
-    console.log('=== End UserChatScreen Info ===');
-  }, []);
+  // --- Helper: Sort Messages by Timestamp (MCP Context 7) ---
+  // Business Rule: Sort messages newest-first for inverted FlatList
+  // When FlatList is inverted, newest-first data displays as oldest-first visually (like WhatsApp)
+  // This ensures correct order even when messages arrive out of sequence via Pusher
+  const sortMessagesByTime = (messages) => {
+    return messages.sort((a, b) => {
+      const timeA = new Date(a.createdAt).getTime();
+      const timeB = new Date(b.createdAt).getTime();
+      return timeB - timeA; // Newest first (descending order) - will be inverted visually
+    });
+  };
 
   // --- Fetch Messages from API (MCP Context 7) ---
   // Business Rule: Fetch messages for the conversation using conversationId
@@ -147,32 +140,17 @@ const UserChatScreen = ({ navigation, route }) => {
     setIsLoadingMessages(true);
     
     try {
-      console.log('=== Fetching Messages for Conversation ===');
-      console.log('Conversation ID:', conversationId);
-      
       const response = await getMessagesByConversationId(conversationId);
       
-      console.log('Messages received:', response);
-      console.log('Total messages:', response?.length || 0);
-      
       if (response && Array.isArray(response)) {
-        setMessages(response);
-        console.log('✅ Messages loaded successfully');
+        // Sort messages to ensure chronological order
+        const sortedMessages = sortMessagesByTime([...response]);
+        setMessages(sortedMessages);
       } else {
-        console.log('No messages in response');
         setMessages([]);
       }
     } catch (err) {
       console.error('Error fetching messages:', err);
-      
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to load messages. Please try again.',
-        visibilityTime: 3000,
-        position: 'top',
-      });
-      
       setMessages([]);
     } finally {
       setIsLoadingMessages(false);
@@ -185,15 +163,10 @@ const UserChatScreen = ({ navigation, route }) => {
     fetchMessages();
   }, [conversationId]);
 
-  // --- Removed separate sorting useEffect (MCP Context 7) ---
-  // Business Rule: Messages are now sorted at display time (in FlatList) instead of in state
-  // This prevents race conditions and timing issues when Pusher adds messages
-  // Previous approach: Sort in useEffect whenever messages.length changed → caused inconsistent display
-  // New approach: Sort when displaying → always shows messages in correct order
-
-  // --- Pusher Real-Time Listener for New Messages (MCP Context 7) ---
-  // Business Rule: Subscribe to conversation-specific channel to get real-time message updates
-  // Backend triggers: pusher.trigger(`conversation-${conversationId}`, 'new-message', messageData)
+  // --- Pusher Real-Time Listener (Fixed - MCP Context 7) ---
+  // Business Rule: Always ensure we're listening to the conversation channel
+  // For new conversations: subscribe and listen
+  // For existing conversations: use existing subscription or create new one
   useEffect(() => {
     if (!conversationId) {
       console.log('⚠️ No conversation ID, skipping Pusher');
@@ -201,269 +174,76 @@ const UserChatScreen = ({ navigation, route }) => {
     }
 
     const channelName = `conversation-${conversationId}`;
-    console.log('📡 Subscribing to Pusher:', channelName);
+    console.log('📡 [PUSHER] Setting up listener for:', channelName);
     
-    const channel = pusher.subscribe(channelName);
+    // Always try to get or create the channel
+    let channel = pusher.channel(channelName);
+    
+    if (!channel) {
+      console.log('🆕 [PUSHER] Channel not found, subscribing now');
+      channel = pusher.subscribe(channelName);
+    } else {
+      console.log('✅ [PUSHER] Using existing channel');
+    }
 
-    // Listen for new messages in this conversation
+    // Define message handler
     const handleNewMessage = (data) => {
-      console.log('💬 New message from Pusher:', data);
-      
+      console.log('📨 [PUSHER] New message event received');
       const newMessage = data.message || data;
-      
-      if (!newMessage) {
-        console.warn('⚠️ No message data');
+
+      // Basic validation
+      if (!newMessage || !newMessage.id) {
+        console.log('❌ [PUSHER] Invalid message - missing ID');
         return;
       }
 
-      // Check if message is from current user (avoid duplicates)
-      const messageSenderId = newMessage.sender?.id?.toString();
-      const isFromMe = messageSenderId === currentUserIdRef.current?.toString();
-      
-      console.log('🔍 Sender ID:', messageSenderId);
-      console.log('🔍 My ID:', currentUserIdRef.current);
-      console.log('🔍 Is from me?:', isFromMe);
-      
-      // Log file attachment info if present
-      if (newMessage.fileUrl) {
-        console.log('📎 File attached:');
-        console.log('   - URL:', newMessage.fileUrl);
-        console.log('   - Name:', newMessage.fileName);
-        console.log('   - Type:', newMessage.fileType);
-        console.log('   - Size:', newMessage.fileSize, 'MB');
-      }
-      
-      if (isFromMe) {
-        console.log('⏭️ Skipping my own message (already added locally)');
-        return;
-      }
+      console.log('📬 [PUSHER] Message details:', {
+        id: newMessage.id,
+        senderId: newMessage.sender?.id,
+        senderName: `${newMessage.sender?.first_name} ${newMessage.sender?.last_name}`.trim(),
+        content: newMessage.content ? `"${newMessage.content.substring(0, 30)}..."` : '(file only)',
+        hasFile: !!newMessage.fileUrl,
+      });
 
-      console.log('✅ Adding message from other user:', newMessage.content);
-
-      // --- Duplicate Detection Step (MCP Context 7) ---
-      // Business Rule: Check if message already exists before adding it
-      // This prevents duplicate messages from appearing when Pusher sends the same message twice
-      // (can happen due to connection issues, re-subscriptions, or race conditions)
-      setMessages(prev => {
-        // Check if message with this ID already exists in the array
-        const messageExists = prev.some(msg => msg.id?.toString() === newMessage.id?.toString());
+      // Add message to state
+      setMessages((prevMessages) => {
+        // Check if message already exists (by ID)
+        const exists = prevMessages.some(msg => msg.id === newMessage.id);
         
-        if (messageExists) {
-          console.log('⚠️ Message already exists, skipping duplicate:', newMessage.id);
-          return prev; // Don't add duplicate, return existing array
+        if (exists) {
+          console.log('⚠️ [PUSHER] Message already exists in chat - skipping (ID:', newMessage.id, ')');
+          return prevMessages;
         }
-        
-        console.log('➕ Adding new message to chat:', newMessage.id);
-        // Message doesn't exist, add it to the array
-        return [...prev, newMessage];
+
+        // Get current user ID from ref
+        const myUserId = currentUserIdRef.current;
+        const messageSenderId = newMessage.sender?.id;
+
+        // Only skip if we have a valid user ID AND it matches the sender
+        if (myUserId && messageSenderId && messageSenderId === myUserId) {
+          console.log('⏭️ [PUSHER] This is my own message - skipping (already shown via optimistic UI)');
+          return prevMessages;
+        }
+
+        // Add new message from other user and sort by timestamp
+        console.log('✅ [PUSHER] Adding message to chat from:', newMessage.sender?.first_name || 'Unknown');
+        const updatedMessages = [...prevMessages, newMessage];
+        return sortMessagesByTime(updatedMessages);
       });
     };
 
+    // Bind the listener
     channel.bind('new-message', handleNewMessage);
-    console.log('✅ Listening for messages');
+    console.log('✅ [PUSHER] Listening for new messages on:', channelName);
 
-    // Cleanup: Unsubscribe when component unmounts or conversationId changes
+    // Cleanup: Only unbind our listener, don't unsubscribe
+    // Let ChatScreen manage subscriptions
     return () => {
-      console.log('🔌 Unsubscribing from Pusher:', channelName);
+      console.log('🔌 [PUSHER] Unbinding listener from:', channelName);
       channel.unbind('new-message', handleNewMessage);
-      pusher.unsubscribe(channelName);
+      // Note: We do NOT unsubscribe - ChatScreen manages subscriptions
     };
   }, [conversationId]);
-
-  // --- Auto-scroll to Bottom (MCP Context 7) ---
-  // Scroll to latest message when new messages are added
-  useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    }
-  }, [messages]);
-
-  // --- Pick File Function (MCP Context 7) ---
-  // Business Rule: Allow users to attach files (images, PDFs, documents, etc.)
-  // Uses expo-document-picker to select files from device
-  const handlePickFile = async () => {
-    try {
-      console.log('📎 Opening file picker...');
-      
-      // Open document picker
-      // Allows all file types: images, PDFs, docs, spreadsheets, etc.
-      const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*', // All file types
-        copyToCacheDirectory: true,
-      });
-      
-      console.log('File picker result:', result);
-      
-      // Check if user selected a file (didn't cancel)
-      if (result.canceled) {
-        console.log('User canceled file picker');
-        return;
-      }
-      
-      // Get the selected file
-      const file = result.assets[0];
-      
-      if (!file) {
-        console.log('No file selected');
-        return;
-      }
-      
-      // Validate file size (max 10 MB)
-      // Business Rule: Prevent large files from being uploaded to save bandwidth
-      const maxSizeInBytes = 10 * 1024 * 1024; // 10 MB
-      if (file.size > maxSizeInBytes) {
-        Toast.show({
-          type: 'error',
-          text1: 'File Too Large',
-          text2: 'Please select a file smaller than 10 MB',
-          visibilityTime: 3000,
-          position: 'top',
-        });
-        return;
-      }
-      
-      console.log('✅ File selected:', file.name);
-      console.log('   - Size:', (file.size / (1024 * 1024)).toFixed(2), 'MB');
-      console.log('   - Type:', file.mimeType);
-      
-      // Store selected file in state
-      setSelectedFile(file);
-      
-      Toast.show({
-        type: 'success',
-        text1: 'File Selected',
-        text2: file.name,
-        visibilityTime: 2000,
-        position: 'top',
-      });
-      
-    } catch (error) {
-      console.error('Error picking file:', error);
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to pick file. Please try again.',
-        visibilityTime: 3000,
-        position: 'top',
-      });
-    }
-  };
-
-  // --- Remove Selected File (MCP Context 7) ---
-  // Allows user to cancel/remove the selected file before sending
-  const handleRemoveFile = () => {
-    console.log('🗑️ Removing selected file');
-    setSelectedFile(null);
-  };
-
-  // --- Send Message Function (MCP Context 7) ---
-  // Business Rule: Optimistic UI - Show message immediately, then wait for API confirmation
-  // Changed: Now supports sending messages with file attachments
-  const handleSendMessage = async () => {
-    // Validation: Must have either text or file
-    if (!inputText.trim() && !selectedFile) {
-      console.log('Empty message and no file, not sending');
-      return;
-    }
-
-    if (!conversationId) {
-      console.error('No conversation ID found');
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Conversation ID not found',
-        visibilityTime: 3000,
-        position: 'top',
-      });
-      return;
-    }
-
-    const messageText = inputText.trim();
-    const fileToSend = selectedFile;
-    
-    console.log('=== Sending Message ===');
-    console.log('Conversation ID:', conversationId);
-    console.log('Message content:', messageText);
-    console.log('File attached:', fileToSend ? fileToSend.name : 'None');
-
-    // Clear input immediately for better UX
-    setInputText('');
-    setSelectedFile(null);
-    Keyboard.dismiss();
-    setIsSendingMessage(true);
-
-    // --- Step 1: Create Optimistic Message (MCP Context 7) ---
-    // Business Rule: Show message immediately in chat before API responds
-    // This provides instant feedback to user (like WhatsApp/iMessage)
-    const optimisticMessage = {
-      id: `temp-${Date.now()}`, // Temporary ID (will be replaced with real ID from API)
-      content: messageText,
-      fileUrl: fileToSend ? fileToSend.uri : null, // Use file.uri directly (React Native DocumentPicker provides this)
-      fileName: fileToSend ? fileToSend.name : null,
-      fileType: fileToSend ? fileToSend.mimeType : null,
-      fileSize: fileToSend ? (fileToSend.size / (1024 * 1024)).toFixed(2) : null,
-      sender: {
-        id: currentUserId,
-        first_name: userInfo?.first_name,
-        last_name: userInfo?.last_name,
-      },
-      createdAt: new Date().toISOString(), // Current timestamp
-      status: 'sending', // Mark as sending (can be used to show loading indicator)
-    };
-
-    // Add optimistic message to chat immediately
-    console.log('✨ Adding optimistic message to chat');
-    setMessages(prev => [...prev, optimisticMessage]);
-
-    try {
-      // --- Step 2: Call API to Send Message (MCP Context 7) ---
-      // API: POST /chat/messages
-      // Body (with file): FormData { conversationId, content, file }
-      // Body (without file): JSON { conversationId, content }
-      const response = await sendMessage(conversationId, messageText, fileToSend);
-      
-      console.log('✅ Message sent successfully:', response);
-      
-      // --- Step 3: Replace Optimistic Message with Real API Response (MCP Context 7) ---
-      // Business Rule: Remove temporary message, add real message from API with actual ID
-      if (response) {
-        setMessages(prev => {
-          // Remove the optimistic message (with temp ID)
-          const filtered = prev.filter(msg => msg.id !== optimisticMessage.id);
-          // Add the real message from API
-          return [...filtered, response];
-        });
-        console.log('✅ Optimistic message replaced with real message from API');
-      }
-      
-    } catch (err) {
-      console.error('❌ Error sending message:', err);
-      
-      // --- Step 4: Remove Optimistic Message on Error (MCP Context 7) ---
-      // Business Rule: If API fails, remove the optimistic message from chat
-      setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
-      console.log('🗑️ Optimistic message removed due to API error');
-      
-      // Show error toast
-      Toast.show({
-        type: 'error',
-        text1: 'Failed to Send',
-        text2: 'Could not send message. Please try again.',
-        visibilityTime: 3000,
-        position: 'top',
-      });
-      
-      // Restore the message text and file so user can retry
-      setInputText(messageText);
-      setSelectedFile(fileToSend);
-      
-    } finally {
-      setIsSendingMessage(false);
-    }
-  };
-
 
   // --- Helper: Get File Icon Based on File Type (MCP Context 7) ---
   // Returns appropriate icon name for each file type
@@ -520,6 +300,44 @@ const UserChatScreen = ({ navigation, route }) => {
     setSelectedImageUrl(null);
   };
 
+  // --- Helper: Download and Share Image (MCP Context 7) ---
+  // Downloads image to device and opens share dialog (WhatsApp-style)
+  // Business Rule: Allow users to download and share images from chat
+  const handleDownloadAndShareImage = async (imageUrl, fileName) => {
+    try {
+      console.log('📥 Downloading image:', fileName || 'image');
+
+      // Check if sharing is available on device
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (!isAvailable) {
+        alert('Sharing not available on this device');
+        return;
+      }
+
+      // Create file path in cache directory
+      const imageName = fileName || `image-${Date.now()}.jpg`;
+      const fileUri = `${FileSystem.cacheDirectory}${imageName}`;
+      
+      // Download the image from URL
+      const downloadResult = await FileSystem.downloadAsync(imageUrl, fileUri);
+      
+      console.log('✅ Image downloaded to:', downloadResult.uri);
+
+      // Share the downloaded image
+      await Sharing.shareAsync(downloadResult.uri, {
+        mimeType: 'image/jpeg',
+        dialogTitle: 'Save Image',
+        UTI: 'public.image',
+      });
+      
+      console.log('✅ Image shared successfully');
+
+    } catch (error) {
+      console.error('❌ Error downloading/sharing image:', error);
+      alert('Failed to download image. Please try again.');
+    }
+  };
+
   // --- Helper: Download and Share File (MCP Context 7) ---
   // Downloads file to device and opens share dialog using expo-sharing
   // Business Rule: Allow users to download and share documents from chat
@@ -530,18 +348,11 @@ const UserChatScreen = ({ navigation, route }) => {
       // Check if sharing is available on device
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
-        Toast.show({
-          type: 'error',
-          text1: 'Sharing Not Available',
-          text2: 'Your device does not support file sharing',
-          visibilityTime: 3000,
-          position: 'top',
-        });
+        alert('Sharing not available on this device');
         return;
       }
 
       // Create file path in cache directory
-      // Business Rule: Download file to device cache for temporary storage
       const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
       
       // Download the file from URL
@@ -550,7 +361,6 @@ const UserChatScreen = ({ navigation, route }) => {
       console.log('✅ File downloaded to:', downloadResult.uri);
 
       // Share the downloaded file
-      // This opens the native share dialog (WhatsApp, Email, Save to Files, etc.)
       await Sharing.shareAsync(downloadResult.uri, {
         mimeType: 'application/octet-stream',
         dialogTitle: fileName,
@@ -561,13 +371,7 @@ const UserChatScreen = ({ navigation, route }) => {
 
     } catch (error) {
       console.error('❌ Error downloading/sharing file:', error);
-      Toast.show({
-        type: 'error',
-        text1: 'Download Failed',
-        text2: 'Could not download file. Please try again.',
-        visibilityTime: 3000,
-        position: 'top',
-      });
+      alert('Failed to download file. Please try again.');
     }
   };
 
@@ -581,241 +385,199 @@ const UserChatScreen = ({ navigation, route }) => {
       if (canOpen) {
         await Linking.openURL(fileUrl);
       } else {
-        Toast.show({
-          type: 'error',
-          text1: 'Cannot Open File',
-          text2: 'Unable to open this file type',
-          visibilityTime: 3000,
-          position: 'top',
-        });
+        alert('Cannot open this file type');
       }
     } catch (error) {
       console.error('Error opening file:', error);
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to open file',
-        visibilityTime: 3000,
-        position: 'top',
-      });
+      alert('Failed to open file');
     }
   };
 
-  // --- Message Item Component (MCP Context 7) ---
-  // Individual message bubble with iOS Messages style
-  // API Structure: { id, sender: { id, first_name, last_name }, content, fileUrl, fileName, fileType, fileSize, createdAt, status }
-  const renderMessage = ({ item, index }) => {
-    // Determine if message is from current user by comparing sender ID
-    const isMe = item.sender?.id?.toString() === currentUserId?.toString();
-    
-    // Business Rule: Show time with every message separately
-    const showTime = true; // Always show time for each message
-
-    // Format timestamp to 12-hour format with AM/PM (MCP Context 7)
-    // Convert UTC time from API (saved by @CreateDateColumn) to local timezone
-    const formatTime = (utcString) => {
-      if (!utcString) return '';
-      
-      // Parse UTC string and convert to local timezone
-      // Backend saves as UTC with @CreateDateColumn(), frontend displays in user's local time
-      const date = new Date(utcString);
-      
-      // Get local time components
-      const hours = date.getHours();
-      const minutes = date.getMinutes();
-      
-      // Convert to 12-hour format
-      const hour12 = hours % 12 || 12; // Convert 0 to 12 for midnight
-      const ampm = hours >= 12 ? 'PM' : 'AM';
-      const minutesStr = minutes.toString().padStart(2, '0');
-      
-      const formattedTime = `${hour12}:${minutesStr} ${ampm}`;
-      
-      console.log('UTC string:', utcString, '→ Local time:', formattedTime);
-      
-      return formattedTime;
-    };
-
-    // Check file type (MCP Context 7)
-    // Business Rule: Display images inline, show document cards for PDFs/docs/archives
-    const hasImage = item.fileUrl && item.fileType?.startsWith('image/');
-    const hasDocument = item.fileUrl && !hasImage;
-    const hasFile = hasImage || hasDocument;
-
-    // --- Get Sender Info for Display (MCP Context 7) ---
-    // Business Rule: Show sender's name and avatar ONLY in group chats for messages from other users
-    const senderFirstName = item.sender?.first_name || '';
-    const senderLastName = item.sender?.last_name || '';
-    const senderFullName = `${senderFirstName} ${senderLastName}`.trim() || 'Unknown';
-    const showSenderInfo = !isMe && isGroupChat; // Show avatar and name only in group chats
-
-    return (
-      <View className={`mb-3 px-5 ${isMe ? 'items-end' : 'items-start'}`}>
-        {/* WhatsApp-Style Message Container with Avatar (MCP Context 7) */}
-        {/* Business Rule: Messages from others show avatar on left side */}
-        {/* Dynamic width: Short messages = narrow bubble, Long messages = wider bubble */}
-        <View className={`flex-row ${isMe ? 'flex-row-reverse' : 'flex-row'} items-end`}>
-          {/* Avatar Circle (Only for messages from others) */}
-          {showSenderInfo && (
-            <View 
-              className="w-10 h-10 rounded-full items-center justify-center mr-2 mb-1"
-              style={{ backgroundColor: getAvatarColor(senderFullName) }}
-            >
-              <Text className="text-sm font-bold text-white">
-                {getInitials(senderFirstName, senderLastName)}
-              </Text>
-            </View>
-          )}
-
-          {/* Message Content Container - Dynamic width like WhatsApp */}
-          <View className={`${isMe ? 'mr-2' : ''}`} style={{ maxWidth: '75%' }}>
-            {/* Business Rule: Files (images/documents) render without bubble background */}
-            {/* Only text-only messages get the bubble styling */}
-            
-            {/* Display image if fileUrl exists and it's an image type */}
-            {/* Business Rule: Images are tappable to open in full-screen view */}
-            {hasImage && (
-              <TouchableOpacity 
-                onPress={() => handleOpenImage(item.fileUrl)}
-                activeOpacity={0.9}
-                className="mb-1"
-              >
-                <Image
-                  source={{ uri: item.fileUrl }}
-                  style={{
-                    width: 200,
-                    height: 200,
-                    borderRadius: 12,
-                  }}
-                  resizeMode="cover"
-                />
-              </TouchableOpacity>
-            )}
-            
-            {/* Display document card for PDFs, Word, Excel, etc. */}
-            {/* Business Rule: Tap card to open file, tap download icon to share/download */}
-            {hasDocument && (
-              <TouchableOpacity
-                onPress={() => handleOpenFile(item.fileUrl, item.fileName)}
-                activeOpacity={0.7}
-                className={`flex-row items-center p-3 rounded-lg mb-1 shadow-sm ${
-                  isMe 
-                    ? 'bg-white shadow-gray-300/50' 
-                    : 'bg-white shadow-gray-300/50'
-                }`}
-              >
-                {/* File Icon */}
-                <View className="w-12 h-12 bg-gray-100 rounded-lg items-center justify-center mr-3">
-                  <MaterialIcons
-                    name={getFileIcon(item.fileType)}
-                    size={24}
-                    color="#000000"
-                  />
-                </View>
-                
-                {/* File Info */}
-                <View className="flex-1">
-                  <Text 
-                    className="text-sm font-semibold text-gray-900"
-                    numberOfLines={1}
-                  >
-                    {item.fileName || 'Document'}
-                  </Text>
-                  <Text className="text-xs mt-1 text-gray-500">
-                    {item.fileSize ? `${item.fileSize} MB` : 'File'}
-                  </Text>
-                </View>
-                
-                {/* Download/Share Icon */}
-                {/* Business Rule: Download file and open share dialog (Save to Files, WhatsApp, etc.) */}
-                <TouchableOpacity
-                  onPress={(e) => {
-                    e.stopPropagation(); // Prevent card's onPress from firing
-                    handleDownloadAndShareFile(item.fileUrl, item.fileName);
-                  }}
-                  activeOpacity={0.6}
-                  className="p-2"
-                >
-                  <MaterialIcons
-                    name="file-download"
-                    size={20}
-                    color="#000000"
-                  />
-                </TouchableOpacity>
-              </TouchableOpacity>
-            )}
-            
-            {/* Display text content in bubble (only if text exists) */}
-            {/* Business Rule: Dynamic width - bubble wraps content, min width for short messages */}
-            {item.content && (
-              <View 
-                className={`px-4 py-3 rounded-2xl shadow-sm ${
-                  hasFile ? 'mt-1' : ''
-                } ${
-                  isMe 
-                    ? 'bg-blue-500 rounded-br-sm shadow-blue-500/30' 
-                    : 'bg-white rounded-bl-sm shadow-gray-500/20'
-                }`}
-                style={{ alignSelf: isMe ? 'flex-end' : 'flex-start' }}
-              >
-                {/* Sender Name (WhatsApp Style - inside bubble for messages from others) */}
-                {showSenderInfo && (
-                  <Text className="text-xs font-semibold text-gray-900 mb-1">
-                    {senderFullName}
-                  </Text>
-                )}
-                
-                <Text className={`text-base leading-6 ${
-                  isMe ? 'text-white' : 'text-gray-900'
-                }`}>
-                  {item.content}
-                </Text>
-              </View>
-            )}
-            
-            {showTime && (
-              <Text className={`text-xs text-gray-500 mt-1 ${
-                isMe ? 'text-right mr-2' : 'text-left ml-2'
-              }`}>
-                {formatTime(item.createdAt)}
-              </Text>
-            )}
-          </View>
-        </View>
-      </View>
-    );
+  // --- Helper: Show Attachment Options (MCP Context 7) ---
+  // Shows menu with options to pick image or document (WhatsApp-style)
+  const handleShowAttachmentOptions = () => {
+    setAttachmentMenuVisible(true);
   };
 
-  // --- Typing Indicator Component (MCP Context 7) ---
-  // Shows when the other person is typing
-  const renderTypingIndicator = () => (
-    <View className="mb-2 px-5 items-start">
-      <View className="bg-white/95 px-4 py-2.5 rounded-2xl rounded-bl-1 shadow-sm shadow-gray-500/20">
-        <View className="flex-row items-center">
-          <View className="w-1.5 h-1.5 rounded-full bg-gray-500 mx-0.5 opacity-40" />
-          <View className="w-1.5 h-1.5 rounded-full bg-gray-500 mx-0.5 opacity-70" />
-          <View className="w-1.5 h-1.5 rounded-full bg-gray-500 mx-0.5 opacity-100" />
-        </View>
-      </View>
-    </View>
-  );
+  // --- Helper: Pick Image from Gallery (MCP Context 7) ---
+  // Business Rule: Allow users to select images from device gallery
+  const handlePickImage = async () => {
+    try {
+      console.log('📸 Opening image picker...');
+      setAttachmentMenuVisible(false);
+      
+      // Request permission to access media library
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (!permissionResult.granted) {
+        Alert.alert('Permission Required', 'Please allow access to your photos to send images.');
+        return;
+      }
 
-  // --- Sort Messages for Display (MCP Context 7) ---
-  // Business Rule: Sort messages by timestamp (oldest to newest) when displaying
-  // This ensures messages always appear in correct chronological order
-  // Sorting at display time (instead of in state) prevents race conditions with Pusher
-  const sortedMessages = [...messages].sort((a, b) => {
-    const timeA = new Date(a.createdAt).getTime();
-    const timeB = new Date(b.createdAt).getTime();
-    return timeA - timeB; // Oldest first (top), newest last (bottom)
-  });
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+        base64: false,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const image = result.assets[0];
+        
+        // Prepare file object for upload
+        const fileToUpload = {
+          uri: image.uri,
+          name: `image_${Date.now()}.jpg`,
+          mimeType: 'image/jpeg',
+        };
+
+        console.log('✅ Image selected:', fileToUpload.name);
+        setSelectedFile(fileToUpload);
+      }
+    } catch (error) {
+      console.error('❌ Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
+    }
+  };
+
+  // --- Helper: Pick Document (MCP Context 7) ---
+  // Business Rule: Allow users to select documents (PDF, Word, Excel, etc.)
+  const handlePickDocument = async () => {
+    try {
+      console.log('📄 Opening document picker...');
+      setAttachmentMenuVisible(false);
+      
+      // Launch document picker
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*', // All file types
+        copyToCacheDirectory: true,
+      });
+
+      console.log('Document picker result:', result);
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const document = result.assets[0];
+        
+        // Prepare file object for upload
+        const fileToUpload = {
+          uri: document.uri,
+          name: document.name,
+          mimeType: document.mimeType || 'application/octet-stream',
+        };
+
+        console.log('✅ Document selected:', fileToUpload.name);
+        setSelectedFile(fileToUpload);
+      }
+    } catch (error) {
+      console.error('❌ Error picking document:', error);
+      Alert.alert('Error', 'Failed to pick document. Please try again.');
+    }
+  };
+
+  // --- Helper: Remove Selected File (MCP Context 7) ---
+  // Removes the selected file before sending
+  const handleRemoveFile = () => {
+    console.log('🗑️ Removing selected file');
+    setSelectedFile(null);
+  };
+
+  // --- Handle Send Message (MCP Context 7) ---
+  // Business Rule: Send message to API with optimistic UI update
+  // Supports text messages, file attachments, or both (WhatsApp-style)
+  // Optimistic UI: Show message immediately, then wait for API confirmation
+  const handleSendMessage = async () => {
+    // Validation: Must have text content OR file attachment
+    if (!inputText.trim() && !selectedFile) {
+      console.log('Empty message and no file, not sending');
+      return;
+    }
+
+    // Validation: Must have conversation ID
+    if (!conversationId) {
+      console.error('No conversation ID found');
+      alert('Cannot send message: Conversation ID not found');
+      return;
+    }
+
+    const messageText = inputText.trim();
+    const fileToSend = selectedFile;
+    
+    console.log('=== Sending Message ===');
+    console.log('Conversation ID:', conversationId);
+    console.log('Message content:', messageText || '(no text)');
+    console.log('File:', fileToSend ? fileToSend.name : '(no file)');
+
+    // Clear input and file immediately for better UX
+    setInputText('');
+    setSelectedFile(null);
+    Keyboard.dismiss();
+    setIsSendingMessage(true);
+
+    // --- Step 1: Create Optimistic Message (MCP Context 7) ---
+    // Business Rule: Show message immediately in chat before API responds
+    // This provides instant feedback to user (like WhatsApp/iMessage)
+    const optimisticMessage = {
+      id: `temp-${Date.now()}`, // Temporary ID (will be replaced with real ID from API)
+      content: messageText || '', // Empty string if only sending file
+      fileUrl: fileToSend ? fileToSend.uri : null, // Show local URI temporarily
+      fileName: fileToSend ? fileToSend.name : null,
+      fileType: fileToSend ? fileToSend.mimeType : null,
+      fileSize: null, // Size not available locally
+      sender: {
+        id: currentUserId,
+        first_name: userInfo?.first_name || user?.first_name,
+        last_name: userInfo?.last_name || user?.last_name,
+      },
+      createdAt: new Date().toISOString(), // Current timestamp
+      status: 'sending', // Mark as sending (can be used to show loading indicator)
+    };
+
+    // Add optimistic message to chat immediately (sorted by timestamp)
+    console.log('✨ Adding optimistic message to chat');
+    setMessages(prev => sortMessagesByTime([...prev, optimisticMessage]));
+
+    try {
+      // --- Step 2: Call API to Send Message (MCP Context 7) ---
+      // API: POST /chat/messages
+      // Body: FormData (if file attached) or JSON (text only)
+      const response = await sendMessage(conversationId, messageText, fileToSend);
+      
+      console.log('✅ Message sent successfully:', response);
+      
+      // --- Step 3: Replace Optimistic Message with Real API Response (MCP Context 7) ---
+      // Business Rule: Remove temporary message, add real message from API with actual ID, then sort
+      if (response) {
+        setMessages(prev => {
+          // Remove the optimistic message (with temp ID)
+          const filtered = prev.filter(msg => msg.id !== optimisticMessage.id);
+          // Add the real message from API and sort by timestamp
+          const updatedMessages = [...filtered, response];
+          return sortMessagesByTime(updatedMessages);
+        });
+        console.log('✅ Optimistic message replaced with real message from API');
+      }
+      
+    } catch (err) {
+      console.error('❌ Error sending message:', err);
+      
+      // --- Step 4: Remove Optimistic Message on Error (MCP Context 7) ---
+      // Business Rule: If API fails, remove the optimistic message to avoid confusion
+      setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
+      
+      // Show error alert
+      alert('Failed to send message. Please try again.');
+      
+      // Restore the text to input box so user can retry
+      setInputText(messageText);
+      
+    } finally {
+      setIsSendingMessage(false);
+    }
+  };
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-100" edges={['top', 'left', 'right']}>
-      {/* Messages List - Full Screen (MCP Context 7) */}
-      {/* WhatsApp-style dull background for better message visibility */}
-      {/* Business Rule: Messages take full height, input bar overlays at bottom */}
-      
+    <SafeAreaView className="flex-1 bg-gray-100">
       {/* Loading State (MCP Context 7) */}
       {isLoadingMessages ? (
         <View className="flex-1 items-center justify-center">
@@ -823,95 +585,290 @@ const UserChatScreen = ({ navigation, route }) => {
           <Text className="text-base text-gray-500 mt-4">Loading messages...</Text>
         </View>
       ) : (
+        /* 📨 Messages List */
         <FlatList
           ref={flatListRef}
-          data={sortedMessages}
-          renderItem={renderMessage}
-          keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+          data={messages}
+          inverted={true}
+          renderItem={({ item }) => {
+            // --- Message Ownership Logic (MCP Context 7) ---
+            // Business Rule: Compare sender.id with current logged-in user's id
+            // Both are numbers: sender.id (number from API) and currentUserId (converted to number)
+            const isMyMessage = item.sender?.id === currentUserId;
+            
+            // Check file type (MCP Context 7)
+            // Business Rule: Display images inline, show document cards for PDFs/docs/archives
+            // Support both camelCase and snake_case field names from API
+            const fileUrl = item.fileUrl || item.file_url;
+            const fileType = item.fileType || item.file_type;
+            
+            const hasImage = fileUrl && fileType?.startsWith('image/');
+            const hasDocument = fileUrl && !hasImage;
+            const hasFile = hasImage || hasDocument;
+            
+            // Format timestamp to 12-hour format with AM/PM (MCP Context 7)
+            // Convert UTC time from API to local timezone
+            const formatTime = (utcString) => {
+              if (!utcString) return '';
+              
+              const date = new Date(utcString);
+              const hours = date.getHours();
+              const minutes = date.getMinutes();
+              
+              // Convert to 12-hour format
+              const hour12 = hours % 12 || 12;
+              const ampm = hours >= 12 ? 'PM' : 'AM';
+              const minutesStr = minutes.toString().padStart(2, '0');
+              
+              return `${hour12}:${minutesStr} ${ampm}`;
+            };
+
+            // --- Get Sender Info for Display (MCP Context 7) ---
+            // Business Rule: Show sender's name and avatar ONLY in group chats for messages from other users
+            const senderFirstName = item.sender?.first_name || '';
+            const senderLastName = item.sender?.last_name || '';
+            const senderFullName = `${senderFirstName} ${senderLastName}`.trim() || 'Unknown';
+            const showSenderInfo = !isMyMessage && isGroupChat; // Show avatar and name only in group chats
+            
+            return (
+              <View
+                className={`mb-3 px-5 ${
+                  isMyMessage ? "items-end" : "items-start"
+                }`}
+              >
+                {/* WhatsApp-Style Message Container with Avatar (MCP Context 7) */}
+                {/* Business Rule: Messages from others in group chats show avatar on left side */}
+                <View className={`flex-row ${isMyMessage ? 'flex-row-reverse' : 'flex-row'} items-end`}>
+                  {/* Avatar Circle (Only for group chat messages from others) */}
+                  {showSenderInfo && (
+                    <View 
+                      className="w-10 h-10 rounded-full items-center justify-center mr-2 mb-1"
+                      style={{ backgroundColor: getAvatarColor(senderFullName) }}
+                    >
+                      <Text className="text-sm font-bold text-white">
+                        {getInitials(senderFirstName, senderLastName)}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Message Content Container - Dynamic width like WhatsApp */}
+                  {/* Business Rule: Documents get more width (90%), images and text get standard width (75%) */}
+                  <View className={`${isMyMessage ? 'mr-2' : ''}`} style={{ 
+                    maxWidth: hasDocument ? '90%' : '75%', // Increased from 85% to 90% for documents
+                    minWidth: hasDocument ? '70%' : 'auto' // Ensure minimum width for documents
+                  }}>
+                  {/* Display image if fileUrl exists and it's an image type */}
+                  {/* Business Rule: Images are tappable to open in full-screen view */}
+                  {/* WhatsApp-style: Download icon overlay on image */}
+                  {hasImage && (
+                    <View className="mb-1 relative">
+                      <TouchableOpacity 
+                        onPress={() => handleOpenImage(fileUrl)}
+                        activeOpacity={0.9}
+                      >
+                        <Image
+                          source={{ uri: fileUrl }}
+                          style={{
+                            width: 200,
+                            height: 200,
+                            borderRadius: 12,
+                          }}
+                          resizeMode="cover"
+                        />
+                      </TouchableOpacity>
+                      
+                      {/* Download Icon Overlay (WhatsApp-style) */}
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleDownloadAndShareImage(fileUrl, item.fileName || item.file_name);
+                        }}
+                        activeOpacity={0.7}
+                        className="absolute bottom-2 right-2 bg-black/60 rounded-full p-2"
+                        style={{ elevation: 3 }}
+                      >
+                        <MaterialIcons
+                          name="file-download"
+                          size={20}
+                          color="#FFFFFF"
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  
+                  {/* Display document card for PDFs, Word, Excel, etc. */}
+                  {/* Business Rule: Tap card to open file, tap download icon to share/download */}
+                  {hasDocument && (() => {
+  // --- Extract File Information (MCP Context 7) ---
+  // Try different possible field names (API might use camelCase or snake_case)
+  const displayFileName = item.fileName || 
+                         item.file_name || 
+                         item.name || 
+                         fileUrl?.split('/').pop()?.split('?')[0] || 
+                         'Document';
+  
+  const displayFileType = item.fileType || item.file_type;
+  const displayFileSize = item.fileSize || item.file_size;
+  
+  console.log('📄 FILE CARD RENDER - Name:', displayFileName);
+  
+  return (
+    <TouchableOpacity
+      onPress={() => handleOpenFile(fileUrl, displayFileName)}
+      activeOpacity={0.7}
+      className="flex-row items-center p-3 rounded-lg mb-1 bg-white shadow-sm shadow-gray-300/50"
+      style={{ 
+        minWidth: '100%', // Force full width
+        alignSelf: 'stretch', // Make it stretch to available space
+      }}
+    >
+      {/* File Icon */}
+      <View className="w-12 h-12 bg-gray-100 rounded-lg items-center justify-center mr-3 flex-shrink-0">
+        <MaterialIcons
+          name={getFileIcon(displayFileType)}
+          size={24}
+          color="#000000"
+        />
+      </View>
+      
+      {/* File Info - FIXED: Use proper React Native styles */}
+      <View 
+        className="flex-1 mr-3"
+        style={{ 
+          flex: 1,
+          minWidth: 0, // This is the React Native equivalent of min-w-0
+        }}
+      >
+        <Text 
+          className="text-sm font-semibold text-black"
+          numberOfLines={2}
+          ellipsizeMode="middle"
+        >
+          {displayFileName || "Test File Name - This Should Show"}
+        </Text>
+        <Text className="text-xs mt-1 text-gray-600">
+          {displayFileSize ? `${displayFileSize} MB` : 'File'}
+        </Text>
+      </View>
+      
+      {/* Download/Share Icon */}
+      <TouchableOpacity
+        onPress={(e) => {
+          e.stopPropagation();
+          handleDownloadAndShareFile(fileUrl, displayFileName);
+        }}
+        activeOpacity={0.6}
+        className="p-2 flex-shrink-0"
+      >
+        <MaterialIcons
+          name="file-download"
+          size={20}
+          color="#000000"
+        />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+})()}
+                  
+                  {/* Display text content in bubble (only if text exists) */}
+                  {/* WhatsApp-style bubble with dynamic rounded corners */}
+                  {item.content && (
+                    <View
+                      className={`px-4 py-3 rounded-2xl shadow-sm ${
+                        hasFile ? 'mt-1' : ''
+                      } ${
+                        isMyMessage 
+                          ? 'bg-blue-500 rounded-br-sm shadow-blue-500/30' 
+                          : 'bg-white rounded-bl-sm shadow-gray-500/20'
+                      }`}
+                      style={{ alignSelf: isMyMessage ? 'flex-end' : 'flex-start' }}
+                    >
+                      {/* Show sender name ONLY in group chats for received messages (WhatsApp Style - inside bubble) */}
+                      {/* Business Rule: Individual chats don't need sender names */}
+                      {showSenderInfo && (
+                        <Text className="text-xs font-semibold text-gray-900 mb-1">
+                          {senderFullName}
+                        </Text>
+                      )}
+                      
+                      <Text
+                        className={`text-base leading-6 ${
+                          isMyMessage ? "text-white" : "text-gray-900"
+                        }`}
+                      >
+                        {item.content}
+                      </Text>
+                    </View>
+                  )}
+                  
+                  {/* Message Time - Display below every message */}
+                  <Text className={`text-xs text-gray-500 mt-1 ${
+                    isMyMessage ? 'text-right mr-2' : 'text-left ml-2'
+                  }`}>
+                    {formatTime(item.createdAt)}
+                  </Text>
+                </View>
+                </View>
+              </View>
+            );
+          }}
+          keyExtractor={(item) =>
+            item.id?.toString() || Math.random().toString()
+          }
           className="flex-1"
-          contentContainerStyle={{ 
-            paddingVertical: 16, 
-            paddingHorizontal: 8, 
-            paddingBottom: 90, // Extra padding at bottom so last message isn't hidden by input bar
+          contentContainerStyle={{
+            paddingTop: 90 + (insets.bottom || 0), // For inverted list, paddingTop = visual bottom padding (clears input bar + safe area)
+            paddingBottom: 16, // For inverted list, paddingBottom = visual top padding
+            paddingHorizontal: 8,
             flexGrow: 1
           }}
           showsVerticalScrollIndicator={false}
-          ListFooterComponent={isTyping ? renderTypingIndicator : null}
-          inverted={false}
-          maintainVisibleContentPosition={{
-            minIndexForVisible: 0,
-            autoscrollToTopThreshold: 10,
-          }}
           keyboardShouldPersistTaps="handled"
         />
       )}
 
-      {/* Input Bar at Bottom - Moves with Keyboard (MCP Context 7) */}
-      {/* Business Rule: Input bar appears on top of keyboard (like WhatsApp/iMessage) */}
-      {/* Messages don't get pushed - only input bar moves up when keyboard opens */}
+      {/* 🧭 Input Bar */}
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{
-          position: 'absolute',
+          position: "absolute",
           bottom: 0,
           left: 0,
           right: 0,
         }}
       >
-        <View className="bg-white border-t border-gray-200 px-4 py-3">
-          {/* File Preview (MCP Context 7) */}
-          {/* Shows when user has selected a file but hasn't sent it yet */}
+        <View 
+          className="bg-white border-t border-gray-200 px-4 py-3"
+          style={{ paddingBottom: insets.bottom || 0 }}
+        >
+          {/* File Preview (shown when file is selected) */}
           {selectedFile && (
-            <View className="mb-2 bg-gray-100 rounded-lg p-3 flex-row items-center">
-              {/* File Icon */}
-              <View className="w-10 h-10 bg-gray-100 rounded-lg items-center justify-center mr-3">
-                <MaterialIcons
-                  name={getFileIcon(selectedFile.mimeType)}
-                  size={20}
-                  color="#000000"
-                />
-              </View>
-              
-              {/* File Info */}
-              <View className="flex-1">
-                <Text className="text-sm font-semibold text-gray-900" numberOfLines={1}>
-                  {selectedFile.name}
-                </Text>
-                <Text className="text-xs text-gray-500 mt-0.5">
-                  {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
-                </Text>
-              </View>
-              
-              {/* Remove File Button */}
-              <TouchableOpacity
-                onPress={handleRemoveFile}
-                className="w-8 h-8 rounded-full bg-gray-200 items-center justify-center"
-                activeOpacity={0.7}
-              >
-                <Ionicons name="close" size={16} color="#6B7280" />
+            <View className="mb-2 flex-row items-center bg-gray-100 rounded-lg p-3">
+              <MaterialIcons
+                name={selectedFile.mimeType?.startsWith('image/') ? 'image' : 'insert-drive-file'}
+                size={24}
+                color="#000000"
+              />
+              <Text className="flex-1 ml-3 text-sm font-medium text-gray-900" numberOfLines={1}>
+                {selectedFile.name}
+              </Text>
+              <TouchableOpacity onPress={handleRemoveFile} className="p-1">
+                <Ionicons name="close-circle" size={24} color="#EF4444" />
               </TouchableOpacity>
             </View>
           )}
           
-          {/* Message Input Container */}
           <View className="flex-row items-center bg-gray-100 rounded-full px-4 py-2">
-            {/* Plus Icon - File Attachment Button (MCP Context 7) */}
-            {/* Business Rule: Allows users to attach files before sending message */}
+            {/* Plus Icon Button (WhatsApp-style) */}
             <TouchableOpacity
-              onPress={handlePickFile}
+              onPress={handleShowAttachmentOptions}
               disabled={isSendingMessage}
               className="mr-2"
               activeOpacity={0.7}
             >
-              <Ionicons
-                name="add-circle"
-                size={28}
-                color={isSendingMessage ? '#D1D5DB' : '#000000'}
-              />
+              <Ionicons name="add-circle" size={28} color="#000000" />
             </TouchableOpacity>
 
-            {/* Text Input */}
             <TextInput
               className="flex-1 text-base text-gray-900 max-h-24"
               placeholder="Type a message..."
@@ -926,31 +883,75 @@ const UserChatScreen = ({ navigation, route }) => {
               editable={!isSendingMessage}
             />
 
-            {/* Send Button */}
             <TouchableOpacity
               onPress={handleSendMessage}
               disabled={(!inputText.trim() && !selectedFile) || isSendingMessage}
               className={`ml-3 w-9 h-9 rounded-full items-center justify-center ${
-                (inputText.trim() || selectedFile) && !isSendingMessage ? 'bg-black' : 'bg-gray-300'
+                (inputText.trim() || selectedFile) && !isSendingMessage ? "bg-black" : "bg-gray-300"
               }`}
               activeOpacity={0.7}
             >
               {isSendingMessage ? (
                 <ActivityIndicator color="white" size="small" />
               ) : (
-                <Ionicons
-                  name="send"
-                  size={18}
-                  color="white"
-                />
+                <Ionicons name="send" size={18} color="white" />
               )}
             </TouchableOpacity>
           </View>
         </View>
       </KeyboardAvoidingView>
 
+      {/* Attachment Options Modal (WhatsApp-style) */}
+      <Modal
+        visible={attachmentMenuVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setAttachmentMenuVisible(false)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setAttachmentMenuVisible(false)}
+          className="flex-1 bg-black/50 justify-end"
+        >
+          <View className="bg-white rounded-t-3xl p-6">
+            <Text className="text-lg font-bold text-gray-900 mb-4">Send Attachment</Text>
+            
+            {/* Image Option */}
+            <TouchableOpacity
+              onPress={handlePickImage}
+              className="flex-row items-center py-4 border-b border-gray-200"
+              activeOpacity={0.7}
+            >
+              <View className="w-12 h-12 bg-blue-100 rounded-full items-center justify-center mr-4">
+                <Ionicons name="image" size={24} color="#3B82F6" />
+              </View>
+              <View>
+                <Text className="text-base font-semibold text-gray-900">Photo & Video</Text>
+                <Text className="text-sm text-gray-500">Send images from gallery</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Document Option */}
+            <TouchableOpacity
+              onPress={handlePickDocument}
+              className="flex-row items-center py-4"
+              activeOpacity={0.7}
+            >
+              <View className="w-12 h-12 bg-purple-100 rounded-full items-center justify-center mr-4">
+                <MaterialIcons name="insert-drive-file" size={24} color="#8B5CF6" />
+              </View>
+              <View>
+                <Text className="text-base font-semibold text-gray-900">Document</Text>
+                <Text className="text-sm text-gray-500">Send PDF, Word, Excel, etc.</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Full-Screen Image Viewer Modal (MCP Context 7) */}
       {/* Business Rule: Allow users to view images in full screen with zoom capability */}
+      {/* WhatsApp-style: Download button in full-screen viewer */}
       <Modal
         visible={imageViewerVisible}
         transparent={true}
@@ -965,6 +966,17 @@ const UserChatScreen = ({ navigation, route }) => {
             activeOpacity={0.8}
           >
             <Ionicons name="close" size={30} color="#FFFFFF" />
+          </TouchableOpacity>
+
+          {/* Download Button (WhatsApp-style) */}
+          <TouchableOpacity
+            onPress={() => {
+              handleDownloadAndShareImage(selectedImageUrl, 'image.jpg');
+            }}
+            style={styles.downloadButton}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="file-download" size={26} color="#FFFFFF" />
           </TouchableOpacity>
 
           {/* Full-Screen Image */}
@@ -982,7 +994,7 @@ const UserChatScreen = ({ navigation, route }) => {
 };
 
 // --- StyleSheet for Image Viewer (MCP Context 7) ---
-// Used for full-screen image modal styling
+// Used for full-screen image modal styling (WhatsApp-style with download button)
 const styles = StyleSheet.create({
   imageViewerContainer: {
     flex: 1,
@@ -998,6 +1010,18 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  downloadButton: {
+    position: 'absolute',
+    bottom: 50,
+    right: 20,
+    zIndex: 10,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',

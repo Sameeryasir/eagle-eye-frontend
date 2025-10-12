@@ -58,10 +58,14 @@ const ChatScreen = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [isSelectUserModalVisible, setIsSelectUserModalVisible] = useState(false);
-  // Business Rule: Start with loading=true to show loader on first mount instead of empty state
-  const [isLoadingConversations, setIsLoadingConversations] = useState(true);
+  const [isLoadingConversations, setIsLoadingConversations] = useState(false);
   const [conversationsError, setConversationsError] = useState(null);
   const searchInputRef = useRef(null);
+  
+  // --- Track Subscribed Channels (MCP Context 7) ---
+  // Keep track of which channels we're already subscribed to
+  // This prevents duplicate subscriptions
+  const subscribedChannelsRef = useRef(new Set());
   
   // --- Get Current User (MCP Context 7) ---
   // Used to filter out current user from conversation participants
@@ -70,16 +74,10 @@ const ChatScreen = ({ navigation }) => {
 
   // --- Helper Function to Process Conversations (MCP Context 7) ---
   // Shared logic to transform API response to UI format
-  // This prevents code duplication between regular and silent fetch
   const processConversations = (response) => {
     if (response && Array.isArray(response)) {
       // Transform API response to match our UI format
       const formattedConversations = response.map(conversation => {
-        console.log('Processing conversation:', conversation.id);
-        console.log('Conversation type:', conversation.type);
-        console.log('Participants:', conversation.participants);
-        console.log('Project:', conversation.project);
-        
         let displayName = 'Unknown User';
         
         // Business Rule: For group conversations, use project name
@@ -87,7 +85,6 @@ const ChatScreen = ({ navigation }) => {
         if (conversation.type === 'group' && conversation.project?.name) {
           // Group conversation - use project name
           displayName = conversation.project.name;
-          console.log('Group conversation - using project name:', displayName);
         } else {
           // Private conversation - find the "other" participant (not the current logged-in user)
           // API Structure: participants[].user.{first_name, last_name, email}
@@ -103,9 +100,6 @@ const ChatScreen = ({ navigation }) => {
             // If we found the other participant, use their user data
             // Otherwise fallback to first participant
             otherParticipantUser = otherParticipant?.user || conversation.participants[0]?.user;
-            
-            console.log('Current user ID:', currentUserId);
-            console.log('Other participant user:', otherParticipantUser);
           }
           
           const firstName = otherParticipantUser?.first_name || '';
@@ -120,7 +114,7 @@ const ChatScreen = ({ navigation }) => {
         const fileType = lastMessage?.fileType || '';
         const fileName = lastMessage?.fileName || '';
         
-        // Business Rule: Format last message with file indicators (same as Pusher logic)
+        // Business Rule: Format last message with file indicators
         let lastMessageText = lastMessage?.content || '';
         
         if (lastMessage?.fileUrl) {
@@ -149,9 +143,6 @@ const ChatScreen = ({ navigation }) => {
           ? new Date(conversation.createdAt).toLocaleString()
           : 'Just now';
         
-        console.log('Formatted conversation name:', displayName);
-        console.log('Last message:', lastMessageText);
-        
         return {
           id: conversation.id?.toString(),
           name: displayName,
@@ -167,13 +158,20 @@ const ChatScreen = ({ navigation }) => {
         };
       });
       
-      console.log('Total conversations formatted:', formattedConversations.length);
-      console.log('Formatted conversations:', formattedConversations);
       return formattedConversations;
     } else {
-      console.log('No conversations data or empty array');
       return [];
     }
+  };
+
+  // --- Sort Conversations by Latest Message (MCP Context 7) ---
+  // Simple function to sort conversations - newest messages first
+  const sortConversationsByLatest = (conversationsList) => {
+    return conversationsList.sort((a, b) => {
+      const timeA = new Date(a.timestamp).getTime();
+      const timeB = new Date(b.timestamp).getTime();
+      return timeB - timeA; // Newest first
+    });
   };
 
   // --- Fetch Conversations from API (MCP Context 7) ---
@@ -184,17 +182,12 @@ const ChatScreen = ({ navigation }) => {
     setConversationsError(null);
     
     try {
-      console.log('=== Fetching Conversations ===');
       const response = await getUserConversations();
-      
-      console.log('Conversations received:', response);
-      console.log('Response structure:', JSON.stringify(response, null, 2));
-      
       const formattedConversations = processConversations(response);
-      setConversations(formattedConversations);
+      const sortedConversations = sortConversationsByLatest(formattedConversations);
+      setConversations(sortedConversations);
     } catch (err) {
       console.error('Error fetching conversations:', err);
-      console.error('Error details:', err.message);
       setConversationsError('Failed to load conversations');
       
       // Show error toast
@@ -212,325 +205,238 @@ const ChatScreen = ({ navigation }) => {
 
   // --- Fetch Conversations Silently (MCP Context 7) ---
   // Business Rule: Refresh conversations without showing loader
-  // Used for real-time Pusher updates to avoid UI flickering
-  // Parameter: turnOffLoader - if true, sets loading state to false after fetch (used for initial mount)
-  const fetchConversationsSilently = async (turnOffLoader = false) => {
+  // Used for initial load to avoid UI flickering
+  const fetchConversationsSilently = async () => {
     try {
-      console.log('=== Silently Fetching Conversations (Pusher Update) ===');
       const response = await getUserConversations();
-      
-      console.log('Conversations received (silent):', response);
-      
       const formattedConversations = processConversations(response);
-      setConversations(formattedConversations);
+      const sortedConversations = sortConversationsByLatest(formattedConversations);
+      setConversations(sortedConversations);
     } catch (err) {
       console.error('Error silently fetching conversations:', err);
-      console.error('Error details:', err.message);
       // Don't show error toast for silent updates to avoid annoying users
-    } finally {
-      // Business Rule: Turn off loading state only if requested (initial mount)
-      // This ensures loader shows on first mount, then disappears after data loads
-      // But doesn't interfere with manual refresh loading state
-      if (turnOffLoader) {
-        setIsLoadingConversations(false);
-      }
     }
+  };
+
+  // --- Handle New Message from Pusher (MCP Context 7) ---
+  // Business Rule: Update conversation list when new message arrives
+  const handleNewMessage = (conversationId, data) => {
+    const newMessage = data.message || data;
+    
+    if (!newMessage) {
+      console.warn('⚠️ No message data received');
+      return;
+    }
+
+    // Update the conversation list - move to top with new message
+    setConversations(prevConversations => {
+      const conversationIndex = prevConversations.findIndex(
+        u => u.conversation?.id?.toString() === conversationId?.toString()
+      );
+
+      if (conversationIndex === -1) {
+        return prevConversations;
+      }
+
+      const updatedConversations = [...prevConversations];
+      const conversationToUpdate = { ...updatedConversations[conversationIndex] };
+      
+      // Format last message with file indicator
+      let lastMessageText = newMessage.content || '';
+      
+      if (newMessage.fileUrl) {
+        const hasImage = newMessage.fileType?.startsWith('image/');
+        
+        if (hasImage) {
+          lastMessageText = lastMessageText 
+            ? `📷 ${lastMessageText}` 
+            : '📷 Photo';
+        } else {
+          const fileName = newMessage.fileName || 'File';
+          lastMessageText = lastMessageText 
+            ? `📎 ${lastMessageText}` 
+            : `📎 ${fileName}`;
+        }
+      } else if (!lastMessageText) {
+        lastMessageText = 'New message';
+      }
+      
+      conversationToUpdate.lastMessage = lastMessageText;
+      conversationToUpdate.lastMessageHasFile = newMessage.fileUrl ? true : false;
+      conversationToUpdate.lastMessageFileType = newMessage.fileType || '';
+      conversationToUpdate.lastMessageFileName = newMessage.fileName || '';
+      conversationToUpdate.timestamp = new Date(newMessage.createdAt).toLocaleString();
+      
+      // Remove from current position and add to top
+      updatedConversations.splice(conversationIndex, 1);
+      return [conversationToUpdate, ...updatedConversations];
+    });
   };
 
   // --- Load Conversations on Mount (MCP Context 7) ---
   // Fetch conversations when component mounts
-  // Pass true to turn off loader after initial fetch completes
   useEffect(() => {
-    fetchConversationsSilently(true);
+    fetchConversationsSilently();
   }, []);
 
-  // --- Pusher Real-Time Listener for New Conversations (MCP Context 7) ---
-  // Business Rule: Subscribe to user-specific channel to get notified of new conversations
-  // Backend triggers: pusher.trigger(`user-${userId}`, 'new-conversation', conversationData)
-  // NOTE: Backend sends FULL conversation data via Pusher - NO API call needed!
+  // --- Pusher Real-Time Listener for New Messages (Optimized - MCP Context 7) ---
+  // Business Rule: Subscribe ONCE to each conversation channel and keep listening
+  // No unsubscribe when navigating away - keep updating conversation list in background
+  // Only subscribe to NEW channels, never duplicate subscriptions
+  // Changed: When new conversation is created, only subscribe to it (don't unsubscribe existing ones)
   useEffect(() => {
-    // Ensure we have a user ID before subscribing
-    if (!currentUserId) {
-      console.log('⚠️ No user ID available, skipping Pusher subscription');
+    if (!conversations || conversations.length === 0) {
       return;
     }
 
-    // Subscribe to user-specific channel
-    const channelName = `user-${currentUserId}`;
-    console.log('📡 Subscribing to Pusher channel:', channelName);
-    
-    const channel = pusher.subscribe(channelName);
+    // Get all conversation IDs
+    const conversationIds = conversations
+      .map(item => item.conversation?.id)
+      .filter(id => id != null);
 
-    // Listen for new conversation events
-    // Backend sends full conversation data, so we can add it directly to the list
-    channel.bind('new-conversation', (data) => {
-      console.log('🔔 New conversation notification received via Pusher:', data);
-      console.log('Conversation data from Pusher:', data.conversation);
+    // Only subscribe to channels we haven't subscribed to yet
+    const newChannels = conversationIds.filter(
+      id => !subscribedChannelsRef.current.has(id)
+    );
+
+    if (newChannels.length === 0) {
+      console.log('✅ [PUSHER] Already subscribed to all channels');
+      return;
+    }
+
+    console.log('📡 [PUSHER] Subscribing to', newChannels.length, 'new channels');
+
+    newChannels.forEach((id) => {
+      const channelName = `conversation-${id}`;
+      console.log('✅ [PUSHER] Subscribing to:', channelName);
       
-      // Backend should send the conversation object in data.conversation
+      const channel = pusher.subscribe(channelName);
+      
+      channel.bind('new-message', (data) => {
+        handleNewMessage(id, data);
+      });
+
+      // Mark this channel as subscribed
+      subscribedChannelsRef.current.add(id);
+    });
+
+    console.log('📡 [PUSHER] Total subscribed channels:', subscribedChannelsRef.current.size);
+
+    // NOTE: No cleanup here - we want to keep subscriptions alive
+    // Cleanup only happens on component unmount (see separate useEffect below)
+  }, [conversations.length]); // Only re-run when number of conversations changes
+
+  // --- Pusher Listener for New Conversation Creation (MCP Context 7) ---
+  // Business Rule: Listen for when someone creates a new conversation with current user
+  // Subscribe to user-specific channel to receive real-time notifications of new conversations
+  useEffect(() => {
+    if (!currentUserId) {
+      console.log('⚠️ [PUSHER] No user ID, skipping user channel subscription');
+      return;
+    }
+
+    const userChannelName = `user-${currentUserId}`;
+    console.log('📡 [PUSHER] Subscribing to user channel:', userChannelName);
+    
+    const userChannel = pusher.subscribe(userChannelName);
+    
+    // Listen for new conversation creation events
+    userChannel.bind('new-conversation', (data) => {
+      console.log('🆕 [PUSHER] New conversation created:', data);
+      
       const newConversation = data.conversation || data;
       
-      if (!newConversation) {
-        console.warn('⚠️ No conversation data received from Pusher');
+      if (!newConversation || !newConversation.id) {
+        console.warn('⚠️ [PUSHER] Invalid conversation data received');
         return;
       }
 
-      // Process the single new conversation to match our UI format
+      // Process the new conversation using the same format as API
       const formattedConversations = processConversations([newConversation]);
       
-      if (formattedConversations.length > 0) {
-        const newFormattedConvo = formattedConversations[0];
+      if (formattedConversations && formattedConversations.length > 0) {
+        const formattedConversation = formattedConversations[0];
         
-        console.log('✅ Adding new conversation to list:', newFormattedConvo);
-        
-        // Add the new conversation to the list
-        // Business Rule: Conversations with messages go to TOP, empty conversations go to BOTTOM
-        // Check if conversation already exists to avoid duplicates
+        // Add new conversation to the top of the list
         setConversations(prevConversations => {
-          const existingIndex = prevConversations.findIndex(
-            user => user.id === newFormattedConvo.id
+          // Check if conversation already exists (prevent duplicates)
+          const exists = prevConversations.some(
+            c => c.conversation?.id?.toString() === newConversation.id?.toString()
           );
           
-          if (existingIndex !== -1) {
-            // Conversation already exists, update it
-            console.log('Conversation already exists, updating it');
-            const updatedConversations = [...prevConversations];
-            updatedConversations[existingIndex] = newFormattedConvo;
-            return updatedConversations;
-          } else {
-            // New conversation - position based on whether it has messages
-            const hasMessages = newFormattedConvo.lastMessage && newFormattedConvo.lastMessage.trim() !== '';
-            
-            if (hasMessages) {
-              // Has messages - add to TOP (most recent activity)
-              console.log('Adding new conversation with messages to top of list');
-              return [newFormattedConvo, ...prevConversations];
-            } else {
-              // No messages - add to BOTTOM (less priority)
-              console.log('Adding new empty conversation to bottom of list');
-              return [...prevConversations, newFormattedConvo];
-            }
-          }
-        });
-        
-        // Show toast notification to user
-        Toast.show({
-          type: 'success',
-          text1: 'New Conversation',
-          text2: `New chat with ${newFormattedConvo.name}`,
-          visibilityTime: 3000,
-          position: 'top',
-        });
-      }
-    });
-
-    // Cleanup: Unsubscribe when component unmounts or userId changes
-    return () => {
-      console.log('🔌 Unsubscribing from Pusher channel:', channelName);
-      channel.unbind('new-conversation');
-      pusher.unsubscribe(channelName);
-    };
-  }, [currentUserId]); // Re-subscribe if user ID changes
-
-  // --- Pusher Real-Time Listener for New Messages in All Conversations (MCP Context 7) ---
-  // Business Rule: Subscribe to ALL conversations to get real-time message updates
-  // Backend triggers: pusher.trigger(`conversation-${conversationId}`, 'new-message', messageData)
-  // NOTE: This updates the conversation list when new messages arrive
-  useEffect(() => {
-    // Ensure we have conversations to subscribe to
-    if (!conversations || conversations.length === 0) {
-      console.log('⚠️ No conversations to subscribe to');
-      return;
-    }
-
-    console.log('');
-    console.log('═══════════════════════════════════════════════════');
-    console.log('📡 PUSHER: Subscribing to ALL Conversation Channels (ChatScreen)');
-    console.log('═══════════════════════════════════════════════════');
-    
-    // Extract conversation IDs from current conversations
-    const conversationIds = conversations
-      .map(user => user.conversation?.id)
-      .filter(id => id != null); // Remove null/undefined IDs
-    
-    console.log('📋 Total conversations to subscribe:', conversationIds.length);
-    console.log('📋 Conversation IDs:', conversationIds);
-    
-    // Array to store all channel subscriptions for cleanup
-    const channels = [];
-
-    // Subscribe to ALL conversations
-    conversationIds.forEach((conversationId, index) => {
-      const channelName = `conversation-${conversationId}`;
-      console.log(`   ${index + 1}. Subscribing to: ${channelName}`);
-      
-      const channel = pusher.subscribe(channelName);
-      channels.push({ channelName, channel, conversationId });
-
-      // --- Message Handler Function (MCP Context 7) ---
-      // Business Rule: Update conversation list when new message arrives
-      // Using arrow function to avoid closure issues
-      const handleNewMessage = (data) => {
-        console.log('');
-        console.log('═══════════════════════════════════════════════════');
-        console.log('🔔 PUSHER: New Message Received in ChatScreen');
-        console.log('═══════════════════════════════════════════════════');
-        console.log('📍 Conversation ID:', conversationId);
-        console.log('📦 Full Pusher Data:', JSON.stringify(data, null, 2));
-        
-        const newMessage = data.message || data;
-        
-        if (!newMessage) {
-          console.warn('⚠️ ERROR: No message data received from Pusher');
-          console.log('═══════════════════════════════════════════════════');
-          console.log('');
-          return;
-        }
-
-        console.log('📨 Extracted Message:', {
-          id: newMessage.id,
-          content: newMessage.content,
-          sender: newMessage.sender,
-          createdAt: newMessage.createdAt,
-          fileUrl: newMessage.fileUrl,
-          fileName: newMessage.fileName,
-          fileType: newMessage.fileType,
-        });
-
-        // Update the conversation list
-        // Business Rule: Move conversation to top and update last message
-        // Using functional setState to always get latest state
-        setConversations(prevConversations => {
-          console.log('🔍 Searching for conversation in list...');
-          console.log('   Total conversations:', prevConversations.length);
-          
-          // Find the conversation that received the new message
-          const conversationIndex = prevConversations.findIndex(
-            u => u.conversation?.id?.toString() === conversationId?.toString()
-          );
-
-          if (conversationIndex === -1) {
-            console.log('❌ ERROR: Conversation not found in list');
-            console.log('   Looking for conversation ID:', conversationId);
-            console.log('   Available conversation IDs:', prevConversations.map(c => c.conversation?.id));
-            console.log('═══════════════════════════════════════════════════');
-            console.log('');
+          if (exists) {
+            console.log('⚠️ [PUSHER] Conversation already exists in list');
             return prevConversations;
           }
-
-          console.log('✅ Found conversation at index:', conversationIndex);
-          console.log('   Conversation name:', prevConversations[conversationIndex].name);
-
-          // Create a new array to avoid mutation
-          const updatedConversations = [...prevConversations];
           
-          // Get the conversation to update
-          const conversationToUpdate = { ...updatedConversations[conversationIndex] };
+          console.log('✅ [PUSHER] Adding new conversation to list:', formattedConversation.name);
+          // Add to top of list (most recent first)
+          return [formattedConversation, ...prevConversations];
+        });
+        
+        // Subscribe to the new conversation's message channel
+        const conversationId = newConversation.id;
+        const conversationChannelName = `conversation-${conversationId}`;
+        
+        if (!subscribedChannelsRef.current.has(conversationId)) {
+          console.log('📡 [PUSHER] Auto-subscribing to new conversation channel:', conversationChannelName);
           
-          console.log('🔄 Updating conversation details...');
+          const channel = pusher.subscribe(conversationChannelName);
           
-          // Update last message and timestamp
-          // Business Rule: Show file indicator if message has file attachment
-          let lastMessageText = newMessage.content || '';
-          
-          if (newMessage.fileUrl) {
-            // Message has file attachment
-            const hasImage = newMessage.fileType?.startsWith('image/');
-            
-            if (hasImage) {
-              // Image attachment
-              lastMessageText = lastMessageText 
-                ? `📷 ${lastMessageText}` 
-                : '📷 Photo';
-              console.log('📷 Message has image attachment');
-            } else {
-              // Document attachment
-              const fileName = newMessage.fileName || 'File';
-              lastMessageText = lastMessageText 
-                ? `📎 ${lastMessageText}` 
-                : `📎 ${fileName}`;
-              console.log('📎 Message has document attachment');
-            }
-          } else if (!lastMessageText) {
-            // No content and no file
-            lastMessageText = 'New message';
-            console.log('💬 Message has no content or file');
-          } else {
-            console.log('💬 Message has text content:', lastMessageText);
-          }
-          
-          conversationToUpdate.lastMessage = lastMessageText;
-          conversationToUpdate.lastMessageHasFile = newMessage.fileUrl ? true : false;
-          conversationToUpdate.lastMessageFileType = newMessage.fileType || '';
-          conversationToUpdate.lastMessageFileName = newMessage.fileName || '';
-          conversationToUpdate.timestamp = new Date(newMessage.createdAt).toLocaleString();
-          
-          console.log('📝 Updated conversation preview:', {
-            name: conversationToUpdate.name,
-            lastMessage: conversationToUpdate.lastMessage,
-            timestamp: conversationToUpdate.timestamp,
+          channel.bind('new-message', (messageData) => {
+            handleNewMessage(conversationId, messageData);
           });
           
-          // Remove conversation from current position
-          updatedConversations.splice(conversationIndex, 1);
-          
-          // Add conversation to the TOP of the list (most recent)
-          const finalConversations = [conversationToUpdate, ...updatedConversations];
-          
-          console.log('⬆️ Moved conversation to TOP of list');
-          console.log('✅ ChatScreen conversation list updated successfully!');
-          console.log('═══════════════════════════════════════════════════');
-          console.log('');
-          
-          return finalConversations;
-        });
-      };
-
-      // Bind the message handler to this channel
-      channel.bind('new-message', handleNewMessage);
+          subscribedChannelsRef.current.add(conversationId);
+          console.log('✅ [PUSHER] Subscribed to new conversation channel');
+        }
+      }
     });
-
-    console.log('✅ All conversation channels subscribed successfully!');
-    console.log('   Total subscriptions:', channels.length);
-    console.log('═══════════════════════════════════════════════════');
-    console.log('');
-
-    // Cleanup: Unsubscribe from ALL channels when component unmounts or conversations change
+    
+    console.log('✅ [PUSHER] Listening for new conversations on:', userChannelName);
+    
+    // Cleanup: Unsubscribe from user channel on unmount
     return () => {
-      console.log('');
-      console.log('═══════════════════════════════════════════════════');
-      console.log('🔌 PUSHER: Unsubscribing from ALL Conversation Channels (ChatScreen)');
-      console.log('═══════════════════════════════════════════════════');
-      console.log('   Unsubscribing from', channels.length, 'channels');
-      channels.forEach(({ channelName, channel }, index) => {
-        console.log(`   ${index + 1}. Unsubscribing: ${channelName}`);
-        channel.unbind('new-message');
+      console.log('🔴 [PUSHER] Unsubscribing from user channel:', userChannelName);
+      userChannel.unbind('new-conversation');
+      pusher.unsubscribe(userChannelName);
+    };
+  }, [currentUserId]); // Re-run if user ID changes
+
+  // --- Cleanup Pusher Subscriptions on Unmount (MCP Context 7) ---
+  // Business Rule: Only unsubscribe from all channels when component unmounts
+  // This prevents unnecessary unsubscribe/resubscribe cycles when new conversations are added
+  useEffect(() => {
+    return () => {
+      console.log('🔴 [PUSHER] Component unmounting - Unsubscribing from all channels');
+      subscribedChannelsRef.current.forEach((id) => {
+        const channelName = `conversation-${id}`;
+        console.log('❌ [PUSHER] Unsubscribing from:', channelName);
         pusher.unsubscribe(channelName);
       });
-      console.log('✅ All channels unsubscribed');
-      console.log('═══════════════════════════════════════════════════');
-      console.log('');
+      subscribedChannelsRef.current.clear();
+      console.log('🔴 [PUSHER] All channels unsubscribed');
     };
-  }); // ✅ Runs on every render - will re-subscribe whenever component updates
+  }, []); // Empty dependency array - only runs on mount/unmount
 
   // --- Navigation Focus Listener (MCP Context 7) ---
-  // Fetch conversations when returning to screen
-  // Business Rule: Call API to get latest data, then Pusher will subscribe to ALL conversations
+  // Reload conversations when screen comes into focus
+  // Note: Pusher subscriptions stay active even when screen is not focused
   useEffect(() => {
-    const unsubscribeFocus = navigation.addListener('focus', () => {
-      // Fetch conversations when returning to this screen
-      // Business Rule: Get fresh data from API, then Pusher useEffect will unsubscribe old and subscribe to all current conversations
-      console.log('📱 ChatScreen focused - fetching latest conversations from API');
+    const unsubscribe = navigation.addListener('focus', () => {
+      console.log('🟢 [CHAT SCREEN] Screen focused - refreshing conversations');
+      // Reload conversations when returning to this screen
       fetchConversations();
     });
 
     const unsubscribeBlur = navigation.addListener('blur', () => {
+      console.log('🔴 [CHAT SCREEN] Screen blurred - Pusher still listening in background');
       // Only dismiss keyboard when leaving the screen
       Keyboard.dismiss();
     });
 
     return () => {
-      unsubscribeFocus();
+      unsubscribe();
       unsubscribeBlur();
     };
   }, [navigation]);
@@ -570,18 +476,11 @@ const ChatScreen = ({ navigation }) => {
   // Navigate to individual chat screen with user data from API
   // Business Rule: Pass conversation ID for fetching/sending messages
   const handleUserPress = (user) => {
-    console.log('=== Opening Conversation ===');
-    console.log('User:', user);
-    console.log('Conversation ID:', user.conversation?.id);
-    console.log('Full conversation:', user.conversation);
-    
     // Ensure we have a conversation ID before navigating
     const conversationId = user.conversation?.id;
     
     if (!conversationId) {
-      console.warn('⚠️ Warning: No conversation ID found for user:', user.name);
-    } else {
-      console.log('✅ Navigating with conversation ID:', conversationId);
+      console.warn('⚠️ No conversation ID found for user:', user.name);
     }
     
     navigation.navigate('UserChatScreen', {
@@ -592,8 +491,6 @@ const ChatScreen = ({ navigation }) => {
       conversation: user.conversation, // Pass full conversation object
       messages: user.conversation?.messages || [], // Use messages from API
     });
-    
-    console.log('=== End Opening Conversation ===');
   };
 
   // --- Open Select User Modal (MCP Context 7) ---
@@ -613,16 +510,11 @@ const ChatScreen = ({ navigation }) => {
   // --- Handle User Selection from Modal (MCP Context 7) ---
   // When user selects a team member from modal, navigate to chat with them
   const handleUserSelectFromModal = (data) => {
-    console.log('=== User Selected from Modal ===');
-    console.log('Data received:', data);
-    
     const { employee, conversation, isGroupChat, project } = data;
     
     // Business Rule: Handle group chat vs private chat differently
     if (isGroupChat) {
       // Group conversation - use project name
-      console.log('Navigating to group chat with project:', project);
-      
       const groupData = {
         id: conversation?.id?.toString(),
         name: project?.name || 'Project Group Chat',
@@ -661,9 +553,6 @@ const ChatScreen = ({ navigation }) => {
         isTyping: false,
       };
       
-      console.log('Navigating to UserChatScreen with:', userData);
-      console.log('Conversation data:', conversation);
-      
       // Navigate to chat screen with new user and conversation
       navigation.navigate('UserChatScreen', {
         userId: userData.id,
@@ -677,12 +566,8 @@ const ChatScreen = ({ navigation }) => {
     
     // NOTE: No need to manually refresh conversations here!
     // When you navigate to UserChatScreen, you leave this screen anyway.
-    // When you come back, one of two things will happen:
-    // 1. Pusher will have already added the conversation (if backend triggered notification)
-    // 2. The screen 'focus' listener will call fetchConversations() automatically
-    // This prevents unnecessary API calls and lets Pusher do its job!
-    
-    console.log('=== End User Selection ===');
+    // When you come back, the screen 'focus' listener will call fetchConversations() automatically
+    // This prevents unnecessary API calls!
   };
 
   // --- User Item Component (MCP Context 7) ---

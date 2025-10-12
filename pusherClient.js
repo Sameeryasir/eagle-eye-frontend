@@ -8,8 +8,8 @@ import Pusher from 'pusher-js/react-native';
 Pusher.logToConsole = true;
 
 // Create a pusher instance
-const pusher = new Pusher("", {
-  cluster: "", // Your Pusher cluster
+const pusher = new Pusher("2a365c8d4fd51cd8b223", {
+  cluster: "ap2", // Your Pusher cluster
   forceTLS: true, // Force TLS for secure connections
 });
 

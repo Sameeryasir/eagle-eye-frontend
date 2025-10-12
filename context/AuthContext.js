@@ -44,8 +44,8 @@ export const AuthProvider = ({ children }) => {
         setIsAuthenticated(true);
         setUserRole(userRole);
         setUserInfo({
-          firstName,
-          lastName,
+          first_name: firstName,
+          last_name: lastName,
           role: userRole,
           id: userId
         });
