@@ -4,6 +4,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { getUserRole } from "../../services/utils/userRole";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from "../../context/AuthContext";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import pusher from "../../pusherClient";
 
 const { width, height } = Dimensions.get("window");
 
@@ -24,12 +27,61 @@ export default function CustomBottomNav({
   handleFabPress,
   isLoading = false,
   userRole: propUserRole = null, // Accept user role as prop to prevent FAB lag
+  hideFAB = false, // Hide FAB icon
+  transparentBackground = false, // Make background transparent
 }) {
   const navigation = useNavigation();
   const route = useRoute(); // Get current route information
   const [activeTab, setActiveTab] = React.useState("home"); // Track active tab
   const [userRole, setUserRole] = React.useState(null); // Track user role
+  const [hasNewNotification, setHasNewNotification] = React.useState(false); // Track new notifications
+  
+  // Debug: Track red dot state changes
+  React.useEffect(() => {
+    console.log('🔴 CustomBottomNav: Red dot state changed to:', hasNewNotification);
+  }, [hasNewNotification]);
+  
+  // Persist red dot state across component remounts
+  React.useEffect(() => {
+    const loadRedDotState = async () => {
+      try {
+        const savedState = await AsyncStorage.getItem('hasNewNotification');
+        if (savedState !== null) {
+          setHasNewNotification(JSON.parse(savedState));
+          console.log('🔴 CustomBottomNav: Restored red dot state:', JSON.parse(savedState));
+        }
+      } catch (error) {
+        console.error('Error loading red dot state:', error);
+      }
+    };
+    
+    loadRedDotState();
+  }, []);
+  
+  // Save red dot state when it changes
+  React.useEffect(() => {
+    const saveRedDotState = async () => {
+      try {
+        await AsyncStorage.setItem('hasNewNotification', JSON.stringify(hasNewNotification));
+        console.log('🔴 CustomBottomNav: Saved red dot state:', hasNewNotification);
+      } catch (error) {
+        console.error('Error saving red dot state:', error);
+      }
+    };
+    
+    saveRedDotState();
+  }, [hasNewNotification]);
+  
+  // Debug: Track component mount/unmount
+  React.useEffect(() => {
+    console.log('🟢 CustomBottomNav: Component mounted on screen:', route.name);
+    return () => {
+      console.log('🔴 CustomBottomNav: Component unmounting from screen:', route.name);
+    };
+  }, [route.name]);
   const insets = useSafeAreaInsets(); // Get safe area insets
+  const { userInfo } = useAuth(); // Get current user info for Pusher
+
 
   // --- Load User Role (MCP Context 7) ---
   // Business Rule: Get user role to determine FAB visibility based on current screen
@@ -65,7 +117,7 @@ export default function CustomBottomNav({
   // ✅ SHOW FAB for Owner role on CalenderScreen, CalenderDetailScreen, and WeekView (Manager and Employee cannot see FAB)
   // Hide FAB on calendar screens until userRole is loaded to prevent flashing during navigation
   const isCalendarScreen = route.name === "CalenderScreen" || route.name === "CalenderDetailScreen" || route.name === "WeekView";
-  const shouldHideFAB = (
+  const shouldHideFAB = hideFAB || (
     userRole === "Employee" && (
       route.name === "ViewAllTasksScreen" || 
       route.name === "HomeScreen" || 
@@ -127,6 +179,50 @@ export default function CustomBottomNav({
     setActiveTab(currentTab);
   }, [route.name]); // Re-run when route name changes
 
+  // --- Pusher Real-time Notification Listener (MCP Context 7) ---
+  // Business Rule: Listen for new notifications to show red dot on bell icon
+  React.useEffect(() => {
+    const currentUserId = userInfo?.id;
+    
+    if (!currentUserId) {
+      console.log('⚠️ CustomBottomNav: No user ID available for Pusher channel');
+      return;
+    }
+
+    // Create channel name matching backend: `user-notifications-${assignedToUserId}`
+    const channelName = `user-notifications-${currentUserId}`;
+    console.log('🔔 CustomBottomNav: Setting up Pusher listener for channel:', channelName);
+    console.log('🔌 CustomBottomNav: Pusher connection state:', pusher.connection.state);
+    console.log('✅ CustomBottomNav: Pusher is connected:', pusher.connection.state === 'connected');
+    
+    // Subscribe to user-specific notification channel
+    const channel = pusher.subscribe(channelName);
+    
+    // Unified handler for all assignment types (task, project, event)
+    const handleNewAssignment = (data, assignmentType) => {
+      console.log(`🔔 CustomBottomNav: NEW ${assignmentType.toUpperCase()} ASSIGNMENT NOTIFICATION RECEIVED:`, data);
+      
+      // Show red dot on bell icon
+      setHasNewNotification(true);
+      console.log('🔴 CustomBottomNav: Red dot shown on bell icon');
+    };
+
+    // Listen for new task assignment events
+    channel.bind('new-task-assignment', (data) => handleNewAssignment(data, 'task'));
+
+    // Listen for new project assignment events
+    channel.bind('new-project-assignment', (data) => handleNewAssignment(data, 'project'));
+
+    // Listen for new event assignment events
+    channel.bind('new-event-assignment', (data) => handleNewAssignment(data, 'event'));
+
+    // Cleanup function to unsubscribe when component unmounts
+    return () => {
+      console.log('🧹 CustomBottomNav: Unsubscribing from Pusher channel:', channelName);
+      pusher.unsubscribe(channelName);
+    };
+  }, [userInfo?.id]);
+
   const handleAddPress = async () => {
     if (onAddPress) {
       onAddPress();
@@ -174,8 +270,11 @@ export default function CustomBottomNav({
   };
 
   const navigateToNotifications = () => {
-    // No navigation - just visual indicator
-    // This icon only shows which screen is active, no tap functionality
+    // Navigate to NotificationScreen when bell icon is pressed
+    navigation.navigate("NotificationScreen");
+    // Hide red dot when user visits notifications
+    setHasNewNotification(false);
+    console.log('🔴 CustomBottomNav: Red dot hidden after visiting notifications');
   };
 
   const navigateToProfile = () => {
@@ -211,16 +310,16 @@ export default function CustomBottomNav({
           justifyContent: shouldHideFAB ? 'space-around' : 'space-between',
           width: '90%',
           height: navHeight,
-          backgroundColor: 'black',
+          backgroundColor: transparentBackground ? 'transparent' : 'black',
           borderRadius: 35,
           paddingHorizontal: 15,
           paddingBottom: 5,
           marginBottom: 20, // Keep consistent margin from bottom
-          shadowColor: "#000",
+          shadowColor: transparentBackground ? 'transparent' : "#000",
           shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.15,
+          shadowOpacity: transparentBackground ? 0 : 0.15,
           shadowRadius: 4,
-          elevation: 6,
+          elevation: transparentBackground ? 0 : 6,
           // Ensure consistent positioning
           position: 'relative',
         }}
@@ -287,6 +386,24 @@ export default function CustomBottomNav({
           onPress={navigateToNotifications}
         >
           <Ionicons name="notifications-outline" size={24} color="#fff" />
+          {/* Red dot for new notifications */}
+          {hasNewNotification && (
+            <View 
+              style={{
+                position: 'absolute',
+                top: -2,
+                right: -2,
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: '#FF3B30',
+                borderWidth: 1,
+                borderColor: '#fff',
+                marginTop: 2,
+                marginRight: 30,
+              }}
+            />
+          )}
           {activeTab === "notifications" && (
             <View className="absolute bottom-[-6px] w-5 h-[3px] bg-white rounded-[2px]" />
           )}

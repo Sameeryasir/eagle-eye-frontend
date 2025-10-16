@@ -18,6 +18,8 @@ import CustomBottomNav from './components/CustomBottomNav';
 import { getMyProjects } from '../services/projects/getProjectsByLoginUserId';
 import { assignProjectToEmployees } from '../services/projects/assignProject';
 import { getUserById } from '../services/user/getUserById';
+import { projectAssignement } from '../services/inAppNotification/projectAssignement';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import Loader from '../services/utils/loader';
 
@@ -153,6 +155,36 @@ function ProjectAssignment({ navigation, route }) {
       };
       
       await assignProjectToEmployees(assignData);
+
+      // --- Send Notification for Project Assignment (MCP Context 7) ---
+      // Business Rule: Send individual notification for each project assigned
+      try {
+        // Get current user info for notification
+        const currentUserId = await AsyncStorage.getItem('userId');
+        const currentUserFirstName = await AsyncStorage.getItem('userFirstName');
+        const currentUserLastName = await AsyncStorage.getItem('userLastName');
+        const currentUserName = `${currentUserFirstName || ''} ${currentUserLastName || ''}`.trim() || 'Unknown User';
+
+        // Send separate notification for each project
+        for (const project of selectedProjects) {
+          const apiNotificationData = {
+            title: 'New Project Assigned',
+            message: `You have been assigned to a new project: ${project.name}`,
+            assignedToUserId: Number(currentEmployee.id || employeeId),
+            projectIds: [Number(project.id)], // Single project ID in array
+            priority: 'medium',
+            projectName: project.name, // Single project name
+            fromUserName: currentUserName
+          };
+          
+          console.log(`🔔 CALLING API FOR PROJECT ASSIGNMENT NOTIFICATION (${project.name}):`, apiNotificationData);
+          await projectAssignement(apiNotificationData);
+          console.log(`✅ API NOTIFICATION SENT SUCCESSFULLY for project: ${project.name}`);
+        }
+      } catch (apiError) {
+        console.error('❌ Error sending API notification:', apiError);
+        // Don't throw error - project was already assigned successfully
+      }
 
       Toast.show({
         type: 'success',

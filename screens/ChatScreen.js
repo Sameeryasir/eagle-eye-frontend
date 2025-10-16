@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { getUserConversations } from '../services/chats/getConversation';
 import SelectUserModal from './components/SelectUserModal';
+import CustomBottomNav from './components/CustomBottomNav';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../context/AuthContext';
 import pusher from '../pusherClient';
@@ -717,7 +718,7 @@ const ChatScreen = ({ navigation }) => {
             No conversations yet
           </Text>
           <Text className="text-base text-gray-400 mt-3 text-center">
-            Tap the + button below to start chatting
+            Tap the + button in the bottom navigation to start chatting
           </Text>
           
           {/* Note: FAB button (bottom-right) handles conversation creation */}
@@ -741,7 +742,7 @@ const ChatScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={['bottom', 'left', 'right']}>
+    <SafeAreaView className="flex-1 bg-white" edges={['bottom', 'left', 'right']} style={{ paddingBottom: 100 }}>
       {/* Search Bar - Fixed at top */}
       {renderSearchBar()}
       
@@ -779,23 +780,6 @@ const ChatScreen = ({ navigation }) => {
         )}
       </KeyboardAvoidingView>
 
-      {/* FAB - Floating Action Button (MCP Context 7) */}
-      {/* Business Rule: Always visible for quick access to start new conversation */}
-      {/* Shows in all states - empty or with conversations */}
-      <TouchableOpacity
-        className="absolute bottom-6 right-6 w-16 h-16 bg-black rounded-full items-center justify-center shadow-lg"
-        onPress={handleOpenSelectUserModal}
-        activeOpacity={0.8}
-        style={{
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 6,
-          elevation: 8,
-        }}
-      >
-        <Ionicons name="add" size={32} color="white" />
-      </TouchableOpacity>
 
       {/* Select User Modal (MCP Context 7) */}
       {/* Modal for selecting team member to start conversation */}
@@ -803,6 +787,11 @@ const ChatScreen = ({ navigation }) => {
         visible={isSelectUserModalVisible}
         onClose={handleCloseSelectUserModal}
         onUserSelect={handleUserSelectFromModal}
+      />
+      
+      {/* Custom Bottom Navigation */}
+      <CustomBottomNav 
+        onAddPress={handleOpenSelectUserModal}
       />
     </SafeAreaView>
   );

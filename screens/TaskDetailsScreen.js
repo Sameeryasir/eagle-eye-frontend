@@ -28,6 +28,8 @@ import { getTaskById } from "../services/tasks/getTaskById";
 import { getEmployeesToAssignTask } from "../services/employees/getEmployeesOfTheCompany";
 import { updateTask } from "../services/tasks/updateTaskById";
 import { assignTaskToUser } from "../services/tasks/assignTask";
+import { taskAssignement } from "../services/inAppNotification/taskAssignement";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // --- Redux Integration (MCP Context 7) ---
 import { useDispatch, useSelector } from 'react-redux';
@@ -389,6 +391,36 @@ function TaskDetailsScreen({ navigation, route }) {
         setShowAssignmentModal(false);
         setSelectedEmployee(null);
         setSearchQuery('');
+
+        // --- Send Notification for Task Assignment (MCP Context 7) ---
+        // Business Rule: Send notification when task is assigned to user
+        try {
+          // Get current user info for notification
+          const currentUserId = await AsyncStorage.getItem('userId');
+          const currentUserFirstName = await AsyncStorage.getItem('userFirstName');
+          const currentUserLastName = await AsyncStorage.getItem('userLastName');
+          const currentUserName = `${currentUserFirstName || ''} ${currentUserLastName || ''}`.trim() || 'Unknown User';
+
+          // Send notification to assigned user
+          const apiNotificationData = {
+            title: 'New Task Assigned',
+            message: `You have been assigned a new task: ${currentTask.title || currentTask.name}`,
+            assignedToUserId: Number(selectedEmployee.id),
+            fromUserName: currentUserName,
+            priority: currentTask.priority || 'low',
+            projectName: currentTask?.project?.name || 'Unknown Project',
+            projectId: Number(currentTask?.project?.id || projectId),
+            taskId: currentTask.id,
+            taskName: currentTask.title || currentTask.name
+          };
+          
+          console.log('🔔 CALLING API FOR TASK ASSIGNMENT NOTIFICATION:', apiNotificationData);
+          await taskAssignement(apiNotificationData);
+          console.log('✅ API NOTIFICATION SENT SUCCESSFULLY');
+        } catch (apiError) {
+          console.error('❌ Error sending API notification:', apiError);
+          // Don't throw error - task was already assigned successfully
+        }
 
         // --- Show Success Toast Message ---
         Toast.show({
@@ -790,6 +822,7 @@ function TaskDetailsScreen({ navigation, route }) {
           onClose={() => setShowUpdateModal(false)}
           task={currentTask}
           projectId={currentTask?.project?.id}
+          projectName={currentTask?.project?.name}
           onSuccess={handleUpdateSuccess}
         />
 

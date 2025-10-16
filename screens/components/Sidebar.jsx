@@ -38,6 +38,7 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
         duration: 300,
         useNativeDriver: true,
       }).start();
+      // Always reload user data when sidebar opens to get latest updates
       loadUserData();
     } else {
       Animated.timing(slideAnim, {
@@ -90,12 +91,16 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
     // Update the active menu item state to show visual feedback
     setActiveMenuItem(itemId);
     
-    // Add navigation specifically for Personnel item
+    // Close sidebar first
+    onClose();
+    
+    // Add navigation for specific items
     if (itemId === 'personnel') {
-      // Close sidebar first
-      onClose();
       // Navigate to PersonalScreen
       navigation.navigate('PersonalScreen');
+    } else if (itemId === 'files') {
+      // Navigate to FilesScreen
+      navigation.navigate('FilesScreen');
     }
     
     // Note: Other items only show visual feedback without navigation

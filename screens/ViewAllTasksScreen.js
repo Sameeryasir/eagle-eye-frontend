@@ -201,7 +201,7 @@ function ViewAllTasksScreen({ navigation, route }) {
   });
   const [filtersApplied, setFiltersApplied] = useState(false); // Track if filters are currently applied
 
-  const { projectId, createDraft, showUpcomingTasks } = route.params || {};
+  const { projectId, projectName, createDraft, showUpcomingTasks } = route.params || {};
 
   // --- Helper function to show custom error dialog ---
   const showErrorDialog = (title, message) => {
@@ -1639,6 +1639,7 @@ function ViewAllTasksScreen({ navigation, route }) {
           visible={updateTaskModalVisible}
           task={selectedTask}
           projectId={projectId}
+          projectName={projectName}
           onClose={handleUpdateTaskClose}
           onSuccess={handleUpdateTaskSuccess}
         />

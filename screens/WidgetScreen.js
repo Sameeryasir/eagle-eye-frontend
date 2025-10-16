@@ -335,8 +335,15 @@ function WidgetScreen({ navigation, route }) {
           onPress={() => {
             const navigationParams = {
               projectId: userRole === "Manager" ? managerProjectId : projectId,
+              projectName: projectName || project?.name || 'Unknown Project', // Pass project name
               showUpcomingTasks: true, // --- Flag to indicate upcoming tasks view (MCP Context 7) ---
             };
+            
+            console.log('🔍 NAVIGATION DEBUG - WidgetScreen to ViewAllTasksScreen:');
+            console.log('📱 Project ID:', navigationParams.projectId);
+            console.log('📝 Project Name:', navigationParams.projectName);
+            console.log('🚀 Navigating to ViewAllTasksScreen with params:', navigationParams);
+            
             navigation.navigate("ViewAllTasksScreen", navigationParams);
           }}
         >

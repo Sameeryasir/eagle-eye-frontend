@@ -13,7 +13,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getEmployeesToAssignTask } from '../../services/employees/getEmployeesOfTheCompany';
+import { getUserForConversations } from '../../services/chats/getUserForConversations';
 import { createConversation } from '../../services/chats/createConversation';
 import { createProjectConversation } from '../../services/chats/createPorjectConversation';
 import { useAuth } from '../../context/AuthContext';
@@ -113,14 +113,14 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
   }, []);
 
   // --- Fetch Employees Function (MCP Context 7) ---
-  // Business Rule: Fetch all employees from company except current user
+  // Business Rule: Fetch all employees for conversation creation
   const fetchEmployees = async () => {
     setIsLoading(true);
     setError(null);
     
     try {
       console.log('=== Fetching Employees for Chat ===');
-      const response = await getEmployeesToAssignTask();
+      const response = await getUserForConversations();
       
       if (response && Array.isArray(response)) {
         // Filter out current user (can't chat with yourself)
@@ -128,17 +128,17 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
           emp => emp.id?.toString() !== currentUserId?.toString()
         );
         
-        console.log('Total employees fetched:', response.length);
+        console.log('Total employees fetched for conversations:', response.length);
         console.log('Filtered employees (excluding current user):', filteredEmployees.length);
         console.log('Current user ID:', currentUserId);
         
         setEmployees(filteredEmployees);
       } else {
-        console.warn('No employees data received from API');
+        console.warn('No employees data received from conversation API');
         setEmployees([]);
       }
     } catch (err) {
-      console.error('Error fetching employees:', err);
+      console.error('Error fetching employees for conversations:', err);
       setError('Failed to load team members. Please try again.');
     } finally {
       setIsLoading(false);

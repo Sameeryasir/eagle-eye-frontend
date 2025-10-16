@@ -16,6 +16,7 @@ import {
   StyleSheet,
   Linking,
   Alert,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -28,6 +29,11 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from "../context/AuthContext";
 import { getMessagesByConversationId } from "../services/chats/getMessagesByConversationId";
 import { sendMessage } from "../services/chats/sendMessage";
+import { isTyping } from "../services/chats/isTyping";
+import { getFilesForConversation } from "../services/chats/getFilesForConversation";
+import { createSignature } from "../services/chats/createSignature";
+import DateTimePicker from '@react-native-community/datetimepicker';
+import appEmitter from "../utils/appEmitter";
 import pusher from "../pusherClient";
 
 // --- Helper Function to Generate Initials (MCP Context 7) ---
@@ -85,7 +91,24 @@ const UserChatScreen = ({ navigation, route }) => {
   const [selectedImageUrl, setSelectedImageUrl] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null); // For file uploads
   const [attachmentMenuVisible, setAttachmentMenuVisible] = useState(false); // For attachment options
+  const [filesModalVisible, setFilesModalVisible] = useState(false); // For viewing all files
+  const [conversationFiles, setConversationFiles] = useState([]); // Store files from conversation
+  const [isLoadingFiles, setIsLoadingFiles] = useState(false); // Loading state for files
   const flatListRef = useRef(null);
+  
+  // --- Request Signature Modal State (MCP Context 7) ---
+  const [signatureModalVisible, setSignatureModalVisible] = useState(false);
+  const [signatureTitle, setSignatureTitle] = useState('');
+  const [signatureNotes, setSignatureNotes] = useState('');
+  const [signatureDueDate, setSignatureDueDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // --- Typing State Management (MCP Context 7) ---
+  // Business Rule: Track who is currently typing in the conversation
+  // Used to show typing indicators below the input bar (WhatsApp-style)
+  const [typingUsers, setTypingUsers] = useState([]); // Array of user objects who are typing
+  const [isUserTyping, setIsUserTyping] = useState(false); // Whether current user is typing
+  const typingTimeoutRef = useRef(null); // For debouncing typing status
 
   // --- Get Current User ID from AsyncStorage (MCP Context 7) ---
   // Business Rule: Retrieve user ID from local storage to compare with message sender
@@ -163,6 +186,63 @@ const UserChatScreen = ({ navigation, route }) => {
     fetchMessages();
   }, [conversationId]);
 
+  // --- Fetch Files from Conversation (MCP Context 7) ---
+  // Business Rule: Fetch all files shared in this conversation
+  const fetchConversationFiles = async () => {
+    const currentConversationId = route.params?.conversationId;
+    
+    if (!currentConversationId) {
+      console.log('❌ No conversation ID found');
+      Alert.alert('Error', 'No conversation ID found');
+      return;
+    }
+
+    setIsLoadingFiles(true);
+    
+    try {
+      console.log('🔄 Fetching files for conversation:', currentConversationId);
+      const response = await getFilesForConversation(currentConversationId);
+      
+      if (response && Array.isArray(response)) {
+        setConversationFiles(response);
+        console.log('✅ Files fetched successfully:', response.length, 'files');
+      } else {
+        setConversationFiles([]);
+        console.log('📭 No files found in conversation');
+      }
+    } catch (err) {
+      console.error('❌ Error fetching conversation files:', err);
+      setConversationFiles([]);
+      Alert.alert('Error', 'Failed to load files. Please try again.');
+    } finally {
+      setIsLoadingFiles(false);
+    }
+  };
+
+  // --- Handle Fetch All Files Event (MCP Context 7) ---
+  // Business Rule: Listen for fetchAllFiles event from App.js header
+  const handleFetchAllFiles = () => {
+    console.log('📁 Received fetchAllFiles event in UserChatScreen');
+    console.log('📁 Setting filesModalVisible to true');
+    setFilesModalVisible(true);
+    fetchConversationFiles();
+  };
+
+  // --- Event Listener for fetchAllFiles (MCP Context 7) ---
+  useEffect(() => {
+    console.log('🔌 Setting up fetchAllFiles event listener');
+    // Listen for fetchAllFiles event
+    appEmitter.on('fetchAllFiles', handleFetchAllFiles);
+    console.log('✅ Event listener set up successfully');
+    
+    // Cleanup listener on unmount
+    return () => {
+      console.log('🔌 Cleaning up fetchAllFiles event listener');
+      appEmitter.off('fetchAllFiles', handleFetchAllFiles);
+    };
+  }, []);
+
+
   // --- Pusher Real-Time Listener (Fixed - MCP Context 7) ---
   // Business Rule: Always ensure we're listening to the conversation channel
   // For new conversations: subscribe and listen
@@ -197,12 +277,18 @@ const UserChatScreen = ({ navigation, route }) => {
         return;
       }
 
+      // Check if it's a signature message
+      const isSignatureMessage = !newMessage.content && newMessage.signature;
+      
       console.log('📬 [PUSHER] Message details:', {
         id: newMessage.id,
         senderId: newMessage.sender?.id,
         senderName: `${newMessage.sender?.first_name} ${newMessage.sender?.last_name}`.trim(),
-        content: newMessage.content ? `"${newMessage.content.substring(0, 30)}..."` : '(file only)',
+        content: newMessage.content ? `"${newMessage.content.substring(0, 30)}..."` : '(no content)',
         hasFile: !!newMessage.fileUrl,
+        isSignatureMessage: isSignatureMessage,
+        signatureTitle: isSignatureMessage ? newMessage.signature?.title : 'N/A',
+        signatureStatus: isSignatureMessage ? newMessage.signature?.status : 'N/A'
       });
 
       // Add message to state
@@ -226,59 +312,102 @@ const UserChatScreen = ({ navigation, route }) => {
         }
 
         // Add new message from other user and sort by timestamp
-        console.log('✅ [PUSHER] Adding message to chat from:', newMessage.sender?.first_name || 'Unknown');
+        if (isSignatureMessage) {
+          console.log('✅ [PUSHER] Adding signature contract to chat from:', newMessage.sender?.first_name || 'Unknown');
+        } else {
+          console.log('✅ [PUSHER] Adding message to chat from:', newMessage.sender?.first_name || 'Unknown');
+        }
         const updatedMessages = [...prevMessages, newMessage];
         return sortMessagesByTime(updatedMessages);
       });
     };
 
-    // Bind the listener
-    channel.bind('new-message', handleNewMessage);
-    console.log('✅ [PUSHER] Listening for new messages on:', channelName);
+    // Define typing handler
+    const handleTypingEvent = (data) => {
+      console.log('⌨️ [PUSHER] Typing event received:', data);
+      
+      const { userId, userName, isTyping: userIsTyping } = data;
+      
+      // Don't show typing indicator for current user
+      if (userId === currentUserIdRef.current) {
+        return;
+      }
 
-    // Cleanup: Only unbind our listener, don't unsubscribe
+      setTypingUsers(prevTypingUsers => {
+        if (userIsTyping) {
+          // Add user to typing list if not already there
+          const userExists = prevTypingUsers.some(user => user.id === userId);
+          if (!userExists) {
+            return [...prevTypingUsers, { id: userId, name: userName }];
+          }
+        } else {
+          // Remove user from typing list
+          return prevTypingUsers.filter(user => user.id !== userId);
+        }
+        return prevTypingUsers;
+      });
+    };
+
+    // Bind the listeners
+    channel.bind('new-message', handleNewMessage);
+    channel.bind('typing', handleTypingEvent);
+    console.log('✅ [PUSHER] Listening for new messages and typing events on:', channelName);
+
+    // Cleanup: Only unbind our listeners, don't unsubscribe
     // Let ChatScreen manage subscriptions
     return () => {
-      console.log('🔌 [PUSHER] Unbinding listener from:', channelName);
+      console.log('🔌 [PUSHER] Unbinding listeners from:', channelName);
       channel.unbind('new-message', handleNewMessage);
+      channel.unbind('typing', handleTypingEvent);
       // Note: We do NOT unsubscribe - ChatScreen manages subscriptions
     };
   }, [conversationId]);
 
-  // --- Helper: Get File Icon Based on File Type (MCP Context 7) ---
-  // Returns appropriate icon name for each file type
-  const getFileIcon = (fileType) => {
-    if (!fileType) return 'insert-drive-file';
+  // --- Cleanup Typing Timeout on Unmount (MCP Context 7) ---
+  // Business Rule: Clear typing timeout when component unmounts to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // --- Date Picker Handler for Signature Request (MCP Context 7) ---
+  const handleDateChange = (event, selectedDate) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      setSignatureDueDate(selectedDate);
+    }
+  };
+
+  // --- Helper: Get File Icon Based on File Name (MCP Context 7) ---
+  // Returns appropriate icon name for each file type based on file extension
+  const getFileIcon = (fileName) => {
+    if (!fileName) return 'insert-drive-file';
+    
+    const extension = fileName.toLowerCase().split('.').pop();
     
     // PDFs
-    if (fileType === 'application/pdf') return 'picture-as-pdf';
+    if (extension === 'pdf') return 'picture-as-pdf';
     
     // Word Documents
-    if (fileType === 'application/msword' || 
-        fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-      return 'description';
-    }
+    if (extension === 'doc' || extension === 'docx') return 'description';
     
     // Excel Spreadsheets
-    if (fileType === 'application/vnd.ms-excel' || 
-        fileType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
-      return 'table-chart';
-    }
+    if (extension === 'xls' || extension === 'xlsx') return 'table-chart';
     
     // PowerPoint Presentations
-    if (fileType === 'application/vnd.ms-powerpoint' || 
-        fileType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
-      return 'slideshow';
-    }
+    if (extension === 'ppt' || extension === 'pptx') return 'slideshow';
     
     // Text files
-    if (fileType === 'text/plain' || fileType === 'text/csv') return 'article';
+    if (extension === 'txt' || extension === 'csv') return 'article';
     
     // Archives (ZIP, RAR)
-    if (fileType === 'application/zip' || 
-        fileType === 'application/x-rar-compressed') {
-      return 'folder-zip';
-    }
+    if (extension === 'zip' || extension === 'rar') return 'folder-zip';
+    
+    // Images
+    if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(extension)) return 'image';
     
     // Default icon for unknown types
     return 'insert-drive-file';
@@ -482,6 +611,53 @@ const UserChatScreen = ({ navigation, route }) => {
     setSelectedFile(null);
   };
 
+  // --- Typing Detection and Management (MCP Context 7) ---
+  // Business Rule: Send typing status to server when user starts/stops typing
+  // Uses debouncing to prevent excessive API calls (WhatsApp-style behavior)
+  const handleTypingStatus = async (isTypingStatus) => {
+    if (!conversationId) {
+      console.log('No conversation ID, skipping typing status');
+      return;
+    }
+
+    try {
+      // Only send if status actually changed
+      if (isTypingStatus !== isUserTyping) {
+        console.log('📝 Sending typing status:', isTypingStatus ? 'started' : 'stopped');
+        await isTyping(conversationId, isTypingStatus);
+        setIsUserTyping(isTypingStatus);
+      }
+    } catch (error) {
+      console.error('❌ Error sending typing status:', error);
+      // Don't show error to user - typing is not critical functionality
+    }
+  };
+
+  // --- Debounced Typing Handler (MCP Context 7) ---
+  // Business Rule: Start typing immediately, stop typing after 2 seconds of inactivity
+  // This prevents spam while providing responsive feedback
+  const handleTextChange = (text) => {
+    setInputText(text);
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // If user is typing and text is not empty, send "started typing"
+    if (text.trim().length > 0 && !isUserTyping) {
+      handleTypingStatus(true);
+    }
+
+    // Set timeout to send "stopped typing" after 2 seconds of inactivity
+    typingTimeoutRef.current = setTimeout(() => {
+      if (isUserTyping) {
+        handleTypingStatus(false);
+      }
+    }, 2000);
+  };
+
+
   // --- Handle Send Message (MCP Context 7) ---
   // Business Rule: Send message to API with optimistic UI update
   // Supports text messages, file attachments, or both (WhatsApp-style)
@@ -513,6 +689,11 @@ const UserChatScreen = ({ navigation, route }) => {
     setSelectedFile(null);
     Keyboard.dismiss();
     setIsSendingMessage(true);
+
+    // Stop typing status when sending message
+    if (isUserTyping) {
+      handleTypingStatus(false);
+    }
 
     // --- Step 1: Create Optimistic Message (MCP Context 7) ---
     // Business Rule: Show message immediately in chat before API responds
@@ -576,6 +757,7 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
+
   return (
     <SafeAreaView className="flex-1 bg-gray-100">
       {/* Loading State (MCP Context 7) */}
@@ -595,6 +777,103 @@ const UserChatScreen = ({ navigation, route }) => {
             // Business Rule: Compare sender.id with current logged-in user's id
             // Both are numbers: sender.id (number from API) and currentUserId (converted to number)
             const isMyMessage = item.sender?.id === currentUserId;
+            
+            // --- Signature Contract Rendering (MCP Context 7) ---
+            // Business Rule: If message has no content but has signature object, show as contract form
+            if (!item.content && item.signature) {
+              return (
+                <View className="mb-4 px-5">
+                  <View 
+                    className="bg-white rounded-xl p-6"
+                    style={{
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.1,
+                      shadowRadius: 8,
+                      elevation: 5,
+                      borderWidth: 1,
+                      borderColor: '#e5e7eb'
+                    }}
+                  >
+                    {/* Contract Header */}
+                    <View className="flex-row items-center mb-4">
+                      <View className="w-12 h-12 rounded-full items-center justify-center mr-4" style={{ backgroundColor: 'black' }}>
+                        <Ionicons name="document-text" size={24} color="white" />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-[18px] font-bold text-[#333]">Contract for Signature</Text>
+                        <Text className="text-[14px] text-[#666]">
+                          From: {item.sender.first_name} {item.sender.last_name}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Contract Title */}
+                    <View className="mb-4">
+                      <Text className="text-[16px] font-semibold text-[#333] mb-2">Document Title</Text>
+                      <Text className="text-[15px] text-[#333] bg-[#f8f9fa] p-3 rounded-lg">
+                        {item.signature.title}
+                      </Text>
+                    </View>
+
+                    {/* Contract Notes */}
+                    {item.signature.notes && (
+                      <View className="mb-4">
+                        <Text className="text-[16px] font-semibold text-[#333] mb-2">Instructions</Text>
+                        <Text className="text-[14px] text-[#666] bg-[#f8f9fa] p-3 rounded-lg">
+                          {item.signature.notes}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Due Date */}
+                    {item.signature.dueDate && (
+                      <View className="mb-4">
+                        <Text className="text-[16px] font-semibold text-[#333] mb-2">Due Date</Text>
+                        <Text className="text-[14px] text-[#666] bg-[#f8f9fa] p-3 rounded-lg">
+                          {new Date(item.signature.dueDate).toLocaleDateString()}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Contract Actions */}
+                    <View className="mt-4">
+                      <TouchableOpacity
+                        className="w-full bg-black rounded-lg py-3 items-center"
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          // Handle sign action
+                          console.log('Contract signing');
+                          Alert.alert('Sign', 'Contract signing functionality will be implemented');
+                        }}
+                      >
+                        <Text className="text-white text-[16px] font-semibold">Sign Contract</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Contract Status */}
+                    <View className="mt-4 pt-4 border-t border-[#e5e7eb]">
+                      <View className="flex-row items-center justify-between">
+                        <Text className="text-[12px] text-[#999]">
+                          Created: {new Date(item.signature.createdAt).toLocaleDateString()}
+                        </Text>
+                        <View 
+                          className="px-3 py-1 rounded-full"
+                          style={{ backgroundColor: item.signature.status === 'pending' ? '#fef3c7' : '#d1fae5' }}
+                        >
+                          <Text 
+                            className="text-[12px] font-semibold"
+                            style={{ color: item.signature.status === 'pending' ? '#d97706' : '#059669' }}
+                          >
+                            {item.signature.status?.toUpperCase()}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              );
+            }
             
             // Check file type (MCP Context 7)
             // Business Rule: Display images inline, show document cards for PDFs/docs/archives
@@ -698,77 +977,77 @@ const UserChatScreen = ({ navigation, route }) => {
                   
                   {/* Display document card for PDFs, Word, Excel, etc. */}
                   {/* Business Rule: Tap card to open file, tap download icon to share/download */}
-                  {hasDocument && (() => {
-  // --- Extract File Information (MCP Context 7) ---
-  // Try different possible field names (API might use camelCase or snake_case)
-  const displayFileName = item.fileName || 
-                         item.file_name || 
-                         item.name || 
-                         fileUrl?.split('/').pop()?.split('?')[0] || 
-                         'Document';
-  
-  const displayFileType = item.fileType || item.file_type;
-  const displayFileSize = item.fileSize || item.file_size;
-  
-  console.log('📄 FILE CARD RENDER - Name:', displayFileName);
-  
-  return (
-    <TouchableOpacity
-      onPress={() => handleOpenFile(fileUrl, displayFileName)}
-      activeOpacity={0.7}
-      className="flex-row items-center p-3 rounded-lg mb-1 bg-white shadow-sm shadow-gray-300/50"
-      style={{ 
-        minWidth: '100%', // Force full width
-        alignSelf: 'stretch', // Make it stretch to available space
-      }}
-    >
-      {/* File Icon */}
-      <View className="w-12 h-12 bg-gray-100 rounded-lg items-center justify-center mr-3 flex-shrink-0">
-        <MaterialIcons
-          name={getFileIcon(displayFileType)}
-          size={24}
-          color="#000000"
-        />
-      </View>
-      
-      {/* File Info - FIXED: Use proper React Native styles */}
-      <View 
-        className="flex-1 mr-3"
-        style={{ 
-          flex: 1,
-          minWidth: 0, // This is the React Native equivalent of min-w-0
-        }}
-      >
-        <Text 
-          className="text-sm font-semibold text-black"
-          numberOfLines={2}
-          ellipsizeMode="middle"
-        >
-          {displayFileName || "Test File Name - This Should Show"}
-        </Text>
-        <Text className="text-xs mt-1 text-gray-600">
-          {displayFileSize ? `${displayFileSize} MB` : 'File'}
-        </Text>
-      </View>
-      
-      {/* Download/Share Icon */}
-      <TouchableOpacity
-        onPress={(e) => {
-          e.stopPropagation();
-          handleDownloadAndShareFile(fileUrl, displayFileName);
-        }}
-        activeOpacity={0.6}
-        className="p-2 flex-shrink-0"
-      >
-        <MaterialIcons
-          name="file-download"
-          size={20}
-          color="#000000"
-        />
-      </TouchableOpacity>
-    </TouchableOpacity>
-  );
-})()}
+                  {hasDocument && (
+                    (() => {
+                      // --- Extract File Information (MCP Context 7) ---
+                      // Try different possible field names (API might use camelCase or snake_case)
+                      const displayFileName = item.fileName || 
+                                             item.file_name || 
+                                             item.name || 
+                                             fileUrl?.split('/').pop()?.split('?')[0] || 
+                                             'Document';
+                      
+                      const displayFileType = item.fileType || item.file_type;
+                      const displayFileSize = item.fileSize || item.file_size;
+                      
+                      return (
+                        <TouchableOpacity
+                          onPress={() => handleOpenFile(fileUrl, displayFileName)}
+                          activeOpacity={0.7}
+                          className="flex-row items-center p-3 rounded-lg mb-1 bg-white shadow-sm shadow-gray-300/50"
+                          style={{ 
+                            minWidth: '100%', // Force full width
+                            alignSelf: 'stretch', // Make it stretch to available space
+                          }}
+                        >
+                          {/* File Icon */}
+                          <View className="w-12 h-12 bg-gray-100 rounded-lg items-center justify-center mr-3 flex-shrink-0">
+                            <MaterialIcons
+                              name={getFileIcon(displayFileType)}
+                              size={24}
+                              color="#000000"
+                            />
+                          </View>
+                          
+                          {/* File Info - FIXED: Use proper React Native styles */}
+                          <View 
+                            className="flex-1 mr-3"
+                            style={{ 
+                              flex: 1,
+                              minWidth: 0, // This is the React Native equivalent of min-w-0
+                            }}
+                          >
+                            <Text 
+                              className="text-sm font-semibold text-black"
+                              numberOfLines={2}
+                              ellipsizeMode="middle"
+                            >
+                              {displayFileName || "Test File Name - This Should Show"}
+                            </Text>
+                            <Text className="text-xs mt-1 text-gray-600">
+                              {displayFileSize ? `${displayFileSize} MB` : 'File'}
+                            </Text>
+                          </View>
+                          
+                          {/* Download/Share Icon */}
+                          <TouchableOpacity
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              handleDownloadAndShareFile(fileUrl, displayFileName);
+                            }}
+                            activeOpacity={0.6}
+                            className="p-2 flex-shrink-0"
+                          >
+                            <MaterialIcons
+                              name="file-download"
+                              size={20}
+                              color="#000000"
+                            />
+                          </TouchableOpacity>
+                        </TouchableOpacity>
+                      );
+                    })()
+                  )}
                   
                   {/* Display text content in bubble (only if text exists) */}
                   {/* WhatsApp-style bubble with dynamic rounded corners */}
@@ -827,6 +1106,58 @@ const UserChatScreen = ({ navigation, route }) => {
         />
       )}
 
+      {/* Typing Indicator (WhatsApp-style) */}
+      {/* Business Rule: Show who is currently typing above the input bar */}
+      {typingUsers.length > 0 && (
+        <View 
+          className="bg-white border-t border-gray-200 px-4 py-2"
+          style={{ 
+            position: "absolute",
+            bottom: 80 + (insets.bottom || 0), // Position above input bar
+            left: 0,
+            right: 0,
+            zIndex: 10,
+          }}
+        >
+          <View className="flex-row items-center">
+            <View className="flex-row items-center mr-2">
+              {/* Typing Animation Dots */}
+              <View className="flex-row items-center">
+                <View 
+                  className="w-2 h-2 bg-gray-400 rounded-full mr-1"
+                  style={{
+                    opacity: 0.4,
+                    animationDelay: '0ms',
+                  }}
+                />
+                <View 
+                  className="w-2 h-2 bg-gray-400 rounded-full mr-1"
+                  style={{
+                    opacity: 0.7,
+                    animationDelay: '150ms',
+                  }}
+                />
+                <View 
+                  className="w-2 h-2 bg-gray-400 rounded-full"
+                  style={{
+                    opacity: 1,
+                    animationDelay: '300ms',
+                  }}
+                />
+              </View>
+            </View>
+            
+            {/* Typing Users Text */}
+            <Text className="text-sm text-gray-600">
+              {typingUsers.length === 1 
+                ? `${typingUsers[0].name} is typing...`
+                : `${typingUsers.length} people are typing...`
+              }
+            </Text>
+          </View>
+        </View>
+      )}
+
       {/* 🧭 Input Bar */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -869,12 +1200,22 @@ const UserChatScreen = ({ navigation, route }) => {
               <Ionicons name="add-circle" size={28} color="#000000" />
             </TouchableOpacity>
 
+            {/* Request Signature Button */}
+            <TouchableOpacity
+              onPress={() => setSignatureModalVisible(true)}
+              disabled={isSendingMessage}
+              className="mr-2"
+              activeOpacity={0.7}
+            >
+              <Ionicons name="create" size={28} color="#3155A1" />
+            </TouchableOpacity>
+
             <TextInput
               className="flex-1 text-base text-gray-900 max-h-24"
               placeholder="Type a message..."
               placeholderTextColor="#9CA3AF"
               value={inputText}
-              onChangeText={setInputText}
+              onChangeText={handleTextChange}
               multiline
               maxLength={1000}
               returnKeyType="send"
@@ -989,6 +1330,291 @@ const UserChatScreen = ({ navigation, route }) => {
           )}
         </View>
       </Modal>
+
+      {/* Full Page Files Modal (MCP Context 7) */}
+      {/* Business Rule: Show full page view when All Files is tapped */}
+      <Modal
+        visible={filesModalVisible}
+        animationType="slide"
+        onRequestClose={() => {
+          console.log('📁 Files modal closed');
+          setFilesModalVisible(false);
+        }}
+      >
+        <SafeAreaView className="flex-1 bg-white">
+          {/* Header */}
+          <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
+            <TouchableOpacity
+              onPress={() => setFilesModalVisible(false)}
+              className="p-2"
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-back" size={24} color="#000000" />
+            </TouchableOpacity>
+            <Text className="text-lg font-bold text-gray-900">All Files</Text>
+            <View className="w-8" />
+          </View>
+
+          {/* Content */}
+          <View className="flex-1">
+            {isLoadingFiles ? (
+              <View className="flex-1 items-center justify-center">
+                <ActivityIndicator size="large" color="#000000" />
+                <Text className="text-base text-gray-500 mt-4">Loading files...</Text>
+              </View>
+            ) : conversationFiles.length > 0 ? (
+              <FlatList
+                data={conversationFiles}
+                keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+                renderItem={({ item }) => {
+                  const fileUrl = item.fileUrl;
+                  const fileName = item.fileName || 'Unknown File';
+                  const fileSize = item.fileSize;
+                  const uploadedAt = item.uploadedAt;
+                  
+                  // Determine if it's an image based on file extension
+                  const isImage = fileName.toLowerCase().match(/\.(jpg|jpeg|png|gif|bmp|webp)$/);
+
+                  return (
+                    <TouchableOpacity
+                      onPress={() => {
+                        if (isImage) {
+                          handleOpenImage(fileUrl);
+                          setFilesModalVisible(false);
+                        } else {
+                          handleOpenFile(fileUrl, fileName);
+                        }
+                      }}
+                      className="flex-row items-center p-4 border-b border-gray-100"
+                      activeOpacity={0.7}
+                    >
+                      {/* File Icon or Image Preview */}
+                      <View className="w-12 h-12 bg-gray-100 rounded-lg items-center justify-center mr-3 flex-shrink-0">
+                        {isImage ? (
+                          <Image
+                            source={{ uri: fileUrl }}
+                            style={{ width: 48, height: 48, borderRadius: 8 }}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <MaterialIcons
+                            name={getFileIcon(fileName)}
+                            size={24}
+                            color="#000000"
+                          />
+                        )}
+                      </View>
+
+                      {/* File Info */}
+                      <View className="flex-1 mr-3">
+                        <Text 
+                          className="text-sm font-semibold text-gray-900"
+                          numberOfLines={2}
+                          ellipsizeMode="middle"
+                        >
+                          {fileName}
+                        </Text>
+                        <Text className="text-xs text-gray-500 mt-1">
+                          {fileSize ? `${fileSize} MB` : 'File'} • {isImage ? 'Image' : 'Document'}
+                        </Text>
+                        <Text className="text-xs text-gray-400 mt-1">
+                          {new Date(uploadedAt).toLocaleDateString()}
+                        </Text>
+                      </View>
+
+                      {/* Download Button */}
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          if (isImage) {
+                            handleDownloadAndShareImage(fileUrl, fileName);
+                          } else {
+                            handleDownloadAndShareFile(fileUrl, fileName);
+                          }
+                        }}
+                        className="p-2"
+                        activeOpacity={0.6}
+                      >
+                        <MaterialIcons
+                          name="file-download"
+                          size={20}
+                          color="#000000"
+                        />
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  );
+                }}
+                className="flex-1"
+                showsVerticalScrollIndicator={false}
+              />
+            ) : (
+              <View className="flex-1 items-center justify-center px-4">
+                <MaterialIcons name="folder-open" size={80} color="#9CA3AF" />
+                <Text className="text-xl text-gray-500 mt-6 text-center font-medium">
+                  No files shared yet
+                </Text>
+                <Text className="text-base text-gray-400 mt-4 text-center">
+                  Files shared in this chat will appear here
+                </Text>
+              </View>
+            )}
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Request Signature Modal (MCP Context 7) */}
+      <Modal
+        visible={signatureModalVisible}
+        animationType="slide"
+        onRequestClose={() => setSignatureModalVisible(false)}
+      >
+        <SafeAreaView className="flex-1 bg-white">
+          {/* Header */}
+          <View className="flex-row items-center justify-between px-5 py-4 border-b border-[#e1e8ed]">
+            <TouchableOpacity
+              onPress={() => setSignatureModalVisible(false)}
+              className="p-2"
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-back" size={24} color="#333" />
+            </TouchableOpacity>
+            <Text className="text-[18px] font-bold text-[#333]">Request Signature</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <ScrollView
+            className="flex-1"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 20 }}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View className="flex-1 p-5">
+              <View className="mb-5">
+                {/* Title Field */}
+                <View className="mb-5">
+                  <View className="flex-row items-center mb-2">
+                    <Ionicons name="create" size={20} color="black" style={{ marginRight: 8 }} />
+                    <Text className="text-[16px] font-semibold text-[#333]">Title *</Text>
+                  </View>
+                  <TextInput
+                    className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333]"
+                    placeholder="Enter signature request title..."
+                    placeholderTextColor="#999"
+                    value={signatureTitle}
+                    onChangeText={setSignatureTitle}
+                    returnKeyType="next"
+                  />
+                </View>
+
+                {/* Notes Field */}
+                <View className="mb-5">
+                  <View className="flex-row items-center mb-2">
+                    <Ionicons name="document-text" size={20} color="black" style={{ marginRight: 8 }} />
+                    <Text className="text-[16px] font-semibold text-[#333]">Notes</Text>
+                  </View>
+                  <TextInput
+                    className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333] h-24"
+                    placeholder="Add notes or instructions..."
+                    placeholderTextColor="#999"
+                    value={signatureNotes}
+                    onChangeText={setSignatureNotes}
+                    multiline
+                    numberOfLines={4}
+                    returnKeyType="next"
+                    style={{ textAlignVertical: 'top' }}
+                  />
+                </View>
+
+                {/* Due Date Field */}
+                <View className="mb-5">
+                  <View className="flex-row items-center mb-2">
+                    <Ionicons name="calendar" size={20} color="black" style={{ marginRight: 8 }} />
+                    <Text className="text-[16px] font-semibold text-[#333]">Due Date</Text>
+                  </View>
+                  <TouchableOpacity
+                    className="flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                    onPress={() => setShowDatePicker(true)}
+                  >
+                    <Text className="text-[16px] text-[#333] font-medium">
+                      {signatureDueDate ? signatureDueDate.toLocaleDateString() : 'Select date'}
+                    </Text>
+                    <Ionicons name="calendar-outline" size={16} color="#666" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </ScrollView>
+
+          {/* Fixed Action Buttons - Always positioned at bottom */}
+          <View className="absolute bottom-0 left-0 right-0 flex-row justify-between gap-4 px-5 pt-5 pb-8 bg-white" style={{ zIndex: 1000 }}>
+            <TouchableOpacity
+              className="flex-1 bg-[#f8f9fa] border border-[#dee2e6] rounded-lg p-4 items-center"
+              onPress={() => setSignatureModalVisible(false)}
+              activeOpacity={0.7}
+            >
+              <Text className="text-[#6c757d] text-[16px] font-semibold">Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="flex-1 bg-black rounded-lg p-4 items-center justify-center"
+              onPress={async () => {
+                try {
+                  // Validate required fields
+                  if (!signatureTitle.trim()) {
+                    Alert.alert('Error', 'Please enter a title for the signature request');
+                    return;
+                  }
+
+                  // Prepare signature data
+                  const signatureData = {
+                    title: signatureTitle.trim(),
+                    notes: signatureNotes.trim(),
+                    dueDate: signatureDueDate ? signatureDueDate.toISOString().split('T')[0] : null
+                  };
+
+                  console.log('Creating signature request:', signatureData);
+                  
+                  // Call the API service
+                  const result = await createSignature(conversationId, signatureData);
+                  
+                  console.log('Signature request created successfully:', result);
+                  
+                  Alert.alert('Success', 'Signature request sent successfully!');
+                  setSignatureModalVisible(false);
+                  
+                  // Reset form
+                  setSignatureTitle('');
+                  setSignatureNotes('');
+                  setSignatureDueDate('');
+                  
+                  // Refresh messages to show the new signature request
+                  if (conversationId) {
+                    fetchMessages();
+                  }
+                  
+                } catch (error) {
+                  console.error('Error creating signature request:', error);
+                  Alert.alert('Error', error.message || 'Failed to create signature request');
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <Text className="text-white text-[16px] font-semibold">Send Request</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+
+        {/* Date Picker Modal */}
+        {showDatePicker && (
+          <DateTimePicker
+            value={signatureDueDate}
+            mode="date"
+            display="default"
+            onChange={handleDateChange}
+            minimumDate={new Date()}
+          />
+        )}
+      </Modal>
+
     </SafeAreaView>
   );
 };

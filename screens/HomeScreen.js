@@ -458,12 +458,20 @@ function HomeScreen({ navigation, route }) {
       key={project.id}
       className="bg-white rounded-2xl p-0 mb-4 border border-[#f0f0f0] overflow-hidden"
       style={{ width: cardWidth }}
-      onPress={() =>
+      onPress={() => {
+        console.log('🔍 NAVIGATION DEBUG - HomeScreen:');
+        console.log('📱 Project ID:', project.id);
+        console.log('📝 Project Name:', project.name);
+        console.log('🚀 Navigating to WidgetScreen with params:', {
+          projectId: project.id,
+          projectName: project.name
+        });
+        
         navigation.navigate("WidgetScreen", { 
           projectId: project.id,
           projectName: project.name 
-        })
-      }
+        });
+      }}
     >
       {/* Navbar-like header */}
       <View className="bg-black py-3 px-5 flex-row justify-between items-center">

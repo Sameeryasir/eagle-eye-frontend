@@ -8,6 +8,8 @@ import * as Localization from 'expo-localization';
 import { getEmployeesToAssignTask } from "../../services/employees/getEmployeesOfTheCompany";
 import { getMyProjects } from "../../services/projects/getProjectsByLoginUserId";
 import { createEvent } from "../../services/event/createEvent";
+import { eventAssignement } from "../../services/inAppNotification/eventAssignement";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import ErrorDialog from './ErrorDialog';
 
 const CreateEventModal = ({ 
@@ -685,6 +687,53 @@ const CreateEventModal = ({
       // Check if the create was successful (API returns the created event data)
       if (response) {
         console.log('Event created successfully:', response);
+        
+        // --- Send Notification for Event Assignment (MCP Context 7) ---
+        // Business Rule: Send notification when event is assigned to users
+        try {
+          // Get current user info for notification
+          const currentUserId = await AsyncStorage.getItem('userId');
+          const currentUserFirstName = await AsyncStorage.getItem('userFirstName');
+          const currentUserLastName = await AsyncStorage.getItem('userLastName');
+          const currentUserName = `${currentUserFirstName || ''} ${currentUserLastName || ''}`.trim() || 'Unknown User';
+
+          // Send notification for assigned employees
+          if (eventForm.assignedTo && eventForm.assignedTo.length > 0) {
+            // Extract employee IDs as array to match backend DTO
+            const assignedToUserIds = eventForm.assignedTo.map(employee => Number(employee.id));
+            
+            // Ensure we have valid event ID
+            const eventId = response?.id || response?.data?.id || eventData?.id;
+            if (!eventId) {
+              console.error('❌ No event ID found in response:', response);
+              return;
+            }
+            
+            const apiNotificationData = {
+              title: 'New Event Assigned',
+              message: `You have been assigned to a new event: ${eventForm.title}`,
+              assignedToUserIds: assignedToUserIds, // Array of user IDs
+              eventId: Number(eventId), // Single event ID as number
+              priority: 'medium',
+              eventName: eventForm.title,
+              fromUserName: currentUserName
+            };
+            
+            console.log('🔔 CALLING API FOR EVENT ASSIGNMENT NOTIFICATION:');
+            console.log('📋 Event Form assignedTo:', eventForm.assignedTo);
+            console.log('📋 Extracted assignedToUserIds:', assignedToUserIds);
+            console.log('📋 Event ID from response:', eventId);
+            console.log('📋 Full notification data:', apiNotificationData);
+            
+            await eventAssignement(apiNotificationData);
+            console.log('✅ API EVENT NOTIFICATION SENT SUCCESSFULLY');
+          } else {
+            console.log('⚠️ No employees assigned to event, skipping notification');
+          }
+        } catch (apiError) {
+          console.error('❌ Error sending API event notification:', apiError);
+          // Don't throw error - event was already created successfully
+        }
         
         // Show success toast message
         Toast.show({

@@ -4,6 +4,7 @@ import { configureStore } from '@reduxjs/toolkit';
 import projectReducer from './slices/projectSlice';
 import taskReducer from './slices/taskSlice';
 import logReducer from './slices/logSlice';
+import notificationReducer from './slices/notificationSlice';
 
 // Configure the Redux store with all reducers
 // This follows MCP Context 7 best practices for clean, maintainable state management
@@ -17,6 +18,9 @@ export const store = configureStore({
     
     // Log management slice for all CRUD operations
     logs: logReducer,
+    
+    // Notification management slice for in-app notifications
+    notifications: notificationReducer,
     
     // Event management slice for all CRUD operations
     

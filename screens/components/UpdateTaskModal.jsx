@@ -24,15 +24,24 @@ import DropDownPicker from "react-native-dropdown-picker";
 // --- Redux Integration (MCP Context 7) ---
 import { useDispatch, useSelector } from 'react-redux';
 import { updateExistingTask, selectTaskUpdating, selectTaskUpdateError } from '../../store/slices/taskSlice';
+import { addNotification } from '../../store/slices/notificationSlice';
 import { getEmployeesToAssignTask } from '../../services/employees/getEmployeesOfTheCompany';
+import { taskAssignement } from '../../services/inAppNotification/taskAssignement';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function UpdateTaskModal({ 
   visible, 
   onClose, 
   task, 
   projectId,
+  projectName,
   onSuccess 
 }) {
+  // --- Debug Navigation Params (MCP Context 7) ---
+  console.log('🔍 UpdateTaskModal - Navigation Params Received:');
+  console.log('📱 Project ID:', projectId);
+  console.log('📝 Project Name:', projectName);
+  console.log('📋 Task:', task);
   // --- Redux State (MCP Context 7) ---
   const dispatch = useDispatch();
   const updating = useSelector(selectTaskUpdating);
@@ -427,6 +436,99 @@ export default function UpdateTaskModal({
       
       if (updateExistingTask.fulfilled.match(result)) {
         // Success - task updated in Redux state automatically
+        
+        // --- Send Notification for Task Assignment (MCP Context 7) ---
+        // Business Rule: Send notification when task is assigned or reassigned
+        if (originalTask.assignedTo?.id !== currentTask.assignedTo?.id) {
+          try {
+            // Get current user info for notification
+            const currentUserId = await AsyncStorage.getItem('userId');
+            const currentUserFirstName = await AsyncStorage.getItem('userFirstName');
+            const currentUserLastName = await AsyncStorage.getItem('userLastName');
+            const currentUserName = `${currentUserFirstName || ''} ${currentUserLastName || ''}`.trim() || 'Unknown User';
+
+            // Send notification to new assignee
+            if (currentTask.assignedTo?.id) {
+              const newAssigneeNotification = {
+                type: 'task_assignment',
+                title: 'New Task Assigned',
+                message: `You have been assigned a new task: ${currentTask.title}`,
+                taskId: task.id,
+                projectId: projectId,
+                fromUserId: currentUserId,
+                fromUserName: currentUserName,
+                assignedToUserId: Number(currentTask.assignedTo.id),
+                priority: currentTask.priority || 'medium'
+              };
+              
+              console.log('🔔 NEW ASSIGNEE NOTIFICATION BEING STORED IN REDUX:', newAssigneeNotification);
+              dispatch(addNotification(newAssigneeNotification));
+              
+              // --- Call API to send notification to backend ---
+              try {
+                const apiNotificationData = {
+                  title: 'New Task Assigned',
+                  message: `You have been assigned a new task: ${task.title || task.name}`,
+                  assignedToUserId: Number(currentTask.assignedTo.id),
+                  fromUserName: currentUserName,
+                  priority: currentTask.priority || 'low',
+                  projectName: projectName,
+                  taskId: task.id,
+                  taskName: task.title,
+                };
+                
+                console.log('🔔 CALLING API FOR NEW ASSIGNEE NOTIFI-CATION:', apiNotificationData);
+                await taskAssignement(apiNotificationData);
+                console.log('✅ API NOTIFICATION SENT SUCCESSFULLY');
+              } catch (apiError) {
+                console.error('❌ Error sending API notification:', apiError);
+                // Don't throw error - Redux notification was already sent
+              }
+            }
+
+            // Send notification to previous assignee if task was reassigned
+            if (originalTask.assignedTo?.id && originalTask.assignedTo.id !== currentTask.assignedTo?.id) {
+              const previousAssigneeNotification = {
+                type: 'task_reassignment',
+                title: 'Task Reassigned',
+                message: `Task "${currentTask.title}" has been reassigned to someone else`,
+                taskId: task.id,
+                projectId: projectId,
+                fromUserId: currentUserId,
+                fromUserName: currentUserName,
+                assignedToUserId: originalTask.assignedTo.id,
+                priority: currentTask.priority || 'medium'
+              };
+              
+              console.log('🔔 PREVIOUS ASSIGNEE NOTIFICATION BEING STORED IN REDUX:', previousAssigneeNotification);
+              dispatch(addNotification(previousAssigneeNotification));
+              
+              // --- Call API to send notification to previous assignee ---
+              try {
+                const apiNotificationData = {
+                  title: 'Task Reassigned',
+                  message: `Task "${task.title || task.name}" has been reassigned to someone else`,
+                  assignedToUserId: Number(originalTask.assignedTo.id),
+                  fromUserName: currentUserName,
+                  priority: currentTask.priority,
+                  projectName: projectName,
+                  taskId: task.id,
+                  taskName: task.title || task.name
+                };
+                
+                console.log('🔔 CALLING API FOR PREVIOUS ASSIGNEE NOTIFICATION:', apiNotificationData);
+                await taskAssignement(apiNotificationData);
+                console.log('✅ API NOTIFICATION SENT SUCCESSFULLY');
+              } catch (apiError) {
+                console.error('❌ Error sending API notification:', apiError);
+                // Don't throw error - Redux notification was already sent
+              }
+            }
+          } catch (error) {
+            console.error('Error creating notifications:', error);
+          }
+        }
+        
         Toast.show({
           type: 'success',
           text1: 'Task Updated Successfully!',
