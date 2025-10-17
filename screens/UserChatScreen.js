@@ -32,6 +32,7 @@ import { sendMessage } from "../services/chats/sendMessage";
 import { isTyping } from "../services/chats/isTyping";
 import { getFilesForConversation } from "../services/chats/getFilesForConversation";
 import { createSignature } from "../services/chats/createSignature";
+import submitSignature from "../services/chats/submitSignature";
 import DateTimePicker from '@react-native-community/datetimepicker';
 import appEmitter from "../utils/appEmitter";
 import pusher from "../pusherClient";
@@ -102,6 +103,8 @@ const UserChatScreen = ({ navigation, route }) => {
   const [signatureNotes, setSignatureNotes] = useState('');
   const [signatureDueDate, setSignatureDueDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [isSendingSignature, setIsSendingSignature] = useState(false);
+  const [activeSignatureId, setActiveSignatureId] = useState(null); // Track which signature is being signed
 
   // --- Typing State Management (MCP Context 7) ---
   // Business Rule: Track who is currently typing in the conversation
@@ -254,16 +257,26 @@ const UserChatScreen = ({ navigation, route }) => {
     }
 
     const channelName = `conversation-${conversationId}`;
+    const signatureChannelName = `conversation-signature-${conversationId}`;
     console.log('📡 [PUSHER] Setting up listener for:', channelName);
+    console.log('📡 [PUSHER] Setting up signature listener for:', signatureChannelName);
     
     // Always try to get or create the channel
     let channel = pusher.channel(channelName);
+    let signatureChannel = pusher.channel(signatureChannelName);
     
     if (!channel) {
       console.log('🆕 [PUSHER] Channel not found, subscribing now');
       channel = pusher.subscribe(channelName);
     } else {
       console.log('✅ [PUSHER] Using existing channel');
+    }
+
+    if (!signatureChannel) {
+      console.log('🆕 [PUSHER] Signature channel not found, subscribing now');
+      signatureChannel = pusher.subscribe(signatureChannelName);
+    } else {
+      console.log('✅ [PUSHER] Using existing signature channel');
     }
 
     // Define message handler
@@ -348,17 +361,126 @@ const UserChatScreen = ({ navigation, route }) => {
       });
     };
 
+    // Define signature message handler
+    const handleSignatureMessage = (data) => {
+      console.log('📝 [PUSHER] Signature message event received');
+      const rawSignatureMessage = data.message || data;
+
+      // Basic validation
+      if (!rawSignatureMessage || !rawSignatureMessage.id) {
+        console.log('❌ [PUSHER] Invalid signature message - missing ID');
+        return;
+      }
+
+      // --- Normalize Signature Message Structure (MCP Context 7) ---
+      // Business Rule: Pusher sends flat structure, but UI expects nested structure
+      // Transform flat signature data into the expected nested format
+      const signatureMessage = {
+        ...rawSignatureMessage,
+        signature: {
+          id: rawSignatureMessage.signatureId || rawSignatureMessage.id,
+          title: rawSignatureMessage.title,
+          notes: rawSignatureMessage.notes,
+          status: rawSignatureMessage.status,
+          dueDate: rawSignatureMessage.dueDate,
+          // Preserve any existing nested signature data
+          ...rawSignatureMessage.signature
+        }
+      };
+
+      // Check if it's a signature message
+      const isSignatureMessage = !signatureMessage.content && signatureMessage.signature;
+      
+      console.log('📬 [PUSHER] Signature message details:', {
+        id: signatureMessage.id,
+        senderId: signatureMessage.sender?.id,
+        senderName: `${signatureMessage.sender?.first_name} ${signatureMessage.sender?.last_name}`.trim(),
+        hasSignature: !!signatureMessage.signature,
+        signatureTitle: signatureMessage.signature?.title,
+        signatureStatus: signatureMessage.signature?.status
+      });
+
+      // Add message to state
+      setMessages((prevMessages) => {
+        // Check if message already exists (by ID)
+        const exists = prevMessages.some(msg => msg.id === signatureMessage.id);
+        
+        if (exists) {
+          console.log('⚠️ [PUSHER] Signature message already exists in chat - skipping (ID:', signatureMessage.id, ')');
+          return prevMessages;
+        }
+
+        // Get current user ID from ref
+        const myUserId = currentUserIdRef.current;
+        const messageSenderId = signatureMessage.sender?.id;
+
+        // Show signature contract to everyone (including the creator)
+        console.log('✅ [PUSHER] Adding signature contract to chat from:', signatureMessage.sender?.first_name || 'Unknown');
+        console.log('👤 [PUSHER] Message sender ID:', messageSenderId, 'Current user ID:', myUserId);
+        console.log('📋 [PUSHER] Normalized signature message structure:', JSON.stringify(signatureMessage, null, 2));
+        const updatedMessages = [...prevMessages, signatureMessage];
+        return sortMessagesByTime(updatedMessages);
+      });
+    };
+
+    // Define signature file upload handler
+    const handleSignatureFileUpload = (data) => {
+      console.log('📁 [PUSHER] Signature file upload event received:');
+      console.log('📁 [PUSHER] Full response data:', JSON.stringify(data, null, 2));
+      
+      const { signatureId, fileUrl, status, fileName, fileSize, signedBy, createdAt } = data;
+      
+      if (!signatureId || !fileUrl) {
+        console.log('❌ [PUSHER] Invalid signature file upload - missing signatureId or fileUrl');
+        return;
+      }
+
+      console.log('📬 [PUSHER] Signature file upload details:', {
+        signatureId,
+        fileUrl,
+        status,
+        fileName,
+        fileSize,
+        signedBy: signedBy?.name || signedBy,
+        createdAt,
+        fullSignedBy: signedBy
+      });
+
+      // Update the signature in messages with the uploaded file
+      setMessages((prevMessages) => {
+        return prevMessages.map(msg => {
+          if (msg.signature && msg.signature.id === signatureId) {
+            console.log('✅ [PUSHER] Updating signature with file URL for signature ID:', signatureId);
+            return {
+              ...msg,
+              signature: {
+                ...msg.signature,
+                status: status || 'signed',
+                fileUrl: fileUrl,
+                fileName: fileName
+              }
+            };
+          }
+          return msg;
+        });
+      });
+    };
+
     // Bind the listeners
     channel.bind('new-message', handleNewMessage);
     channel.bind('typing', handleTypingEvent);
+    signatureChannel.bind('message-with-signature', handleSignatureMessage);
     console.log('✅ [PUSHER] Listening for new messages and typing events on:', channelName);
+    console.log('✅ [PUSHER] Listening for signature messages on:', signatureChannelName);
 
     // Cleanup: Only unbind our listeners, don't unsubscribe
     // Let ChatScreen manage subscriptions
     return () => {
       console.log('🔌 [PUSHER] Unbinding listeners from:', channelName);
+      console.log('🔌 [PUSHER] Unbinding signature listeners from:', signatureChannelName);
       channel.unbind('new-message', handleNewMessage);
       channel.unbind('typing', handleTypingEvent);
+      signatureChannel.unbind('message-with-signature', handleSignatureMessage);
       // Note: We do NOT unsubscribe - ChatScreen manages subscriptions
     };
   }, [conversationId]);
@@ -376,7 +498,7 @@ const UserChatScreen = ({ navigation, route }) => {
   // --- Date Picker Handler for Signature Request (MCP Context 7) ---
   const handleDateChange = (event, selectedDate) => {
     setShowDatePicker(false);
-    if (selectedDate) {
+    if (selectedDate && selectedDate instanceof Date) {
       setSignatureDueDate(selectedDate);
     }
   };
@@ -780,12 +902,55 @@ const UserChatScreen = ({ navigation, route }) => {
             
             // --- Signature Contract Rendering (MCP Context 7) ---
             // Business Rule: If message has no content but has signature object, show as contract form
-            if (!item.content && item.signature) {
+            // Handle both nested (item.signature) and flat (item.title, item.notes, etc.) structures
+            const hasSignatureData = item.signature || (!item.content && (item.title || item.notes || item.status));
+            if (!item.content && hasSignatureData && item) {
+              
+              // --- Subscribe ALL Users to Signature Upload Channel (MCP Context 7) ---
+              // Business Rule: Only subscribe to signature uploads for pending contracts
+              const signatureId = item.signature?.id || item.signatureId || item.id;
+              const signatureStatus = item.signature?.status || item.status;
+              const signatureUploadChannelName = `signature-${signatureId}`;
+              
+              console.log('📡 [CONTRACT] Contract form displayed - Signature ID:', signatureId);
+              console.log('📡 [CONTRACT] Contract status:', signatureStatus);
+              
+              // Only subscribe to signature upload events for pending contracts
+              if (signatureId && signatureStatus !== 'signed') {
+                console.log('📡 [CONTRACT] Contract is pending - subscribing to signature channel:', signatureUploadChannelName);
+                
+                const contractChannel = pusher.subscribe(signatureUploadChannelName);
+                contractChannel.bind('signature-file-uploaded', (data) => {
+                  console.log('🎯 [CONTRACT] Signature uploaded - updating contract for all users');
+                  console.log('🎯 [CONTRACT] Upload data:', JSON.stringify(data, null, 2));
+                  
+                  // Update the message for everyone
+                  setMessages(prevMessages => 
+                    prevMessages.map(msg => 
+                      msg.id === item.id 
+                        ? {
+                            ...msg,
+                            signature: {
+                              ...msg.signature,
+                              status: data.status,
+                              fileUrl: data.fileUrl,
+                              fileName: data.fileName,
+                              signedBy: data.signedBy
+                            }
+                          }
+                        : msg
+                    )
+                  );
+                });
+              } else if (signatureStatus === 'signed') {
+                console.log('📡 [CONTRACT] Contract already signed - skipping signature channel subscription');
+              }
               return (
-                <View className="mb-4 px-5">
+                <View className={`mb-4 px-5 ${isMyMessage ? 'items-end' : 'items-start'}`}>
                   <View 
-                    className="bg-white rounded-xl p-6"
+                    className="bg-white rounded-xl p-4"
                     style={{
+                      width: '70%', // Reduced width from 85% to 70%
                       shadowColor: '#000',
                       shadowOffset: { width: 0, height: 4 },
                       shadowOpacity: 0.1,
@@ -801,71 +966,170 @@ const UserChatScreen = ({ navigation, route }) => {
                         <Ionicons name="document-text" size={24} color="white" />
                       </View>
                       <View className="flex-1">
-                        <Text className="text-[18px] font-bold text-[#333]">Contract for Signature</Text>
-                        <Text className="text-[14px] text-[#666]">
-                          From: {item.sender.first_name} {item.sender.last_name}
-                        </Text>
+                        <Text className="text-[14px] font-bold text-[#333]">Contract for Signature</Text>
                       </View>
                     </View>
 
                     {/* Contract Title */}
                     <View className="mb-4">
-                      <Text className="text-[16px] font-semibold text-[#333] mb-2">Document Title</Text>
-                      <Text className="text-[15px] text-[#333] bg-[#f8f9fa] p-3 rounded-lg">
-                        {item.signature.title}
+                      <Text className="text-[12px] font-semibold text-[#333] mb-2">Document Title</Text>
+                      <Text className="text-[11px] text-[#333] bg-[#f8f9fa] p-3 rounded-lg">
+                        {item.signature?.title || item.title || 'Contract for Signature'}
                       </Text>
                     </View>
 
                     {/* Contract Notes */}
-                    {item.signature.notes && (
+                    {(item.signature?.notes || item.notes) && (
                       <View className="mb-4">
-                        <Text className="text-[16px] font-semibold text-[#333] mb-2">Instructions</Text>
-                        <Text className="text-[14px] text-[#666] bg-[#f8f9fa] p-3 rounded-lg">
-                          {item.signature.notes}
+                        <Text className="text-[12px] font-semibold text-[#333] mb-2">Instructions</Text>
+                        <Text className="text-[11px] text-[#666] bg-[#f8f9fa] p-3 rounded-lg">
+                          {item.signature?.notes || item.notes}
                         </Text>
                       </View>
                     )}
 
                     {/* Due Date */}
-                    {item.signature.dueDate && (
+                    {(item.signature?.dueDate || item.dueDate) && (
                       <View className="mb-4">
-                        <Text className="text-[16px] font-semibold text-[#333] mb-2">Due Date</Text>
-                        <Text className="text-[14px] text-[#666] bg-[#f8f9fa] p-3 rounded-lg">
-                          {new Date(item.signature.dueDate).toLocaleDateString()}
+                        <Text className="text-[12px] font-semibold text-[#333] mb-2">Due Date</Text>
+                        <Text className="text-[11px] text-[#666] bg-[#f8f9fa] p-3 rounded-lg">
+                          {new Date(item.signature?.dueDate || item.dueDate).toLocaleDateString()}
                         </Text>
                       </View>
                     )}
 
                     {/* Contract Actions */}
                     <View className="mt-4">
-                      <TouchableOpacity
-                        className="w-full bg-black rounded-lg py-3 items-center"
-                        activeOpacity={0.7}
-                        onPress={() => {
-                          // Handle sign action
-                          console.log('Contract signing');
-                          Alert.alert('Sign', 'Contract signing functionality will be implemented');
-                        }}
-                      >
-                        <Text className="text-white text-[16px] font-semibold">Sign Contract</Text>
-                      </TouchableOpacity>
+                      {/* Sign Contract Button - Only show for receiver when not signed */}
+                      {!isMyMessage && (item.signature?.status || item.status) !== 'signed' ? (
+                        <TouchableOpacity
+                          className="w-full bg-black rounded-lg py-3 items-center"
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            // Get signature ID from the message
+                            const signatureId = item.signature?.id || item.signatureId || item.id;
+                            console.log('🔍 [SIGNATURE] Signature ID for upload channel:', signatureId);
+                            
+                            // Subscribe to the signature-specific channel for file uploads
+                            const signatureUploadChannelName = `signature-${signatureId}`;
+                            console.log('📡 [PUSHER] Subscribing to signature upload channel:', signatureUploadChannelName);
+                            
+                            const signatureUploadChannel = pusher.subscribe(signatureUploadChannelName);
+                            
+                            // Listen for signature file upload events
+                            signatureUploadChannel.bind('signature-file-uploaded', (data) => {
+                              console.log('🎯 [PUSHER] Signature file uploaded for ID:', signatureId);
+                              console.log('🎯 [PUSHER] Upload data:', JSON.stringify(data, null, 2));
+                              
+                              // Update the message with the uploaded signature file
+                              setMessages(prevMessages => 
+                                prevMessages.map(msg => 
+                                  msg.id === item.id 
+                                    ? {
+                                        ...msg,
+                                        signature: {
+                                          ...msg.signature,
+                                          status: data.status,
+                                          fileUrl: data.fileUrl,
+                                          fileName: data.fileName,
+                                          signedBy: data.signedBy
+                                        }
+                                      }
+                                    : msg
+                                )
+                              );
+                            });
+                            
+                            // Navigate to signature screen
+                            console.log('Navigating to signature screen for contract:', item.signature?.title || item.title);
+                            navigation.navigate('SignatureScreen', {
+                              signatureData: {
+                                title: item.signature?.title || item.title,
+                                notes: item.signature?.notes || item.notes,
+                                dueDate: item.signature?.dueDate || item.dueDate,
+                                contractId: item.id
+                              },
+                              onSignatureComplete: async (signatureData) => {
+                                try {
+                                  console.log('Signature completed:', signatureData);
+                                  console.log('Signature image name:', signatureData?.fileName || signatureData?.name || 'Unknown');
+                                  console.log('Signature image type:', signatureData?.type || signatureData?.mimeType || 'Unknown');
+                                  console.log('Signature image size:', signatureData?.size || 'Unknown');
+                                  
+                                  // Call submitSignature API with contract ID
+                                  const contractId = item.signature?.id || item.signatureId || item.id; // Use signature ID as contract ID
+                                  console.log('Submitting signature for contract ID:', contractId);
+                                  
+                                  const result = await submitSignature(contractId, signatureData);
+                                  console.log('✅ Signature submitted successfully:', result);
+                                  
+                                  // Update the message status to signed
+                                  setMessages(prevMessages => 
+                                    prevMessages.map(msg => 
+                                      msg.id === item.id 
+                                        ? {
+                                            ...msg,
+                                            signature: {
+                                              ...msg.signature,
+                                              status: 'signed'
+                                            }
+                                          }
+                                        : msg
+                                    )
+                                  );
+                                  
+                                  Alert.alert('Success', 'Contract signed successfully!');
+                                  
+                                } catch (error) {
+                                  console.error('❌ Error submitting signature:', error);
+                                  Alert.alert('Error', 'Failed to submit signature. Please try again.');
+                                }
+                              }
+                            });
+                          }}
+                        >
+                          <Text className="text-white text-[12px] font-semibold">Sign Contract</Text>
+                        </TouchableOpacity>
+                      ) : null}
                     </View>
+
+                    {/* Signature Display - Show when signed */}
+                    {(item.signature?.status || item.status) === 'signed' && (item.signature?.fileUrl || item.fileUrl) && (
+                      <View className="mt-4 pt-4 border-t border-[#e5e7eb]">
+                        <Text className="text-[12px] font-semibold text-[#333] mb-3">Digital Signature</Text>
+                         <TouchableOpacity 
+                           onPress={() => handleOpenImage(item.signature?.fileUrl || item.fileUrl)}
+                           activeOpacity={0.9}
+                         >
+                           <View className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                             <Image
+                               source={{ uri: item.signature?.fileUrl || item.fileUrl }}
+                               style={{
+                                 width: '100%',
+                                 height: 120,
+                                 resizeMode: 'contain',
+                               }}
+                             />
+                           </View>
+                         </TouchableOpacity>
+                      </View>
+                    )}
 
                     {/* Contract Status */}
                     <View className="mt-4 pt-4 border-t border-[#e5e7eb]">
                       <View className="flex-row items-center justify-between">
-                        <Text className="text-[12px] text-[#999]">
-                          Created: {new Date(item.signature.createdAt).toLocaleDateString()}
+                        <Text className="text-[10px] text-[#999]">
+                          Created: {new Date(item.signature?.createdAt || item.createdAt).toLocaleDateString()}
                         </Text>
                         <View 
                           className="px-3 py-1 rounded-full"
-                          style={{ backgroundColor: item.signature.status === 'pending' ? '#fef3c7' : '#d1fae5' }}
+                          style={{ backgroundColor: (item.signature?.status || item.status) === 'signed' ? '#d1fae5' : '#fef3c7' }}
                         >
                           <Text 
-                            className="text-[12px] font-semibold"
-                            style={{ color: item.signature.status === 'pending' ? '#d97706' : '#059669' }}
+                            className="text-[10px] font-semibold"
+                            style={{ color: (item.signature?.status || item.status) === 'signed' ? '#059669' : '#d97706' }}
                           >
-                            {item.signature.status?.toUpperCase()}
+                            {(item.signature?.status || item.status) === 'signed' ? 'SIGNED' : 'PENDING'}
                           </Text>
                         </View>
                       </View>
@@ -1200,15 +1464,23 @@ const UserChatScreen = ({ navigation, route }) => {
               <Ionicons name="add-circle" size={28} color="#000000" />
             </TouchableOpacity>
 
-            {/* Request Signature Button */}
-            <TouchableOpacity
-              onPress={() => setSignatureModalVisible(true)}
-              disabled={isSendingMessage}
-              className="mr-2"
-              activeOpacity={0.7}
-            >
-              <Ionicons name="create" size={28} color="#3155A1" />
-            </TouchableOpacity>
+            {/* Request Signature Button - Only show in individual chats */}
+            {!isGroupChat && (
+              <TouchableOpacity
+                onPress={() => {
+                  // Reset signature form data when opening modal
+                  setSignatureTitle('');
+                  setSignatureNotes('');
+                  setSignatureDueDate(new Date());
+                  setSignatureModalVisible(true);
+                }}
+                disabled={isSendingMessage}
+                className="mr-2"
+                activeOpacity={0.7}
+              >
+                <Ionicons name="create" size={28} color="#3155A1" />
+              </TouchableOpacity>
+            )}
 
             <TextInput
               className="flex-1 text-base text-gray-900 max-h-24"
@@ -1309,16 +1581,6 @@ const UserChatScreen = ({ navigation, route }) => {
             <Ionicons name="close" size={30} color="#FFFFFF" />
           </TouchableOpacity>
 
-          {/* Download Button (WhatsApp-style) */}
-          <TouchableOpacity
-            onPress={() => {
-              handleDownloadAndShareImage(selectedImageUrl, 'image.jpg');
-            }}
-            style={styles.downloadButton}
-            activeOpacity={0.8}
-          >
-            <MaterialIcons name="file-download" size={26} color="#FFFFFF" />
-          </TouchableOpacity>
 
           {/* Full-Screen Image */}
           {selectedImageUrl && (
@@ -1555,7 +1817,10 @@ const UserChatScreen = ({ navigation, route }) => {
               <Text className="text-[#6c757d] text-[16px] font-semibold">Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              className="flex-1 bg-black rounded-lg p-4 items-center justify-center"
+              className={`flex-1 bg-black rounded-lg p-4 items-center justify-center ${
+                isSendingSignature ? 'opacity-50' : ''
+              }`}
+              disabled={isSendingSignature}
               onPress={async () => {
                 try {
                   // Validate required fields
@@ -1563,6 +1828,11 @@ const UserChatScreen = ({ navigation, route }) => {
                     Alert.alert('Error', 'Please enter a title for the signature request');
                     return;
                   }
+
+                  // Prevent multiple requests
+                  if (isSendingSignature) return;
+                  
+                  setIsSendingSignature(true);
 
                   // Prepare signature data
                   const signatureData = {
@@ -1578,42 +1848,42 @@ const UserChatScreen = ({ navigation, route }) => {
                   
                   console.log('Signature request created successfully:', result);
                   
-                  Alert.alert('Success', 'Signature request sent successfully!');
+                  // Close modal and reset form
                   setSignatureModalVisible(false);
-                  
-                  // Reset form
                   setSignatureTitle('');
                   setSignatureNotes('');
                   setSignatureDueDate('');
                   
-                  // Refresh messages to show the new signature request
-                  if (conversationId) {
-                    fetchMessages();
-                  }
-                  
                 } catch (error) {
                   console.error('Error creating signature request:', error);
                   Alert.alert('Error', error.message || 'Failed to create signature request');
+                } finally {
+                  setIsSendingSignature(false);
                 }
               }}
               activeOpacity={0.7}
             >
-              <Text className="text-white text-[16px] font-semibold">Send Request</Text>
+              {isSendingSignature ? (
+                <ActivityIndicator color="white" size="small" />
+              ) : (
+                <Text className="text-white text-[16px] font-semibold">Send Request</Text>
+              )}
             </TouchableOpacity>
           </View>
         </SafeAreaView>
 
-        {/* Date Picker Modal */}
-        {showDatePicker && (
-          <DateTimePicker
-            value={signatureDueDate}
-            mode="date"
-            display="default"
-            onChange={handleDateChange}
-            minimumDate={new Date()}
-          />
-        )}
       </Modal>
+
+      {/* Date Picker Modal - Outside signature modal */}
+      {showDatePicker && (
+        <DateTimePicker
+          value={signatureDueDate || new Date()}
+          mode="date"
+          display="default"
+          onChange={handleDateChange}
+          minimumDate={new Date()}
+        />
+      )}
 
     </SafeAreaView>
   );

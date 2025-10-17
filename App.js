@@ -78,6 +78,7 @@ import ProjectAssignment from "./screens/ProjectAssignment";
 import WeekView from "./screens/WeekView";
 import ChatScreen from "./screens/ChatScreen";
 import UserChatScreen from "./screens/UserChatScreen";
+import SignatureScreen from "./screens/SignatureScreen";
 import NotificationScreen from "./screens/NotificationScreen";
 import AccountInfoScreen from "./screens/AccountInfoScreen";
 import ProjectFilesScreen from "./screens/ProjectFilesScreen";
@@ -666,6 +667,13 @@ const AppNavigator = () => {
                 },
                 headerShadowVisible: false,
               })}
+            />
+            <Stack.Screen
+              name="SignatureScreen"
+              component={SignatureScreen}
+              options={{
+                headerShown: false,
+              }}
             />
             <Stack.Screen
               name="NotificationScreen"

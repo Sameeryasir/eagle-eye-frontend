@@ -11,7 +11,7 @@ import {
   Keyboard,
   ActivityIndicator,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { getUserConversations } from '../services/chats/getConversation';
 import SelectUserModal from './components/SelectUserModal';
 import CustomBottomNav from './components/CustomBottomNav';
@@ -118,7 +118,13 @@ const ChatScreen = ({ navigation }) => {
         // Business Rule: Format last message with file indicators
         let lastMessageText = lastMessage?.content || '';
         
-        if (lastMessage?.fileUrl) {
+        // Check if it's a signature message (no content but has signature object)
+        const isSignatureMessage = !lastMessage?.content && lastMessage?.signature;
+        
+        if (isSignatureMessage) {
+          // Signature message - show professional icons
+          lastMessageText = '📄 ✍️';
+        } else if (lastMessage?.fileUrl) {
           // Message has file attachment
           const hasImage = lastMessage.fileType?.startsWith('image/');
           
@@ -245,7 +251,13 @@ const ChatScreen = ({ navigation }) => {
       // Format last message with file indicator
       let lastMessageText = newMessage.content || '';
       
-      if (newMessage.fileUrl) {
+      // Check if it's a signature message (no content but has signature object)
+      const isSignatureMessage = !newMessage.content && newMessage.signature;
+      
+      if (isSignatureMessage) {
+        // Signature message - show black contract icon (consistent with Pusher)
+        lastMessageText = '⚫ ✍️';
+      } else if (newMessage.fileUrl) {
         const hasImage = newMessage.fileType?.startsWith('image/');
         
         if (hasImage) {
@@ -273,6 +285,56 @@ const ChatScreen = ({ navigation }) => {
       return [conversationToUpdate, ...updatedConversations];
     });
   };
+
+  // --- Handle New Signature Message from Pusher (MCP Context 7) ---
+  // Business Rule: Update conversation list when new signature message arrives
+  function handleSignatureMessage(conversationId, data) {
+    const signatureMessage = data.message || data;
+    
+    if (!signatureMessage) {
+      console.warn('⚠️ No signature message data received');
+      return;
+    }
+
+    console.log('📝 [PUSHER] Processing signature message for conversation:', conversationId);
+
+    // Update the conversation list - move to top with new signature message
+    setConversations(prevConversations => {
+      const conversationIndex = prevConversations.findIndex(
+        u => u.conversation?.id?.toString() === conversationId?.toString()
+      );
+
+      if (conversationIndex === -1) {
+        return prevConversations;
+      }
+
+      const updatedConversations = [...prevConversations];
+      const conversationToUpdate = { ...updatedConversations[conversationIndex] };
+      
+      // Format signature message for conversation list
+      const signatureTitle = signatureMessage.signature?.title || signatureMessage.title || 'Contract for Signature';
+      const hasSignatureFile = signatureMessage.signature?.fileUrl || signatureMessage.fileUrl;
+      
+      let lastMessageText;
+      if (hasSignatureFile) {
+        // Signature has been signed - show folder icon
+        lastMessageText = `📁 ✍️ ${signatureTitle}`;
+      } else {
+        // Signature pending - show same format as API fetch (triggers MaterialIcons)
+        lastMessageText = '📄 ✍️';
+      }
+      
+      conversationToUpdate.lastMessage = lastMessageText;
+      conversationToUpdate.lastMessageHasFile = !!hasSignatureFile;
+      conversationToUpdate.lastMessageFileType = hasSignatureFile ? 'signature' : '';
+      conversationToUpdate.lastMessageFileName = hasSignatureFile ? (signatureMessage.signature?.fileName || signatureMessage.fileName || 'signature') : '';
+      conversationToUpdate.timestamp = new Date(signatureMessage.createdAt).toLocaleString();
+      
+      // Remove from current position and add to top
+      updatedConversations.splice(conversationIndex, 1);
+      return [conversationToUpdate, ...updatedConversations];
+    });
+  }
 
   // --- Load Conversations on Mount (MCP Context 7) ---
   // Fetch conversations when component mounts
@@ -309,12 +371,20 @@ const ChatScreen = ({ navigation }) => {
 
     newChannels.forEach((id) => {
       const channelName = `conversation-${id}`;
+      const signatureChannelName = `conversation-signature-${id}`;
       console.log('✅ [PUSHER] Subscribing to:', channelName);
+      console.log('✅ [PUSHER] Subscribing to signature channel:', signatureChannelName);
       
       const channel = pusher.subscribe(channelName);
+      const signatureChannel = pusher.subscribe(signatureChannelName);
       
       channel.bind('new-message', (data) => {
         handleNewMessage(id, data);
+      });
+
+      signatureChannel.bind('message-with-signature', (data) => {
+        console.log('📝 [PUSHER] Signature message received for conversation:', id);
+        handleSignatureMessage(id, data);
       });
 
       // Mark this channel as subscribed
@@ -620,9 +690,18 @@ const ChatScreen = ({ navigation }) => {
                 </View>
               </View>
             ) : (
-              <Text className="text-base text-gray-600 flex-1" numberOfLines={1}>
-                {item.lastMessage}
-              </Text>
+              <View className="flex-1 flex-row items-center">
+                {item.lastMessage === '📄 ✍️' ? (
+                  <>
+                    <MaterialIcons name="description" size={16} color="#000000" />
+                    <MaterialIcons name="edit" size={16} color="#000000" style={{ marginLeft: 4 }} />
+                  </>
+                ) : (
+                  <Text className="text-base text-gray-600 flex-1" numberOfLines={1}>
+                    {item.lastMessage}
+                  </Text>
+                )}
+              </View>
             )}
           </View>
           
