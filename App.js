@@ -131,16 +131,42 @@ const CustomHeaderForChat = ({ onMenuPress, navigation }) => {
         <View className="flex-row items-center justify-between px-5 py-4">
           <Text className="text-3xl font-bold text-white">Messages</Text>
           <View className="flex-row items-center">
-            <TouchableOpacity className="w-10 h-10 items-center justify-center mr-3">
+            <TouchableOpacity className="w-10 h-10 items-center justify-center">
               <Ionicons name="create-outline" size={28} color="#FFFFFF" />
             </TouchableOpacity>
-            <TouchableOpacity 
-              className="w-10 h-10 items-center justify-center"
-              onPress={() => navigation?.navigate('AccountInfo')}
-            >
-              <Ionicons name="person-outline" size={28} color="#FFFFFF" />
-            </TouchableOpacity>
           </View>
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+};
+
+// Custom Header Component for SignatureScreen
+const CustomHeaderForSignature = ({ navigation }) => {
+  return (
+    <SafeAreaView style={{ backgroundColor: "#3155A1" }} edges={["top"]}>
+      <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
+      <View className="border-b border-gray-200" style={{ backgroundColor: "#3155A1" }}>
+        {/* Main Header */}
+        <View className="flex-row items-center justify-between px-5 py-4">
+          <TouchableOpacity 
+            onPress={() => navigation.goBack()} 
+            className="w-10 h-10 items-center justify-center"
+          >
+            <Ionicons name="close" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          
+          <Text className="text-xl font-bold text-white">Signature</Text>
+          
+          <TouchableOpacity 
+            onPress={() => {
+              // Emit a custom event for clear action
+              navigation.navigate('SignatureScreen', { action: 'clear' });
+            }} 
+            className="w-10 h-10 items-center justify-center"
+          >
+            <Ionicons name="refresh" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
       </View>
     </SafeAreaView>
@@ -207,10 +233,28 @@ const CustomHeaderForUserChat = ({ navigation, route }) => {
                 console.log('fetchAllFiles event emitted');
               }}
             >
-              <View className="w-8 h-8 bg-blue-100 rounded-full items-center justify-center mr-4">
-                <Ionicons name="folder" size={18} color="#3B82F6" />
+              <View className="w-8 h-8  items-center justify-center mr-2">
+                <Ionicons name="folder" size={18} color="black" />
               </View>
-              <Text className="text-base font-semibold text-gray-800">All Files</Text>
+              <Text className="text-base font-semibold text-gray-800">Files</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              className="flex-row items-center px-5 py-4"
+              style={{ backgroundColor: 'transparent' }}
+              onPress={() => {
+                console.log('Signatures pressed');
+                console.log('Emitting fetchSignatures event...');
+                setMenuVisible(false);
+                // Emit event to fetch signatures
+                appEmitter.emit("fetchSignatures");
+                console.log('fetchSignatures event emitted');
+              }}
+            >
+              <View className="w-8 h-8  items-center justify-center mr-2">
+                <Ionicons name="create" size={20} color="black" />
+              </View>
+              <Text className="text-base font-semibold text-gray-800">Signatures</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -671,9 +715,19 @@ const AppNavigator = () => {
             <Stack.Screen
               name="SignatureScreen"
               component={SignatureScreen}
-              options={{
-                headerShown: false,
-              }}
+              options={({ navigation }) => ({
+                headerShown: true,
+                header: () => (
+                  <CustomHeaderForSignature
+                    navigation={navigation}
+                  />
+                ),
+                headerBackTitleVisible: false,
+                headerStyle: {
+                  backgroundColor: "white",
+                },
+                headerShadowVisible: false,
+              })}
             />
             <Stack.Screen
               name="NotificationScreen"

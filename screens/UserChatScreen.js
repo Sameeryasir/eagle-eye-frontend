@@ -18,6 +18,7 @@ import {
   Alert,
   ScrollView,
 } from "react-native";
+import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from "@expo/vector-icons";
@@ -31,6 +32,7 @@ import { getMessagesByConversationId } from "../services/chats/getMessagesByConv
 import { sendMessage } from "../services/chats/sendMessage";
 import { isTyping } from "../services/chats/isTyping";
 import { getFilesForConversation } from "../services/chats/getFilesForConversation";
+import { getSignaturesOfConversation } from "../services/chats/getSignaturesOfConversation";
 import { createSignature } from "../services/chats/createSignature";
 import submitSignature from "../services/chats/submitSignature";
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -95,6 +97,11 @@ const UserChatScreen = ({ navigation, route }) => {
   const [filesModalVisible, setFilesModalVisible] = useState(false); // For viewing all files
   const [conversationFiles, setConversationFiles] = useState([]); // Store files from conversation
   const [isLoadingFiles, setIsLoadingFiles] = useState(false); // Loading state for files
+  const [signaturesModalVisible, setSignaturesModalVisible] = useState(false); // For viewing all signatures
+  const [conversationSignatures, setConversationSignatures] = useState([]); // Store signatures from conversation
+  const [isLoadingSignatures, setIsLoadingSignatures] = useState(false); // Loading state for signatures
+  const [signatureDetailModalVisible, setSignatureDetailModalVisible] = useState(false); // For signature detail view
+  const [selectedSignature, setSelectedSignature] = useState(null); // Selected signature for detail view
   const flatListRef = useRef(null);
   
   // --- Request Signature Modal State (MCP Context 7) ---
@@ -222,6 +229,62 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
+  // --- Fetch Conversation Signatures (MCP Context 7) ---
+  // Business Rule: Fetch all signatures for the current conversation
+  const fetchConversationSignatures = async () => {
+    const currentConversationId = route.params?.conversationId;
+    
+    if (!currentConversationId) {
+      console.log('❌ No conversation ID found');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'No conversation ID found',
+        position: 'top',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+
+    setIsLoadingSignatures(true);
+    
+    try {
+      console.log('🔄 Fetching signatures for conversation:', currentConversationId);
+      const response = await getSignaturesOfConversation(currentConversationId);
+      
+      if (response && Array.isArray(response)) {
+        setConversationSignatures(response);
+        console.log('✅ Signatures fetched successfully:', response.length, 'signatures');
+        console.log('📝 First signature data:', response[0]);
+      } else {
+        setConversationSignatures([]);
+        console.log('📭 No signatures found in conversation');
+      }
+    } catch (err) {
+      console.error('❌ Error fetching conversation signatures:', err);
+      setConversationSignatures([]);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to load signatures. Please try again.',
+        position: 'top',
+        visibilityTime: 3000,
+      });
+    } finally {
+      setIsLoadingSignatures(false);
+    }
+  };
+
+  // --- Handle Signature Card Tap (MCP Context 7) ---
+  // Business Rule: Open signature detail view when card is tapped
+  const handleSignatureCardTap = (signature) => {
+    console.log('📝 Signature card tapped:', signature);
+    console.log('📝 Requested by:', signature.requestedBy);
+    console.log('📝 Signature from:', signature.signatureFrom);
+    setSelectedSignature(signature);
+    setSignatureDetailModalVisible(true);
+  };
+
   // --- Handle Fetch All Files Event (MCP Context 7) ---
   // Business Rule: Listen for fetchAllFiles event from App.js header
   const handleFetchAllFiles = () => {
@@ -229,6 +292,15 @@ const UserChatScreen = ({ navigation, route }) => {
     console.log('📁 Setting filesModalVisible to true');
     setFilesModalVisible(true);
     fetchConversationFiles();
+  };
+
+  // --- Handle Fetch All Signatures Event (MCP Context 7) ---
+  // Business Rule: Listen for fetchSignatures event from App.js header
+  const handleFetchAllSignatures = () => {
+    console.log('📝 Received fetchSignatures event in UserChatScreen');
+    console.log('📝 Setting signaturesModalVisible to true');
+    setSignaturesModalVisible(true);
+    fetchConversationSignatures();
   };
 
   // --- Event Listener for fetchAllFiles (MCP Context 7) ---
@@ -242,6 +314,20 @@ const UserChatScreen = ({ navigation, route }) => {
     return () => {
       console.log('🔌 Cleaning up fetchAllFiles event listener');
       appEmitter.off('fetchAllFiles', handleFetchAllFiles);
+    };
+  }, []);
+
+  // --- Event Listener for fetchSignatures (MCP Context 7) ---
+  useEffect(() => {
+    console.log('🔌 Setting up fetchSignatures event listener');
+    // Listen for fetchSignatures event
+    appEmitter.on('fetchSignatures', handleFetchAllSignatures);
+    console.log('✅ Signatures event listener set up successfully');
+    
+    // Cleanup listener on unmount
+    return () => {
+      console.log('🔌 Cleaning up fetchSignatures event listener');
+      appEmitter.off('fetchSignatures', handleFetchAllSignatures);
     };
   }, []);
 
@@ -1078,11 +1164,23 @@ const UserChatScreen = ({ navigation, route }) => {
                                     )
                                   );
                                   
-                                  Alert.alert('Success', 'Contract signed successfully!');
+                                  Toast.show({
+                                    type: 'success',
+                                    text1: 'Success',
+                                    text2: 'Contract signed successfully!',
+                                    position: 'top',
+                                    visibilityTime: 3000,
+                                  });
                                   
                                 } catch (error) {
                                   console.error('❌ Error submitting signature:', error);
-                                  Alert.alert('Error', 'Failed to submit signature. Please try again.');
+                                  Toast.show({
+                                    type: 'error',
+                                    text1: 'Error',
+                                    text2: 'Failed to submit signature. Please try again.',
+                                    position: 'top',
+                                    visibilityTime: 3000,
+                                  });
                                 }
                               }
                             });
@@ -1724,6 +1822,262 @@ const UserChatScreen = ({ navigation, route }) => {
         </SafeAreaView>
       </Modal>
 
+      {/* Signatures Modal (MCP Context 7) */}
+      <Modal
+        visible={signaturesModalVisible}
+        animationType="slide"
+        onRequestClose={() => {
+          console.log('📝 Signatures modal closed');
+          setSignaturesModalVisible(false);
+        }}
+      >
+        <SafeAreaView className="flex-1 bg-white">
+          {/* Header */}
+          <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
+            <TouchableOpacity
+              onPress={() => setSignaturesModalVisible(false)}
+              className="p-2"
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-back" size={24} color="#000000" />
+            </TouchableOpacity>
+            <Text className="text-lg font-bold text-gray-900">All Signatures</Text>
+            <View className="w-8" />
+          </View>
+
+          {/* Content */}
+          <View className="flex-1">
+            {isLoadingSignatures ? (
+              <View className="flex-1 items-center justify-center">
+                <ActivityIndicator size="large" color="#000000" />
+                <Text className="text-base text-gray-500 mt-4">Loading signatures...</Text>
+              </View>
+            ) : conversationSignatures.length > 0 ? (
+              <FlatList
+                data={conversationSignatures}
+                keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+                renderItem={({ item }) => {
+                  const title = item.title || 'Untitled Signature';
+                  const status = item.status || 'pending';
+                  
+                  return (
+                    <TouchableOpacity
+                      className="mx-4 mb-3 p-4 bg-white rounded-xl shadow-sm border border-gray-100"
+                      activeOpacity={0.7}
+                      onPress={() => handleSignatureCardTap(item)}
+                    >
+                      <View className="flex-row items-center justify-between">
+                        <View className="flex-1">
+                          <Text className="text-base font-semibold text-gray-900" numberOfLines={2}>
+                            {title}
+                          </Text>
+                        </View>
+                        
+                        <View className="ml-3">
+                          <Ionicons 
+                            name={status === 'signed' ? 'checkmark-circle' : 'time'} 
+                            size={24} 
+                            color={status === 'signed' ? '#10B981' : '#F59E0B'} 
+                          />
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                }}
+                className="flex-1"
+                contentContainerStyle={{ paddingVertical: 16 }}
+                showsVerticalScrollIndicator={false}
+              />
+            ) : (
+              <View className="flex-1 items-center justify-center px-8">
+                <Ionicons name="create-outline" size={80} color="#C7C7CC" />
+                <Text className="text-xl text-gray-500 mt-6 text-center font-medium">
+                  No signatures yet
+                </Text>
+                <Text className="text-base text-gray-400 mt-4 text-center">
+                  Signature requests in this chat will appear here
+                </Text>
+              </View>
+            )}
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Signature Detail Modal (MCP Context 7) */}
+      <Modal
+        visible={signatureDetailModalVisible}
+        animationType="slide"
+        onRequestClose={() => {
+          console.log('📝 Signature detail modal closed');
+          setSignatureDetailModalVisible(false);
+          setSelectedSignature(null);
+        }}
+      >
+        <SafeAreaView className="flex-1 bg-white">
+          {/* Header */}
+          <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
+            <TouchableOpacity
+              onPress={() => {
+                setSignatureDetailModalVisible(false);
+                setSelectedSignature(null);
+              }}
+              className="p-2"
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-back" size={24} color="#000000" />
+            </TouchableOpacity>
+            <Text className="text-lg font-bold text-gray-900">Signature Details</Text>
+            <View className="w-8" />
+          </View>
+
+          {/* Content */}
+          {selectedSignature && (
+            <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+              <View className="p-4">
+                <View className="mb-4 px-2">
+                  <View 
+                    className="bg-white  p-4"
+                   
+                  >
+                    {/* Contract Header */}
+                    <View className="flex-row items-center mb-4">
+                      <View className="w-12 h-12 rounded-full items-center justify-center mr-4" style={{ backgroundColor: 'black' }}>
+                        <Ionicons name="document-text" size={24} color="white" />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-[14px] font-bold text-[#333]">Contract for Signature</Text>
+                        <View className="flex-row items-center mt-1">
+                          <View className={`px-2 py-1 rounded-full ${
+                            selectedSignature.status === 'signed' 
+                              ? 'bg-green-100' 
+                              : selectedSignature.status === 'pending'
+                              ? 'bg-yellow-100'
+                              : 'bg-gray-100'
+                          }`}>
+                            <Text className={`text-[10px] font-medium ${
+                              selectedSignature.status === 'signed' 
+                                ? 'text-green-800' 
+                                : selectedSignature.status === 'pending'
+                                ? 'text-yellow-800'
+                                : 'text-gray-800'
+                            }`}>
+                              {selectedSignature.status?.toUpperCase() || 'UNKNOWN'}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Contract Title */}
+                    <View className="mb-4">
+                      <Text className="text-[12px] font-semibold text-[#333] mb-2">Document Title</Text>
+                      <Text className="text-[11px] text-[#333] bg-[#f8f9fa] p-3 rounded-lg">
+                        {selectedSignature.title || 'Contract for Signature'}
+                      </Text>
+                    </View>
+
+                    {/* Contract Notes */}
+                    {selectedSignature.notes && (
+                      <View className="mb-4">
+                        <Text className="text-[12px] font-semibold text-[#333] mb-2">Instructions</Text>
+                        <Text className="text-[11px] text-[#666] bg-[#f8f9fa] p-3 rounded-lg">
+                          {selectedSignature.notes}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Requested By */}
+                    {selectedSignature.requestedBy && (
+                      <View className="mb-4">
+                        <Text className="text-[12px] font-semibold text-[#333] mb-2">Requested By</Text>
+                        <Text className="text-[11px] text-[#666] bg-[#f8f9fa] p-3 rounded-lg">
+                          {selectedSignature.requestedBy?.name || selectedSignature.requestedBy}
+                          {selectedSignature.requestedBy?.email && ` (${selectedSignature.requestedBy.email})`}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Signature From */}
+                    {selectedSignature.signatureFrom && (
+                      <View className="mb-4">
+                        <Text className="text-[12px] font-semibold text-[#333] mb-2">Signature From</Text>
+                        <Text className="text-[11px] text-[#666] bg-[#f8f9fa] p-3 rounded-lg">
+                          {selectedSignature.signatureFrom?.name || selectedSignature.signatureFrom}
+                          {selectedSignature.signatureFrom?.email && ` (${selectedSignature.signatureFrom.email})`}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Due Date */}
+                    {selectedSignature.dueDate && (
+                      <View className="mb-4">
+                        <Text className="text-[12px] font-semibold text-[#333] mb-2">Due Date</Text>
+                        <Text className="text-[11px] text-[#666] bg-[#f8f9fa] p-3 rounded-lg">
+                          {new Date(selectedSignature.dueDate).toLocaleDateString()}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Created Date */}
+                    {selectedSignature.createdAt && (
+                      <View className="mb-4">
+                        <Text className="text-[12px] font-semibold text-[#333] mb-2">Created</Text>
+                        <Text className="text-[11px] text-[#666] bg-[#f8f9fa] p-3 rounded-lg">
+                          {new Date(selectedSignature.createdAt).toLocaleDateString()}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Document Preview */}
+                    {selectedSignature.fileUrl && (
+                      <View className="mb-4">
+                        <Text className="text-[12px] font-semibold text-[#333] mb-2">Document</Text>
+                        
+                        {/* Check if file is an image */}
+                        {(() => {
+                          const fileUrl = selectedSignature.fileUrl;
+                          const isImage = fileUrl && (
+                            fileUrl.toLowerCase().includes('.jpg') ||
+                            fileUrl.toLowerCase().includes('.jpeg') ||
+                            fileUrl.toLowerCase().includes('.png') ||
+                            fileUrl.toLowerCase().includes('.gif') ||
+                            fileUrl.toLowerCase().includes('.webp')
+                          );
+                          
+                          if (isImage) {
+                            return (
+                              <View className="bg-[#f8f9fa] p-3 rounded-lg">
+                                <Image
+                                  source={{ uri: fileUrl }}
+                                  className="w-full h-32 rounded-lg"
+                                  resizeMode="contain"
+                                  onError={() => console.log('Failed to load image:', fileUrl)}
+                                />
+                                <Text className="text-[10px] text-[#666] mt-2 text-center">
+                                  {selectedSignature.fileName || 'Image'}
+                                  {selectedSignature.fileSize && ` • ${(selectedSignature.fileSize / 1024 / 1024).toFixed(2)} MB`}
+                                </Text>
+                              </View>
+                            );
+                          } else {
+                            return (
+                              <Text className="text-[11px] text-[#666] bg-[#f8f9fa] p-3 rounded-lg">
+                                {selectedSignature.fileUrl}
+                                {selectedSignature.fileSize && ` • ${(selectedSignature.fileSize / 1024 / 1024).toFixed(2)} MB`}
+                              </Text>
+                            );
+                          }
+                        })()}
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </View>
+            </ScrollView>
+          )}
+        </SafeAreaView>
+      </Modal>
+
       {/* Request Signature Modal (MCP Context 7) */}
       <Modal
         visible={signatureModalVisible}
@@ -1834,11 +2188,31 @@ const UserChatScreen = ({ navigation, route }) => {
                   
                   setIsSendingSignature(true);
 
-                  // Prepare signature data
+                  // Prepare signature data with local timezone
+                  const formatWithTimezone = (date) => {
+                    const offset = -date.getTimezoneOffset();
+                    const offsetHours = Math.floor(Math.abs(offset) / 60);
+                    const offsetMinutes = Math.abs(offset) % 60;
+                    const offsetSign = offset >= 0 ? '+' : '-';
+                    const offsetString = `${offsetSign}${offsetHours.toString().padStart(2, '0')}:${offsetMinutes.toString().padStart(2, '0')}`;
+                    
+                    const isoString = date.toLocaleString('sv-SE', {
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit',
+                      hour12: false
+                    }).replace(',', '.').replace(' ', 'T');
+                    
+                    return `${isoString}${offsetString}`;
+                  };
+
                   const signatureData = {
                     title: signatureTitle.trim(),
                     notes: signatureNotes.trim(),
-                    dueDate: signatureDueDate ? signatureDueDate.toISOString().split('T')[0] : null
+                    dueDate: signatureDueDate ? formatWithTimezone(signatureDueDate) : null
                   };
 
                   console.log('Creating signature request:', signatureData);
@@ -1847,6 +2221,7 @@ const UserChatScreen = ({ navigation, route }) => {
                   const result = await createSignature(conversationId, signatureData);
                   
                   console.log('Signature request created successfully:', result);
+                  console.log('📝 Full API Response:', JSON.stringify(result, null, 2));
                   
                   // Close modal and reset form
                   setSignatureModalVisible(false);
@@ -1856,7 +2231,13 @@ const UserChatScreen = ({ navigation, route }) => {
                   
                 } catch (error) {
                   console.error('Error creating signature request:', error);
-                  Alert.alert('Error', error.message || 'Failed to create signature request');
+                  Toast.show({
+                    type: 'error',
+                    text1: 'Error',
+                    text2: error.message || 'Failed to create signature request',
+                    position: 'top',
+                    visibilityTime: 3000,
+                  });
                 } finally {
                   setIsSendingSignature(false);
                 }

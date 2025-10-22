@@ -581,13 +581,19 @@ const CalenderDetailScreen = ({ route, navigation }) => {
                 {items.length > 0 ? 'SCHEDULED ITEMS' : 'SCHEDULE VIEW'}
               </Text>
               <Text className="text-lg font-semibold text-gray-800 leading-6">
-                {selectedDate ? new Date(selectedDate).toLocaleDateString(Localization.locale, { 
-                  weekday: 'long', 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric',
-                  timeZone: Localization.timezone
-                }) : 'Selected Date'}
+                {selectedDate ? (() => {
+                  // Treat selectedDate as string only - NO Date object creation at all
+                  const [year, month, day] = selectedDate.split('-');
+                  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                    'July', 'August', 'September', 'October', 'November', 'December'];
+                  
+                  // Simple string formatting without any Date object
+                  const monthName = monthNames[parseInt(month) - 1];
+                  const formattedDate = `${monthName} ${parseInt(day)}, ${year}`;
+                  
+                  console.log('📅 Selected Date:', selectedDate, '→ Formatted:', formattedDate);
+                  return formattedDate;
+                })() : 'Selected Date'}
               </Text>
             </View>
             <View className="items-center bg-gray-100 px-3 py-2 rounded-lg min-w-15">

@@ -147,19 +147,23 @@ function CalenderScreen({ navigation }) {
           }
           
           // --- FIXED: Convert to local timezone for date extraction ---
-          // Business Rule: Use local date instead of UTC to prevent timezone issues
+          // Business Rule: Use automatic local timezone conversion
           // This ensures events created "today" appear on "today" in the calendar
           const localStartDate = new Date(event.startTime);
           const localEndDate = event.endTime ? new Date(event.endTime) : localStartDate;
           
-          // --- Get date strings for start and end dates ---
-          const eventStartDate = localStartDate.getFullYear() + '-' + 
-            String(localStartDate.getMonth() + 1).padStart(2, '0') + '-' + 
-            String(localStartDate.getDate()).padStart(2, '0');
+          // --- Get date strings for start and end dates using automatic local timezone ---
+          const eventStartDate = localStartDate.toLocaleString('en-CA', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          }).replace(/,/g, ''); // Format: YYYY-MM-DD
           
-          const eventEndDate = localEndDate.getFullYear() + '-' + 
-            String(localEndDate.getMonth() + 1).padStart(2, '0') + '-' + 
-            String(localEndDate.getDate()).padStart(2, '0');
+          const eventEndDate = localEndDate.toLocaleString('en-CA', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          }).replace(/,/g, ''); // Format: YYYY-MM-DD
           
           // --- Debug: Log timezone conversion for verification ---
           console.log(`Event "${event.title}" - Original: ${event.startTime}, Local Start: ${localStartDate.toLocaleDateString()}, Local End: ${localEndDate.toLocaleDateString()}`);

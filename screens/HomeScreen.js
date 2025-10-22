@@ -144,6 +144,29 @@ function HomeScreen({ navigation, route }) {
     loadProjects();
   }, [dispatch]);
 
+  // --- TIMEZONE DEBUGGING (MCP Context 7) ---
+  // Fetch and display user's local timezone information
+  useEffect(() => {
+    const debugTimezone = () => {
+      console.log("🌍 TIMEZONE DEBUG INFO - HomeScreen:");
+      console.log("Browser timezone:", Intl.DateTimeFormat().resolvedOptions().timeZone);
+      console.log("Current time:", new Date().toString());
+      console.log("Current time (ISO):", new Date().toISOString());
+      console.log("Current time (Local):", new Date().toLocaleString());
+      console.log("Timezone offset (minutes):", new Date().getTimezoneOffset());
+      console.log("Timezone offset (hours):", new Date().getTimezoneOffset() / 60);
+      console.log("---");
+    };
+
+    // Call immediately
+    debugTimezone();
+
+    // Also call every 30 seconds to see if timezone changes
+    const interval = setInterval(debugTimezone, 30000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   // --- Update Filtered Projects When Projects Change (MCP Context 7) ---
   // Keep search functionality local as requested
   useEffect(() => {

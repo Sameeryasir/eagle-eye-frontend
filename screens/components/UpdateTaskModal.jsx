@@ -406,9 +406,32 @@ export default function UpdateTaskModal({
       taskPayload.priority = currentTask.priority;
     }
 
+    // Use built-in toLocaleString for automatic timezone formatting (same as CreateEventModal)
+    const formatWithTimezone = (date) => {
+      // Get timezone offset automatically
+      const timezoneOffset = date.getTimezoneOffset();
+      const offsetHours = Math.floor(Math.abs(timezoneOffset) / 60);
+      const offsetMinutes = Math.abs(timezoneOffset) % 60;
+      const offsetSign = timezoneOffset <= 0 ? '+' : '-';
+      const timezoneString = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
+      
+      // Use toLocaleString with ISO format for automatic formatting
+      const isoString = date.toLocaleString('sv-SE', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        fractionalSecondDigits: 3
+      }).replace(' ', 'T');
+      
+      return `${isoString}${timezoneString}`;
+    };
+
     // Check startTime changes
     if (originalTask.startTime.getTime() !== currentTask.startTime.getTime()) {
-      taskPayload.startTime = currentTask.startTime.toISOString();
+      taskPayload.startTime = formatWithTimezone(currentTask.startTime); // Local timezone format
     }
 
     // Check endTime changes - matching CreateTaskScreen logic
@@ -416,7 +439,7 @@ export default function UpdateTaskModal({
     const currentEndTime = currentTask.endTime?.getTime() || null;
     
     if (originalEndTime !== currentEndTime) {
-      taskPayload.endTime = currentTask.endTime ? currentTask.endTime.toISOString() : null;
+      taskPayload.endTime = currentTask.endTime ? formatWithTimezone(currentTask.endTime) : null; // Local timezone format
     }
 
     // Check if any changes were made

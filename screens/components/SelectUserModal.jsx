@@ -81,8 +81,8 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
   
   useEffect(() => {
     if (visible) {
+      // Only fetch employees immediately - projects will be fetched when needed
       fetchEmployees();
-      fetchProjects();
       setSearchQuery('');
       setSelectedProject(null);
       setProjectSearchQuery('');
@@ -631,9 +631,8 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
                   // Toggle popup and fetch projects if needed
                   if (!showProjectPopup) {
                     setShowProjectPopup(true);
-                    if (projects.length === 0 && !isLoadingProjects) {
-                      await fetchProjects();
-                    }
+                    // Always fetch fresh projects when opening popup
+                    await fetchProjects();
                   } else {
                     setShowProjectPopup(false);
                   }

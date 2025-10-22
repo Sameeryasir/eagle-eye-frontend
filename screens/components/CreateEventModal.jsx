@@ -610,9 +610,9 @@ const CreateEventModal = ({
       const locale = Localization.locale; // e.g., "en-US"
       const locales = Localization.locales; // Array of supported locales
       
-      // Get timezone offset using expo-localization
-      const timezoneOffset = new Date().getTimezoneOffset(); // Minutes offset from UTC
-      const timezoneOffsetHours = -timezoneOffset / 60; // Convert to hours (negative because getTimezoneOffset returns opposite)
+      // Get timezone offset using expo-localization (for debugging only)
+      const debugTimezoneOffset = new Date().getTimezoneOffset(); // Minutes offset from UTC
+      const debugTimezoneOffsetHours = -debugTimezoneOffset / 60; // Convert to hours (negative because getTimezoneOffset returns opposite)
       
       // Format the event data - Backend DTO accepts: title, description, startTime, endTime, assignedTo, projects
       // Business Rule: Send ONLY ONE type at a time - either employees OR projects, never both
@@ -634,11 +634,34 @@ const CreateEventModal = ({
         console.log('No assignments - sending empty arrays to API');
       }
       
+      // Use built-in toLocaleString for automatic timezone formatting
+      const formatWithTimezone = (date) => {
+        // Get timezone offset automatically
+        const timezoneOffset = date.getTimezoneOffset();
+        const offsetHours = Math.floor(Math.abs(timezoneOffset) / 60);
+        const offsetMinutes = Math.abs(timezoneOffset) % 60;
+        const offsetSign = timezoneOffset <= 0 ? '+' : '-';
+        const timezoneString = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
+        
+        // Use toLocaleString with ISO format for automatic formatting
+        const isoString = date.toLocaleString('sv-SE', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          fractionalSecondDigits: 3
+        }).replace(' ', 'T');
+        
+        return `${isoString}${timezoneString}`;
+      };
+      
       const eventData = {
         title: eventForm.title.trim(),
         description: eventForm.description.trim() || '',
-        startTime: startDateTime.toISOString(), // ISO 8601 string format (UTC)
-        endTime: endDateTime.toISOString(), // ISO 8601 string format (UTC)
+        startTime: formatWithTimezone(startDateTime), // Local timezone format (e.g., 2025-10-21T20:34:00.000+05:00)
+        endTime: formatWithTimezone(endDateTime), // Local timezone format (e.g., 2025-10-21T21:34:00.000+05:00)
         assignedTo: assignedToIds, // Employee IDs (when isProject is true)
         projects: projectIds // Project IDs (when isProject is false)
       };
@@ -651,8 +674,7 @@ const CreateEventModal = ({
       console.log('Event Date (YYYY-MM-DD):', eventDate);
       console.log('--- TIMEZONE INFORMATION (Expo Localization) - DEBUG ONLY ---');
       console.log('Timezone Name:', timezoneName);
-      console.log('Timezone Offset (Hours):', timezoneOffsetHours);
-      console.log('Timezone Offset (Minutes):', timezoneOffset);
+      console.log('Timezone Offset (Minutes):', debugTimezoneOffset);
       console.log('--- LOCALIZATION INFORMATION - DEBUG ONLY ---');
       console.log('Locale:', locale);
       console.log('Locales:', locales);
@@ -668,12 +690,10 @@ const CreateEventModal = ({
       console.log('Projects (UI State):', eventForm.projects);
       console.log('Selected Employee Values:', selectedEmployeeValues);
       console.log('Selected Project Values:', selectedProjectValues);
-      console.log('--- BACKEND DATA (UTC Strings with Timezone) ---');
+      console.log('--- BACKEND DATA (Local Timezone Format) ---');
       console.log('Event Data Being Sent:', eventData);
-      console.log('Start Time with Timezone:', eventData.startTime);
-      console.log('End Time with Timezone:', eventData.endTime);
-      console.log('Timezone Name:', timezoneName);
-      console.log('Timezone Offset (Hours):', timezoneOffsetHours);
+      console.log('Start Time (Local):', eventData.startTime);
+      console.log('End Time (Local):', eventData.endTime);
       console.log('AssignedTo Array (Employee IDs):', eventData.assignedTo);
       console.log('Projects Array (Project IDs):', eventData.projects);
       console.log('Assignment Type:', eventForm.isProject ? 'Employees' : 'Projects');
@@ -681,8 +701,11 @@ const CreateEventModal = ({
       console.log('Project Count:', eventData.projects.length);
       console.log('=== End Event Creation Debug ===');
 
-      // Call API directly
+      // Call API with UTC format (backend expects this)
+      console.log('🚀 SENDING TO API:', JSON.stringify(eventData, null, 2));
+      
       const response = await createEvent(eventData);
+      console.log('✅ API RESPONSE SUCCESS:', response);
       
       // Check if the create was successful (API returns the created event data)
       if (response) {

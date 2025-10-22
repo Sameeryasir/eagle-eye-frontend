@@ -46,10 +46,10 @@
     },
     "extra": {
       "eas": {
-        "projectId": "d9353bcc-d487-40d1-bf8d-a765d0341079"
+        "projectId": "d0a82c9f-63e0-4907-934d-5db24a9da32a"
       }
     },
-    "owner": "hammad.m",
+    "owner": "asjad12345",
     "plugins": [
       "expo-localization"
     ]

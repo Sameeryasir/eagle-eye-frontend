@@ -485,12 +485,35 @@ const UpdateEventModal = ({
         String(localStartDate.getMonth() + 1).padStart(2, '0') + '-' + 
         String(localStartDate.getDate()).padStart(2, '0');
       
-      // Format the event data - send ISO strings (consistent with CreateEventModal)
+      // Use built-in toLocaleString for automatic timezone formatting (same as CreateEventModal)
+      const formatWithTimezone = (date) => {
+        // Get timezone offset automatically
+        const timezoneOffset = date.getTimezoneOffset();
+        const offsetHours = Math.floor(Math.abs(timezoneOffset) / 60);
+        const offsetMinutes = Math.abs(timezoneOffset) % 60;
+        const offsetSign = timezoneOffset <= 0 ? '+' : '-';
+        const timezoneString = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
+        
+        // Use toLocaleString with ISO format for automatic formatting
+        const isoString = date.toLocaleString('sv-SE', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          fractionalSecondDigits: 3
+        }).replace(' ', 'T');
+        
+        return `${isoString}${timezoneString}`;
+      };
+
+      // Format the event data - send local timezone format (consistent with CreateEventModal)
       const eventData = {
         title: eventForm.title.trim(),
         description: eventForm.description.trim() || '',
-        startTime: eventStartTime.toISOString(), // ISO 8601 string format (UTC)
-        endTime: eventEndTime.toISOString() // ISO 8601 string format (UTC)
+        startTime: formatWithTimezone(eventStartTime), // Local timezone format (e.g., 2025-10-21T20:34:00.000+05:00)
+        endTime: formatWithTimezone(eventEndTime) // Local timezone format (e.g., 2025-10-21T21:34:00.000+05:00)
       };
 
       console.log('=== EVENT UPDATE PROCESSING ===');
@@ -511,10 +534,10 @@ const UpdateEventModal = ({
       console.log('Event End Time (ISO):', eventEndTime.toISOString());
       console.log('Local Start Date:', localStartDate.toLocaleDateString());
       console.log('Event Date (YYYY-MM-DD):', eventDate);
-      console.log('--- Final Data Being Sent to API ---');
+      console.log('--- Final Data Being Sent to API (Local Timezone Format) ---');
       console.log('Event Data:', eventData);
-      console.log('Start Time Being Sent:', eventData.startTime);
-      console.log('End Time Being Sent:', eventData.endTime);
+      console.log('Start Time Being Sent (Local):', eventData.startTime);
+      console.log('End Time Being Sent (Local):', eventData.endTime);
       console.log('=== END EVENT UPDATE PROCESSING ===');
 
       // Call the updateEventById service

@@ -821,43 +821,32 @@ const ChatScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={['bottom', 'left', 'right']} style={{ paddingBottom: 100 }}>
-      {/* Search Bar - Fixed at top */}
-      {renderSearchBar()}
-      
-      {/* Messages List */}
-      <KeyboardAvoidingView 
-        className="flex-1"
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 20}
-        enabled={true}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Loading State (MCP Context 7) */}
-        {isLoadingConversations ? (
-          <View className="flex-1 items-center justify-center">
-            <ActivityIndicator size="large" color="#000000" />
-            <Text className="text-base text-gray-500 mt-4">Loading conversations...</Text>
-          </View>
-        ) : filteredConversations.length > 0 ? (
-          <FlatList
-            data={filteredConversations}
-            renderItem={renderUserItem}
-            keyExtractor={(item) => item.id}
-            className="flex-1"
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: isKeyboardVisible ? 20 : 0 }}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="none"
-            refreshing={isLoadingConversations}
-            onRefresh={fetchConversations}
-          />
-        ) : (
-          <View className="flex-1">
-            {renderEmptyState()}
-          </View>
-        )}
-      </KeyboardAvoidingView>
+    <View className="flex-1 bg-white">
+      {/* Loading State (MCP Context 7) */}
+      {isLoadingConversations ? (
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#000000" />
+          <Text className="text-base text-gray-500 mt-4">Loading conversations...</Text>
+        </View>
+      ) : filteredConversations.length > 0 ? (
+        <FlatList
+          data={filteredConversations}
+          renderItem={renderUserItem}
+          keyExtractor={(item) => item.id}
+          className="flex-1"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 100 }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="none"
+          refreshing={isLoadingConversations}
+          onRefresh={fetchConversations}
+          ListHeaderComponent={renderSearchBar()}
+        />
+      ) : (
+        <View className="flex-1">
+          {renderEmptyState()}
+        </View>
+      )}
 
 
       {/* Select User Modal (MCP Context 7) */}
@@ -870,9 +859,11 @@ const ChatScreen = ({ navigation }) => {
       
       {/* Custom Bottom Navigation */}
       <CustomBottomNav 
+        keyboardVisible={isKeyboardVisible}
+        currentScreen="chat"
         onAddPress={handleOpenSelectUserModal}
       />
-    </SafeAreaView>
+    </View>
   );
 };
 

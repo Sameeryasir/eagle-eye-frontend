@@ -103,7 +103,28 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
       return;
     }
 
-    const startDateISO = startDate.toISOString();
+    // Format date with local timezone
+    const formatWithTimezone = (date) => {
+      const offset = -date.getTimezoneOffset();
+      const offsetHours = Math.floor(Math.abs(offset) / 60);
+      const offsetMinutes = Math.abs(offset) % 60;
+      const offsetSign = offset >= 0 ? '+' : '-';
+      const offsetString = `${offsetSign}${offsetHours.toString().padStart(2, '0')}:${offsetMinutes.toString().padStart(2, '0')}`;
+      
+      const isoString = date.toLocaleString('sv-SE', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      }).replace(',', '.').replace(' ', 'T');
+      
+      return `${isoString}${offsetString}`;
+    };
+
+    const startDateWithTimezone = formatWithTimezone(startDate);
 
     setIsLoading(true);
     
@@ -112,7 +133,7 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
       const projectPayload = {
         name: projectData.name.trim(),
         description: projectData.description.trim(),
-        startDate: startDateISO,
+        startDate: startDateWithTimezone,
       };
 
       // --- Use Redux Action for Project Creation ---

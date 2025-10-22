@@ -1,6 +1,6 @@
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { API_URL } from "../../config/api";
+import { API_URL } from "@env";
 import refreshToken from "../utils/tokenRefresh";
 
 export async function updateImageById(imageId, updateData, newFile = null) {
@@ -56,6 +56,6 @@ export async function updateImageById(imageId, updateData, newFile = null) {
       });
       return retryResponse.data;
     }
-    throw new Error(err.response?.data?.message || err.message || "Update failed");
+    throw new Error("Update failed");
   }
 }

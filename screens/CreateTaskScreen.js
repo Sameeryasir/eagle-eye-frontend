@@ -391,25 +391,50 @@ function CreateTaskScreen({ navigation, route }) {
         String(localEndDate.getMonth() + 1).padStart(2, '0') + '-' + 
         String(localEndDate.getDate()).padStart(2, '0') : null;
 
+      // Use built-in toLocaleString for automatic timezone formatting (same as CreateEventModal)
+      const formatWithTimezone = (date) => {
+        // Get timezone offset automatically
+        const timezoneOffset = date.getTimezoneOffset();
+        const offsetHours = Math.floor(Math.abs(timezoneOffset) / 60);
+        const offsetMinutes = Math.abs(timezoneOffset) % 60;
+        const offsetSign = timezoneOffset <= 0 ? '+' : '-';
+        const timezoneString = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
+        
+        // Use toLocaleString with ISO format for automatic formatting
+        const isoString = date.toLocaleString('sv-SE', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          fractionalSecondDigits: 3
+        }).replace(' ', 'T');
+        
+        return `${isoString}${timezoneString}`;
+      };
+
       // Prepare the data for Redux action
       const taskPayload = {
         title: taskData.title.trim(),
         description: taskData.description.trim(),
         assignedToUserId: taskData.assignedTo?.id || null,
         priority: taskData.priority || null,
-        startTime: startDateTime.toISOString(), // ISO 8601 string format
-        minStartTime: minStartTime.toISOString(), // Send captured time for backend validation
-        endTime: endDateTime ? endDateTime.toISOString() : null, // ISO 8601 string format
+        startTime: formatWithTimezone(startDateTime), // Local timezone format (e.g., 2025-10-21T20:34:00.000+05:00)
+        minStartTime: formatWithTimezone(minStartTime), // Local timezone format for backend validation
+        endTime: endDateTime ? formatWithTimezone(endDateTime) : null, // Local timezone format (e.g., 2025-10-21T21:34:00.000+05:00)
         projectId: projectId,
       };
 
-      console.log('=== CreateTaskScreen Task Creation Debug ===');
+      console.log('=== CreateTaskScreen Task Creation Debug (Local Timezone Format) ===');
       console.log('Original Start Time:', startDateTime.toLocaleString());
       console.log('Local Start Date:', localStartDate.toLocaleDateString());
       console.log('Task Start Date (YYYY-MM-DD):', taskStartDate);
+      console.log('Start Time Being Sent (Local):', taskPayload.startTime);
       if (endDateTime) {
         console.log('Original End Time:', endDateTime.toLocaleString());
         console.log('Local End Date:', localEndDate.toLocaleDateString());
+        console.log('End Time Being Sent (Local):', taskPayload.endTime);
         console.log('Task End Date (YYYY-MM-DD):', taskEndDate);
       }
       console.log('Task Payload Being Sent:', taskPayload);

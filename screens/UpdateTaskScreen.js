@@ -191,8 +191,31 @@ function UpdateTaskScreen({ navigation, route }) {
       return;
     }
 
-    const startTime = startDateTime.toISOString();
-    const endTime = endDateTime.toISOString();
+    // Use built-in toLocaleString for automatic timezone formatting (same as CreateEventModal)
+    const formatWithTimezone = (date) => {
+      // Get timezone offset automatically
+      const timezoneOffset = date.getTimezoneOffset();
+      const offsetHours = Math.floor(Math.abs(timezoneOffset) / 60);
+      const offsetMinutes = Math.abs(timezoneOffset) % 60;
+      const offsetSign = timezoneOffset <= 0 ? '+' : '-';
+      const timezoneString = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
+      
+      // Use toLocaleString with ISO format for automatic formatting
+      const isoString = date.toLocaleString('sv-SE', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        fractionalSecondDigits: 3
+      }).replace(' ', 'T');
+      
+      return `${isoString}${timezoneString}`;
+    };
+
+    const startTime = formatWithTimezone(startDateTime); // Local timezone format
+    const endTime = formatWithTimezone(endDateTime); // Local timezone format
 
     setIsLoading(true);
     
@@ -201,8 +224,8 @@ function UpdateTaskScreen({ navigation, route }) {
       const taskPayload = {
         title: taskData.title.trim(),
         description: taskData.description.trim(),
-        startTime: startTime,
-        endTime: endTime,
+        startTime: startTime, // Local timezone format (e.g., 2025-10-21T20:34:00.000+05:00)
+        endTime: endTime, // Local timezone format (e.g., 2025-10-21T21:34:00.000+05:00)
         projectId: projectId, // Include projectId if available
       };
 
