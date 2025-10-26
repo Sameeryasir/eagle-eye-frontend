@@ -142,7 +142,7 @@ const ChatScreen = ({ navigation }) => {
           }
         } else if (!lastMessageText) {
           // No content and no file
-          lastMessageText = '';
+          lastMessageText = 'No message yet';
         }
         
         // Format timestamp
@@ -589,7 +589,7 @@ const ChatScreen = ({ navigation }) => {
       const groupData = {
         id: conversation?.id?.toString(),
         name: project?.name || 'Project Group Chat',
-        lastMessage: '', // Empty for new conversation
+        lastMessage: 'No message yet', // Empty for new conversation
         timestamp: 'Just now',
         unreadCount: 0,
         isOnline: false,
@@ -617,7 +617,7 @@ const ChatScreen = ({ navigation }) => {
         id: employee.id?.toString(),
         name: fullName,
         email: employee.email,
-        lastMessage: '', // Empty for new conversation
+        lastMessage: 'No message yet', // Empty for new conversation
         timestamp: 'Just now',
         unreadCount: 0,
         isOnline: false, // Could be enhanced with real online status later

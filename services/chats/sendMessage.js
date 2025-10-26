@@ -10,7 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../../config/api.js';
 import refreshToken from '../utils/tokenRefresh';
 
-export const sendMessage = async (conversationId, content, file = null) => {
+export const sendMessage = async (conversationId, content, file = null, messageId = null) => {
   let token = await AsyncStorage.getItem('token');
   let refreshTokenValue = await AsyncStorage.getItem('refreshToken');
 
@@ -33,6 +33,7 @@ export const sendMessage = async (conversationId, content, file = null) => {
   console.log('Conversation ID:', conversationId);
   console.log('Content:', content);
   console.log('File:', file ? `${file.name} (${file.mimeType})` : 'None');
+  console.log('Message ID:', messageId || 'None');
 
   // --- Prepare Request Body (MCP Context 7) ---
   // Business Rule: Use FormData when file is attached, otherwise use JSON
@@ -50,6 +51,12 @@ export const sendMessage = async (conversationId, content, file = null) => {
     if (content && content.trim()) {
       requestBody.append('content', content.trim());
     }
+    
+    // Append message_id if provided (from database)
+    if (messageId) {
+      requestBody.append('message_id', messageId);
+    }
+    
     
     // Append file with proper structure for React Native
     // React Native requires: { uri, name, type }
@@ -70,12 +77,30 @@ export const sendMessage = async (conversationId, content, file = null) => {
       content: content.trim(),
     };
     
+    // Add message_id if provided (from database)
+    if (messageId) {
+      requestBody.message_id = messageId;
+    }
+    
+     
     headers['Content-Type'] = 'application/json';
     
     console.log('Using JSON for text-only message');
   }
   
   try {
+    // Console log the complete request body being sent to server
+    console.log('📤 Complete request body being sent to server:');
+    if (file) {
+      console.log('FormData contents:');
+      console.log('- conversationId:', conversationId);
+      console.log('- content:', content);
+      console.log('- message_id:', messageId);
+      console.log('- file:', file ? `${file.name} (${file.mimeType})` : 'None');
+    } else {
+      console.log('JSON request body:', JSON.stringify(requestBody, null, 2));
+    }
+    
     // Make API request to send message (with or without file)
     const response = await axios.post(
       `${API_URL}/chat/messages`, 

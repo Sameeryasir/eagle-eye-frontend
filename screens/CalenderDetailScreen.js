@@ -333,25 +333,15 @@ const CalenderDetailScreen = ({ route, navigation }) => {
         let startDate, endDate;
         
         if (event.startTime) {
-          // Parse UTC time and convert to local time using user's timezone
+          // Simple UTC to local time conversion
           startDate = new Date(event.startTime);
-          // Use expo-localization to get proper local time display
-          const localStartTime = startDate.toLocaleString(Localization.locale, {
-            timeZone: Localization.timezone
-          });
-          console.log(`UTC startTime: ${event.startTime} -> Local (${Localization.timezone}): ${localStartTime}`);
         } else {
           startDate = new Date();
         }
         
         if (event.endTime) {
-          // Parse UTC time and convert to local time using user's timezone
+          // Simple UTC to local time conversion
           endDate = new Date(event.endTime);
-          // Use expo-localization to get proper local time display
-          const localEndTime = endDate.toLocaleString(Localization.locale, {
-            timeZone: Localization.timezone
-          });
-          console.log(`UTC endTime: ${event.endTime} -> Local (${Localization.timezone}): ${localEndTime}`);
         } else {
           // Default 1 hour duration if no end time
           endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
@@ -370,32 +360,8 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           String(selectedDateObj.getMonth() + 1).padStart(2, '0') + '-' + 
           String(selectedDateObj.getDate()).padStart(2, '0');
         
-        // Adjust display times for multi-day events
-        if (selectedDateString !== eventStartDateString || selectedDateString !== eventEndDateString) {
-          console.log(`Multi-day event detected: "${event.title}"`);
-          console.log(`Event spans: ${eventStartDateString} to ${eventEndDateString}, showing for: ${selectedDateString}`);
-          
-          // If this is the start date, show from start time to end of day
-          if (selectedDateString === eventStartDateString) {
-            endDate = new Date(selectedDateObj);
-            endDate.setHours(23, 59, 59, 999); // End of day
-            console.log(`Start day: showing from ${startDate.toLocaleTimeString()} to end of day`);
-          }
-          // If this is the end date, show from start of day to end time
-          else if (selectedDateString === eventEndDateString) {
-            startDate = new Date(selectedDateObj);
-            startDate.setHours(0, 0, 0, 0); // Start of day
-            console.log(`End day: showing from start of day to ${endDate.toLocaleTimeString()}`);
-          }
-          // If this is a middle day, show full day
-          else {
-            startDate = new Date(selectedDateObj);
-            startDate.setHours(0, 0, 0, 0); // Start of day
-            endDate = new Date(selectedDateObj);
-            endDate.setHours(23, 59, 59, 999); // End of day
-            console.log(`Middle day: showing full day`);
-          }
-        }
+        // Multi-day events now use their original start/end times
+        // No more forced all-day display
         
         console.log(`Converted dates for event ${index}:`, {
           startDate: startDate,
@@ -548,16 +514,14 @@ const CalenderDetailScreen = ({ route, navigation }) => {
             `${item.originalStartDate} to ${item.originalEndDate}`
           ) : (
             // Show time range for single-day events
-            `${item.startDate.toLocaleTimeString(Localization.locale, { 
+            `${item.startDate.toLocaleTimeString('en-US', { 
               hour: '2-digit', 
               minute: '2-digit', 
-              hour12: true,
-              timeZone: Localization.timezone 
-            })} - ${item.endDate.toLocaleTimeString(Localization.locale, { 
+              hour12: true
+            })} - ${item.endDate.toLocaleTimeString('en-US', { 
               hour: 'numeric', 
               minute: '2-digit', 
-              hour12: true,
-              timeZone: Localization.timezone 
+              hour12: true
             })}`
           )}
         </Text>

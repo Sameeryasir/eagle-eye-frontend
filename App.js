@@ -15,6 +15,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MenuProvider } from "react-native-popup-menu";
 import Toast from 'react-native-toast-message';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SQLiteProvider, useSQLiteContext,  SQLiteDatabase } from 'expo-sqlite';
 
 // --- Redux Store Integration (MCP Context 7) ---
 // Import Redux store and provider for global state management
@@ -84,6 +85,7 @@ import AccountInfoScreen from "./screens/AccountInfoScreen";
 import ProjectFilesScreen from "./screens/ProjectFilesScreen";
 
 const Stack = createNativeStackNavigator();
+
 
 // Custom Header Component with Header + Search Bar
 const CustomHeader = ({ onMenuPress, navigation }) => {
@@ -808,11 +810,13 @@ const AppNavigator = () => {
 export default function App() {
   return (
     <ErrorBoundary>
-      <Provider store={store}>
-        <AuthProvider>
-          <AppNavigator />
-        </AuthProvider>
-      </Provider>
+      <SQLiteProvider databaseName="messages.db">
+        <Provider store={store}>
+          <AuthProvider>
+            <AppNavigator />
+          </AuthProvider>
+        </Provider>
+      </SQLiteProvider>
     </ErrorBoundary>
   );
 }

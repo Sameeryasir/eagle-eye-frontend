@@ -33,6 +33,7 @@
     "expo-select-dropdown": "^1.2.0",
     "expo-sharing": "~13.1.5",
     "expo-splash-screen": "~0.30.10",
+    "expo-sqlite": "~15.2.14",
     "expo-status-bar": "~2.2.3",
     "lottie-react-native": "7.2.2",
     "moment": "^2.30.1",
