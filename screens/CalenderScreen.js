@@ -96,6 +96,8 @@ function CalenderScreen({ navigation }) {
             // --- Add formatted date + time strings for display ---
             startTimeFormatted: task.startTime ? formatDateTime(task.startTime) : 'No time set',
             endTimeFormatted: task.endTime ? formatDateTime(task.endTime) : 'No end time',
+            // --- Add flag to check if endTime is null ---
+            hasEndTime: task.endTime !== null && task.endTime !== undefined,
             description: task.description || 'No description',
             priority: task.priority,
             status: task.status,

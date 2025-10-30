@@ -106,6 +106,15 @@ const UserChatScreen = ({ navigation, route }) => {
   const [inputText, setInputText] = useState("");
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
+  
+  // --- Pagination State (MCP Context 7) ---
+  // Business Rule: Load messages in chunks for better performance
+  const [currentOffset, setCurrentOffset] = useState(0);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1); // Track current API page
+  const [isUsingAPI, setIsUsingAPI] = useState(false); // Track if we're using API or SQLite
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
   const [selectedImageUrl, setSelectedImageUrl] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null); // For file uploads
@@ -134,7 +143,9 @@ const UserChatScreen = ({ navigation, route }) => {
   // --- Get Current User ID from AsyncStorage (MCP Context 7) ---
   // Business Rule: Retrieve user ID from local storage to compare with message sender
   // This ensures we're using the exact same ID that was stored during login
+  // CRITICAL FIX: Initialize with loading state to prevent UI flicker
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [isLoadingUserId, setIsLoadingUserId] = useState(true);
   const currentUserIdRef = useRef(currentUserId);
 
   // Update ref when currentUserId changes
@@ -143,23 +154,173 @@ const UserChatScreen = ({ navigation, route }) => {
   }, [currentUserId]);
 
   // --- Fetch User ID from AsyncStorage (MCP Context 7) ---
+  // Business Rule: Load user ID BEFORE rendering messages to prevent left-side flicker
   useEffect(() => {
     const getUserIdFromStorage = async () => {
       try {
+        setIsLoadingUserId(true);
         const storedUserId = await AsyncStorage.getItem('userId');
         
         if (storedUserId) {
           // Convert to number since sender.id comes as number from API
           const userIdNumber = parseInt(storedUserId);
           setCurrentUserId(userIdNumber);
+          console.log('✅ Current user ID loaded:', userIdNumber);
+        } else {
+          console.log('⚠️ No user ID found in AsyncStorage');
         }
       } catch (error) {
-        console.error('Error reading userId from AsyncStorage:', error);
+        console.error('❌ Error reading userId from AsyncStorage:', error);
+      } finally {
+        setIsLoadingUserId(false);
       }
     };
 
     getUserIdFromStorage();
   }, []);
+
+  // --- Helper: Convert API Message to UI Format (MCP Context 7) ---
+  // Business Rule: Standardize message format for display consistency
+  // This ensures all messages have the same structure regardless of source (API or SQLite)
+  const convertMessageToUI = (msg) => ({
+    id: msg.id?.toString(),
+    content: msg.content,
+    fileUrl: msg.fileUrl,
+    fileName: msg.fileName,
+    fileType: msg.fileType,
+    fileSize: msg.fileSize,
+    sender: {
+      id: msg.sender?.id,
+      first_name: msg.sender?.first_name,
+      last_name: msg.sender?.last_name
+    },
+    createdAt: msg.createdAt,
+    status: msg.status || 'sent',
+    signature: msg.signature ? {
+      id: msg.signature.id,
+      title: msg.signature.title,
+      notes: msg.signature.notes,
+      dueDate: msg.signature.dueDate,
+      status: msg.signature.status,
+      fileUrl: msg.signature.fileUrl,
+      fileName: msg.signature.fileName,
+      fileSize: msg.signature.fileSize,
+      signedBy: msg.signature.signedBy
+    } : null
+  });
+
+  // --- Helper: Save Message to SQLite Database (MCP Context 7) ---
+  // Business Rule: Persist messages locally for offline access
+  // This ensures messages are available even without internet connection
+  const saveMessageToSQLite = (msg, conversationId) => {
+    try {
+      // Check if message already exists to avoid duplicates
+      const existingMessage = db.getFirstSync(
+        `SELECT id FROM messages_${conversationId} WHERE id = ?`,
+        [msg.id]
+      );
+      
+      if (existingMessage) {
+        console.log(`ℹ️ Message ${msg.id} already exists - skipping`);
+        return;
+      }
+      
+      // Save message to SQLite
+      db.runSync(`
+        INSERT OR REPLACE INTO messages_${conversationId} (
+          id, conversation_id, content, file_uri, file_name, file_type, file_size,
+          sender_id, sender_first_name, sender_last_name, created_at, status,
+          signature_id, signature_title, signature_notes, signature_due_date, 
+          signature_status, signature_file_url, signature_file_name, signature_file_size,
+          signed_by_id, signed_by_name, signed_by_email
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        msg.id,
+        conversationId,
+        msg.content || null,
+        msg.fileUrl || null,
+        msg.fileName || null,
+        msg.fileType || null,
+        msg.fileSize || null,
+        msg.sender?.id || null,
+        msg.sender?.first_name || null,
+        msg.sender?.last_name || null,
+        msg.createdAt || new Date().toISOString(),
+        msg.status || 'sent',
+        msg.signature?.id || null,
+        msg.signature?.title || null,
+        msg.signature?.notes || null,
+        msg.signature?.dueDate || null,
+        msg.signature?.status || null,
+        msg.signature?.fileUrl || null,
+        msg.signature?.fileName || null,
+        msg.signature?.fileSize || null,
+        msg.signature?.signedBy?.id || null,
+        msg.signature?.signedBy?.name || null,
+        msg.signature?.signedBy?.email || null
+      ]);
+    } catch (dbError) {
+      console.error('❌ Error saving message to database:', dbError);
+    }
+  };
+
+  // --- Helper: Fetch All Messages from API and Save to SQLite (MCP Context 7) ---
+  // Business Rule: When SQLite is empty, fetch all messages from API and cache locally
+  // This ensures fast subsequent loads and offline access
+  // Change Summary: Simplified version without one-by-one delays, loads all pages efficiently
+  const fetchAllMessagesFromAPI = async (conversationId) => {
+    console.log('📡 Fetching all messages from API...');
+    setIsUsingAPI(true);
+    setCurrentPage(1);
+    
+    let allMessages = [];
+    let currentPageNum = 1;
+    let hasMorePages = true;
+    
+    // Load all pages from API
+    while (hasMorePages) {
+      console.log(`📡 Loading page ${currentPageNum} from API...`);
+      
+      const apiResponse = await getMessagesByConversationId(conversationId, currentPageNum, 20);
+      const apiMessages = apiResponse?.messages || [];
+      
+      if (apiMessages && apiMessages.length > 0) {
+        allMessages = [...allMessages, ...apiMessages];
+        currentPageNum++;
+        hasMorePages = apiResponse?.page < apiResponse?.totalPages;
+      } else {
+        hasMorePages = false;
+      }
+    }
+    
+    console.log(`✅ Loaded ${allMessages.length} messages from API`);
+    
+    // Convert all messages to UI format
+    const uiMessages = allMessages.map(msg => convertMessageToUI(msg));
+    
+    // Display all messages at once
+    setMessages(prevMessages => {
+      const combinedMessages = [...prevMessages, ...uiMessages];
+      return sortMessagesByTime(combinedMessages);
+    });
+    
+    // Save all messages to SQLite
+    console.log('💾 Saving messages to SQLite...');
+    allMessages.forEach(msg => saveMessageToSQLite(msg, conversationId));
+    console.log('✅ All messages saved to SQLite');
+    
+    // Update pagination state
+    setCurrentOffset(0);
+    setHasMoreMessages(false);
+    setCurrentPage(currentPageNum - 1);
+    
+    // Store last message ID
+    const sortedMessages = sortMessagesByTime([...uiMessages]);
+    storeLastMessageId(sortedMessages);
+    
+    console.log('✅ All messages loaded and saved');
+    return uiMessages;
+  };
 
   // --- Helper: Sort Messages by Timestamp (MCP Context 7) ---
   // Business Rule: Sort messages newest-first for inverted FlatList
@@ -173,10 +334,33 @@ const UserChatScreen = ({ navigation, route }) => {
     });
   };
 
-  // --- Fetch Messages from SQLite Database (MCP Context 7) ---
-  // Business Rule: Always load messages from SQLite database for fast loading (no API calls)
+  // --- Dedupe Messages By ID (Simple UI Safeguard - MCP Context 7) ---
+  // What: Ensures we never render duplicate messages in the list even if multiple fetchers run
+  // Why: If two sources append the same server message, UI should still show it once
+  // NOTE: Non-destructive; does not change DB or fetching logic
+  const dedupeMessagesById = (items) => {
+    try {
+      if (!Array.isArray(items) || items.length === 0) return items || [];
+      const seen = new Set();
+      const unique = [];
+      for (const item of items) {
+        const key = String(item?.id ?? '');
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          unique.push(item);
+        }
+      }
+      return unique;
+    } catch {
+      return items || [];
+    }
+  };
+
+  // --- Fetch Messages from SQLite Database or API (MCP Context 7) ---
+  // Business Rule: Load messages from SQLite database first, fallback to API if empty
+  // Loader only shown for API calls (SQLite is fast)
   const fetchMessages = async () => {
-    console.log('🚀 fetchMessages called - loading from SQLite database');
+    console.log('🚀 fetchMessages called - loading from SQLite database or API');
     console.log('🔍 conversationId:', conversationId);
     
     if (!conversationId) {
@@ -185,14 +369,192 @@ const UserChatScreen = ({ navigation, route }) => {
     }
 
     console.log('✅ Conversation ID found, starting to fetch messages from SQLite');
-    setIsLoadingMessages(true);
+    // Don't show loader for SQLite queries - they're fast
+    // setIsLoadingMessages(true);
     
     try {
-      // Load messages from SQLite database for fast loading
-      console.log('📡 Loading messages from SQLite database for conversation:', conversationId);
+      // Check if messages table exists before querying
+      console.log('🔍 Checking if messages table exists for conversation:', conversationId);
+      
+      try {
+        const tableCheck = db.getAllSync(`SELECT name FROM sqlite_master WHERE type='table' AND name='messages_${conversationId}'`);
+        if (tableCheck.length === 0) {
+          console.log('⚠️ Messages table does not exist yet - skipping SQLite query');
+          console.log('📭 No messages found in SQLite database - fetching from API');
+          
+          // No table exists - fetch from API with pagination
+          try {
+            console.log('📡 Fetching from API without loader...');
+            setIsUsingAPI(true); // We're using API for this conversation
+            setCurrentPage(1); // Start from page 1
+            
+            // Load pages progressively - show each page as it loads
+            let allMessages = [];
+            let currentPageNum = 1;
+            let hasMorePages = true;
+            
+            while (hasMorePages) {
+              console.log(`📡 Loading page ${currentPageNum} from API...`);
+              const apiResponse = await getMessagesByConversationId(conversationId, currentPageNum, 20);
+              console.log(`📡 API Response for page ${currentPageNum}:`, apiResponse);
+              
+              const apiMessages = apiResponse?.messages || [];
+              console.log(`📋 Found ${apiMessages.length} messages in page ${currentPageNum} (Total: ${apiResponse?.total || 0})`);
+              
+              if (apiMessages && apiMessages.length > 0) {
+                allMessages = [...allMessages, ...apiMessages];
+                
+                // Convert current page messages to UI format
+                const currentPageMessages = apiMessages.map(msg => ({
+                  id: msg.id?.toString(),
+                  content: msg.content,
+                  fileUrl: msg.fileUrl,
+                  fileName: msg.fileName,
+                  fileType: msg.fileType,
+                  fileSize: msg.fileSize,
+                  sender: {
+                    id: msg.sender?.id,
+                    first_name: msg.sender?.first_name,
+                    last_name: msg.sender?.last_name
+                  },
+                  createdAt: msg.createdAt,
+                  status: msg.status || 'sent',
+                  // Add signature data if it exists
+                  signature: msg.signature ? {
+                    id: msg.signature.id,
+                    title: msg.signature.title,
+                    notes: msg.signature.notes,
+                    dueDate: msg.signature.dueDate,
+                    status: msg.signature.status,
+                    fileUrl: msg.signature.fileUrl,
+                    fileName: msg.signature.fileName,
+                    fileSize: msg.signature.fileSize,
+                    signedBy: msg.signature.signedBy
+                  } : null
+                }));
+
+                // Show all messages from this page at once for faster loading
+                setMessages(prevMessages => {
+                  const combinedMessages = [...prevMessages, ...currentPageMessages];
+                  return sortMessagesByTime(combinedMessages);
+                });
+
+                currentPageNum++;
+                hasMorePages = apiResponse?.page < apiResponse?.totalPages;
+                
+                // No delay between pages for faster loading
+              } else {
+                hasMorePages = false;
+              }
+            }
+            
+            console.log(`✅ Loaded all pages progressively. Total messages: ${allMessages.length}`);
+            
+            // Store all messages in SQLite database
+            console.log('💾 Storing all API messages in SQLite database...');
+            allMessages.forEach(msg => {
+              try {
+                // Check if message already exists to avoid duplicates
+                const existingMessage = db.getFirstSync(
+                  `SELECT id FROM messages_${conversationId} WHERE id = ?`,
+                  [msg.id]
+                );
+                
+                if (existingMessage) {
+                  console.log(`ℹ️ Message ${msg.id} already exists in database - skipping insert`);
+                  return;
+                }
+                
+                db.runSync(`
+                  INSERT OR REPLACE INTO messages_${conversationId} (
+                    id, conversation_id, content, file_uri, file_name, file_type, file_size,
+                    sender_id, sender_first_name, sender_last_name, created_at, status,
+                    signature_id, signature_title, signature_notes, signature_due_date, 
+                    signature_status, signature_file_url, signature_file_name, signature_file_size,
+                    signed_by_id, signed_by_name, signed_by_email
+                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `, [
+                  msg.id,
+                  conversationId,
+                  msg.content || null,
+                  msg.fileUrl || null,
+                  msg.fileName || null,
+                  msg.fileType || null,
+                  msg.fileSize || null,
+                  msg.sender?.id || null,
+                  msg.sender?.first_name || null,
+                  msg.sender?.last_name || null,
+                  msg.createdAt || new Date().toISOString(),
+                  msg.status || 'sent',
+                  msg.signature?.id || null,
+                  msg.signature?.title || null,
+                  msg.signature?.notes || null,
+                  msg.signature?.dueDate || null,
+                  msg.signature?.status || null,
+                  msg.signature?.fileUrl || null,
+                  msg.signature?.fileName || null,
+                  msg.signature?.fileSize || null,
+                  msg.signature?.signedBy?.id || null,
+                  msg.signature?.signedBy?.name || null,
+                  msg.signature?.signedBy?.email || null
+                ]);
+              } catch (dbError) {
+                console.error('❌ Error storing API message in database:', dbError);
+              }
+            });
+            console.log('✅ All API messages stored in SQLite database');
+
+            // Reset pagination state - no more pages to load
+            setCurrentOffset(0);
+            setHasMoreMessages(false); // All messages loaded
+            setCurrentPage(currentPageNum - 1); // Set to last loaded page
+            
+            // Store the last message ID in AsyncStorage
+            const finalMessages = sortMessagesByTime(allMessages.map(msg => ({
+              id: msg.id?.toString(),
+              content: msg.content,
+              fileUrl: msg.fileUrl,
+              fileName: msg.fileName,
+              fileType: msg.fileType,
+              fileSize: msg.fileSize,
+              sender: {
+                id: msg.sender?.id,
+                first_name: msg.sender?.first_name,
+                last_name: msg.sender?.last_name
+              },
+              createdAt: msg.createdAt,
+              status: msg.status || 'sent',
+              signature: msg.signature ? {
+                id: msg.signature.id,
+                title: msg.signature.title,
+                notes: msg.signature.notes,
+                dueDate: msg.signature.dueDate,
+                status: msg.signature.status,
+                fileUrl: msg.signature.fileUrl,
+                fileName: msg.signature.fileName,
+                fileSize: msg.signature.fileSize,
+                signedBy: msg.signature.signedBy
+              } : null
+            })));
+            storeLastMessageId(finalMessages);
+            
+            console.log('✅ All messages loaded progressively from API');
+          } catch (error) {
+            console.error('❌ Error fetching messages from API:', error);
+            setMessages([]);
+            setHasMoreMessages(false);
+          }
+        }
+      } catch (tableError) {
+        console.error('❌ Error checking table existence:', tableError);
+        // Continue with API fallback
+      }
+
+      // Load only 20 recent messages initially for better performance
+      console.log('📡 Loading recent messages from SQLite database for conversation:', conversationId);
       
       const dbMessages = db.getAllSync(
-        `SELECT * FROM messages_${conversationId} ORDER BY created_at DESC`
+        `SELECT * FROM messages_${conversationId} ORDER BY created_at DESC LIMIT 20`
       );
       
       console.log('📨 SQLite Response received:', dbMessages);
@@ -236,13 +598,186 @@ const UserChatScreen = ({ navigation, route }) => {
         const sortedMessages = sortMessagesByTime([...uiMessages]);
         setMessages(sortedMessages);
         
+        // Reset pagination state
+        setCurrentOffset(0);
+        setHasMoreMessages(dbMessages.length === 20); // If we got 20, there might be more
+        
         // Store the last message ID in AsyncStorage
         storeLastMessageId(sortedMessages);
         
         console.log('✅ Messages loaded from SQLite and sorted, setMessages called');
       } else {
-        console.log('📭 No messages found in SQLite database');
+        console.log('📭 No messages found in SQLite database - fetching from API');
+        
+        // No messages in SQLite - fetch from API with pagination
+        try {
+          console.log('📡 Fetching from API without loader...');
+          setIsUsingAPI(true); // We're using API for this conversation
+          setCurrentPage(1); // Start from page 1
+          
+          // Load pages progressively like WhatsApp - show each page as it loads
+          let allMessages = [];
+          let currentPageNum = 1;
+          let hasMorePages = true;
+          
+          while (hasMorePages) {
+            console.log(`📡 Loading page ${currentPageNum} from API...`);
+            const apiResponse = await getMessagesByConversationId(conversationId, currentPageNum, 20);
+            console.log(`📡 API Response for page ${currentPageNum}:`, apiResponse);
+            
+            const apiMessages = apiResponse?.messages || [];
+            console.log(`📋 Found ${apiMessages.length} messages in page ${currentPageNum} (Total: ${apiResponse?.total || 0})`);
+            
+            if (apiMessages && apiMessages.length > 0) {
+              allMessages = [...allMessages, ...apiMessages];
+              
+              // Convert current page messages to UI format
+              const currentPageMessages = apiMessages.map(msg => ({
+                id: msg.id?.toString(),
+                content: msg.content,
+                fileUrl: msg.fileUrl,
+                fileName: msg.fileName,
+                fileType: msg.fileType,
+                fileSize: msg.fileSize,
+                sender: {
+                  id: msg.sender?.id,
+                  first_name: msg.sender?.first_name,
+                  last_name: msg.sender?.last_name
+                },
+                createdAt: msg.createdAt,
+                status: msg.status || 'sent',
+                // Add signature data if it exists
+                signature: msg.signature ? {
+                  id: msg.signature.id,
+                  title: msg.signature.title,
+                  notes: msg.signature.notes,
+                  dueDate: msg.signature.dueDate,
+                  status: msg.signature.status,
+                  fileUrl: msg.signature.fileUrl,
+                  fileName: msg.signature.fileName,
+                  fileSize: msg.signature.fileSize,
+                  signedBy: msg.signature.signedBy
+                } : null
+              }));
+
+              // Show messages one by one quickly like WhatsApp
+              for (let i = 0; i < currentPageMessages.length; i++) {
+                const message = currentPageMessages[i];
+                setMessages(prevMessages => {
+                  const combinedMessages = [...prevMessages, message];
+                  return sortMessagesByTime(combinedMessages);
+                });
+                
+                // Fast delay between each message (50ms for WhatsApp-like speed)
+                await new Promise(resolve => setTimeout(resolve, 50));
+              }
+
+              currentPageNum++;
+              hasMorePages = apiResponse?.page < apiResponse?.totalPages;
+              
+              // Small delay between pages
+              await new Promise(resolve => setTimeout(resolve, 100));
+            } else {
+              hasMorePages = false;
+            }
+          }
+          
+          console.log(`✅ Loaded all pages progressively. Total messages: ${allMessages.length}`);
+          
+          // Store all messages in SQLite database
+          console.log('💾 Storing all API messages in SQLite database...');
+          allMessages.forEach(msg => {
+            try {
+              // Check if message already exists to avoid duplicates
+              const existingMessage = db.getFirstSync(
+                `SELECT id FROM messages_${conversationId} WHERE id = ?`,
+                [msg.id]
+              );
+              
+              if (existingMessage) {
+                console.log(`ℹ️ Message ${msg.id} already exists in database - skipping insert`);
+                return;
+              }
+              
+              db.runSync(`
+                INSERT OR REPLACE INTO messages_${conversationId} (
+                  id, conversation_id, content, file_uri, file_name, file_type, file_size,
+                  sender_id, sender_first_name, sender_last_name, created_at, status,
+                  signature_id, signature_title, signature_notes, signature_due_date, 
+                  signature_status, signature_file_url, signature_file_name, signature_file_size,
+                  signed_by_id, signed_by_name, signed_by_email
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `, [
+                msg.id,
+                conversationId,
+                msg.content || null,
+                msg.fileUrl || null,
+                msg.fileName || null,
+                msg.fileType || null,
+                msg.fileSize || null,
+                msg.sender?.id || null,
+                msg.sender?.first_name || null,
+                msg.sender?.last_name || null,
+                msg.createdAt || new Date().toISOString(),
+                msg.status || 'sent',
+                msg.signature?.id || null,
+                msg.signature?.title || null,
+                msg.signature?.notes || null,
+                msg.signature?.dueDate || null,
+                msg.signature?.status || null,
+                msg.signature?.fileUrl || null,
+                msg.signature?.fileName || null,
+                msg.signature?.fileSize || null,
+                msg.signature?.signedBy?.id || null,
+                msg.signature?.signedBy?.name || null,
+                msg.signature?.signedBy?.email || null
+              ]);
+            } catch (dbError) {
+              console.error('❌ Error storing API message in database:', dbError);
+            }
+          });
+          console.log('✅ All API messages stored in SQLite database');
+
+          // Reset pagination state - no more pages to load
+          setCurrentOffset(0);
+          setHasMoreMessages(false); // All messages loaded
+          setCurrentPage(currentPageNum - 1); // Set to last loaded page
+          
+          // Store the last message ID in AsyncStorage
+          const finalMessages = sortMessagesByTime(allMessages.map(msg => ({
+            id: msg.id?.toString(),
+            content: msg.content,
+            fileUrl: msg.fileUrl,
+            fileName: msg.fileName,
+            fileType: msg.fileType,
+            fileSize: msg.fileSize,
+            sender: {
+              id: msg.sender?.id,
+              first_name: msg.sender?.first_name,
+              last_name: msg.sender?.last_name
+            },
+            createdAt: msg.createdAt,
+            status: msg.status || 'sent',
+            signature: msg.signature ? {
+              id: msg.signature.id,
+              title: msg.signature.title,
+              notes: msg.signature.notes,
+              dueDate: msg.signature.dueDate,
+              status: msg.signature.status,
+              fileUrl: msg.signature.fileUrl,
+              fileName: msg.signature.fileName,
+              fileSize: msg.signature.fileSize,
+              signedBy: msg.signature.signedBy
+            } : null
+          })));
+          storeLastMessageId(finalMessages);
+          
+          console.log('✅ All messages loaded progressively from API and stored in SQLite');
+        } catch (apiError) {
+          console.error('❌ Error fetching messages from API:', apiError);
         setMessages([]);
+          setHasMoreMessages(false);
+        }
       }
     } catch (err) {
       console.error('❌ Error fetching messages from SQLite:', err);
@@ -251,6 +786,138 @@ const UserChatScreen = ({ navigation, route }) => {
     } finally {
       console.log('🏁 fetchMessages completed, setting loading to false');
       setIsLoadingMessages(false);
+    }
+  };
+
+  // --- Load More Messages Function (MCP Context 7) ---
+  // Business Rule: Load older messages in chunks when user scrolls up
+  // Handles both SQLite pagination (offset) and API pagination (page)
+  const loadMoreMessages = async () => {
+    if (!hasMoreMessages) {
+      console.log('ℹ️ No more messages to load');
+      return;
+    }
+
+    console.log('📄 Loading more messages...');
+
+    try {
+      if (isUsingAPI) {
+        // Load next page from API
+        const nextPage = currentPage + 1;
+        console.log(`📡 Loading page ${nextPage} from API...`);
+        
+        const apiResponse = await getMessagesByConversationId(conversationId, nextPage, 20);
+        console.log(`📡 API Response for page ${nextPage}:`, apiResponse);
+        
+        const apiMessages = apiResponse?.messages || [];
+        console.log(`📋 Found ${apiMessages.length} messages in API response (Total: ${apiResponse?.total || 0})`);
+
+        if (apiMessages && apiMessages.length > 0) {
+          // Convert API messages to UI format
+          const uiMessages = apiMessages.map(msg => ({
+            id: msg.id?.toString(),
+            content: msg.content,
+            fileUrl: msg.fileUrl,
+            fileName: msg.fileName,
+            fileType: msg.fileType,
+            fileSize: msg.fileSize,
+            sender: {
+              id: msg.sender?.id,
+              first_name: msg.sender?.first_name,
+              last_name: msg.sender?.last_name
+            },
+            createdAt: msg.createdAt,
+            status: msg.status || 'sent',
+            // Add signature data if it exists
+            signature: msg.signature ? {
+              id: msg.signature.id,
+              title: msg.signature.title,
+              notes: msg.signature.notes,
+              dueDate: msg.signature.dueDate,
+              status: msg.signature.status,
+              fileUrl: msg.signature.fileUrl,
+              fileName: msg.signature.fileName,
+              fileSize: msg.signature.fileSize,
+              signedBy: msg.signature.signedBy
+            } : null
+          }));
+
+          // Add older messages to existing messages (append to end)
+          setMessages(prevMessages => {
+            const combinedMessages = [...prevMessages, ...uiMessages];
+            return sortMessagesByTime(combinedMessages);
+          });
+
+          // Update pagination state
+          setCurrentPage(nextPage);
+          setHasMoreMessages(apiResponse?.page < apiResponse?.totalPages); // Check if there are more pages
+
+          console.log('✅ Older messages loaded successfully from API');
+        } else {
+          console.log('📭 No more older messages found in API');
+          setHasMoreMessages(false);
+        }
+      } else {
+        // Load next 20 messages from SQLite
+      const nextOffset = currentOffset + 20; // Start from where we left off
+      const olderMessages = db.getAllSync(
+        `SELECT * FROM messages_${conversationId} ORDER BY created_at DESC LIMIT 20 OFFSET ${nextOffset}`
+      );
+
+      console.log(`📋 Found ${olderMessages.length} older messages`);
+
+      if (olderMessages && olderMessages.length > 0) {
+        // Convert database messages to UI format
+        const uiMessages = olderMessages.map(msg => ({
+          id: msg.id?.toString() || `db_${msg.created_at}`,
+          content: msg.content,
+          fileUrl: msg.file_uri,
+          fileName: msg.file_name,
+          fileType: msg.file_type,
+          fileSize: msg.file_size,
+          sender: {
+            id: msg.sender_id,
+            first_name: msg.sender_first_name,
+            last_name: msg.sender_last_name
+          },
+          createdAt: msg.created_at,
+          status: msg.status || 'sent',
+          // Add signature data if it exists
+          signature: msg.signature_id ? {
+            id: msg.signature_id,
+            title: msg.signature_title,
+            notes: msg.signature_notes,
+            dueDate: msg.signature_due_date,
+            status: msg.signature_status,
+            fileUrl: msg.signature_file_url,
+            fileName: msg.signature_file_name,
+            fileSize: msg.signature_file_size,
+            signedBy: msg.signed_by_id ? {
+              id: msg.signed_by_id,
+              name: msg.signed_by_name,
+              email: msg.signed_by_email
+            } : null
+          } : null
+        }));
+
+        // Add older messages to existing messages (append to end)
+        setMessages(prevMessages => {
+          const combinedMessages = [...prevMessages, ...uiMessages];
+          return sortMessagesByTime(combinedMessages);
+        });
+
+        // Update pagination state
+        setCurrentOffset(nextOffset);
+        setHasMoreMessages(olderMessages.length === 20); // If we got 20, there might be more
+
+          console.log('✅ Older messages loaded successfully from SQLite');
+      } else {
+          console.log('📭 No more older messages found in SQLite');
+        setHasMoreMessages(false);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error loading more messages:', error);
     }
   };
 
@@ -326,6 +993,7 @@ const UserChatScreen = ({ navigation, route }) => {
 
   // --- Store Last Message ID in AsyncStorage (MCP Context 7) ---
   // Business Rule: Store the ID of the last CONFIRMED message (sent status, not pending/offline)
+  // CRITICAL: Only store server message IDs (integers), not Date.now() or offline IDs
   const storeLastMessageId = async (messages) => {
     if (messages && messages.length > 0) {
       try {
@@ -333,11 +1001,13 @@ const UserChatScreen = ({ navigation, route }) => {
         const confirmedMessages = messages.filter(msg => 
           msg.status === 'sent' && 
           !msg.id.toString().startsWith('offline_') &&
-          !msg.id.toString().startsWith('db_')
+          !msg.id.toString().startsWith('db_') &&
+          // CRITICAL: Only store integer IDs (server IDs), not Date.now() values
+          !isNaN(parseInt(msg.id)) && parseInt(msg.id) < 1000000 // Server IDs are usually small integers
         );
         
         if (confirmedMessages.length === 0) {
-          console.log('ℹ️ [ASYNCSTORAGE] No confirmed messages found - not storing any ID');
+          console.log('ℹ️ [ASYNCSTORAGE] No confirmed server messages found - not storing any ID');
           return;
         }
         
@@ -346,21 +1016,23 @@ const UserChatScreen = ({ navigation, route }) => {
         const messageId = lastConfirmedMessage.id;
         
         console.log('🔍 [ASYNCSTORAGE] Messages array length:', messages.length);
-        console.log('🔍 [ASYNCSTORAGE] Confirmed messages count:', confirmedMessages.length);
+        console.log('🔍 [ASYNCSTORAGE] Confirmed server messages count:', confirmedMessages.length);
         console.log('🔍 [ASYNCSTORAGE] Last confirmed message details:', {
           id: messageId,
+          idType: typeof messageId,
+          isInteger: !isNaN(parseInt(messageId)),
           content: lastConfirmedMessage.content ? lastConfirmedMessage.content.substring(0, 50) + '...' : '(no content)',
           sender: lastConfirmedMessage.sender?.first_name || 'Unknown',
           status: lastConfirmedMessage.status,
           createdAt: lastConfirmedMessage.createdAt
         });
         
-        if (messageId) {
+        if (messageId && !isNaN(parseInt(messageId)) && parseInt(messageId) < 1000000) {
           await AsyncStorage.setItem('latestMessageId', messageId.toString());
-          console.log('💾 [ASYNCSTORAGE] ✅ Successfully stored latest CONFIRMED message ID:', messageId);
+          console.log('💾 [ASYNCSTORAGE] ✅ Successfully stored latest CONFIRMED server message ID:', messageId);
           console.log('💾 [ASYNCSTORAGE] 📱 Stored in AsyncStorage with key: "latestMessageId"');
         } else {
-          console.log('⚠️ [ASYNCSTORAGE] No message ID found in last confirmed message');
+          console.log('⚠️ [ASYNCSTORAGE] Skipping invalid message ID:', messageId, '(not a valid server ID)');
         }
       } catch (error) {
         console.error('❌ [ASYNCSTORAGE] Failed to store message ID:', error);
@@ -565,30 +1237,74 @@ const UserChatScreen = ({ navigation, route }) => {
   // Fetch messages when component mounts and when conversationId changes
   useEffect(() => {
     console.log('🔄 UserChatScreen mounted or conversationId changed - calling API');
-    fetchMessages();
     
-    // Also check for new messages after the last stored message ID
-    fetchNewMessagesAfterLast();
+    // Reset initial load flag when conversationId changes
+    setIsInitialLoadComplete(false);
+    
+    // First, try to load messages from SQLite database
+    // Only fetch new messages if we already have messages in the database
+    const loadMessagesAndCheckForNew = async () => {
+      try {
+        // Check if messages table exists and has data
+        const tableCheck = db.getAllSync(`SELECT name FROM sqlite_master WHERE type='table' AND name='messages_${conversationId}'`);
+        
+        if (tableCheck.length > 0) {
+          // Table exists - check if it has messages
+          const messageCount = db.getFirstSync(`SELECT COUNT(*) as count FROM messages_${conversationId}`);
+          
+          if (messageCount && messageCount.count > 0) {
+            console.log('📱 Database has messages - loading from SQLite and checking for new messages');
+            // Load existing messages from SQLite
+            await fetchMessages();
+            // Then check for new messages after the last one
+            await fetchNewMessagesAfterLast();
+          } else {
+            console.log('📱 Database exists but is empty - fetching all messages from API');
+            // Database exists but is empty - fetch all messages from API
+            await fetchMessages();
+          }
+        } else {
+          console.log('📱 No database table - fetching all messages from API');
+          // No table exists - fetch all messages from API
+          await fetchMessages();
+        }
+        
+        // Mark initial load as complete
+        setIsInitialLoadComplete(true);
+      } catch (error) {
+        console.error('❌ Error in loadMessagesAndCheckForNew:', error);
+        // Fallback to just fetching messages
+        await fetchMessages();
+        setIsInitialLoadComplete(true);
+      }
+    };
+    
+    loadMessagesAndCheckForNew();
   }, [conversationId]);
 
   // --- Load Messages on Focus (MCP Context 7) ---
-  // Always call API when user navigates to this screen
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      console.log('📱 UserChatScreen focused - calling API to refresh messages');
-      console.log('🔍 Current conversationId:', conversationId);
-      if (conversationId) {
-        fetchMessages();
-        
-        // Also check for new messages after the last stored message ID
-        fetchNewMessagesAfterLast();
-      } else {
-        console.log('⚠️ No conversationId available on focus');
-      }
-    });
+  // REMOVED: Navigation focus listener to prevent automatic refresh when signature modal closes
+  // The app already handles message updates via:
+  // 1. Internet connectivity monitoring (sendOfflineMessages)
+  // 2. Pusher real-time updates
+  // 3. Manual message sending
+  // This prevents unnecessary API calls and app refresh
+  // useEffect(() => {
+  //   const unsubscribe = navigation.addListener('focus', () => {
+  //     console.log('📱 UserChatScreen focused - calling API to refresh messages');
+  //     console.log('🔍 Current conversationId:', conversationId);
+  //     if (conversationId) {
+  //       fetchMessages();
+  //       
+  //       // Also check for new messages after the last stored message ID
+  //       fetchNewMessagesAfterLast();
+  //     } else {
+  //       console.log('⚠️ No conversationId available on focus');
+  //     }
+  //   });
 
-    return unsubscribe;
-  }, [navigation, conversationId]);
+  //   return unsubscribe;
+  // }, [navigation, conversationId]);
 
 
   // --- Send Pending Offline Messages When Internet Restored (MCP Context 7) ---
@@ -624,14 +1340,12 @@ const UserChatScreen = ({ navigation, route }) => {
         // Send messages one by one (sequentially)
         for (const msg of pendingMessages) {
           try {
-            // Check if this is a signature request
+            // Handle signature requests - send them to API when internet is restored
             if (msg.signature_id) {
-              console.log(`📝 Sending signature request: "${msg.signature_title}" to server...`);
+              console.log(`📝 [${pendingMessages.indexOf(msg) + 1}/${pendingMessages.length}] Sending signature request: "${msg.signature_title}" to server...`);
+              console.log(`📝 [DEBUG] Offline signature ID: ${msg.signature_id}, Title: "${msg.signature_title}", Notes: "${msg.signature_notes}"`);
               
-              // Import createSignature function
-              const { createSignature } = await import('../services/chats/createSignature');
-              
-              // Prepare signature data
+              // Prepare signature data for API
               const signatureData = {
                 title: msg.signature_title,
                 notes: msg.signature_notes,
@@ -639,66 +1353,134 @@ const UserChatScreen = ({ navigation, route }) => {
               };
               
               // Send signature request to API
-              const response = await createSignature(conversationId, signatureData);
-              console.log('✅ Signature request sent successfully, server response:', response);
+              const signatureResponse = await createSignature(conversationId, signatureData);
+              console.log('✅ Signature request sent successfully, server response:', JSON.stringify(signatureResponse, null, 2));
               
-              // Update database with server response
-              if (response?.id) {
-                // First, delete the old offline message
+              // Extract data from server response
+              const serverMessageId = signatureResponse?.id;
+              const serverSignatureId = signatureResponse?.signature?.id;
+              const serverSignature = signatureResponse?.signature;
+              const serverSender = signatureResponse?.sender;
+              
+              console.log('🆔 Server Message ID:', serverMessageId);
+              console.log('🆔 Server Signature ID:', serverSignatureId);
+              
+              if (serverMessageId && serverSignatureId) {
+                // Replace offline message with complete server response data
+                // Use multiple fields in WHERE clause to ensure we update the correct record
                 db.runSync(
-                  `DELETE FROM messages_${conversationId} WHERE signature_id = ? AND status = 'pending'`,
-                  [msg.signature_id]
-                );
-                
-                // Then insert the new message with server data
-                db.runSync(
-                  `INSERT INTO messages_${conversationId} (
-                    id, conversation_id, content, file_uri, file_name, file_type, file_size,
-                    sender_id, sender_first_name, sender_last_name, created_at, status,
-                    signature_id, signature_title, signature_notes, signature_due_date, 
-                    signature_status, signature_file_url, signature_file_name, signature_file_size,
-                    signed_by_id, signed_by_name, signed_by_email
-                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  `UPDATE messages_${conversationId} SET 
+                    id = ?,
+                    content = ?,
+                    file_uri = ?,
+                    file_name = ?,
+                    file_type = ?,
+                    file_size = ?,
+                    sender_id = ?,
+                    sender_first_name = ?,
+                    sender_last_name = ?,
+                    created_at = ?,
+                    status = ?,
+                    signature_id = ?,
+                    signature_title = ?,
+                    signature_notes = ?,
+                    signature_due_date = ?,
+                    signature_status = ?,
+                    signature_file_url = ?,
+                    signature_file_name = ?,
+                    signature_file_size = ?
+                   WHERE signature_id = ? AND signature_title = ? AND signature_notes = ? AND status = 'pending'`,
                   [
-                    response.id, // Server message ID
-                    conversationId,
-                    null, // No content for signature requests
-                    null, null, null, null, // No file data
-                    msg.sender_id,
-                    msg.sender_first_name,
-                    msg.sender_last_name,
-                    response.createdAt || new Date().toISOString(),
-                    'sent',
-                    response.signature?.id || response.signature_id,
-                    response.signature?.title || msg.signature_title,
-                    response.signature?.notes || msg.signature_notes,
-                    response.signature?.dueDate || msg.signature_due_date,
-                    response.signature?.status || 'pending',
-                    null, null, null, // No signature file yet
-                    null, null, null // No signedBy info yet
+                    serverMessageId,
+                    signatureResponse?.content || null,
+                    signatureResponse?.fileUrl || null,
+                    signatureResponse?.fileName || null,
+                    signatureResponse?.fileType || null,
+                    signatureResponse?.fileSize || null,
+                    serverSender?.id || null,
+                    serverSender?.first_name || null,
+                    serverSender?.last_name || null,
+                    signatureResponse?.createdAt || new Date().toISOString(),
+                    signatureResponse?.status || 'sent',
+                    serverSignatureId,
+                    serverSignature?.title || null,
+                    serverSignature?.notes || null,
+                    serverSignature?.dueDate || null,
+                    serverSignature?.status || 'pending',
+                    serverSignature?.fileUrl || null,
+                    serverSignature?.fileName || null,
+                    serverSignature?.fileSize || null,
+                    msg.signature_id, // WHERE clause parameter 1
+                    msg.signature_title, // WHERE clause parameter 2
+                    msg.signature_notes // WHERE clause parameter 3
                   ]
                 );
                 
-                console.log('✅ Signature request updated in database with server ID:', response.id);
+                console.log(`🔄 [${pendingMessages.indexOf(msg) + 1}/${pendingMessages.length}] Replaced offline signature request with server response`);
+                console.log(`🔄 [DEBUG] Updated signature: ${msg.signature_id} → ${serverSignatureId}`);
+                
+                // Update message in UI with complete server response
+                setMessages(prevMessages => 
+                  prevMessages.map(prevMsg => 
+                    prevMsg.signature_id === msg.signature_id && 
+                    prevMsg.status === 'pending'
+                      ? { 
+                          ...prevMsg, 
+                          id: serverMessageId,
+                          content: signatureResponse?.content || null,
+                          fileUrl: signatureResponse?.fileUrl || null,
+                          fileName: signatureResponse?.fileName || null,
+                          fileType: signatureResponse?.fileType || null,
+                          fileSize: signatureResponse?.fileSize || null,
+                          sender: {
+                            id: serverSender?.id,
+                            name: `${serverSender?.first_name || ''} ${serverSender?.last_name || ''}`.trim(),
+                            email: serverSender?.email
+                          },
+                          createdAt: signatureResponse?.createdAt,
+                          status: signatureResponse?.status || 'sent',
+                          signature: {
+                            id: serverSignatureId,
+                            title: serverSignature?.title,
+                            notes: serverSignature?.notes,
+                            dueDate: serverSignature?.dueDate,
+                            status: serverSignature?.status || 'pending',
+                            fileUrl: serverSignature?.fileUrl,
+                            fileName: serverSignature?.fileName,
+                            fileSize: serverSignature?.fileSize
+                          },
+                          serverResponse: signatureResponse
+                        }
+                      : prevMsg
+                  )
+                );
+                
+                console.log('✅ Signature request updated in UI with complete server data');
+              } else {
+                console.log('⚠️ Missing server IDs in response, keeping as pending');
               }
               
-            } else {
-              // Regular message (not signature request)
-              console.log(`📤 Sending message: "${msg.content}" to server...`);
-              
-              // Prepare file object if exists
-              let fileToSend = null;
-              if (msg.file_uri) {
-                fileToSend = {
-                  uri: msg.file_uri,
-                  name: msg.file_name,
-                  mimeType: msg.file_type,
-                  size: msg.file_size
-                };
-              }
-              
-              // Send message to API and wait for response
-              const response = await sendMessage(conversationId, msg.content, fileToSend);
+              // Wait before processing next message
+              await new Promise(resolve => setTimeout(resolve, 500));
+              continue;
+            }
+            
+            // Regular message (not signature request)
+            console.log(`📤 Sending message: "${msg.content}" to server...`);
+            
+            // Prepare file object if exists
+            let fileToSend = null;
+            if (msg.file_uri) {
+              fileToSend = {
+                uri: msg.file_uri,
+                name: msg.file_name,
+                mimeType: msg.file_type,
+                size: msg.file_size
+              };
+            }
+            
+            // Send message to API and wait for response
+            const response = await sendMessage(conversationId, msg.content, fileToSend);
             console.log('✅ Message sent successfully, server response:', response);
             
             // Extract message ID from server response
@@ -770,7 +1552,6 @@ const UserChatScreen = ({ navigation, route }) => {
             
             // Wait a bit before sending next message (to avoid overwhelming server)
             await new Promise(resolve => setTimeout(resolve, 500));
-            }
             
           } catch (error) {
             console.error('❌ Failed to send pending message:', error);
@@ -779,10 +1560,14 @@ const UserChatScreen = ({ navigation, route }) => {
           }
         }
         
+        // Count only regular messages (not signature requests)
+        const regularMessagesCount = pendingMessages.filter(msg => !msg.signature_id).length;
+        const signatureRequestsCount = pendingMessages.filter(msg => msg.signature_id).length;
+        
         Toast.show({
           type: 'success',
           text1: 'Messages Sent',
-          text2: `${pendingMessages.length} pending messages sent successfully`,
+          text2: `${regularMessagesCount} messages sent successfully${signatureRequestsCount > 0 ? `, ${signatureRequestsCount} signature requests kept offline` : ''}`,
           position: 'top',
           visibilityTime: 3000,
         });
@@ -928,8 +1713,17 @@ const UserChatScreen = ({ navigation, route }) => {
 
   // --- Handle Fetch All Signatures Event (MCP Context 7) ---
   // Business Rule: Listen for fetchSignatures event from App.js header
+  // Added guard to prevent automatic fetching during offline-to-online transition
   const handleFetchAllSignatures = () => {
     console.log('📝 Received fetchSignatures event in UserChatScreen');
+    
+    // Guard: Don't fetch signatures if we're currently processing offline messages
+    // This prevents automatic signature fetching when internet comes back online
+    if (isSendingOfflineMessages) {
+      console.log('⚠️ [SIGNATURES] Skipping signature fetch - currently processing offline messages');
+      return;
+    }
+    
     console.log('📝 Setting signaturesModalVisible to true');
     setSignaturesModalVisible(true);
     fetchConversationSignatures();
@@ -1343,6 +2137,20 @@ const UserChatScreen = ({ navigation, route }) => {
           console.log('ℹ️ [PUSHER] Skipping database storage for my own message (already stored when sent offline)');
         }
         
+        // Check for duplicates before adding
+        const isDuplicate = prevMessages.some(msg => 
+          String(msg.id) === String(newMessage.id) ||
+          (msg.content === newMessage.content && 
+           msg.createdAt === newMessage.createdAt && 
+           String(msg.senderId) === String(newMessage.senderId))
+        );
+
+        // If duplicate, don't add
+        if (isDuplicate) {
+          console.log('⚠️ [PUSHER] Duplicate message detected - not adding to list');
+          return prevMessages;
+        }
+
         const updatedMessages = [...prevMessages, newMessage];
         const sortedMessages = sortMessagesByTime(updatedMessages);
         
@@ -1404,6 +2212,7 @@ const UserChatScreen = ({ navigation, route }) => {
       // Transform flat signature data into the expected nested format
       const signatureMessage = {
         ...rawSignatureMessage,
+        status: 'sent', // Pusher messages are already sent - this ensures tick icon shows
         signature: {
           id: rawSignatureMessage.signatureId || rawSignatureMessage.id,
           title: rawSignatureMessage.title,
@@ -1441,6 +2250,44 @@ const UserChatScreen = ({ navigation, route }) => {
         const myUserId = currentUserIdRef.current;
         const messageSenderId = signatureMessage.sender?.id;
 
+        // --- Replace Pending Signature Messages with Real Pusher Response (MCP Context 7) ---
+        // Business Rule: If this is a signature from current user, check if we have a pending signature to replace
+        const isMySignature = String(messageSenderId) === String(myUserId);
+        
+        if (isMySignature) {
+          console.log('🔄 [PUSHER] This is my signature - checking for pending signature to replace');
+          
+          // Find pending signature with same title and timestamp (within 30 seconds)
+          const signatureTime = new Date(signatureMessage.createdAt).getTime();
+          const pendingSignatureIndex = prevMessages.findIndex(msg => {
+            if (msg.status !== 'pending') return false;
+            if (String(msg.sender?.id) !== String(myUserId)) return false;
+            if (!msg.signature) return false;
+            
+            // Check if signature title matches
+            const titleMatches = msg.signature.title === signatureMessage.signature?.title;
+            
+            // Check if timestamp is within 30 seconds
+            const msgTime = new Date(msg.createdAt).getTime();
+            const timeMatches = Math.abs(signatureTime - msgTime) < 30000; // 30 seconds
+            
+            return titleMatches && timeMatches;
+          });
+          
+          if (pendingSignatureIndex !== -1) {
+            console.log('✅ [PUSHER] Found pending signature to replace at index:', pendingSignatureIndex);
+            
+            // Replace pending signature with real signature from Pusher
+            const updatedMessages = [...prevMessages];
+            updatedMessages[pendingSignatureIndex] = signatureMessage;
+            
+            console.log('🔄 [PUSHER] Replaced pending signature with real signature from server');
+            return sortMessagesByTime(updatedMessages);
+          } else {
+            console.log('ℹ️ [PUSHER] No matching pending signature found - adding as new signature');
+          }
+        }
+
         // Show signature contract to everyone (including the creator)
         console.log('✅ [PUSHER] Adding signature contract to chat from:', signatureMessage.sender?.first_name || 'Unknown');
         console.log('👤 [PUSHER] Message sender ID:', messageSenderId, 'Current user ID:', myUserId);
@@ -1462,12 +2309,12 @@ const UserChatScreen = ({ navigation, route }) => {
             sender_first_name: signatureMessage.sender?.name?.split(' ')[0] || null,
             sender_last_name: signatureMessage.sender?.name?.split(' ').slice(1).join(' ') || null,
             created_at: signatureMessage.createdAt || new Date().toISOString(),
-            status: 'sent', // Pusher messages are already sent
+            status: 'sent', // Pusher messages are already sent (MESSAGE status, not signature status)
             signature_id: signatureMessage.signatureId || signatureMessage.id || null,
             signature_title: signatureMessage.title || null,
             signature_notes: signatureMessage.notes || null,
             signature_due_date: signatureMessage.dueDate || null,
-            signature_status: signatureMessage.status || 'pending',
+            signature_status: signatureMessage.signature?.status || 'pending', // Use signature status, not message status
             signature_file_url: signatureMessage.fileUrl || null,
             signature_file_name: signatureMessage.fileName || null,
             signature_file_size: signatureMessage.fileSize || null,
@@ -1941,11 +2788,15 @@ const UserChatScreen = ({ navigation, route }) => {
         db.runSync(`DELETE FROM messages_${conversationId}`);
       console.log('✅ Database cleared successfully');
       
+      // Clear AsyncStorage message ID as well
+      AsyncStorage.removeItem('latestMessageId');
+      console.log('✅ AsyncStorage message ID cleared');
+      
       // Show success message
       Toast.show({
         type: 'success',
         text1: 'Database Cleared',
-        text2: 'All messages removed from local storage',
+        text2: 'All messages and message ID removed from local storage',
         position: 'top',
         visibilityTime: 2000,
       });
@@ -2255,15 +3106,22 @@ const UserChatScreen = ({ navigation, route }) => {
 
 
   // --- Handle Offline Signature Request (MCP Context 7) ---
-  // Business Rule: Store signature requests in SQLite when offline
+  // Business Rule: Store signature requests in SQLite when offline, send when internet is restored
+  // This ensures signature requests work offline just like regular messages
   const handleOfflineSignatureRequest = async (signatureData) => {
     console.log('📝 [OFFLINE] Storing signature request in database');
+    console.log('🔍 [DEBUG] handleOfflineSignatureRequest - received signatureData:', signatureData);
+    console.log('🔍 [DEBUG] handleOfflineSignatureRequest - dueDate value:', signatureData.dueDate);
+    console.log('🔍 [DEBUG] handleOfflineSignatureRequest - dueDate type:', typeof signatureData.dueDate);
+    console.log('🔍 [DEBUG] handleOfflineSignatureRequest - dueDate is null?', signatureData.dueDate === null || signatureData.dueDate === undefined);
     
     try {
       // Create signature request data matching Pusher response format
-      // Use smaller sequential IDs instead of Date.now() to avoid integer overflow
-      const messageId = Math.floor(Math.random() * 1000000) + 100000; // 6-digit random ID
-      const signatureId = messageId + 1; // Different ID for signature
+      // Use integer IDs to match database schema
+      const timestamp = Date.now();
+      const random = Math.floor(Math.random() * 1000);
+      const messageId = parseInt(`${timestamp}${random}`.slice(-10)); // Convert to integer, keep last 10 digits
+      const signatureId = messageId + 1; // Different integer ID for signature
       
       const signatureRequestData = {
         conversation_id: conversationId,
@@ -2276,11 +3134,13 @@ const UserChatScreen = ({ navigation, route }) => {
         sender_first_name: userInfo?.firstName || 'Unknown',
         sender_last_name: userInfo?.lastName || 'User',
         created_at: new Date().toISOString(),
-        status: 'sent',
+        status: 'pending',
         signature_id: signatureId, // Use signatureId from Pusher format
         signature_title: signatureData.title || 'Contract for Signature',
         signature_notes: signatureData.notes || null,
-        signature_due_date: signatureData.dueDate || null,
+        signature_due_date: signatureData.dueDate && signatureData.dueDate.trim() 
+          ? signatureData.dueDate.trim() 
+          : new Date().toISOString().split('T')[0], // Always provide valid date, never null
         signature_status: 'pending',
         signature_file_url: signatureData.fileUrl || null,
         signature_file_name: signatureData.fileName || null,
@@ -2296,6 +3156,8 @@ const UserChatScreen = ({ navigation, route }) => {
         messageId: messageId,
         conversationId: signatureRequestData.conversation_id,
         signatureId: signatureRequestData.signature_id,
+        signatureIdType: typeof signatureRequestData.signature_id,
+        messageIdType: typeof messageId,
         title: signatureRequestData.signature_title,
         notes: signatureRequestData.signature_notes,
         dueDate: signatureRequestData.signature_due_date,
@@ -2413,6 +3275,13 @@ const UserChatScreen = ({ navigation, route }) => {
       // Check if it's a data type mismatch error
       if (error.message?.includes('datatype mismatch') || error.message?.includes('type mismatch')) {
         console.error('❌ [OFFLINE] Data type mismatch - checking database schema');
+        console.error('❌ [OFFLINE] Data being inserted:', {
+          messageId: typeof messageId,
+          signatureId: typeof signatureId,
+          conversationId: typeof signatureRequestData.conversation_id,
+          senderId: typeof signatureRequestData.sender_id,
+          createdAt: typeof signatureRequestData.created_at
+        });
         
         // Try to get table info to debug
         try {
@@ -2542,11 +3411,14 @@ const UserChatScreen = ({ navigation, route }) => {
         ]);
         
         console.log('✅ Message stored in SQLite database');
-        // Use smaller sequential ID instead of Date.now() to avoid integer overflow
-        const offlineMessageId = Math.floor(Math.random() * 1000000) + 100000; // 6-digit random ID
+        // Use integer IDs to match database schema
+        const timestamp = Date.now();
+        const random = Math.floor(Math.random() * 1000);
+        const offlineMessageId = parseInt(`${timestamp}${random}`.slice(-10)); // Convert to integer, keep last 10 digits
         
         console.log('✅ [OFFLINE] Message successfully saved:', {
-          id: 'offline_' + offlineMessageId,
+          id: offlineMessageId,
+          idType: typeof offlineMessageId,
           content: messageText,
           status: 'pending',
           conversationId: conversationId
@@ -2554,7 +3426,7 @@ const UserChatScreen = ({ navigation, route }) => {
         
         // Create message object for UI display
         const uiMessage = {
-          id: `offline_${offlineMessageId}`,
+          id: offlineMessageId, // Use the unique ID directly
           content: messageText,
           fileUrl: fileToSend ? fileToSend.uri : null,
           fileName: fileToSend ? fileToSend.name : null,
@@ -2767,22 +3639,28 @@ const UserChatScreen = ({ navigation, route }) => {
 
   return (
     <SafeAreaView className="flex-1 bg-gray-100">
-      {/* Loading State (MCP Context 7) */}
-      {isLoadingMessages ? (
+      {/* Loading State (MCP Context 7) --- */}
+      {/* FIXED: Show loading until BOTH messages AND user ID are loaded to prevent UI flicker */}
+      {isLoadingMessages || isLoadingUserId ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#000000" />
-          <Text className="text-base text-gray-500 mt-4">Loading messages...</Text>
+          <Text className="text-base text-gray-500 mt-4">
+            {isLoadingUserId ? 'Loading user...' : 'Loading messages...'}
+          </Text>
         </View>
       ) : (
         /* 📨 Messages List */
         <FlatList
           ref={flatListRef}
-          data={messages}
+          data={dedupeMessagesById(messages)}
           inverted={true}
+          onEndReached={loadMoreMessages}
+          onEndReachedThreshold={0.1}
           renderItem={({ item }) => {
             // --- Message Ownership Logic (MCP Context 7) ---
             // Business Rule: Compare sender.id with current logged-in user's id
             // Convert both to string for comparison to handle data type mismatch
+            // FIXED: Now currentUserId is guaranteed to be loaded, preventing left-side flicker
             const isMyMessage = String(item.sender?.id) === String(currentUserId);
             
             // Debug: Log message ownership for database messages
@@ -2872,6 +3750,7 @@ const UserChatScreen = ({ navigation, route }) => {
                 console.log('📡 [CONTRACT] Contract already signed - skipping signature channel subscription');
               }
               return (
+                <View>
                 <View className={`mb-4 px-5 ${isMyMessage ? 'items-end' : 'items-start'}`}>
                   <View 
                     className="bg-white rounded-xl p-4"
@@ -3102,17 +3981,39 @@ const UserChatScreen = ({ navigation, route }) => {
                     {/* Contract Status */}
                     <View className="mt-4 pt-3 border-t border-gray-200">
                       <View className="flex-row items-center justify-between">
-                        <Text className="text-[10px] text-[#999]">
-                          Created: {(() => {
-                            const date = new Date(item.createdAt);
-                            const hours = date.getHours();
-                            const minutes = date.getMinutes();
-                            const hour12 = hours % 12 || 12;
-                            const ampm = hours >= 12 ? 'PM' : 'AM';
-                            const minutesStr = minutes.toString().padStart(2, '0');
-                            return `${hour12}:${minutesStr} ${ampm}`;
-                          })()}
-                        </Text>
+                        {/* Time and Tick Icon - Inside the card */}
+                        <View className="flex-row items-center">
+                          <Text className="text-[10px] text-gray-500">
+                            {(() => {
+                              const date = new Date(item.createdAt);
+                              const hours = date.getHours();
+                              const minutes = date.getMinutes();
+                              const hour12 = hours % 12 || 12;
+                              const ampm = hours >= 12 ? 'PM' : 'AM';
+                              const minutesStr = minutes.toString().padStart(2, '0');
+                              return `${hour12}:${minutesStr} ${ampm}`;
+                            })()}
+                          </Text>
+                          
+                          {/* Show tick icon for my messages inside the card */}
+                          {isMyMessage && (
+                            <View className="ml-1">
+                              {item.status === 'pending' ? (
+                                <Ionicons name="time-outline" size={10} color="#F59E0B" />
+                              ) : item.status === 'offline' ? (
+                                <Ionicons name="time-outline" size={10} color="#F59E0B" />
+                              ) : item.status === 'sending' ? (
+                                <Ionicons name="time-outline" size={10} color="#6B7280" />
+                              ) : item.status === 'failed' ? (
+                                <Ionicons name="close-circle" size={10} color="#EF4444" />
+                              ) : (
+                                <Ionicons name="checkmark-done" size={10} color="#10B981" />
+                              )}
+                            </View>
+                          )}
+                        </View>
+                        
+                        {/* Status Badge */}
                         <View 
                           className="px-3 py-1 rounded-full"
                           style={{ backgroundColor: (item.signature?.status || item.status) === 'signed' ? '#d1fae5' : '#fef3c7' }}
@@ -3127,6 +4028,9 @@ const UserChatScreen = ({ navigation, route }) => {
                       </View>
                     </View>
                   </View>
+                </View>
+                
+                {/* REMOVED: Time display below card - now shown inside the card itself */}
                 </View>
           
             );
@@ -3378,9 +4282,13 @@ const UserChatScreen = ({ navigation, route }) => {
               </View>
             );
           }}
-          keyExtractor={(item) =>
-            item.id?.toString() || Math.random().toString()
-          }
+          keyExtractor={(item, index) => {
+            // Create unique key combining ID, timestamp, and index to prevent duplicates
+            const baseKey = item.id?.toString() || `msg_${index}`;
+            const timestamp = item.createdAt || new Date().toISOString();
+            const uniqueKey = `${baseKey}_${timestamp}_${index}`;
+            return uniqueKey;
+          }}
           className="flex-1"
           contentContainerStyle={{
             paddingTop: 90 + (insets.bottom || 0), // For inverted list, paddingTop = visual bottom padding (clears input bar + safe area)
@@ -3390,6 +4298,15 @@ const UserChatScreen = ({ navigation, route }) => {
           }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={() => (
+            // Loading indicator for pagination (appears at top due to inverted FlatList)
+            isLoadingMoreMessages ? (
+              <View className="py-4 items-center">
+                <ActivityIndicator size="small" color="#000000" />
+                <Text className="text-xs text-gray-500 mt-2">Loading older messages...</Text>
+              </View>
+            ) : null
+          )}
         />
       )}
 
@@ -3690,91 +4607,21 @@ const UserChatScreen = ({ navigation, route }) => {
       />
 
       {/* Request Signature Modal (MCP Context 7) */}
+      {/* Business Rule: Handle both online and offline signature requests */}
       <SignatureRequestModal
         visible={signatureModalVisible}
         onClose={() => setSignatureModalVisible(false)}
         conversationId={conversationId}
         onSuccess={(result) => {
-          console.log('Signature request created successfully:', result);
+          console.log('✅ Signature request created successfully:', result);
           
-          // Store signature request in SQLite database
-          if (result && result.message) {
-            const signatureMessage = result.message;
-            console.log('📝 Storing signature request in database:', signatureMessage);
-            
-            try {
-              // Prepare signature data for database storage
-              const messageData = {
-                conversation_id: conversationId,
-                content: null, // Signature requests have no text content
-                file_uri: null,
-                file_name: null,
-                file_type: null,
-                file_size: null,
-                sender_id: currentUserId,
-                sender_first_name: userInfo?.firstName || 'Unknown',
-                sender_last_name: userInfo?.lastName || 'User',
-                created_at: signatureMessage.createdAt || new Date().toISOString(),
-                status: 'sent',
-                signature_id: signatureMessage.signature?.id || null,
-                signature_title: signatureMessage.signature?.title || null,
-                signature_notes: signatureMessage.signature?.notes || null,
-                signature_due_date: signatureMessage.signature?.dueDate || null,
-                signature_status: signatureMessage.signature?.status || 'pending',
-                signature_file_url: null,
-                signature_file_name: null,
-                signature_file_size: null,
-                signed_by_id: signatureMessage.signature?.signedBy?.id || null,
-                signed_by_name: signatureMessage.signature?.signedBy?.name || null,
-                signed_by_email: signatureMessage.signature?.signedBy?.email || null
-              };
-              
-              // Store signature request in SQLite database
-              db.runSync(`
-                INSERT INTO messages_${conversationId} (
-                  id, conversation_id, content, file_uri, file_name, file_type, file_size,
-                  sender_id, sender_first_name, sender_last_name, created_at, status,
-                  signature_id, signature_title, signature_notes, signature_due_date, 
-                  signature_status, signature_file_url, signature_file_name, signature_file_size,
-                  signed_by_id, signed_by_name, signed_by_email
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-              `, [
-                result.id, // Use response.id (1036) as the message ID
-                messageData.conversation_id,
-                messageData.content,
-                messageData.file_uri,
-                messageData.file_name,
-                messageData.file_type,
-                messageData.file_size,
-                messageData.sender_id,
-                messageData.sender_first_name,
-                messageData.sender_last_name,
-                messageData.created_at,
-                messageData.status,
-                messageData.signature_id,
-                messageData.signature_title,
-                messageData.signature_notes,
-                messageData.signature_due_date,
-                messageData.signature_status,
-                messageData.signature_file_url,
-                messageData.signature_file_name,
-                messageData.signature_file_size,
-                messageData.signed_by_id,
-                messageData.signed_by_name,
-                messageData.signed_by_email
-              ]);
-              
-              console.log('✅ Signature request stored in SQLite database');
-              
-            } catch (error) {
-              console.error('❌ Error storing signature request in database:', error);
-            }
-          }
+          // Note: Database storage is handled by Pusher handler (handleSignatureMessage)
+          // This callback only provides immediate feedback to user
+          // The actual message will appear in chat via Pusher real-time update
+          
+          console.log('📝 Signature request sent to server - waiting for Pusher update...');
         }}
-        onOfflineRequest={(signatureData) => {
-          console.log('📝 [OFFLINE] Signature request created offline:', signatureData);
-          handleOfflineSignatureRequest(signatureData);
-        }}
+        onOfflineRequest={handleOfflineSignatureRequest}
       />
 
     </SafeAreaView>

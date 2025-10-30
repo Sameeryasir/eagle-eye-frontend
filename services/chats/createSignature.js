@@ -36,12 +36,24 @@ export async function createSignature(conversationId, signatureData = {}) {
   
   try {
     // Prepare the request payload - aligned with CreateMessageWithSignatureDto
+    // Business Rule: Only include fields that have valid values to avoid null constraint violations
     const payload = {
       conversationId: parseInt(conversationId), // Required: Number type
-      title: signatureData?.title || undefined, // Optional: String type
-      notes: signatureData?.notes || undefined, // Optional: String type  
-      dueDate: signatureData?.dueDate || undefined // Optional: ISO date string
     };
+    
+    // Only add optional fields if they have valid values
+    if (signatureData?.title && signatureData.title.trim()) {
+      payload.title = signatureData.title.trim();
+    }
+    
+    if (signatureData?.notes && signatureData.notes.trim()) {
+      payload.notes = signatureData.notes.trim();
+    }
+    
+    // Only add dueDate if it's a valid date string (not null/undefined/empty)
+    if (signatureData?.dueDate && signatureData.dueDate.trim()) {
+      payload.dueDate = signatureData.dueDate;
+    }
     
     console.log('Creating signature request with payload:', payload);
     

@@ -18,6 +18,8 @@ import CustomBottomNav from './components/CustomBottomNav';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../context/AuthContext';
 import pusher from '../pusherClient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 
 // --- Helper Function to Generate Initials (MCP Context 7) ---
 // Extract first letter of first name and first letter of last name
@@ -53,6 +55,7 @@ const getAvatarColor = (name) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
+
 const ChatScreen = ({ navigation }) => {
   // --- State Management (MCP Context 7) ---
   const [conversations, setConversations] = useState([]);
@@ -61,6 +64,7 @@ const ChatScreen = ({ navigation }) => {
   const [isSelectUserModalVisible, setIsSelectUserModalVisible] = useState(false);
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
   const [conversationsError, setConversationsError] = useState(null);
+  const [messageCounts, setMessageCounts] = useState({});
   const searchInputRef = useRef(null);
   
   // --- Track Subscribed Channels (MCP Context 7) ---
@@ -72,6 +76,31 @@ const ChatScreen = ({ navigation }) => {
   // Used to filter out current user from conversation participants
   const { userInfo } = useAuth();
   const currentUserId = userInfo?.id;
+
+  // --- Message Count Functions (MCP Context 7) ---
+  // Save message count to local storage
+  const saveMessageCount = async (conversationId, count) => {
+    try {
+      const counts = await AsyncStorage.getItem('messageCounts');
+      const countsObj = counts ? JSON.parse(counts) : {};
+      countsObj[conversationId] = count;
+      await AsyncStorage.setItem('messageCounts', JSON.stringify(countsObj));
+    } catch (error) {
+      console.error('Error saving message count:', error);
+    }
+  };
+
+  // Get message count from local storage
+  const getMessageCount = async (conversationId) => {
+    try {
+      const counts = await AsyncStorage.getItem('messageCounts');
+      const countsObj = counts ? JSON.parse(counts) : {};
+      return countsObj[conversationId] || 0;
+    } catch (error) {
+      console.error('Error getting message count:', error);
+      return 0;
+    }
+  };
 
   // --- Helper Function to Process Conversations (MCP Context 7) ---
   // Shared logic to transform API response to UI format
@@ -227,13 +256,24 @@ const ChatScreen = ({ navigation }) => {
 
   // --- Handle New Message from Pusher (MCP Context 7) ---
   // Business Rule: Update conversation list when new message arrives
-  const handleNewMessage = (conversationId, data) => {
+  const handleNewMessage = async (conversationId, data) => {
     const newMessage = data.message || data;
     
     if (!newMessage) {
       console.warn('⚠️ No message data received');
       return;
     }
+
+    // Update message count for this conversation
+    const currentCount = await getMessageCount(conversationId);
+    const newCount = currentCount + 1;
+    await saveMessageCount(conversationId, newCount);
+    
+    // Update local state for immediate UI update
+    setMessageCounts(prevCounts => ({
+      ...prevCounts,
+      [conversationId]: newCount
+    }));
 
     // Update the conversation list - move to top with new message
     setConversations(prevConversations => {
@@ -282,7 +322,16 @@ const ChatScreen = ({ navigation }) => {
       
       // Remove from current position and add to top
       updatedConversations.splice(conversationIndex, 1);
-      return [conversationToUpdate, ...updatedConversations];
+      const finalConversations = [conversationToUpdate, ...updatedConversations];
+      
+      // Update SQLite database with the updated conversation
+      try {
+        storeConversationsInSQLite(db, finalConversations);
+      } catch (error) {
+        console.error('❌ Error updating SQLite after new message:', error);
+      }
+      
+      return finalConversations;
     });
   };
 
@@ -332,14 +381,39 @@ const ChatScreen = ({ navigation }) => {
       
       // Remove from current position and add to top
       updatedConversations.splice(conversationIndex, 1);
-      return [conversationToUpdate, ...updatedConversations];
+      const finalConversations = [conversationToUpdate, ...updatedConversations];
+      
+      // Update SQLite database with the updated conversation
+      try {
+        storeConversationsInSQLite(db, finalConversations);
+      } catch (error) {
+        console.error('❌ Error updating SQLite after signature message:', error);
+      }
+      
+      return finalConversations;
     });
   }
+
 
   // --- Load Conversations on Mount (MCP Context 7) ---
   // Fetch conversations when component mounts
   useEffect(() => {
+    // Fetch conversations from API
     fetchConversationsSilently();
+    
+    // Load message counts from local storage
+    const loadMessageCounts = async () => {
+      try {
+        const counts = await AsyncStorage.getItem('messageCounts');
+        if (counts) {
+          setMessageCounts(JSON.parse(counts));
+        }
+      } catch (error) {
+        console.error('Error loading message counts:', error);
+      }
+    };
+    
+    loadMessageCounts();
   }, []);
 
   // --- Pusher Real-Time Listener for New Messages (Optimized - MCP Context 7) ---
@@ -442,7 +516,16 @@ const ChatScreen = ({ navigation }) => {
           
           console.log('✅ [PUSHER] Adding new conversation to list:', formattedConversation.name);
           // Add to top of list (most recent first)
-          return [formattedConversation, ...prevConversations];
+          const finalConversations = [formattedConversation, ...prevConversations];
+          
+          // Update SQLite database with the new conversation
+          try {
+            storeConversationsInSQLite(db, finalConversations);
+          } catch (error) {
+            console.error('❌ Error updating SQLite after new conversation:', error);
+          }
+          
+          return finalConversations;
         });
         
         // Subscribe to the new conversation's message channel
@@ -511,6 +594,7 @@ const ChatScreen = ({ navigation }) => {
       unsubscribeBlur();
     };
   }, [navigation]);
+
 
   // --- Search Functionality (MCP Context 7) ---
   // Use useMemo to prevent unnecessary re-renders that might dismiss keyboard
@@ -701,18 +785,12 @@ const ChatScreen = ({ navigation }) => {
                     {item.lastMessage}
                   </Text>
                 )}
+         
               </View>
             )}
           </View>
           
-          {/* Unread count badge */}
-          {item.unreadCount > 0 && (
-            <View className="ml-2 w-7 h-7 rounded-full bg-blue-500 items-center justify-center">
-              <Text className="text-sm text-white font-semibold">
-                {item.unreadCount > 9 ? '9+' : item.unreadCount}
-              </Text>
-            </View>
-          )}
+   
         </View>
       </View>
     </TouchableOpacity>
@@ -724,6 +802,7 @@ const ChatScreen = ({ navigation }) => {
   const renderSearchBar = () => (
     <View className="px-5 py-4 bg-white border-b border-gray-100">
       <View className="flex-row items-center bg-gray-100 rounded-2xl px-5 py-3">
+        {/* Search Icon */}
         <Ionicons name="search" size={24} color="#8E8E93" />
         <TextInput
           ref={searchInputRef}

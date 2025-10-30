@@ -1,15 +1,16 @@
-// --- Get Conversation By ID Service (MCP Context 7) ---
-// This service fetches messages for a specific conversation
-// API Endpoint: GET /chat/conversations/{conversationId}/messages
+// --- Get Messages By Conversation ID Service (MCP Context 7) ---
+// This service fetches messages for a specific conversation with pagination
+// API Endpoint: GET /chat/conversations/{conversationId}/messages?page={page}&limit={limit}
 // Requires: JWT Authentication
-// Business Rule: Fetches all messages for the given conversation ID
+// Business Rule: Fetches paginated messages for the given conversation ID
+// Parameters: conversationId (required), page (default: 1), limit (default: 20, max: 100)
 
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../../config/api';
 import refreshToken from '../utils/tokenRefresh';
 
-export async function getMessagesByConversationId(conversationId) {
+export async function getMessagesByConversationId(conversationId, page = 1, limit = 20) {
   let token = await AsyncStorage.getItem('token');
   let refreshTokenValue = await AsyncStorage.getItem('refreshToken');
   
@@ -23,10 +24,19 @@ export async function getMessagesByConversationId(conversationId) {
     throw new Error('Conversation ID is required');
   }
   
+  // Validation: Ensure page and limit are valid
+  if (page < 1) {
+    throw new Error('Page number must be greater than 0');
+  }
+  
+  if (limit < 1 || limit > 100) {
+    throw new Error('Limit must be between 1 and 100');
+  }
+  
   try {
-    // Make API request to fetch conversation messages
+    // Make API request to fetch conversation messages with pagination
     const response = await axios.get(
-      `${API_URL}/chat/conversations/${conversationId}/messages`,
+      `${API_URL}/chat/conversations/${conversationId}/messages?page=${page}&limit=${limit}`,
       {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -46,7 +56,7 @@ export async function getMessagesByConversationId(conversationId) {
 
       // Retry the original request with new token
       const retryResponse = await axios.get(
-        `${API_URL}/chat/conversations/${conversationId}/messages`,
+        `${API_URL}/chat/conversations/${conversationId}/messages?page=${page}&limit=${limit}`,
         {
           headers: {
             'Authorization': `Bearer ${newToken}`,

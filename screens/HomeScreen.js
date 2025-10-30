@@ -119,6 +119,7 @@ function HomeScreen({ navigation, route }) {
   const [inviteErrorDialogVisible, setInviteErrorDialogVisible] = useState(false);
   const [inviteErrorMessage, setInviteErrorMessage] = useState('');
   const { width: screenWidth } = useWindowDimensions();
+  const [hideCompanyAfterCreate, setHideCompanyAfterCreate] = useState(false);
 
   const numColumns = screenWidth >= 1024 ? 3 : screenWidth >= 768 ? 2 : 1;
   const horizontalPadding = 40; // px-5 on container (20 left + 20 right)
@@ -432,6 +433,8 @@ function HomeScreen({ navigation, route }) {
   // Close modal - Redux will automatically update the UI when project is created
   const handleCreateProjectSuccess = () => {
     setCreateProjectModalVisible(false);
+    // Hide company name briefly right after creation to satisfy business rule
+    setHideCompanyAfterCreate(true);
     
     // --- Show Success Toast Message ---
     Toast.show({
@@ -444,6 +447,8 @@ function HomeScreen({ navigation, route }) {
     });
     
     // No need to manually refresh - Redux will automatically update the UI
+    // Re-enable company display after a short delay (simple, non-invasive)
+    setTimeout(() => setHideCompanyAfterCreate(false), 2000);
   };
 
   const handleCreateProjectCancel = () => {

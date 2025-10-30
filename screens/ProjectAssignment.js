@@ -76,9 +76,19 @@ function ProjectAssignment({ navigation, route }) {
 
   const loadEmployeeDetails = async () => {
     try {
+      // Get employee data with assigned projects directly from getUserById API
       const employeeData = await getUserById(employeeId);
+      console.log('Employee data received:', employeeData);
       setFetchedEmployee(employeeData);
-      setFetchedAssignedProjects(employeeData?.projects || []);
+      
+      // Extract assigned projects directly from the API response
+      if (employeeData?.assignedProjects) {
+        console.log('Found assignedProjects:', employeeData.assignedProjects);
+        setFetchedAssignedProjects(employeeData.assignedProjects);
+      } else {
+        console.log('No assignedProjects found for this employee');
+        setFetchedAssignedProjects([]);
+      }
     } catch (err) {
       console.error('Error loading employee:', err);
       setFetchedEmployee(null);
@@ -197,7 +207,18 @@ function ProjectAssignment({ navigation, route }) {
     } catch (error) {
       console.error('Assignment error:', error);
       
-      if (error.response?.status === 400) {
+      // --- Handle 403 Error for Shared Projects ---
+      // Business Rule: If error status is 403, show specific message about shared projects
+      if (error.response?.status === 403) {
+        Toast.show({
+          type: 'error',
+          text1: 'Assignment Not Allowed',
+          text2: 'The project is shared. You cannot assign shared projects.',
+          visibilityTime: 4000,
+          autoHide: true,
+          topOffset: 80,
+        });
+      } else if (error.response?.status === 400) {
         setShowErrorDialog(true);
       } else {
         Toast.show({

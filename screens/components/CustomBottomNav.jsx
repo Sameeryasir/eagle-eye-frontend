@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from "../../context/AuthContext";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import pusher from "../../pusherClient";
+import appEmitter from "../../utils/appEmitter";
 
 const { width, height } = Dimensions.get("window");
 
@@ -41,36 +42,45 @@ export default function CustomBottomNav({
     console.log('🔴 CustomBottomNav: Red dot state changed to:', hasNewNotification);
   }, [hasNewNotification]);
   
-  // Persist red dot state across component remounts
+  // Persist red dot state PER USER across component remounts
+  // Uses a namespaced key so different users don't share the same badge state
   React.useEffect(() => {
     const loadRedDotState = async () => {
       try {
-        const savedState = await AsyncStorage.getItem('hasNewNotification');
+        if (!userInfo?.id) return; // Wait for user id
+        const storageKey = `hasNewNotification:${userInfo.id}`;
+        const savedState = await AsyncStorage.getItem(storageKey);
         if (savedState !== null) {
           setHasNewNotification(JSON.parse(savedState));
-          console.log('🔴 CustomBottomNav: Restored red dot state:', JSON.parse(savedState));
+          console.log('🔴 CustomBottomNav: Restored red dot state for user:', userInfo.id, JSON.parse(savedState));
+        } else {
+          setHasNewNotification(false);
         }
+        // Cleanup legacy global key if it exists
+        await AsyncStorage.removeItem('hasNewNotification');
       } catch (error) {
         console.error('Error loading red dot state:', error);
       }
     };
     
     loadRedDotState();
-  }, []);
+  }, [userInfo?.id]);
   
-  // Save red dot state when it changes
+  // Save red dot state when it changes (per-user key)
   React.useEffect(() => {
     const saveRedDotState = async () => {
       try {
-        await AsyncStorage.setItem('hasNewNotification', JSON.stringify(hasNewNotification));
-        console.log('🔴 CustomBottomNav: Saved red dot state:', hasNewNotification);
+        if (!userInfo?.id) return; // Don't persist without user id
+        const storageKey = `hasNewNotification:${userInfo.id}`;
+        await AsyncStorage.setItem(storageKey, JSON.stringify(hasNewNotification));
+        console.log('🔴 CustomBottomNav: Saved red dot state for user:', userInfo.id, hasNewNotification);
       } catch (error) {
         console.error('Error saving red dot state:', error);
       }
     };
     
     saveRedDotState();
-  }, [hasNewNotification]);
+  }, [hasNewNotification, userInfo?.id]);
   
   // Debug: Track component mount/unmount
   React.useEffect(() => {
@@ -201,7 +211,12 @@ export default function CustomBottomNav({
     // Unified handler for all assignment types (task, project, event)
     const handleNewAssignment = (data, assignmentType) => {
       console.log(`🔔 CustomBottomNav: NEW ${assignmentType.toUpperCase()} ASSIGNMENT NOTIFICATION RECEIVED:`, data);
-      
+
+      // Guard: If user is already on NotificationScreen, do not show red dot
+      if (route.name === "NotificationScreen") {
+        return;
+      }
+
       // Show red dot on bell icon
       setHasNewNotification(true);
       console.log('🔴 CustomBottomNav: Red dot shown on bell icon');
@@ -222,6 +237,22 @@ export default function CustomBottomNav({
       pusher.unsubscribe(channelName);
     };
   }, [userInfo?.id]);
+
+  // Listen for external clear-badge events (from NotificationScreen focus)
+  React.useEffect(() => {
+    const handleClearBadge = () => {
+      setHasNewNotification(false);
+      console.log('🧹 CustomBottomNav: Badge cleared via appEmitter');
+    };
+    if (global.appEmitter || appEmitter) {
+      appEmitter.on('clear-notification-badge', handleClearBadge);
+    }
+    return () => {
+      if (global.appEmitter || appEmitter) {
+        appEmitter.off('clear-notification-badge', handleClearBadge);
+      }
+    };
+  }, []);
 
   const handleAddPress = async () => {
     if (onAddPress) {

@@ -216,7 +216,7 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           startDate = new Date();
         }
         
-        if (task.endTime) {
+        if (task.endTime && task.hasEndTime) {
           // Parse UTC time and convert to local time
           endDate = new Date(task.endTime);
           
@@ -238,8 +238,9 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           
           console.log(`Task UTC endTime: ${task.endTime} -> Local: ${endDate.toLocaleString()}`);
         } else {
-          // Default 1 hour duration if no end time
-          endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+          // No end time - use start time as end time to show as a point in time
+          endDate = new Date(startDate.getTime() + 30 * 60 * 1000); // 30 minutes duration for display
+          console.log(`Task has no endTime - showing as 30min duration for display`);
         }
         
         console.log(`Converted dates for task ${index}:`, {
@@ -269,7 +270,10 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           status: task.status,
           assignedTo: task.assignedTo,
           originalTaskId: task.id,
-          type: 'task' // Mark as task
+          type: 'task', // Mark as task
+          // --- Add endTime information ---
+          hasEndTime: task.hasEndTime,
+          endTimeFormatted: task.endTimeFormatted || 'No end time'
         };
       });
       
@@ -512,7 +516,7 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           {isMultiDayEvent ? (
             // Show date range for multi-day events
             `${item.originalStartDate} to ${item.originalEndDate}`
-          ) : (
+          ) : isEvent ? (
             // Show time range for single-day events
             `${item.startDate.toLocaleTimeString('en-US', { 
               hour: '2-digit', 
@@ -523,6 +527,25 @@ const CalenderDetailScreen = ({ route, navigation }) => {
               minute: '2-digit', 
               hour12: true
             })}`
+          ) : (
+            // Show time for tasks - handle no end time
+            item.hasEndTime ? (
+              `${item.startDate.toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                hour12: true
+              })} - ${item.endDate.toLocaleTimeString('en-US', { 
+                hour: 'numeric', 
+                minute: '2-digit', 
+                hour12: true
+              })}`
+            ) : (
+              `${item.startDate.toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                hour12: true
+              })} - No end time`
+            )
           )}
         </Text>
       </TouchableOpacity>

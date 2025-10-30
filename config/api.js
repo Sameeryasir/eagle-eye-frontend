@@ -10,7 +10,7 @@ const getApiUrl = () => {
   // 3. Default fallback
   return process.env.EXPO_PUBLIC_API_URL || 
          process.env.API_URL || 
-         'https://73cc4df9ef90.ngrok-free.app';
+         'https://64dd678367a1.ngrok-free.app';
 };
 
 export const API_URL = getApiUrl();

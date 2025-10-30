@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Toast from 'react-native-toast-message';
+import NetInfo from '@react-native-community/netinfo';
 import { createSignature } from '../../services/chats/createSignature';
 
 // --- Signature Request Modal Component (MCP Context 7) ---
@@ -53,7 +54,7 @@ const SignatureRequestModal = ({
   };
 
   // --- Handle Send Signature Request (MCP Context 7) ---
-  // Business Rule: Validate form data and create signature request via API or store offline
+  // Business Rule: Check internet connectivity FIRST, then create signature request via API or store offline
   const handleSendRequest = async () => {
     try {
       // Validate required fields
@@ -68,16 +69,62 @@ const SignatureRequestModal = ({
       setIsSendingSignature(true);
 
       // Prepare signature data
+      // Business Rule: Always provide a valid dueDate to avoid backend null constraint violations
+      // Ensure dueDate is NEVER null/undefined by using multiple fallbacks
+      const today = new Date();
+      const selectedDate = signatureDueDate || today;
+      const dueDateString = selectedDate instanceof Date 
+        ? selectedDate.toISOString().split('T')[0] 
+        : today.toISOString().split('T')[0];
+      
       const signatureData = {
         title: signatureTitle.trim(),
         notes: signatureNotes.trim(),
-        dueDate: signatureDueDate ? signatureDueDate.toISOString().split('T')[0] : null
+        dueDate: dueDateString // Always a valid date string, never null
       };
 
-      console.log('Creating signature request:', signatureData);
+      console.log('🔍 [DEBUG] SignatureRequestModal - signatureData being sent:', signatureData);
+      console.log('🔍 [DEBUG] SignatureRequestModal - signatureDueDate value:', signatureDueDate);
+      console.log('🔍 [DEBUG] SignatureRequestModal - selectedDate:', selectedDate);
+      console.log('🔍 [DEBUG] SignatureRequestModal - dueDateString:', dueDateString);
+      console.log('🔍 [DEBUG] SignatureRequestModal - dueDate is null?', dueDateString === null || dueDateString === undefined);
       
+      // --- Console Log Signature Request Body (MCP Context 7) ---
+      console.log('📝 [SIGNATURE] Creating signature request with body:', JSON.stringify(signatureData, null, 2));
+      console.log('📝 [SIGNATURE] Conversation ID:', conversationId);
+      console.log('📝 [SIGNATURE] Title:', signatureData.title);
+      console.log('📝 [SIGNATURE] Notes:', signatureData.notes);
+      console.log('📝 [SIGNATURE] Due Date:', signatureData.dueDate);
+      
+      // CHECK INTERNET CONNECTION FIRST (MCP Context 7)
+      // Business Rule: Don't attempt API call if user is offline - go directly to offline storage
+      const netInfo = await NetInfo.fetch();
+      
+      if (netInfo.isConnected === false) {
+        console.log('📝 [OFFLINE] User is offline - storing signature request offline');
+        
+        // Store signature request offline
+        if (onOfflineRequest) {
+          onOfflineRequest(signatureData);
+        }
+        
+        // Show offline message
+        Toast.show({
+          type: 'info',
+          text1: 'Signature Request Saved',
+          text2: 'Signature requests are stored offline only - not sent to server',
+          position: 'top',
+          visibilityTime: 3000,
+        });
+        
+        // Close modal and reset form
+        handleClose();
+        return;
+      }
+      
+      // ONLINE: Call the API service
+      console.log('📡 [ONLINE] User is online - sending signature request to API');
       try {
-        // Call the API service
         const result = await createSignature(conversationId, signatureData);
         
         console.log('Signature request created successfully:', result);
@@ -102,28 +149,14 @@ const SignatureRequestModal = ({
       } catch (apiError) {
         console.error('API Error creating signature request:', apiError);
         
-        // Check if it's a network error (offline)
-        if (apiError.message?.includes('Network Error') || apiError.code === 'NETWORK_ERROR') {
-          console.log('📝 [OFFLINE] Network error - storing signature request offline');
-          
-          // Store signature request offline
-          if (onOfflineRequest) {
-            onOfflineRequest(signatureData);
-          }
-          
-          // Close modal and reset form
-          handleClose();
-          
-        } else {
-          // Other API errors
-          Toast.show({
-            type: 'error',
-            text1: 'Error',
-            text2: apiError.message || 'Failed to create signature request',
-            position: 'top',
-            visibilityTime: 3000,
-          });
-        }
+        // Show error message for API failures
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: apiError.message || 'Failed to create signature request',
+          position: 'top',
+          visibilityTime: 3000,
+        });
       }
       
     } catch (error) {
