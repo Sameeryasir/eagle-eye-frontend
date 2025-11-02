@@ -189,19 +189,15 @@ export default function CustomBottomNav({
     setActiveTab(currentTab);
   }, [route.name]); // Re-run when route name changes
 
-  // --- Pusher Real-time Notification Listener (MCP Context 7) ---
-  // Business Rule: Listen for new notifications to show red dot on bell icon
-  React.useEffect(() => {
-    const currentUserId = userInfo?.id;
-    
-    if (!currentUserId) {
-      console.log('⚠️ CustomBottomNav: No user ID available for Pusher channel');
-      return;
-    }
+  // --- Track Pusher Subscription State (MCP Context 7) ---
+  // Business Rule: Use ref to track if we're subscribed to avoid duplicate subscriptions
+  const isSubscribedRef = React.useRef(false);
+  const previousRouteRef = React.useRef(null);
 
-    // Create channel name matching backend: `user-notifications-${assignedToUserId}`
-    const channelName = `user-notifications-${currentUserId}`;
-    console.log('🔔 CustomBottomNav: Setting up Pusher listener for channel:', channelName);
+  // --- Helper Function to Setup Pusher Subscription (MCP Context 7) ---
+  // Business Rule: Centralized function to subscribe and bind event handlers to avoid code duplication
+  const setupPusherSubscription = (channelName, logMessage) => {
+    console.log(logMessage, channelName);
     console.log('🔌 CustomBottomNav: Pusher connection state:', pusher.connection.state);
     console.log('✅ CustomBottomNav: Pusher is connected:', pusher.connection.state === 'connected');
     
@@ -211,11 +207,6 @@ export default function CustomBottomNav({
     // Unified handler for all assignment types (task, project, event)
     const handleNewAssignment = (data, assignmentType) => {
       console.log(`🔔 CustomBottomNav: NEW ${assignmentType.toUpperCase()} ASSIGNMENT NOTIFICATION RECEIVED:`, data);
-
-      // Guard: If user is already on NotificationScreen, do not show red dot
-      if (route.name === "NotificationScreen") {
-        return;
-      }
 
       // Show red dot on bell icon
       setHasNewNotification(true);
@@ -230,13 +221,87 @@ export default function CustomBottomNav({
 
     // Listen for new event assignment events
     channel.bind('new-event-assignment', (data) => handleNewAssignment(data, 'event'));
+    
+    // Mark as subscribed
+    isSubscribedRef.current = true;
+  };
 
-    // Cleanup function to unsubscribe when component unmounts
+  // --- Pusher Real-time Notification Listener (MCP Context 7) ---
+  // Business Rule: Listen for new notifications to show red dot on bell icon
+  // Business Rule: Unsubscribe from Pusher channel ONLY when user enters NotificationScreen
+  // Business Rule: Subscribe to Pusher channel ONLY ONCE when user leaves NotificationScreen
+  // Business Rule: Hide red dot automatically when user navigates to NotificationScreen
+  React.useEffect(() => {
+    const currentUserId = userInfo?.id;
+    
+    if (!currentUserId) {
+      console.log('⚠️ CustomBottomNav: No user ID available for Pusher channel');
+      return;
+    }
+
+    // Create channel name matching backend: `user-notifications-${assignedToUserId}`
+    const channelName = `user-notifications-${currentUserId}`;
+    const isOnNotificationScreen = route.name === "NotificationScreen";
+    const previousRoute = previousRouteRef.current;
+    
+    // --- Handle Navigation to NotificationScreen ---
+    // Business Rule: Only unsubscribe when entering NotificationScreen (not already on it)
+    if (isOnNotificationScreen && previousRoute !== "NotificationScreen") {
+      console.log('🔔 CustomBottomNav: User navigated TO NotificationScreen - hiding red dot and unsubscribing from Pusher');
+      setHasNewNotification(false);
+      
+      // Unsubscribe from Pusher channel when entering NotificationScreen
+      // This saves resources since user is already viewing notifications
+      try {
+        if (pusher.channels.channels[channelName]) {
+          console.log('🚪 CustomBottomNav: Unsubscribing from channel:', channelName);
+          pusher.unsubscribe(channelName);
+          isSubscribedRef.current = false;
+        }
+      } catch (error) {
+        console.error('❌ CustomBottomNav: Error unsubscribing from channel:', error);
+      }
+      
+      // Update previous route
+      previousRouteRef.current = route.name;
+      return;
+    }
+    
+    // --- Handle Navigation Away from NotificationScreen ---
+    // Business Rule: Only subscribe ONCE when leaving NotificationScreen (not already subscribed)
+    if (!isOnNotificationScreen && previousRoute === "NotificationScreen" && !isSubscribedRef.current) {
+      setupPusherSubscription(channelName, '🔔 CustomBottomNav: User navigated AWAY from NotificationScreen - subscribing to Pusher channel:');
+      previousRouteRef.current = route.name;
+      return;
+    }
+    
+    // --- Initial Subscribe (First Time Only) ---
+    // Business Rule: Subscribe on component mount if not on NotificationScreen and not already subscribed
+    if (!isOnNotificationScreen && !isSubscribedRef.current && previousRoute === null) {
+      setupPusherSubscription(channelName, '🔔 CustomBottomNav: Initial subscribe to Pusher channel:');
+      previousRouteRef.current = route.name;
+    } else if (!isOnNotificationScreen) {
+      // Update previous route for non-NotificationScreen routes (but don't re-subscribe)
+      previousRouteRef.current = route.name;
+    }
+
+    // Cleanup function to unsubscribe only when component unmounts (not on route changes)
     return () => {
-      console.log('🧹 CustomBottomNav: Unsubscribing from Pusher channel:', channelName);
-      pusher.unsubscribe(channelName);
+      // Only cleanup on unmount (when userInfo changes or component unmounts)
+      // Don't cleanup on route changes - we handle that above
+      if (!userInfo?.id) {
+        console.log('🧹 CustomBottomNav: Cleaning up Pusher channel subscription on unmount:', channelName);
+        try {
+          if (pusher.channels.channels[channelName]) {
+            pusher.unsubscribe(channelName);
+          }
+          isSubscribedRef.current = false;
+        } catch (error) {
+          console.error('❌ CustomBottomNav: Error during cleanup:', error);
+        }
+      }
     };
-  }, [userInfo?.id]);
+  }, [userInfo?.id, route.name]); // Re-run when user ID or route name changes
 
   // Listen for external clear-badge events (from NotificationScreen focus)
   React.useEffect(() => {

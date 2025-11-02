@@ -1497,7 +1497,7 @@ const CreateEventModal = ({
               value={startDateTime}
               mode="time"
               is24Hour={false}
-              display="default"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={handleStartTimeChange}
               minimumDate={startDateTime.toDateString() === new Date().toDateString() ? new Date() : undefined}
             />
@@ -1518,7 +1518,7 @@ const CreateEventModal = ({
               value={endDateTime}
               mode="time"
               is24Hour={false}
-              display="default"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={handleEndTimeChange}
               minimumDate={endDateTime.toDateString() === new Date().toDateString() ? new Date() : undefined}
             />

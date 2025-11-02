@@ -33,8 +33,13 @@
         "VIBRATE",
         "WAKE_LOCK",
         "RECEIVE_BOOT_COMPLETED"
-      ]
-     
+      ],
+      "useNextNotificationsApi": true,
+      "notification": {
+        "icon": "./assets/icon.png",
+        "color": "#ffffff",
+        "channelId": "default"
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -42,13 +47,21 @@
     },
     "extra": {
       "eas": {
-        "projectId": "d0a82c9f-63e0-4907-934d-5db24a9da32a"
+        "projectId": "965f7868-60cf-4aa7-ac08-a8e4125438de"
       }
     },
-    "owner": "asjad12345",
+    "owner": "hammad6788",
     "plugins": [
       "expo-localization",
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#ffffff",
+          "sounds": []
+        }
+      ]
     ]
   }
 }

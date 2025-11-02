@@ -6,6 +6,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
 // --- Notification Configuration ---
 // Configure how notifications are handled when the app is in foreground
@@ -73,8 +74,15 @@ export const generateExpoPushToken = async () => {
     }
 
     // Generate the Expo push token
+    // Auto-detect project ID from app.json (works better in standalone builds)
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId || 
+                     Constants.easConfig?.projectId ||
+                     '965f7868-60cf-4aa7-ac08-a8e4125438de'; // Fallback to hardcoded if auto-detect fails
+    
+    console.log('Using project ID for push token:', projectId);
+    
     const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: '35012417-c75c-4b31-89df-1a71d6aa5491', // From app.json
+      projectId: projectId,
     });
 
     const expoToken = tokenData.data;

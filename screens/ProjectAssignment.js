@@ -196,6 +196,9 @@ function ProjectAssignment({ navigation, route }) {
         // Don't throw error - project was already assigned successfully
       }
 
+      // Add newly assigned projects to local state
+      setFetchedAssignedProjects(prev => [...prev, ...selectedProjects]);
+      
       Toast.show({
         type: 'success',
         text1: 'Projects Assigned Successfully',

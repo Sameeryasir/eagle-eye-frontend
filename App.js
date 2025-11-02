@@ -16,6 +16,7 @@ import { MenuProvider } from "react-native-popup-menu";
 import Toast from 'react-native-toast-message';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SQLiteProvider, useSQLiteContext,  SQLiteDatabase } from 'expo-sqlite';
+import * as Notifications from 'expo-notifications';
 
 // --- Redux Store Integration (MCP Context 7) ---
 // Import Redux store and provider for global state management
@@ -298,6 +299,40 @@ const AppNavigator = () => {
   
   // SplashScreen will handle initial routing and auth checking
 
+  // --- Handle notification when app is in background or closed (MCP Context 7) ---
+  // Business Rule: Navigate to appropriate screen when user taps on notification
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data;
+      console.log('📱 Notification clicked:', data);
+      
+      // Navigate based on notification type
+      if (navigationRef) {
+        if (data?.type === 'task-assignment' && data.taskId) {
+          console.log('📋 Navigating to TaskDetailsScreen with taskId:', data.taskId);
+          navigationRef.navigate('TaskDetails', { taskId: data.taskId });
+        } else if (data?.type === 'project-assignment' && data.projectId) {
+          console.log('📁 Navigating to HomeScreen');
+          navigationRef.navigate('HomeScreen');
+        } else if (data?.type === 'event-assignment' && data.eventId) {
+          console.log('📅 Navigating to CalenderScreen');
+          navigationRef.navigate('CalenderScreen');
+        } else if (data?.type === 'project-conversation-created' && data.conversationId) {
+          console.log('💬 Navigating to ChatScreen');
+          navigationRef.navigate('ChatScreen');
+        } else if (data?.type === 'conversation-created' && data.conversationId) {
+          console.log('💬 Navigating to ChatScreen');
+          navigationRef.navigate('ChatScreen');
+        } else if (data?.type === 'chat-message' && data.conversationId) {
+          console.log('💬 Navigating to ChatScreen');
+          navigationRef.navigate('ChatScreen');
+        }
+      }
+    });
+
+    return () => subscription.remove();
+  }, [navigationRef]);
+
   const handleMenuPress = () => {
     setSidebarVisible(true);
   };
@@ -316,7 +351,7 @@ const AppNavigator = () => {
           navigationRef.navigate("ChatScreen");
           break;
         case "files":
-          // Navigate to files screen
+          // Navigate to files screenF
           break;
         case "material":
           // Navigate to material screen

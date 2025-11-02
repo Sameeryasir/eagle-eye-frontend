@@ -43,6 +43,8 @@ import Header from "../components/Header";
 import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
 import { sendInvite } from "../services/auth/SendInvite";
+import { getUserById } from "../services/user/getUserById";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // --- Responsive Design Constants (MCP Context 7) ---
 // More comprehensive screen size detection for better responsive design
@@ -120,6 +122,7 @@ function HomeScreen({ navigation, route }) {
   const [inviteErrorMessage, setInviteErrorMessage] = useState('');
   const { width: screenWidth } = useWindowDimensions();
   const [hideCompanyAfterCreate, setHideCompanyAfterCreate] = useState(false);
+  const [currentUserCompanyId, setCurrentUserCompanyId] = useState(null); // Store current user's company ID to compare with project companies
 
   const numColumns = screenWidth >= 1024 ? 3 : screenWidth >= 768 ? 2 : 1;
   const horizontalPadding = 40; // px-5 on container (20 left + 20 right)
@@ -206,6 +209,29 @@ function HomeScreen({ navigation, route }) {
 
     loadUserRole();
   }, [navigation]);
+
+  // --- Load Current User's Company (MCP Context 7) ---
+  // Business Rule: Get current user's company ID to compare with project companies
+  // Only show company name for collaborated projects (different company)
+  useEffect(() => {
+    const loadCurrentUserCompany = async () => {
+      try {
+        const userId = await AsyncStorage.getItem('userId');
+        if (userId) {
+          const userData = await getUserById(userId);
+          // Get company ID from user data (can be company.id or company_id)
+          const companyId = userData?.company?.id || userData?.company_id || null;
+          setCurrentUserCompanyId(companyId);
+          console.log('Current user company ID:', companyId);
+        }
+      } catch (error) {
+        console.error('Error loading current user company:', error);
+        // Don't show error to user - just continue without company comparison
+      }
+    };
+
+    loadCurrentUserCompany();
+  }, []);
 
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
@@ -584,8 +610,11 @@ function HomeScreen({ navigation, route }) {
 
       {/* Rest of the card content */}
       <View className="p-6 py-8">
-        {/* Company Tag - Show if company exists */}
-        {project.company && (
+        {/* Company Tag - Show only for collaborated projects (different company) (MCP Context 7) --- */}
+        {/* Business Rule: Hide company name for projects from user's own company, show only for collaborated projects */}
+        {project.company && 
+         currentUserCompanyId && 
+         project.company.id !== currentUserCompanyId && (
           <View className="mb-3">
             <View className="flex-row items-center self-start">
               <Ionicons name="business" size={14} color="black" />

@@ -1,16 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { getNotificationforCurrentUser } from '../services/inAppNotification/getNotificationforCurrentUser';
 import { markAllRead } from '../services/inAppNotification/markAllRead';
+import { deleteNotificationById } from '../services/inAppNotification/deleteNotificationById';
 import { useAuth } from '../context/AuthContext';
 import pusher from '../pusherClient';
 import CustomBottomNav from './components/CustomBottomNav';
+import Toast from 'react-native-toast-message';
 
 export default function NotificationScreen() {
   const [apiNotifications, setApiNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [markingAllRead, setMarkingAllRead] = useState(false);
+  const navigation = useNavigation();
   
   // Get current user info for Pusher channel
   const { userInfo } = useAuth();
@@ -97,6 +101,69 @@ export default function NotificationScreen() {
       setMarkingAllRead(false);
     }
   };
+
+  // --- Delete Notification Handler (MCP Context 7) ---
+  // Business Rule: Delete a specific notification when user taps bin icon
+  const handleDeleteNotification = async (notificationId) => {
+    try {
+      console.log('🗑️ DELETING NOTIFICATION:', notificationId);
+      
+      // Call API to delete notification
+      await deleteNotificationById(notificationId);
+      
+      // Remove notification from local state
+      setApiNotifications(prevNotifications => 
+        prevNotifications.filter(notif => notif.id !== notificationId)
+      );
+      
+      // Show success toast
+      Toast.show({
+        type: 'success',
+        text1: 'Notification Deleted',
+        text2: 'The notification has been removed',
+        visibilityTime: 2000,
+        autoHide: true,
+        topOffset: 80,
+      });
+      
+      console.log('✅ NOTIFICATION DELETED SUCCESSFULLY');
+      
+    } catch (error) {
+      console.error('❌ Error deleting notification:', error);
+      
+      // Show error toast
+      Toast.show({
+        type: 'error',
+        text1: 'Delete Failed',
+        text2: 'Failed to delete notification. Please try again.',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
+    }
+  };
+
+  // --- Handle Notification Card Tap (MCP Context 7) ---
+  // Business Rule: Navigate to appropriate screen based on notification type
+  const handleNotificationTap = (notification) => {
+    console.log('🔔 Notification tapped:', notification);
+    
+    // Navigate to TaskDetailsScreen if task notification
+    if (notification.taskId) {
+      console.log('📋 Navigating to TaskDetailsScreen with taskId:', notification.taskId);
+      navigation.navigate('TaskDetails', { taskId: notification.taskId });
+    }
+    // Navigate to HomeScreen if project notification
+    else if (notification.projectId) {
+      console.log('📁 Navigating to HomeScreen');
+      navigation.navigate('HomeScreen');
+    }
+    // Navigate to CalenderScreen if event notification
+    else if (notification.eventId) {
+      console.log('📅 Navigating to CalenderScreen from event notification');
+      navigation.navigate('CalenderScreen');
+    }
+  };
   
   // Load notifications when screen opens
   useEffect(() => {
@@ -130,17 +197,24 @@ export default function NotificationScreen() {
     const channel = pusher.subscribe(channelName);
     
     // Unified listener for all assignment types (task, project, event)
-    const handleNewAssignment = (data, assignmentType) => {
+    const handleNewAssignment = async (data, assignmentType) => {
       console.log(`🔔 NEW ${assignmentType.toUpperCase()} ASSIGNMENT NOTIFICATION RECEIVED:`, data);
+      
+      // Fix: Handle array format from Pusher - extract first item if array
+      let notificationData = data;
+      if (Array.isArray(data) && data.length > 0) {
+        notificationData = data[0];
+        console.log('📦 Data was array, extracted object:', notificationData);
+      }
       
       // Add new notification to the list
       setApiNotifications(prevNotifications => {
         // Check if notification already exists to avoid duplicates
         const exists = prevNotifications.some(notif => 
-          notif.id === data.id || 
-          (assignmentType === 'task' && notif.taskId === data.taskId && notif.fromUserId === data.fromUserId) ||
-          (assignmentType === 'project' && notif.projectIds && data.projectIds && notif.projectIds.some(pid => data.projectIds.includes(pid))) ||
-          (assignmentType === 'event' && notif.eventId === data.eventId && notif.fromUserId === data.fromUserId)
+          notif.id === notificationData.id || 
+          (assignmentType === 'task' && notif.taskId === notificationData.taskId && notif.fromUserId === notificationData.fromUserId) ||
+          (assignmentType === 'project' && notif.projectIds && notificationData.projectIds && notif.projectIds.some(pid => notificationData.projectIds.includes(pid))) ||
+          (assignmentType === 'event' && notif.eventId === notificationData.eventId && notif.fromUserId === notificationData.fromUserId)
         );
         
         if (exists) {
@@ -149,10 +223,20 @@ export default function NotificationScreen() {
         }
         
         // Add new notification to the beginning of the list
-        const newNotifications = [data, ...prevNotifications];
+        const newNotifications = [notificationData, ...prevNotifications];
         console.log(`✅ New ${assignmentType} notification added to list:`, newNotifications.length);
         return newNotifications;
       });
+      
+      // Auto-mark all notifications as read when new notification arrives
+      try {
+        console.log('🔔 AUTO CALLING API TO MARK ALL NOTIFICATIONS AS READ (from Pusher)');
+        await markAllRead();
+        console.log('✅ ALL NOTIFICATIONS AUTO-MARKED AS READ (from Pusher)');
+      } catch (markError) {
+        console.error('❌ Error auto-marking notifications as read (from Pusher):', markError);
+        // Don't throw error - notification was added successfully
+      }
     };
 
     // Listen for new task assignment events
@@ -193,9 +277,10 @@ export default function NotificationScreen() {
           contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
         >
             {apiNotifications.map((notification) => (
-            <View key={notification.id} className="bg-white p-5 mt-2 mb-4 rounded-2xl shadow-lg border border-gray-100">
+            <TouchableOpacity key={notification.id} onPress={() => handleNotificationTap(notification)} activeOpacity={0.7}>
+              <View className="bg-white p-5 mt-2 mb-4 rounded-2xl shadow-lg border border-gray-100">
               <View className="flex-row items-center mb-3">
-                <View className="w-12 h-12 rounded-full bg-blue-500 justify-center items-center mr-4 shadow-md">
+                <View className="w-12 h-12 rounded-full bg-black justify-center items-center mr-4">
                   <Text className="text-white text-lg font-bold">
                     {notification.fromUserName ? notification.fromUserName.charAt(0).toUpperCase() : 'U'}
                   </Text>
@@ -203,15 +288,23 @@ export default function NotificationScreen() {
                 <View className="flex-1">
                   <Text className="text-lg font-semibold text-gray-800 mb-1">{notification.fromUserName}</Text>
                   {notification.projectName && (
-                    <Text className="text-sm text-gray-500 font-medium">{notification.projectName}</Text>
+                    <Text className="text-sm text-gray-500 font-medium">Project: {notification.projectName}</Text>
                   )}
                 </View>
+                {/* Delete Icon */}
+                <TouchableOpacity 
+                  className="p-2"
+                  onPress={() => handleDeleteNotification(notification.id)}
+                >
+                  <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                </TouchableOpacity>
               </View>
+              {/* Title Section */}
+              {notification.title && (
+                <Text className="text-xl font-bold text-gray-900 mb-2">{notification.title}</Text>
+              )}
               <Text className="text-base text-gray-700 leading-6 mb-4 font-normal">{notification.message}</Text>
               <View className="flex-row justify-between items-center">
-                {notification.taskName && (
-                  <Text className="text-xs text-gray-400 italic font-medium">Task: {notification.taskName}</Text>
-                )}
                 <Text className="text-xs text-gray-400 font-medium">
                   {notification.createdAt ? new Date(notification.createdAt).toLocaleDateString('en-US', {
                     month: 'short',
@@ -221,7 +314,8 @@ export default function NotificationScreen() {
                   }) : 'Just now'}
                 </Text>
               </View>
-            </View>
+              </View>
+            </TouchableOpacity>
           ))}
         </ScrollView>
       )}
