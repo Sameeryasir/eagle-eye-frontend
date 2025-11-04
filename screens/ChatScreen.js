@@ -219,6 +219,7 @@ const ChatScreen = ({ navigation }) => {
     
     try {
       const response = await getUserConversations();
+      console.log('💬 Get Conversation by User ID Response:', response);
       const formattedConversations = processConversations(response);
       const sortedConversations = sortConversationsByLatest(formattedConversations);
       setConversations(sortedConversations);
@@ -245,6 +246,7 @@ const ChatScreen = ({ navigation }) => {
   const fetchConversationsSilently = async () => {
     try {
       const response = await getUserConversations();
+      console.log('💬 Get Conversation by User ID Response:', response);
       const formattedConversations = processConversations(response);
       const sortedConversations = sortConversationsByLatest(formattedConversations);
       setConversations(sortedConversations);
@@ -324,13 +326,6 @@ const ChatScreen = ({ navigation }) => {
       updatedConversations.splice(conversationIndex, 1);
       const finalConversations = [conversationToUpdate, ...updatedConversations];
       
-      // Update SQLite database with the updated conversation
-      try {
-        storeConversationsInSQLite(db, finalConversations);
-      } catch (error) {
-        console.error('❌ Error updating SQLite after new message:', error);
-      }
-      
       return finalConversations;
     });
   };
@@ -382,13 +377,6 @@ const ChatScreen = ({ navigation }) => {
       // Remove from current position and add to top
       updatedConversations.splice(conversationIndex, 1);
       const finalConversations = [conversationToUpdate, ...updatedConversations];
-      
-      // Update SQLite database with the updated conversation
-      try {
-        storeConversationsInSQLite(db, finalConversations);
-      } catch (error) {
-        console.error('❌ Error updating SQLite after signature message:', error);
-      }
       
       return finalConversations;
     });
@@ -518,13 +506,6 @@ const ChatScreen = ({ navigation }) => {
           // Add to top of list (most recent first)
           const finalConversations = [formattedConversation, ...prevConversations];
           
-          // Update SQLite database with the new conversation
-          try {
-            storeConversationsInSQLite(db, finalConversations);
-          } catch (error) {
-            console.error('❌ Error updating SQLite after new conversation:', error);
-          }
-          
           return finalConversations;
         });
         
@@ -645,6 +626,7 @@ const ChatScreen = ({ navigation }) => {
       conversationId: conversationId, // Pass conversation ID
       conversation: user.conversation, // Pass full conversation object
       messages: user.conversation?.messages || [], // Use messages from API
+      type: user.conversation?.type, // Pass conversation type
     });
   };
 
@@ -690,6 +672,7 @@ const ChatScreen = ({ navigation }) => {
         conversation: conversation, // Pass full conversation object
         isGroupChat: true,
         project: project,
+        type: conversation?.type, // Pass conversation type
       });
     } else {
       // Private conversation - use employee name
@@ -716,6 +699,7 @@ const ChatScreen = ({ navigation }) => {
         messages: [], // Start with empty messages for new conversation
         conversationId: conversation?.id, // Pass conversation ID from API
         conversation: conversation, // Pass full conversation object
+        type: conversation?.type, // Pass conversation type
       });
     }
     

@@ -9,10 +9,13 @@ import {
   ActivityIndicator,
   Keyboard,
   Dimensions,
+  Platform,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Toast from 'react-native-toast-message';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // --- Redux Integration (MCP Context 7) ---
 // Import Redux hooks and actions for centralized project creation
@@ -22,6 +25,9 @@ import { createProject } from '../../store/slices/projectSlice';
 function CreateProject({ navigation, onSuccess, onCancel }) {
   // --- Redux Integration ---
   const dispatch = useDispatch();
+  
+  // --- Get safe area insets for notch handling (MCP Context 7) ---
+  const insets = useSafeAreaInsets();
   
   // --- Get screen dimensions for responsive design ---
   const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -197,16 +203,24 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
 
   return (
     <View 
-      className={`flex-1 ${isVerySmallScreen ? 'bg-blue-50' : 'bg-white'}`} 
       style={{ 
+        flex: 1,
         height: screenHeight,
         width: screenWidth,
         margin: 0,
-        padding: 0
+        padding: 0,
       }}
     >
-      {/* Black Navbar - Responsive sizing */}
-      <View className={`bg-black ${isVerySmallScreen ? 'px-3 py-2' : 'px-4 py-3'} flex-row items-center justify-between`}>
+      {/* Transparent safe area for notch (MCP Context 7) */}
+      <View style={{ height: insets.top, backgroundColor: 'transparent' }} />
+      
+      {/* Main content container */}
+      <View 
+        className={`flex-1 ${isVerySmallScreen ? 'bg-blue-50' : 'bg-white'}`} 
+        style={{ flex: 1 }}
+      >
+        {/* Black Navbar - Responsive sizing */}
+        <View className={`bg-black ${isVerySmallScreen ? 'px-3 py-2' : 'px-4 py-3'} flex-row items-center justify-between`}>
         <Text className={`text-black ${isVerySmallScreen ? 'text-[16px]' : 'text-[18px]'} font-semibold`}>
           Create Project
         </Text>
@@ -330,15 +344,95 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
         </View>
       </View>
 
-      {/* Date Picker */}
-      {showStartDatePicker && (
+      {/* Date Picker - iOS popup style */}
+      {Platform.OS === 'ios' && (
+        <Modal
+          visible={showStartDatePicker}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowStartDatePicker(false)}
+        >
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              justifyContent: 'center',
+              alignItems: 'center',
+              paddingHorizontal: 20,
+            }}
+            activeOpacity={1}
+            onPress={() => setShowStartDatePicker(false)}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+              style={{
+                backgroundColor: 'white',
+                borderRadius: 16,
+                width: '100%',
+                maxWidth: 350,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.25,
+                shadowRadius: 10,
+                elevation: 10,
+              }}
+            >
+              {/* Header with Done button */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  paddingHorizontal: 20,
+                  paddingTop: 20,
+                  paddingBottom: 15,
+                  borderBottomWidth: 1,
+                  borderBottomColor: '#E5E7EB',
+                }}
+              >
+                <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827' }}>
+                  Select Start Date
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowStartDatePicker(false)}
+                  style={{
+                    backgroundColor: '#000000',
+                    paddingHorizontal: 20,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>Done</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Date Picker */}
+              <View style={{ paddingHorizontal: 10, paddingVertical: 10 }}>
+                <DateTimePicker
+                  value={startDate}
+                  mode="date"
+                  display="inline"
+                  onChange={handleStartDateChange}
+                  minimumDate={new Date(new Date().setHours(0, 0, 0, 0))}
+                />
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+      )}
+
+      {/* Date Picker - Android with default popup */}
+      {Platform.OS === 'android' && showStartDatePicker && (
         <DateTimePicker
           value={startDate}
           mode="date"
+          display="default"
           onChange={handleStartDateChange}
           minimumDate={new Date(new Date().setHours(0, 0, 0, 0))}
         />
       )}
+      </View>
     </View>
   );
 }

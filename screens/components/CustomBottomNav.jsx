@@ -36,6 +36,8 @@ export default function CustomBottomNav({
   const [activeTab, setActiveTab] = React.useState("home"); // Track active tab
   const [userRole, setUserRole] = React.useState(null); // Track user role
   const [hasNewNotification, setHasNewNotification] = React.useState(false); // Track new notifications
+  const insets = useSafeAreaInsets(); // Get safe area insets
+  const { userInfo } = useAuth(); // Get current user info for Pusher
   
   // Debug: Track red dot state changes
   React.useEffect(() => {
@@ -89,9 +91,6 @@ export default function CustomBottomNav({
       console.log('🔴 CustomBottomNav: Component unmounting from screen:', route.name);
     };
   }, [route.name]);
-  const insets = useSafeAreaInsets(); // Get safe area insets
-  const { userInfo } = useAuth(); // Get current user info for Pusher
-
 
   // --- Load User Role (MCP Context 7) ---
   // Business Rule: Get user role to determine FAB visibility based on current screen
@@ -179,6 +178,8 @@ export default function CustomBottomNav({
           return "profile"; // Calendar icon highlighted for calendar screens
         case "ChatScreen":
           return "chats"; // Chat icon highlighted for chat screen
+        case "NotificationScreen":
+          return "notifications"; // Notification icon highlighted for notification screen
         default:
           return null; // No tab highlighted for other screens
       }
@@ -201,29 +202,49 @@ export default function CustomBottomNav({
     console.log('🔌 CustomBottomNav: Pusher connection state:', pusher.connection.state);
     console.log('✅ CustomBottomNav: Pusher is connected:', pusher.connection.state === 'connected');
     
-    // Subscribe to user-specific notification channel
-    const channel = pusher.subscribe(channelName);
-    
-    // Unified handler for all assignment types (task, project, event)
-    const handleNewAssignment = (data, assignmentType) => {
-      console.log(`🔔 CustomBottomNav: NEW ${assignmentType.toUpperCase()} ASSIGNMENT NOTIFICATION RECEIVED:`, data);
+    try {
+      // Subscribe to user-specific notification channel
+      const channel = pusher.subscribe(channelName);
+      console.log('✅ CustomBottomNav: Subscribed to channel:', channelName);
+      
+      // Handle subscription success
+      channel.bind('pusher:subscription_succeeded', () => {
+        console.log('✅ CustomBottomNav: Subscription succeeded for:', channelName);
+      });
+      
+      // Handle subscription errors
+      channel.bind('pusher:subscription_error', (error) => {
+        console.error('❌ CustomBottomNav: Subscription error for:', channelName, error);
+      });
+      
+      // Unified handler for all assignment types (task, project, event, message)
+      const handleNewAssignment = (data, assignmentType) => {
+        console.log(`🔔 CustomBottomNav: NEW ${assignmentType.toUpperCase()} ASSIGNMENT NOTIFICATION RECEIVED:`, data);
 
-      // Show red dot on bell icon
-      setHasNewNotification(true);
-      console.log('🔴 CustomBottomNav: Red dot shown on bell icon');
-    };
+        // Show red dot on bell icon
+        setHasNewNotification(true);
+        console.log('🔴 CustomBottomNav: Red dot shown on bell icon');
+      };
 
-    // Listen for new task assignment events
-    channel.bind('new-task-assignment', (data) => handleNewAssignment(data, 'task'));
+      // Listen for new task assignment events
+      channel.bind('new-task-assignment', (data) => handleNewAssignment(data, 'task'));
 
-    // Listen for new project assignment events
-    channel.bind('new-project-assignment', (data) => handleNewAssignment(data, 'project'));
+      // Listen for new project assignment events
+      channel.bind('new-project-assignment', (data) => handleNewAssignment(data, 'project'));
 
-    // Listen for new event assignment events
-    channel.bind('new-event-assignment', (data) => handleNewAssignment(data, 'event'));
-    
-    // Mark as subscribed
-    isSubscribedRef.current = true;
+      // Listen for new event assignment events
+      channel.bind('new-event-assignment', (data) => handleNewAssignment(data, 'event'));
+      
+      // Listen for new message events
+      channel.bind('new-message', (data) => handleNewAssignment(data, 'message'));
+      
+      console.log('✅ CustomBottomNav: All event listeners bound successfully for:', channelName);
+      
+      // Mark as subscribed
+      isSubscribedRef.current = true;
+    } catch (error) {
+      console.error('❌ CustomBottomNav: Error setting up Pusher subscription:', error);
+    }
   };
 
   // --- Pusher Real-time Notification Listener (MCP Context 7) ---

@@ -10,7 +10,7 @@ const getApiUrl = () => {
   // 3. Default fallback
   return process.env.EXPO_PUBLIC_API_URL || 
          process.env.API_URL || 
-         'https://0a7e1df57694.ngrok-free.app';
+         'https://api.eagle-eye.ca/';
 };
 
 export const API_URL = getApiUrl();

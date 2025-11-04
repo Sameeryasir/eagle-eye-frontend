@@ -163,6 +163,15 @@ export default function NotificationScreen() {
       console.log('📅 Navigating to CalenderScreen from event notification');
       navigation.navigate('CalenderScreen');
     }
+    // Navigate to UserChatScreen if message notification
+    else if (notification.conversationId) {
+      console.log('💬 Navigating to UserChatScreen from message notification with conversationId:', notification.conversationId);
+      navigation.navigate('UserChatScreen', {
+        conversationId: notification.conversationId,
+        userName: notification.fromUserName || 'User',
+        type: notification.conversationType,
+      });
+    }
   };
   
   // Load notifications when screen opens
@@ -196,7 +205,7 @@ export default function NotificationScreen() {
     // Subscribe to user-specific notification channel
     const channel = pusher.subscribe(channelName);
     
-    // Unified listener for all assignment types (task, project, event)
+    // Unified listener for all assignment types (task, project, event, message)
     const handleNewAssignment = async (data, assignmentType) => {
       console.log(`🔔 NEW ${assignmentType.toUpperCase()} ASSIGNMENT NOTIFICATION RECEIVED:`, data);
       
@@ -210,15 +219,10 @@ export default function NotificationScreen() {
       // Add new notification to the list
       setApiNotifications(prevNotifications => {
         // Check if notification already exists to avoid duplicates
-        const exists = prevNotifications.some(notif => 
-          notif.id === notificationData.id || 
-          (assignmentType === 'task' && notif.taskId === notificationData.taskId && notif.fromUserId === notificationData.fromUserId) ||
-          (assignmentType === 'project' && notif.projectIds && notificationData.projectIds && notif.projectIds.some(pid => notificationData.projectIds.includes(pid))) ||
-          (assignmentType === 'event' && notif.eventId === notificationData.eventId && notif.fromUserId === notificationData.fromUserId)
-        );
+        const exists = prevNotifications.some(notif => notif.id === notificationData.id);
         
         if (exists) {
-          console.log(`📝 ${assignmentType} notification already exists, skipping duplicate`);
+          console.log(`📝 ${assignmentType} notification already exists (ID: ${notificationData.id}), skipping duplicate`);
           return prevNotifications;
         }
         
@@ -247,6 +251,9 @@ export default function NotificationScreen() {
 
     // Listen for new event assignment events
     channel.bind('new-event-assignment', (data) => handleNewAssignment(data, 'event'));
+    
+    // Listen for new message events
+    channel.bind('new-message', (data) => handleNewAssignment(data, 'message'));
 
     // Cleanup function to unsubscribe when component unmounts
     return () => {

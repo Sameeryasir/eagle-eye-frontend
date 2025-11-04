@@ -5,6 +5,7 @@ import Toast from 'react-native-toast-message';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import DropDownPicker from 'react-native-dropdown-picker';
 import * as Localization from 'expo-localization';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getEmployeesToAssignTask } from "../../services/employees/getEmployeesOfTheCompany";
 import { getMyProjects } from "../../services/projects/getProjectsByLoginUserId";
 import { createEvent } from "../../services/event/createEvent";
@@ -18,6 +19,9 @@ const CreateEventModal = ({
   selectedDate, 
   onEventCreated 
 }) => {
+  // --- Get safe area insets for notch handling (MCP Context 7) ---
+  const insets = useSafeAreaInsets();
+  
   // --- Local State Management ---
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState(null);
@@ -1481,8 +1485,84 @@ const CreateEventModal = ({
             </TouchableOpacity>
           </View>
 
-          {/* Date and Time Pickers (following task creation pattern) */}
-          {showStartDatePicker && (
+          {/* Date and Time Pickers - iOS popup style, Android default */}
+          {/* Start Date Picker - iOS popup */}
+          {Platform.OS === 'ios' && (
+            <Modal
+              visible={showStartDatePicker}
+              transparent={true}
+              animationType="fade"
+              onRequestClose={() => setShowStartDatePicker(false)}
+            >
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  paddingHorizontal: 20,
+                }}
+                activeOpacity={1}
+                onPress={() => setShowStartDatePicker(false)}
+              >
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onPress={(e) => e.stopPropagation()}
+                  style={{
+                    backgroundColor: 'white',
+                    borderRadius: 16,
+                    width: '100%',
+                    maxWidth: 350,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 10,
+                    elevation: 10,
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      paddingHorizontal: 20,
+                      paddingTop: 20,
+                      paddingBottom: 15,
+                      borderBottomWidth: 1,
+                      borderBottomColor: '#E5E7EB',
+                    }}
+                  >
+                    <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827' }}>
+                      Select Start Date
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setShowStartDatePicker(false)}
+                      style={{
+                        backgroundColor: '#000000',
+                        paddingHorizontal: 20,
+                        paddingVertical: 8,
+                        borderRadius: 8,
+                      }}
+                    >
+                      <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={{ paddingHorizontal: 10, paddingVertical: 10 }}>
+                    <DateTimePicker
+                      value={startDateTime}
+                      mode="date"
+                      display="inline"
+                      onChange={handleStartDateChange}
+                      minimumDate={selectedDate ? new Date(selectedDate) : new Date()}
+                    />
+                  </View>
+                </TouchableOpacity>
+              </TouchableOpacity>
+            </Modal>
+          )}
+
+          {/* Start Date Picker - Android default */}
+          {Platform.OS === 'android' && showStartDatePicker && (
             <DateTimePicker
               value={startDateTime}
               mode="date"
@@ -1497,13 +1577,89 @@ const CreateEventModal = ({
               value={startDateTime}
               mode="time"
               is24Hour={false}
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              display={Platform.OS === 'ios' ? 'spinner' : 'clock'}
               onChange={handleStartTimeChange}
               minimumDate={startDateTime.toDateString() === new Date().toDateString() ? new Date() : undefined}
             />
           )}
 
-          {showEndDatePicker && (
+          {/* End Date Picker - iOS popup */}
+          {Platform.OS === 'ios' && (
+            <Modal
+              visible={showEndDatePicker}
+              transparent={true}
+              animationType="fade"
+              onRequestClose={() => setShowEndDatePicker(false)}
+            >
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  paddingHorizontal: 20,
+                }}
+                activeOpacity={1}
+                onPress={() => setShowEndDatePicker(false)}
+              >
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onPress={(e) => e.stopPropagation()}
+                  style={{
+                    backgroundColor: 'white',
+                    borderRadius: 16,
+                    width: '100%',
+                    maxWidth: 350,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 10,
+                    elevation: 10,
+                  }}
+                >
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      paddingHorizontal: 20,
+                      paddingTop: 20,
+                      paddingBottom: 15,
+                      borderBottomWidth: 1,
+                      borderBottomColor: '#E5E7EB',
+                    }}
+                  >
+                    <Text style={{ fontSize: 18, fontWeight: '600', color: '#111827' }}>
+                      Select End Date
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setShowEndDatePicker(false)}
+                      style={{
+                        backgroundColor: '#000000',
+                        paddingHorizontal: 20,
+                        paddingVertical: 8,
+                        borderRadius: 8,
+                      }}
+                    >
+                      <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={{ paddingHorizontal: 10, paddingVertical: 10 }}>
+                    <DateTimePicker
+                      value={endDateTime}
+                      mode="date"
+                      display="inline"
+                      onChange={handleEndDateChange}
+                      minimumDate={selectedDate ? new Date(selectedDate) : startDateTime}
+                    />
+                  </View>
+                </TouchableOpacity>
+              </TouchableOpacity>
+            </Modal>
+          )}
+
+          {/* End Date Picker - Android default */}
+          {Platform.OS === 'android' && showEndDatePicker && (
             <DateTimePicker
               value={endDateTime}
               mode="date"
@@ -1518,7 +1674,7 @@ const CreateEventModal = ({
               value={endDateTime}
               mode="time"
               is24Hour={false}
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              display={Platform.OS === 'ios' ? 'spinner' : 'clock'}
               onChange={handleEndTimeChange}
               minimumDate={endDateTime.toDateString() === new Date().toDateString() ? new Date() : undefined}
             />

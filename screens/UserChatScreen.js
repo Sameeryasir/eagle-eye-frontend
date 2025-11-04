@@ -41,6 +41,7 @@ import { getMessageAfterLastMessage } from "../services/chats/getMessageAfterLas
 import DateTimePicker from '@react-native-community/datetimepicker';
 import appEmitter from "../utils/appEmitter";
 import pusher from "../pusherClient";
+import { createMessageNotification } from "../services/inAppNotification/createMessageNotification";
 import SignatureRequestModal from "./components/SignatureRequestModal";
 import AllFilesModal from "./components/AllFilesModal";
 import AllSignaturesModal from "./components/AllSignaturesModal";
@@ -85,7 +86,11 @@ const UserChatScreen = ({ navigation, route }) => {
     messages: initialMessages = [],
     isGroupChat: isGroupChatParam = false,
     conversation,
+    type,
   } = route.params || {};
+
+  // Log conversation type
+  console.log('💬 Conversation Type:', type);
 
   // --- Determine if Group Chat (MCP Context 7) ---
   // Business Rule: Only show sender names in group chats, not in individual chats
@@ -385,6 +390,8 @@ const UserChatScreen = ({ navigation, route }) => {
           // No table exists - fetch from API with pagination
           try {
             console.log('📡 Fetching from API without loader...');
+            Keyboard.dismiss(); // Dismiss keyboard during API call
+            setIsLoadingMessages(true); // Disable input during API call
             setIsUsingAPI(true); // We're using API for this conversation
             setCurrentPage(1); // Start from page 1
             
@@ -612,6 +619,8 @@ const UserChatScreen = ({ navigation, route }) => {
         // No messages in SQLite - fetch from API with pagination
         try {
           console.log('📡 Fetching from API without loader...');
+          Keyboard.dismiss(); // Dismiss keyboard during API call
+          setIsLoadingMessages(true); // Disable input during API call
           setIsUsingAPI(true); // We're using API for this conversation
           setCurrentPage(1); // Start from page 1
           
@@ -1367,92 +1376,210 @@ const UserChatScreen = ({ navigation, route }) => {
               
               if (serverMessageId && serverSignatureId) {
                 // Replace offline message with complete server response data
-                // Use multiple fields in WHERE clause to ensure we update the correct record
-                db.runSync(
-                  `UPDATE messages_${conversationId} SET 
-                    id = ?,
-                    content = ?,
-                    file_uri = ?,
-                    file_name = ?,
-                    file_type = ?,
-                    file_size = ?,
-                    sender_id = ?,
-                    sender_first_name = ?,
-                    sender_last_name = ?,
-                    created_at = ?,
-                    status = ?,
-                    signature_id = ?,
-                    signature_title = ?,
-                    signature_notes = ?,
-                    signature_due_date = ?,
-                    signature_status = ?,
-                    signature_file_url = ?,
-                    signature_file_name = ?,
-                    signature_file_size = ?
-                   WHERE signature_id = ? AND signature_title = ? AND signature_notes = ? AND status = 'pending'`,
-                  [
-                    serverMessageId,
-                    signatureResponse?.content || null,
-                    signatureResponse?.fileUrl || null,
-                    signatureResponse?.fileName || null,
-                    signatureResponse?.fileType || null,
-                    signatureResponse?.fileSize || null,
-                    serverSender?.id || null,
-                    serverSender?.first_name || null,
-                    serverSender?.last_name || null,
-                    signatureResponse?.createdAt || new Date().toISOString(),
-                    signatureResponse?.status || 'sent',
-                    serverSignatureId,
-                    serverSignature?.title || null,
-                    serverSignature?.notes || null,
-                    serverSignature?.dueDate || null,
-                    serverSignature?.status || 'pending',
-                    serverSignature?.fileUrl || null,
-                    serverSignature?.fileName || null,
-                    serverSignature?.fileSize || null,
-                    msg.signature_id, // WHERE clause parameter 1
-                    msg.signature_title, // WHERE clause parameter 2
-                    msg.signature_notes // WHERE clause parameter 3
-                  ]
+                // CRITICAL FIX: Use the message ID (primary key) to ensure we update the exact offline record
+                const offlineMessageId = msg.id; // The temporary offline message ID
+                
+                console.log(`🔄 [UPDATE] Updating offline signature record with ID: ${offlineMessageId} to server ID: ${serverMessageId}`);
+                console.log(`🔄 [UPDATE] Offline signature_id: ${msg.signature_id} → Server signature_id: ${serverSignatureId}`);
+                console.log(`🔄 [UPDATE] Server response signature data:`, JSON.stringify(serverSignature, null, 2));
+                
+                // First, verify the offline record exists before updating
+                const offlineRecord = db.getFirstSync(
+                  `SELECT id, status, signature_id FROM messages_${conversationId} WHERE id = ?`,
+                  [offlineMessageId]
                 );
+                
+                if (!offlineRecord) {
+                  console.error(`❌ [UPDATE] Offline record with ID ${offlineMessageId} not found in database!`);
+                  continue; // Skip this message if record not found
+                } else {
+                  console.log(`✅ [UPDATE] Found offline record:`, {
+                    id: offlineRecord.id,
+                    status: offlineRecord.status,
+                    signature_id: offlineRecord.signature_id
+                  });
+                }
+                
+                // CRITICAL FIX: Since we're changing the PRIMARY KEY (id), we need to DELETE the old record and INSERT the new one
+                // This ensures the record is properly replaced and won't be found as "pending" again
+                console.log(`🔄 [UPDATE] Deleting offline record with ID: ${offlineMessageId}`);
+                db.runSync(
+                  `DELETE FROM messages_${conversationId} WHERE id = ? AND status = 'pending' AND signature_id IS NOT NULL`,
+                  [offlineMessageId]
+                );
+                
+                // Check if any record with server ID already exists (from Pusher)
+                const existingServerRecord = db.getFirstSync(
+                  `SELECT id FROM messages_${conversationId} WHERE id = ?`,
+                  [serverMessageId]
+                );
+                
+                if (!existingServerRecord) {
+                  // Insert the new server record
+                  console.log(`📝 [UPDATE] Inserting server record with ID: ${serverMessageId}`);
+                  db.runSync(
+                    `INSERT INTO messages_${conversationId} (
+                      id, conversation_id, content, file_uri, file_name, file_type, file_size,
+                      sender_id, sender_first_name, sender_last_name, created_at, status,
+                      signature_id, signature_title, signature_notes, signature_due_date, 
+                      signature_status, signature_file_url, signature_file_name, signature_file_size,
+                      signed_by_id, signed_by_name, signed_by_email
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                      serverMessageId,
+                      conversationId,
+                      signatureResponse?.content || null,
+                      signatureResponse?.fileUrl || null,
+                      signatureResponse?.fileName || null,
+                      signatureResponse?.fileType || null,
+                      signatureResponse?.fileSize || null,
+                      serverSender?.id || null,
+                      serverSender?.first_name || null,
+                      serverSender?.last_name || null,
+                      signatureResponse?.createdAt || new Date().toISOString(),
+                      signatureResponse?.status || 'sent',
+                      serverSignatureId,
+                      serverSignature?.title || null,
+                      serverSignature?.notes || null,
+                      serverSignature?.dueDate || null,
+                      serverSignature?.status || 'pending',
+                      serverSignature?.fileUrl || null,
+                      serverSignature?.fileName || null,
+                      serverSignature?.fileSize || null,
+                      null, // signed_by_id
+                      null, // signed_by_name
+                      null  // signed_by_email
+                    ]
+                  );
+                  console.log(`✅ [UPDATE] Successfully inserted server record with ID: ${serverMessageId}`);
+                } else {
+                  console.log(`ℹ️ [UPDATE] Server record with ID ${serverMessageId} already exists (from Pusher), skipping insert`);
+                  // Update the existing record to ensure it has all the correct data
+                  db.runSync(
+                    `UPDATE messages_${conversationId} SET
+                      conversation_id = ?,
+                      content = ?,
+                      file_uri = ?,
+                      file_name = ?,
+                      file_type = ?,
+                      file_size = ?,
+                      sender_id = ?,
+                      sender_first_name = ?,
+                      sender_last_name = ?,
+                      created_at = ?,
+                      status = ?,
+                      signature_id = ?,
+                      signature_title = ?,
+                      signature_notes = ?,
+                      signature_due_date = ?,
+                      signature_status = ?,
+                      signature_file_url = ?,
+                      signature_file_name = ?,
+                      signature_file_size = ?
+                    WHERE id = ?`,
+                    [
+                      conversationId,
+                      signatureResponse?.content || null,
+                      signatureResponse?.fileUrl || null,
+                      signatureResponse?.fileName || null,
+                      signatureResponse?.fileType || null,
+                      signatureResponse?.fileSize || null,
+                      serverSender?.id || null,
+                      serverSender?.first_name || null,
+                      serverSender?.last_name || null,
+                      signatureResponse?.createdAt || new Date().toISOString(),
+                      signatureResponse?.status || 'sent',
+                      serverSignatureId,
+                      serverSignature?.title || null,
+                      serverSignature?.notes || null,
+                      serverSignature?.dueDate || null,
+                      serverSignature?.status || 'pending',
+                      serverSignature?.fileUrl || null,
+                      serverSignature?.fileName || null,
+                      serverSignature?.fileSize || null,
+                      serverMessageId
+                    ]
+                  );
+                  console.log(`✅ [UPDATE] Successfully updated existing server record with ID: ${serverMessageId}`);
+                }
+                
+                // Verify the old record is gone
+                const oldRecordCheck = db.getFirstSync(
+                  `SELECT id FROM messages_${conversationId} WHERE id = ?`,
+                  [offlineMessageId]
+                );
+                
+                if (oldRecordCheck) {
+                  console.error(`❌ [UPDATE] Old offline record with ID ${offlineMessageId} still exists after delete!`);
+                } else {
+                  console.log(`✅ [UPDATE] Old offline record with ID ${offlineMessageId} successfully deleted`);
+                }
+                
+                // Verify the new record exists
+                const newRecordCheck = db.getFirstSync(
+                  `SELECT id, status, signature_id, signature_title FROM messages_${conversationId} WHERE id = ?`,
+                  [serverMessageId]
+                );
+                
+                if (newRecordCheck) {
+                  console.log(`✅ [UPDATE] New server record verified:`, {
+                    id: newRecordCheck.id,
+                    status: newRecordCheck.status,
+                    signature_id: newRecordCheck.signature_id,
+                    signature_title: newRecordCheck.signature_title
+                  });
+                } else {
+                  console.error(`❌ [UPDATE] New server record with ID ${serverMessageId} not found after insert!`);
+                }
                 
                 console.log(`🔄 [${pendingMessages.indexOf(msg) + 1}/${pendingMessages.length}] Replaced offline signature request with server response`);
                 console.log(`🔄 [DEBUG] Updated signature: ${msg.signature_id} → ${serverSignatureId}`);
                 
                 // Update message in UI with complete server response
+                // CRITICAL FIX: Match by offline message ID (not signature_id) to find the exact pending record
                 setMessages(prevMessages => 
-                  prevMessages.map(prevMsg => 
-                    prevMsg.signature_id === msg.signature_id && 
-                    prevMsg.status === 'pending'
-                      ? { 
-                          ...prevMsg, 
-                          id: serverMessageId,
-                          content: signatureResponse?.content || null,
-                          fileUrl: signatureResponse?.fileUrl || null,
-                          fileName: signatureResponse?.fileName || null,
-                          fileType: signatureResponse?.fileType || null,
-                          fileSize: signatureResponse?.fileSize || null,
-                          sender: {
-                            id: serverSender?.id,
-                            name: `${serverSender?.first_name || ''} ${serverSender?.last_name || ''}`.trim(),
-                            email: serverSender?.email
-                          },
-                          createdAt: signatureResponse?.createdAt,
-                          status: signatureResponse?.status || 'sent',
-                          signature: {
-                            id: serverSignatureId,
-                            title: serverSignature?.title,
-                            notes: serverSignature?.notes,
-                            dueDate: serverSignature?.dueDate,
-                            status: serverSignature?.status || 'pending',
-                            fileUrl: serverSignature?.fileUrl,
-                            fileName: serverSignature?.fileName,
-                            fileSize: serverSignature?.fileSize
-                          },
-                          serverResponse: signatureResponse
-                        }
-                      : prevMsg
-                  )
+                  prevMessages.map(prevMsg => {
+                    // Match by offline message ID - this is the exact record we just updated in database
+                    const isOfflineSignature = (
+                      String(prevMsg.id) === String(offlineMessageId) && 
+                      prevMsg.status === 'pending' &&
+                      prevMsg.signature // Ensure it's a signature message
+                    );
+                    
+                    if (isOfflineSignature) {
+                      console.log(`🔄 [UI] Replacing offline signature UI message ID ${offlineMessageId} with server ID ${serverMessageId}`);
+                      return { 
+                        ...prevMsg, 
+                        id: serverMessageId,
+                        content: signatureResponse?.content || null,
+                        fileUrl: signatureResponse?.fileUrl || null,
+                        fileName: signatureResponse?.fileName || null,
+                        fileType: signatureResponse?.fileType || null,
+                        fileSize: signatureResponse?.fileSize || null,
+                        sender: {
+                          id: serverSender?.id,
+                          first_name: serverSender?.first_name,
+                          last_name: serverSender?.last_name,
+                          name: `${serverSender?.first_name || ''} ${serverSender?.last_name || ''}`.trim(),
+                          email: serverSender?.email
+                        },
+                        createdAt: signatureResponse?.createdAt,
+                        status: signatureResponse?.status || 'sent',
+                        signature: {
+                          id: serverSignatureId,
+                          title: serverSignature?.title,
+                          notes: serverSignature?.notes,
+                          dueDate: serverSignature?.dueDate,
+                          status: serverSignature?.status || 'pending',
+                          fileUrl: serverSignature?.fileUrl,
+                          fileName: serverSignature?.fileName,
+                          fileSize: serverSignature?.fileSize
+                        },
+                        serverResponse: signatureResponse
+                      };
+                    }
+                    return prevMsg;
+                  })
                 );
                 
                 console.log('✅ Signature request updated in UI with complete server data');
@@ -2238,11 +2365,12 @@ const UserChatScreen = ({ navigation, route }) => {
 
       // Add message to state
       setMessages((prevMessages) => {
-        // Check if message already exists (by ID) - prevent duplicates
-        const exists = prevMessages.some(msg => msg.id === signatureMessage.id);
+        // CRITICAL FIX: Check if message already exists (by ID) - prevent duplicates
+        const messageId = signatureMessage.messageId || signatureMessage.id;
+        const exists = prevMessages.some(msg => String(msg.id) === String(messageId));
         
         if (exists) {
-          console.log('⚠️ [PUSHER] Signature message already exists in chat - skipping duplicate (ID:', signatureMessage.id, ')');
+          console.log('⚠️ [PUSHER] Signature message already exists in chat - skipping duplicate (ID:', messageId, ')');
           return prevMessages;
         }
 
@@ -2252,30 +2380,39 @@ const UserChatScreen = ({ navigation, route }) => {
 
         // --- Replace Pending Signature Messages with Real Pusher Response (MCP Context 7) ---
         // Business Rule: If this is a signature from current user, check if we have a pending signature to replace
+        // Also check if this message was already updated from offline (by checking server message ID)
         const isMySignature = String(messageSenderId) === String(myUserId);
         
         if (isMySignature) {
           console.log('🔄 [PUSHER] This is my signature - checking for pending signature to replace');
           
-          // Find pending signature with same title and timestamp (within 30 seconds)
+          // Find pending signature with same title and timestamp (within 60 seconds)
+          // Also check if any message with this server ID already exists (was updated from offline)
           const signatureTime = new Date(signatureMessage.createdAt).getTime();
           const pendingSignatureIndex = prevMessages.findIndex(msg => {
+            // Check if this is the exact message we just updated from offline (by server ID)
+            if (String(msg.id) === String(messageId) && msg.status === 'sent') {
+              return true; // This message was already updated from offline, replace it
+            }
+            
+            // Otherwise, check for pending signature with matching title
             if (msg.status !== 'pending') return false;
             if (String(msg.sender?.id) !== String(myUserId)) return false;
             if (!msg.signature) return false;
             
             // Check if signature title matches
-            const titleMatches = msg.signature.title === signatureMessage.signature?.title;
+            const titleMatches = msg.signature.title === (signatureMessage.signature?.title || signatureMessage.title);
             
-            // Check if timestamp is within 30 seconds
+            // Check if timestamp is within 60 seconds (increased from 30)
             const msgTime = new Date(msg.createdAt).getTime();
-            const timeMatches = Math.abs(signatureTime - msgTime) < 30000; // 30 seconds
+            const timeMatches = Math.abs(signatureTime - msgTime) < 60000; // 60 seconds
             
             return titleMatches && timeMatches;
           });
           
           if (pendingSignatureIndex !== -1) {
             console.log('✅ [PUSHER] Found pending signature to replace at index:', pendingSignatureIndex);
+            console.log(`🔄 [PUSHER] Replacing message ID ${prevMessages[pendingSignatureIndex].id} with server ID ${messageId}`);
             
             // Replace pending signature with real signature from Pusher
             const updatedMessages = [...prevMessages];
@@ -3626,6 +3763,67 @@ const UserChatScreen = ({ navigation, route }) => {
       
       console.log('✅ Message status updated to sent in UI');
       
+      // --- Send Message Notification (MCP Context 7) ---
+      // Business Rule: Send notification for both group and private chats based on conversation type
+      try {
+        const conversationType = type || conversation?.type || "private";
+        const isGroup = conversationType === 'group' || isGroupChat;
+        
+        if (isGroup) {
+          // Group chat: Send ONE notification (backend will handle distribution to all participants)
+          // Use group chat name as fromUserName
+          const groupChatName = userName || conversation?.project?.name || 'Group Chat';
+          
+          const notificationData = {
+            title: "New message",
+            message: messageText || (fileToSend ? `Sent a file: ${fileToSend.name}` : "Sent a message"),
+            conversationId: conversationId,
+            fromUserName: groupChatName,
+            conversationType: "group"
+          };
+          
+          console.log('🔔 Notification Body (Group):', JSON.stringify(notificationData, null, 2));
+          await createMessageNotification(notificationData);
+          console.log('✅ Group message notification sent successfully');
+        } else {
+          // Private chat: Send notification to the other participant
+          // Use sender name as fromUserName
+          let recipientUserId = null;
+          
+          if (conversation?.participants && conversation.participants.length > 0) {
+            const otherParticipant = conversation.participants.find(
+              participant => participant.user?.id?.toString() !== currentUserId?.toString()
+            );
+            recipientUserId = otherParticipant?.user?.id;
+          }
+          
+          // Fallback: Use userId from route params if participants not available
+          if (!recipientUserId && userId) {
+            recipientUserId = userId;
+          }
+          
+          if (recipientUserId) {
+            const fromUserName = `${userInfo?.firstName || ''} ${userInfo?.lastName || ''}`.trim() || 'Unknown User';
+            
+            const notificationData = {
+              title: "New message",
+              message: messageText || (fileToSend ? `Sent a file: ${fileToSend.name}` : "Sent a message"),
+              conversationId: conversationId,
+              assignedToUserId: Number(recipientUserId),
+              fromUserName: fromUserName,
+              conversationType: "private"
+            };
+            
+            console.log('🔔 Sending private message notification:', notificationData);
+            await createMessageNotification(notificationData);
+            console.log('✅ Private message notification sent successfully');
+          }
+        }
+      } catch (notificationError) {
+        console.error('❌ Error sending message notification:', notificationError);
+        // Don't throw error - message was already sent successfully
+      }
+      
     } catch (err) {
       console.error('❌ Error sending message:', err);
       alert('Failed to send message. Please try again.');
@@ -4399,7 +4597,7 @@ const UserChatScreen = ({ navigation, route }) => {
             {/* Plus Icon Button (WhatsApp-style) */}
             <TouchableOpacity
               onPress={handleShowAttachmentOptions}
-              disabled={isSendingMessage}
+              disabled={isSendingMessage || isLoadingMessages}
               className="mr-2"
               activeOpacity={0.7}
             >
@@ -4410,33 +4608,13 @@ const UserChatScreen = ({ navigation, route }) => {
             {!isGroupChat && (
               <TouchableOpacity
                 onPress={() => setSignatureModalVisible(true)}
-                disabled={isSendingMessage}
+                disabled={isSendingMessage || isLoadingMessages}
                 className="mr-2"
                 activeOpacity={0.7}
               >
                 <Ionicons name="create" size={28} color="#3155A1" />
               </TouchableOpacity>
             )}
-
-            {/* Fetch Messages from DB Button */}
-            <TouchableOpacity
-              onPress={getAllMessagesFromDB}
-              disabled={isSendingMessage}
-              className="mr-2"
-              activeOpacity={0.7}
-            >
-              <Ionicons name="list" size={28} color="#10B981" />
-            </TouchableOpacity>
-
-            {/* Delete Messages from DB Button */}
-            <TouchableOpacity
-              onPress={clearDatabase}
-              disabled={isSendingMessage}
-              className="mr-2"
-              activeOpacity={0.7}
-            >
-              <Ionicons name="trash" size={28} color="#EF4444" />
-            </TouchableOpacity>
 
             <TextInput
               className="flex-1 text-base text-gray-900 max-h-24"
@@ -4449,14 +4627,14 @@ const UserChatScreen = ({ navigation, route }) => {
               returnKeyType="send"
               onSubmitEditing={handleSendMessage}
               blurOnSubmit={false}
-              editable={!isSendingMessage}
+              editable={!isSendingMessage && !isLoadingMessages}
             />
 
             <TouchableOpacity
               onPress={handleSendMessage}
-              disabled={(!inputText.trim() && !selectedFile) || isSendingMessage}
+              disabled={(!inputText.trim() && !selectedFile) || isSendingMessage || isLoadingMessages}
               className={`ml-3 w-9 h-9 rounded-full items-center justify-center ${
-                (inputText.trim() || selectedFile) && !isSendingMessage ? "bg-black" : "bg-gray-300"
+                (inputText.trim() || selectedFile) && !isSendingMessage && !isLoadingMessages ? "bg-black" : "bg-gray-300"
               }`}
               activeOpacity={0.7}
             >

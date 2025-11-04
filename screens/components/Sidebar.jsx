@@ -24,7 +24,7 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
   });
   const [userRole, setUserRole] = React.useState(null);
   const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
-  const [activeMenuItem, setActiveMenuItem] = React.useState('chats'); // Track which menu item is active
+  const [activeMenuItem, setActiveMenuItem] = React.useState(null); // Track which menu item is active (no auto-selection)
   const navigation = useNavigation();
   const { logout } = useAuth();
   
@@ -101,6 +101,9 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
     } else if (itemId === 'files') {
       // Navigate to FilesScreen
       navigation.navigate('FilesScreen');
+    } else if (itemId === 'chats') {
+      // Navigate to ChatScreen
+      navigation.navigate('ChatScreen');
     }
     
     // Note: Other items only show visual feedback without navigation

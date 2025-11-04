@@ -315,6 +315,16 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
       return;
     }
     
+    // Business Rule: Prevent creating conversation if no employees are assigned
+    if (employees.length === 0) {
+      Alert.alert(
+        'No Team Members',
+        'There are no employees assigned to this project. Please assign team members to the project before creating a conversation.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    
     setIsCreatingConversation(true);
     
     try {
@@ -704,6 +714,7 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
 
         {/* Create Project Chat Card - Show only when project is selected (MCP Context 7) */}
         {/* Business Rule: Appears between controls and employee list when project is selected */}
+        {/* Business Rule: Disable button if no employees are assigned to the project */}
         {selectedProject && (
           <View className="px-5 pb-4">
             <View className="bg-white rounded-2xl p-4 shadow-sm">
@@ -711,22 +722,51 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
                 className="flex-row items-center justify-between"
                 onPress={handleCreateProjectChat}
                 activeOpacity={0.7}
+                disabled={employees.length === 0 || isLoading}
               >
                 <View className="flex-row items-center flex-1">
-                  <View className="w-12 h-12 bg-gray-100 rounded-xl items-center justify-center mr-3">
-                    <Ionicons name="people" size={24} color="black" />
+                  <View 
+                    className={`w-12 h-12 rounded-xl items-center justify-center mr-3 ${
+                      employees.length === 0 ? 'bg-gray-200' : 'bg-gray-100'
+                    }`}
+                  >
+                    <Ionicons 
+                      name="people" 
+                      size={24} 
+                      color={employees.length === 0 ? '#9CA3AF' : 'black'} 
+                    />
                   </View>
                   <View className="flex-1">
-                    <Text className="text-base font-bold text-gray-900">
+                    <Text 
+                      className={`text-base font-bold ${
+                        employees.length === 0 ? 'text-gray-400' : 'text-gray-900'
+                      }`}
+                    >
                       Create Project Chat
                     </Text>
-                    <Text className="text-xs text-gray-500 mt-0.5">
-                      Start a group conversation
+                    <Text 
+                      className={`text-xs mt-0.5 ${
+                        employees.length === 0 
+                          ? 'text-gray-400' 
+                          : 'text-gray-500'
+                      }`}
+                    >
+                      {employees.length === 0 
+                        ? 'No employees assigned to this project'
+                        : 'Start a group conversation'}
                     </Text>
                   </View>
                 </View>
-                <View className="w-10 h-10 bg-black rounded-full items-center justify-center ml-2">
-                  <Ionicons name="add" size={24} color="white" />
+                <View 
+                  className={`w-10 h-10 rounded-full items-center justify-center ml-2 ${
+                    employees.length === 0 ? 'bg-gray-300' : 'bg-black'
+                  }`}
+                >
+                  <Ionicons 
+                    name="add" 
+                    size={24} 
+                    color={employees.length === 0 ? '#9CA3AF' : 'white'} 
+                  />
                 </View>
               </TouchableOpacity>
             </View>

@@ -9,6 +9,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -36,10 +37,18 @@ const SignatureRequestModal = ({
 
   // --- Date Picker Handler (MCP Context 7) ---
   // Business Rule: Handle date selection for signature due date
+  // On Android: System dialog auto-closes, so we just update the date
+  // On iOS: Spinner stays open so users can adjust, close it manually by tapping date field again
   const handleDateChange = (event, selectedDate) => {
-    setShowDatePicker(false);
     if (selectedDate && selectedDate instanceof Date) {
       setSignatureDueDate(selectedDate);
+      // Close picker on Android when date is selected (system dialog)
+      if (Platform.OS === 'android') {
+        setShowDatePicker(false);
+      }
+    } else if (Platform.OS === 'android') {
+      // User cancelled on Android
+      setShowDatePicker(false);
     }
   };
 
@@ -246,13 +255,32 @@ const SignatureRequestModal = ({
                   </View>
                   <TouchableOpacity
                     className="flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                    onPress={() => setShowDatePicker(true)}
+                    onPress={() => setShowDatePicker(!showDatePicker)}
                   >
                     <Text className="text-[16px] text-[#333] font-medium">
                       {signatureDueDate ? signatureDueDate.toLocaleDateString() : 'Select date'}
                     </Text>
-                    <Ionicons name="calendar-outline" size={16} color="#666" />
+                    <Ionicons 
+                      name={showDatePicker ? "chevron-up" : "calendar-outline"} 
+                      size={16} 
+                      color="#666" 
+                    />
                   </TouchableOpacity>
+                  
+                  {/* Calendar Picker - Shows inline in modal (MCP Context 7) --- */}
+                  {/* Business Rule: Display calendar picker directly in the modal when date field is clicked */}
+                  {showDatePicker && (
+                    <View className="mt-3 border border-[#e1e8ed] rounded-lg bg-white p-3">
+                      <DateTimePicker
+                        value={signatureDueDate || new Date()}
+                        mode="date"
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        onChange={handleDateChange}
+                        minimumDate={new Date()}
+                        style={{ width: '100%' }}
+                      />
+                    </View>
+                  )}
                 </View>
               </View>
             </View>
@@ -285,16 +313,6 @@ const SignatureRequestModal = ({
         </SafeAreaView>
       </Modal>
 
-      {/* Date Picker Modal - Outside main modal */}
-      {showDatePicker && (
-        <DateTimePicker
-          value={signatureDueDate || new Date()}
-          mode="date"
-          display="default"
-          onChange={handleDateChange}
-          minimumDate={new Date()}
-        />
-      )}
     </>
   );
 };
