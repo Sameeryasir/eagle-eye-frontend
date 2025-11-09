@@ -512,14 +512,21 @@ const ChatScreen = ({ navigation }) => {
         // Subscribe to the new conversation's message channel
         const conversationId = newConversation.id;
         const conversationChannelName = `conversation-${conversationId}`;
+        const signatureChannelName = `conversation-signature-${conversationId}`;
         
         if (!subscribedChannelsRef.current.has(conversationId)) {
-          console.log('📡 [PUSHER] Auto-subscribing to new conversation channel:', conversationChannelName);
+          console.log('📡 [PUSHER] Auto-subscribing to new conversation channels:', conversationChannelName, 'and', signatureChannelName);
           
           const channel = pusher.subscribe(conversationChannelName);
+          const signatureChannel = pusher.subscribe(signatureChannelName);
           
           channel.bind('new-message', (messageData) => {
             handleNewMessage(conversationId, messageData);
+          });
+          
+          signatureChannel.bind('message-with-signature', (signatureData) => {
+            console.log('📝 [PUSHER] Signature message received for new conversation:', conversationId);
+            handleSignatureMessage(conversationId, signatureData);
           });
           
           subscribedChannelsRef.current.add(conversationId);

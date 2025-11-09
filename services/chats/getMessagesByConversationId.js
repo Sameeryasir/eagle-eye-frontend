@@ -10,7 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../../config/api';
 import refreshToken from '../utils/tokenRefresh';
 
-export async function getMessagesByConversationId(conversationId, page = 1, limit = 20) {
+export async function getMessagesByConversationId(conversationId, page = 1, limit = 20, { signal } = {}) {
   let token = await AsyncStorage.getItem('token');
   let refreshTokenValue = await AsyncStorage.getItem('refreshToken');
   

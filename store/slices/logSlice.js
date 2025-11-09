@@ -136,6 +136,10 @@ const logSlice = createSlice({
     setCurrentProjectId: (state, action) => {
       state.currentProjectId = action.payload;
     },
+    
+    // --- Reset Actions (MCP Context 7) ---
+    // Business Rule: Reset entire logs state to initial state on logout
+    resetLogsState: () => initialState,
   },
   extraReducers: (builder) => {
     builder
@@ -175,7 +179,7 @@ const logSlice = createSlice({
 
 // --- Export Actions (MCP Context 7) ---
 // Business Rule: Export all actions for use in components
-export const { clearLogs, clearError, setCurrentProjectId } = logSlice.actions;
+export const { clearLogs, clearError, setCurrentProjectId, resetLogsState } = logSlice.actions;
 
 // --- Export Selectors (MCP Context 7) ---
 // Business Rule: Provide selectors for easy state access

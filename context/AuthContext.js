@@ -2,8 +2,9 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setupNotifications, clearExpoToken } from '../services/notifications/expoTokenService';
 import { saveTokenToServer, removeTokenFromServer } from '../services/notifications/sendTokenToServer';
-// Import cache clearing function for projects (MCP Context 7)
-import { clearProjectsCache } from '../store/slices/projectSlice';
+// --- Clear All Redux Stores on Logout (MCP Context 7) ---
+// Business Rule: Clear all Redux state when user logs out to prevent data leakage
+import { clearAllReduxStores } from '../store/utils/clearAllReduxStores';
 
 const AuthContext = createContext();
 
@@ -75,6 +76,12 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (userData) => {
     try {
+      // --- Clear Redux State Before Login (MCP Context 7) ---
+      // Business Rule: Clear all Redux state when user logs in to ensure fresh data for new user
+      // This prevents any leftover data from previous sessions
+      console.log('🧹 Clearing Redux stores before login...');
+      await clearAllReduxStores();
+      
       // Store tokens
       await AsyncStorage.setItem('token', userData.access_token);
       await AsyncStorage.setItem('refreshToken', userData.refresh_token);
@@ -117,6 +124,7 @@ export const AuthProvider = ({ children }) => {
         role: userData.user?.role?.name,
         id: userData.user?.id?.toString()
       });
+      console.log('✅ Login successful, Redux stores cleared, ready for fresh data');
       // Navigation will be handled by the current screen
     } catch (error) {
       console.error('Login error:', error);
@@ -156,9 +164,10 @@ export const AuthProvider = ({ children }) => {
       // Clear Expo token from notification service
       await clearExpoToken();
 
-      // --- Clear Projects Cache (MCP Context 7) ---
-      // Clear cached project data when user logs out to prevent data leakage
-      await clearProjectsCache();
+      // --- Clear ALL Redux Stores and Caches (MCP Context 7) ---
+      // Business Rule: Clear all Redux state when user logs out to prevent data leakage between users
+      // This ensures one user's data doesn't show up for another user
+      await clearAllReduxStores();
 
       // Update state
       setIsAuthenticated(false);

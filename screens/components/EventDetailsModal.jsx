@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Modal, FlatList, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, FlatList } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import Toast from 'react-native-toast-message';
 import { useDispatch } from 'react-redux';
@@ -82,14 +82,26 @@ const EventDetailsModal = ({
     }
   }, [deleteError, onClose]);
 
+  const openAccessDeniedDialog = (message) => {
+    setAccessDeniedDialog({
+      visible: true,
+      title: 'Access Denied',
+      message,
+    });
+  };
+
+  const closeAccessDeniedDialog = () => {
+    setAccessDeniedDialog((prev) => ({
+      ...prev,
+      visible: false,
+    }));
+  };
+
   const handleUpdate = () => {
-    // Check if user is Employee and show alert
-    if (userRole === 'Employee') {
-      Alert.alert(
-        'Access Denied',
-        'Employees cannot update events.',
-        [{ text: 'OK' }]
-      );
+    // Check if user role is not allowed (Employee or Manager)
+    if (userRole === 'Employee' || userRole === 'Manager') {
+      const restrictedRoleLabel = userRole === 'Employee' ? 'Employees' : 'Managers';
+      openAccessDeniedDialog(`${restrictedRoleLabel} cannot update events.`);
       return;
     }
     setShowUpdateModal(true);
@@ -108,13 +120,10 @@ const EventDetailsModal = ({
   };
 
   const handleDelete = () => {
-    // Check if user is Employee and show alert
-    if (userRole === 'Employee') {
-      Alert.alert(
-        'Access Denied',
-        'Employees cannot delete events.',
-        [{ text: 'OK' }]
-      );
+    // Check if user role is not allowed (Employee or Manager)
+    if (userRole === 'Employee' || userRole === 'Manager') {
+      const restrictedRoleLabel = userRole === 'Employee' ? 'Employees' : 'Managers';
+      openAccessDeniedDialog(`${restrictedRoleLabel} cannot delete events.`);
       return;
     }
     setDeleteDialogVisible(true);
@@ -563,6 +572,13 @@ const EventDetailsModal = ({
         </View>
       </View>
     </Modal>
+
+    <AccessDeniedDialog
+      visible={accessDeniedDialog.visible}
+      title={accessDeniedDialog.title || 'Access Denied'}
+      message={accessDeniedDialog.message || 'You do not have permission to perform this action.'}
+      onClose={closeAccessDeniedDialog}
+    />
     </>
   );
 };

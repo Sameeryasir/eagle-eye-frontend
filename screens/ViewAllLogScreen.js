@@ -1012,7 +1012,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   };
 
   // Separate Manager Card Component
-  const ManagerLogCard = ({ log, projectName, selectedProjectFilter }) => (
+  const ManagerLogCard = ({ log, projectName, selectedProjectFilter, userRole }) => (
     <TouchableOpacity
       onPress={() => {
         console.log("ManagerLogCard - Log tapped:", log);
@@ -1143,99 +1143,102 @@ const ViewAllLogScreen = ({ route, navigation }) => {
               </View>
             ) : null}
 
-            <Menu
-              rendererProps={{
-                placement: "bottom-end",
-                anchorStyle: { marginRight: 0 },
-                triggerStyle: { marginRight: 0 },
-              }}
-            >
-              <MenuTrigger>
-                <View style={{
-                  activeOpacity: 1,
-                  marginTop: 0
-                }}>
-                  <Ionicons
-                    name="ellipsis-vertical"
-                    size={Math.min(16, screenWidth * 0.04)}
-                    color="#6b7280"
-                  />
-                </View>
-              </MenuTrigger>
-              <MenuOptions
-                customStyles={{
-                  optionsContainer: {
-                    backgroundColor: "white",
-                    borderRadius: Math.min(8, screenWidth * 0.02),
-                    padding: Math.min(8, screenWidth * 0.02),
-                    width: Math.min(120, screenWidth * 0.3),
-                    marginRight: -40,
-                    marginTop: 15,
-                    shadowColor: "#000",
-                    shadowOpacity: 0.15,
-                    shadowRadius: 6,
-                    shadowOffset: { width: 0, height: 3 },
-                    elevation: 3,
-                  },
+            {/* Hide menu for Owner role */}
+            {userRole !== "Owner" && (
+              <Menu
+                rendererProps={{
+                  placement: "bottom-end",
+                  anchorStyle: { marginRight: 0 },
+                  triggerStyle: { marginRight: 0 },
                 }}
               >
-                <MenuOption
-                  onSelect={() => handleUpdate(log)}
+                <MenuTrigger>
+                  <View style={{
+                    activeOpacity: 1,
+                    marginTop: 0
+                  }}>
+                    <Ionicons
+                      name="ellipsis-vertical"
+                      size={Math.min(16, screenWidth * 0.04)}
+                      color="#6b7280"
+                    />
+                  </View>
+                </MenuTrigger>
+                <MenuOptions
                   customStyles={{
-                    optionWrapper: {
-                      flexDirection: "row",
-                      alignItems: "center",
-                      paddingVertical: Math.min(10, screenHeight * 0.012),
-                      paddingHorizontal: Math.min(16, screenWidth * 0.04),
-                      borderRadius: 4,
+                    optionsContainer: {
+                      backgroundColor: "white",
+                      borderRadius: Math.min(8, screenWidth * 0.02),
+                      padding: Math.min(8, screenWidth * 0.02),
+                      width: Math.min(120, screenWidth * 0.3),
+                      marginRight: -40,
+                      marginTop: 15,
+                      shadowColor: "#000",
+                      shadowOpacity: 0.15,
+                      shadowRadius: 6,
+                      shadowOffset: { width: 0, height: 3 },
+                      elevation: 3,
                     },
                   }}
                 >
-                  <Ionicons name="create-outline" size={Math.min(18, screenWidth * 0.045)} color="#000" />
-                  <Text
-                    style={{
-                      marginLeft: 10,
-                      fontSize: Math.min(14, screenWidth * 0.035),
-                      fontWeight: "600",
-                      color: "black",
+                  <MenuOption
+                    onSelect={() => handleUpdate(log)}
+                    customStyles={{
+                      optionWrapper: {
+                        flexDirection: "row",
+                        alignItems: "center",
+                        paddingVertical: Math.min(10, screenHeight * 0.012),
+                        paddingHorizontal: Math.min(16, screenWidth * 0.04),
+                        borderRadius: 4,
+                      },
                     }}
                   >
-                    Update
-                  </Text>
-                </MenuOption>
-                <MenuOption
-                  onSelect={() => handleDelete(log)}
-                  customStyles={{
-                    optionWrapper: {
-                      flexDirection: "row",
-                      alignItems: "center",
-                      paddingVertical: Math.min(10, screenHeight * 0.012),
-                      paddingHorizontal: Math.min(16, screenWidth * 0.04),
-                      borderRadius: 4,
-                    },
-                  }}
-                >
-                  <Ionicons name="trash-outline" size={Math.min(18, screenWidth * 0.045)} color="#dc3545" />
-                  <Text
-                    style={{
-                      marginLeft: 10,
-                      fontSize: Math.min(14, screenWidth * 0.035),
-                      fontWeight: "600",
-                      color: "#dc3545",
+                    <Ionicons name="create-outline" size={Math.min(18, screenWidth * 0.045)} color="#000" />
+                    <Text
+                      style={{
+                        marginLeft: 10,
+                        fontSize: Math.min(14, screenWidth * 0.035),
+                        fontWeight: "600",
+                        color: "black",
+                      }}
+                    >
+                      Update
+                    </Text>
+                  </MenuOption>
+                  <MenuOption
+                    onSelect={() => handleDelete(log)}
+                    customStyles={{
+                      optionWrapper: {
+                        flexDirection: "row",
+                        alignItems: "center",
+                        paddingVertical: Math.min(10, screenHeight * 0.012),
+                        paddingHorizontal: Math.min(16, screenWidth * 0.04),
+                        borderRadius: 4,
+                      },
                     }}
                   >
-                    Delete
-                  </Text>
-                </MenuOption>
-              </MenuOptions>
-            </Menu>
+                    <Ionicons name="trash-outline" size={Math.min(18, screenWidth * 0.045)} color="#dc3545" />
+                    <Text
+                      style={{
+                        marginLeft: 10,
+                        fontSize: Math.min(14, screenWidth * 0.035),
+                        fontWeight: "600",
+                        color: "#dc3545",
+                      }}
+                    >
+                      Delete
+                    </Text>
+                  </MenuOption>
+                </MenuOptions>
+              </Menu>
+            )}
           </View>
         </View>
       </View>
     </TouchableOpacity>
   );
 
-  const LogCard = ({ log, projectName, selectedProjectFilter }) => (
+  const LogCard = ({ log, projectName, selectedProjectFilter, userRole }) => (
     <TouchableOpacity
       onPress={() => {
         console.log("LogCard - Log tapped:", log);
@@ -1367,92 +1370,95 @@ const ViewAllLogScreen = ({ route, navigation }) => {
               </View>
             ) : null}
 
-            <Menu
-              rendererProps={{
-                placement: "bottom-end",
-                anchorStyle: { marginRight: 0 },
-                triggerStyle: { marginRight: 0 },
-              }}
-            >
-              <MenuTrigger>
-                <View style={{
-                  activeOpacity: 1,
-                  marginTop: 0
-                }}>
-                  <Ionicons
-                    name="ellipsis-vertical"
-                    size={Math.min(16, screenWidth * 0.04)}
-                    color="#6b7280"
-                  />
-                </View>
-              </MenuTrigger>
-              <MenuOptions
-                customStyles={{
-                  optionsContainer: {
-                    backgroundColor: "white",
-                    borderRadius: Math.min(8, screenWidth * 0.02),
-                    padding: Math.min(8, screenWidth * 0.02),
-                    width: Math.min(120, screenWidth * 0.3),
-                    marginRight: -40,
-                    marginTop: 15,
-                    shadowColor: "#000",
-                    shadowOpacity: 0.15,
-                    shadowRadius: 6,
-                    shadowOffset: { width: 0, height: 3 },
-                    elevation: 3,
-                  },
+            {/* Hide menu for Owner role */}
+            {userRole !== "Owner" && (
+              <Menu
+                rendererProps={{
+                  placement: "bottom-end",
+                  anchorStyle: { marginRight: 0 },
+                  triggerStyle: { marginRight: 0 },
                 }}
               >
-                <MenuOption
-                  onSelect={() => handleUpdate(log)}
+                <MenuTrigger>
+                  <View style={{
+                    activeOpacity: 1,
+                    marginTop: 0
+                  }}>
+                    <Ionicons
+                      name="ellipsis-vertical"
+                      size={Math.min(16, screenWidth * 0.04)}
+                      color="#6b7280"
+                    />
+                  </View>
+                </MenuTrigger>
+                <MenuOptions
                   customStyles={{
-                    optionWrapper: {
-                      flexDirection: "row",
-                      alignItems: "center",
-                      paddingVertical: Math.min(10, screenHeight * 0.012),
-                      paddingHorizontal: Math.min(16, screenWidth * 0.04),
-                      borderRadius: 4,
+                    optionsContainer: {
+                      backgroundColor: "white",
+                      borderRadius: Math.min(8, screenWidth * 0.02),
+                      padding: Math.min(8, screenWidth * 0.02),
+                      width: Math.min(120, screenWidth * 0.3),
+                      marginRight: -40,
+                      marginTop: 15,
+                      shadowColor: "#000",
+                      shadowOpacity: 0.15,
+                      shadowRadius: 6,
+                      shadowOffset: { width: 0, height: 3 },
+                      elevation: 3,
                     },
                   }}
                 >
-                  <Ionicons name="create-outline" size={Math.min(18, screenWidth * 0.045)} color="#000" />
-                  <Text
-                    style={{
-                      marginLeft: 10,
-                      fontSize: Math.min(14, screenWidth * 0.035),
-                      fontWeight: "600",
-                      color: "black",
+                  <MenuOption
+                    onSelect={() => handleUpdate(log)}
+                    customStyles={{
+                      optionWrapper: {
+                        flexDirection: "row",
+                        alignItems: "center",
+                        paddingVertical: Math.min(10, screenHeight * 0.012),
+                        paddingHorizontal: Math.min(16, screenWidth * 0.04),
+                        borderRadius: 4,
+                      },
                     }}
                   >
-                    Update
-                  </Text>
-                </MenuOption>
-                <MenuOption
-                  onSelect={() => handleDelete(log)}
-                  customStyles={{
-                    optionWrapper: {
-                      flexDirection: "row",
-                      alignItems: "center",
-                      paddingVertical: Math.min(10, screenHeight * 0.012),
-                      paddingHorizontal: Math.min(16, screenWidth * 0.04),
-                      borderRadius: 4,
-                    },
-                  }}
-                >
-                  <Ionicons name="trash-outline" size={Math.min(18, screenWidth * 0.045)} color="#dc3545" />
-                  <Text
-                    style={{
-                      marginLeft: 10,
-                      fontSize: Math.min(14, screenWidth * 0.035),
-                      fontWeight: "600",
-                      color: "#dc3545",
+                    <Ionicons name="create-outline" size={Math.min(18, screenWidth * 0.045)} color="#000" />
+                    <Text
+                      style={{
+                        marginLeft: 10,
+                        fontSize: Math.min(14, screenWidth * 0.035),
+                        fontWeight: "600",
+                        color: "black",
+                      }}
+                    >
+                      Update
+                    </Text>
+                  </MenuOption>
+                  <MenuOption
+                    onSelect={() => handleDelete(log)}
+                    customStyles={{
+                      optionWrapper: {
+                        flexDirection: "row",
+                        alignItems: "center",
+                        paddingVertical: Math.min(10, screenHeight * 0.012),
+                        paddingHorizontal: Math.min(16, screenWidth * 0.04),
+                        borderRadius: 4,
+                      },
                     }}
                   >
-                    Delete
-                  </Text>
-                </MenuOption>
-              </MenuOptions>
-            </Menu>
+                    <Ionicons name="trash-outline" size={Math.min(18, screenWidth * 0.045)} color="#dc3545" />
+                    <Text
+                      style={{
+                        marginLeft: 10,
+                        fontSize: Math.min(14, screenWidth * 0.035),
+                        fontWeight: "600",
+                        color: "#dc3545",
+                      }}
+                    >
+                      Delete
+                    </Text>
+                  </MenuOption>
+                </MenuOptions>
+              </Menu>
+            )}
           </View>
         </View>
       </View>
@@ -1860,9 +1866,9 @@ const ViewAllLogScreen = ({ route, navigation }) => {
           {filteredLogs.map((log, index) => (
             <View key={`log-${log.id}`} style={{ marginBottom: index < filteredLogs.length - 1 ? 20 : 0 }}>
               {userRole === "Manager" || userRole === "Owner" ? (
-                <ManagerLogCard log={log} projectName={projectName} selectedProjectFilter={selectedProjectFilter} />
+                <ManagerLogCard log={log} projectName={projectName} selectedProjectFilter={selectedProjectFilter} userRole={userRole} />
               ) : (
-                <LogCard log={log} projectName={projectName} selectedProjectFilter={selectedProjectFilter} />
+                <LogCard log={log} projectName={projectName} selectedProjectFilter={selectedProjectFilter} userRole={userRole} />
               )}
             </View>
           ))}

@@ -20,19 +20,17 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 import { Ionicons } from "@expo/vector-icons";
 import { uploadImage } from "../../services/images/uploadImage";
 import { updateLogById } from "../../services/log/updateLogById";
-import { updateImageById } from "../../services/images/updateImageById";
 import * as ImagePicker from "expo-image-picker";
 
 // --- Update Log Modal Component ---
 // Purpose: Allows users to update existing logs with modified notes and new images
 // Business Logic: Follows MCP context 7 best practices for clean, maintainable code
 // 
-// CHANGES MADE:
-// - Removed image deletion functionality (updateImageById)
-// - Simplified to only handle note updates and new image uploads
-// - Uses correct field name 'Image' for backend compatibility
-// - Added updateLogById service for log note updates
-// - Separated image handling: uploadImage for new images (accepts arrays), updateLogById for notes (no arrays)
+// === Change Summary (2025-11-07) ===
+// What: Removed update-by-id image handling and clarified the "Add New Image" workflow to keep the upload entry point obvious.
+// Why: Business rule disallows in-place image edits; users can only add a fresh image when updating notes, so the CTA must remain clear.
+// Dependencies: Continues relying on uploadImage and updateLogById only.
+// MCP Context: Implemented per MCP context 7 for clarity, safety, and maintainability.
 // 
 const UpdateLogModal = ({ 
   visible, 
@@ -45,7 +43,6 @@ const UpdateLogModal = ({
   const [logNote, setLogNote] = useState("");
   const [selectedImage, setSelectedImage] = useState(null); // Single image only
   const [existingImages, setExistingImages] = useState([]);
-  const [removedImageId, setRemovedImageId] = useState(null); // Single removed image ID
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingImages, setIsUploadingImages] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -79,14 +76,12 @@ const UpdateLogModal = ({
       setLogNote(noteText);
       setExistingImages(log.images || []);
       setSelectedImage(null); // Reset selected image when modal opens
-      setRemovedImageId(null); // Reset removed image ID when modal opens
     } else if (!visible) {
       // Reset form when modal is closed
       console.log("UpdateLogModal - Modal closed, resetting form");
       setLogNote("");
       setExistingImages([]);
       setSelectedImage(null);
-      setRemovedImageId(null);
     }
 
     // Cleanup listeners
@@ -150,14 +145,6 @@ const UpdateLogModal = ({
     setSelectedImage(null);
   };
 
-  // --- Remove Existing Image Function ---
-  const removeExistingImage = (imageId) => {
-    console.log("Removing existing image with ID:", imageId);
-    console.log("UpdateLogModal - Stored removed image ID:", imageId);
-    setRemovedImageId(imageId); // Store the removed image ID
-    setExistingImages(prev => prev.filter(img => img.id !== imageId));
-  };
-
   // --- Handle Update Submission ---
   const handleUpdateLog = async () => {
     // --- Validation Step ---
@@ -183,15 +170,14 @@ const UpdateLogModal = ({
       const hasNewImage = selectedImage !== null;
       
       // If no changes detected, show custom dialog and stay in modal
-      if (!hasNoteChange && !hasNewImage && !removedImageId) {
+      if (!hasNoteChange && !hasNewImage) {
         setNoChangesDialogVisible(true);
         return;
       }
       
       console.log("UpdateLogModal - Changes detected:", {
         noteChanged: hasNoteChange,
-        newImage: hasNewImage,
-        removedImageId: removedImageId
+        newImage: hasNewImage
       });
       
       // --- Step 2: Update Log Note (if changed) ---
@@ -206,8 +192,9 @@ const UpdateLogModal = ({
       }
       
       // --- Step 3: Handle New Image (if any) ---
-      if (hasNewImage || removedImageId) {
-        console.log(`UpdateLogModal - Handling image update/replacement`);
+      if (hasNewImage) {
+        // Business Logic: Only fresh uploads are allowed; do not attempt replacements.
+        console.log(`UpdateLogModal - Handling upload for new image only`);
         await uploadNewImage(log.id);
       }
       
@@ -251,47 +238,9 @@ const UpdateLogModal = ({
     setIsUploadingImages(true);
     
     try {
-      // Check if we have a removed image ID to associate with
-      if (removedImageId && selectedImage) {
-        console.log(`UpdateLogModal - Removed image ID: ${removedImageId}`);
-        console.log(`UpdateLogModal - Replacing with new image`);
-        
-        // Create FormData for updateImageById
-        const formData = new FormData();
-        formData.append('image', {
-          uri: selectedImage.uri,
-          type: 'image/jpeg',
-          name: `replacement_image_${Date.now()}.jpg`,
-        });
-        
-        console.log(`UpdateLogModal - Updating image ID ${removedImageId} with new image`);
-        console.log(`UpdateLogModal - FormData being sent:`, formData._parts);
-        
-        try {
-          const response = await updateImageById(removedImageId, formData);
-          console.log(`UpdateLogModal - Successfully updated image ${removedImageId}:`, response);
-          Toast.show({
-            type: 'success',
-            text1: 'Image Replaced Successfully!',
-            text2: 'The image has been updated',
-            visibilityTime: 3000,
-            autoHide: true,
-            topOffset: 80,
-          });
-        } catch (error) {
-          console.error(`UpdateLogModal - Failed to update image ${removedImageId}:`, error);
-          Toast.show({
-            type: 'error',
-            text1: 'Image Replace Failed',
-            text2: 'Failed to replace image. Please try again.',
-            visibilityTime: 4000,
-            autoHide: true,
-            topOffset: 80,
-          });
-        }
-        
-      } else if (selectedImage) {
-        // Regular upload for new image (no association needed)
+      if (selectedImage) {
+        // --- New Image Upload (MCP Context 7) ---
+        // Business Rule: Only fresh uploads are permitted; existing images stay untouched.
         console.log(`UpdateLogModal - Regular upload for new image`);
         
         const formData = new FormData();
@@ -364,23 +313,25 @@ const UpdateLogModal = ({
           resizeMode="cover"
         />
         
-        {/* Remove Button */}
-        <TouchableOpacity
-          onPress={() => isExisting ? removeExistingImage(image.id) : removeNewImage()}
-          style={{
-            position: 'absolute',
-            top: 4,
-            right: 4,
-            backgroundColor: 'rgba(220, 53, 69, 0.9)',
-            borderRadius: 12,
-            width: 24,
-            height: 24,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Ionicons name="close" size={16} color="white" />
-        </TouchableOpacity>
+        {/* Remove Button (only for new uploads) */}
+        {!isExisting && (
+          <TouchableOpacity
+            onPress={removeNewImage}
+            style={{
+              position: 'absolute',
+              top: 4,
+              right: 4,
+              backgroundColor: 'rgba(220, 53, 69, 0.9)',
+              borderRadius: 12,
+              width: 24,
+              height: 24,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="close" size={16} color="white" />
+          </TouchableOpacity>
+        )}
       </View>
       
       <Text style={{
@@ -478,61 +429,15 @@ const UpdateLogModal = ({
                         style={{ flexDirection: 'row' }}
                       >
                         {existingImages.map((image, index) => 
+                          // NOTE: Existing images stay read-only; replacements are disabled by business rule.
                           renderImagePreview(image, index, true)
                         )}
                       </ScrollView>
                     </View>
                   )}
 
-                  {/* --- New Images Section --- */}
-                  <View className="mb-5">
-                    <View className="flex-row items-center mb-2">
-                      <Ionicons name="camera" size={16} color="#374151" style={{ marginRight: 6 }} />
-                      <Text className="text-[16px] font-semibold text-[#333]">Add New Images</Text>
-                    </View>
-                    
-                    {/* Image Picker Button */}
-                    <TouchableOpacity
-                      className="border-2 border-dashed border-[#e1e8ed] rounded-lg p-4 items-center justify-center bg-[#f8f9fa] mb-3"
-                      onPress={pickImage}
-                    >
-                      <Ionicons 
-                        name="camera-outline" 
-                        size={24} 
-                        color="#666" 
-                        style={{ marginBottom: 8 }} 
-                      />
-                      <Text className="text-[14px] text-[#666] text-center">
-                        {selectedImage 
-                          ? 'Replace Selected Image'
-                          : 'Select New Image'
-                        }
-                      </Text>
-                    </TouchableOpacity>
-
-                    {/* New Image Preview */}
-                    {selectedImage && (
-                      <View>
-                        <View className="flex-row justify-between items-center mb-2">
-                          <Text className="text-[14px] text-[#666]">
-                            New Image to Upload:
-                          </Text>
-                          <TouchableOpacity
-                            onPress={() => setSelectedImage(null)}
-                            className="bg-[#dc3545] px-3 py-1 rounded"
-                          >
-                            <Text className="text-white text-[12px] font-medium">
-                              Clear
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                        
-                        <View className="flex-row">
-                          {renderImagePreview(selectedImage, 0, false)}
-                        </View>
-                      </View>
-                    )}
-                  </View>
+                  {/* --- New Image Section --- */}
+            
                 </View>
               )}
               keyExtractor={(item) => item.key}

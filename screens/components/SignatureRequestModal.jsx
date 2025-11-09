@@ -1,3 +1,8 @@
+// --- Change Summary (MCP Context 7) ---
+// What: Updated signature notification payload to include assigned user, conversation type, and consistent fields expected by backend.
+// Why: Aligns signature notifications with the standard message notification schema so records persist in the database.
+// Dependencies: Relies on createMessageNotification service and assumes recipientUserId/conversationType props when available.
+
 import React, { useState } from 'react';
 import {
   View,
@@ -16,6 +21,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import Toast from 'react-native-toast-message';
 import NetInfo from '@react-native-community/netinfo';
 import { createSignature } from '../../services/chats/createSignature';
+import { createMessageNotification } from '../../services/inAppNotification/createMessageNotification';
+import { useAuth } from '../../context/AuthContext';
 
 // --- Signature Request Modal Component (MCP Context 7) ---
 // Business Rule: Reusable modal for requesting digital signatures in chat conversations
@@ -25,8 +32,14 @@ const SignatureRequestModal = ({
   onClose, 
   conversationId, 
   onSuccess,
-  onOfflineRequest 
+  onOfflineRequest,
+  recipientUserId, // Recipient user ID for private chat notifications
+  conversationType // Conversation classification passed from parent screen
 }) => {
+  // --- Get User Info for Notifications (MCP Context 7) ---
+  // Business Rule: Get current user info to send notifications
+  const { userInfo } = useAuth();
+  
   // --- State Management (MCP Context 7) ---
   // Business Rule: Track form data and loading states for signature request
   const [signatureTitle, setSignatureTitle] = useState('');
@@ -137,6 +150,40 @@ const SignatureRequestModal = ({
         const result = await createSignature(conversationId, signatureData);
         
         console.log('Signature request created successfully:', result);
+        
+        // --- Send Notification for Signature Request (MCP Context 7) ---
+        // Business Rule: Notify other user when signature form is created
+        // Why: Keep users informed about new signature requests
+        try {
+          if (!recipientUserId) {
+            console.log('⚠️ [SIGNATURE] recipientUserId missing - skipping notification payload build');
+          } else {
+            const fromUserName = `${userInfo?.firstName || ''} ${userInfo?.lastName || ''}`.trim() || 'Unknown User';
+            const signatureTitleText = signatureData.title || 'Contract for Signature';
+
+            // --- Build Notification Payload (MCP Context 7) ---
+            // Business Rule: Match requested schema exactly so backend persists record.
+            const notificationData = {
+              title: 'New signature request',
+              message: `Signature request: ${signatureTitleText}`,
+              conversationId: Number(conversationId),
+              fromUserName,
+              assignedToUserId: Number(recipientUserId),
+              conversationType: 'private'
+            };
+
+            console.log('🔔 [SIGNATURE] Sending notification for signature request:', JSON.stringify(notificationData, null, 2));
+            console.log('📤 [SIGNATURE] Notification payload to DB:', {
+              ...notificationData,
+              endpoint: '/users-notifications/message'
+            });
+            await createMessageNotification(notificationData);
+            console.log('✅ [SIGNATURE] Notification sent successfully for signature request');
+          }
+        } catch (notificationError) {
+          console.error('❌ [SIGNATURE] Error sending signature notification:', notificationError);
+          // Don't throw error - signature was already created successfully
+        }
         
         // Show success message
         Toast.show({

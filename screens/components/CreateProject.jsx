@@ -17,6 +17,11 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+// === Change Summary (2025-11-07) ===
+// What: Matched the top safe-area strip to the modal header color so users don't see a white band above the sheet.
+// Why: Prevents a distracting flash of white behind the status bar, keeping the create-project experience seamless (MCP context 7 UX polish).
+// Dependencies: None; reuses existing layout structure.
+
 // --- Redux Integration (MCP Context 7) ---
 // Import Redux hooks and actions for centralized project creation
 import { useDispatch } from 'react-redux';
@@ -211,8 +216,8 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
         padding: 0,
       }}
     >
-      {/* Transparent safe area for notch (MCP Context 7) */}
-      <View style={{ height: insets.top, backgroundColor: 'transparent' }} />
+      {/* --- Safe Area Overlay (MCP Context 7) --- */}
+      {/* NOTE: Keep status bar strip black so the header blends without a white band. */}
       
       {/* Main content container */}
       <View 
@@ -323,7 +328,7 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
       </View>
 
       {/* Fixed Action Button - Always positioned at bottom - Responsive sizing */}
-      <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200">
+      <View className="absolute bottom-0 left-0 right-0 bg-white">
         <View className={`${isVerySmallScreen ? 'px-2' : 'px-5'} pt-4 items-center ${isVerySmallScreen ? 'pb-3' : isSmallScreen ? 'pb-4' : 'pb-6'}`}>
           <TouchableOpacity
             className={`w-full ${isVerySmallScreen ? 'max-w-[260px]' : 'max-w-[280px]'} bg-black rounded-lg ${isVerySmallScreen ? 'p-3' : 'p-4'} items-center justify-center`}

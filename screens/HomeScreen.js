@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -645,10 +645,14 @@ function HomeScreen({ navigation, route }) {
   );
 
   const renderContent = () => {
-    // Simple logic: Only render FlatList when we have data or an error
-    if (isLoading || (!error && projects.length === 0)) {
+    // Only return null if still loading - let FlatList handle empty state
+    if (isLoading) {
       return null;
     }
+
+    // --- Simple Fix: When empty, ensure FlatList is scrollable for easy pull-to-refresh (MCP Context 7) ---
+    // Business Rule: Empty list must allow smooth pull-to-refresh on first swipe
+    const isEmpty = filteredProjects.length === 0;
 
     return (
       <FlatList
@@ -656,7 +660,15 @@ function HomeScreen({ navigation, route }) {
         key={numColumns}
         numColumns={numColumns}
         keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
+        // --- Simple Solution: Use flexGrow when empty to make list scrollable (MCP Context 7) ---
+        // This ensures users can pull-to-refresh smoothly without multiple swipes
+        contentContainerStyle={
+          isEmpty
+            ? { flexGrow: 1, paddingHorizontal: 20, paddingBottom: 100 }
+            : { paddingHorizontal: 20, paddingBottom: 100 }
+        }
+        scrollEnabled={true}
+        bounces={true}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         refreshControl={
@@ -672,7 +684,16 @@ function HomeScreen({ navigation, route }) {
         }
         ListHeaderComponentStyle={{ marginHorizontal: -20 }}
         ListEmptyComponent={() => (
-          <View className="flex-1 justify-center items-center p-5 min-h-[400px]">
+          // --- Simple Empty Component: Takes full height to enable smooth scrolling (MCP Context 7) ---
+          <View 
+            style={{ 
+              flex: 1, 
+              justifyContent: 'center', 
+              alignItems: 'center',
+              paddingVertical: 40,
+              minHeight: screenHeight * 0.7 // Simple: 70% of screen height for easy pull-to-refresh
+            }}
+          >
             {error ? (
               <>
                 <Text className="text-[16px] text-[#dc3545] text-center mb-4 font-semibold">
@@ -706,7 +727,7 @@ function HomeScreen({ navigation, route }) {
   return (
     <View className="flex-1 bg-white">
       {/* Content (Header fixed; search bar scrolls inside list) */}
-      {isLoading || (!error && projects.length === 0) ? (
+      {isLoading ? (
         <View className="flex-1 justify-center items-center p-5 min-h-[100px]">
           <Loader size="large" color="#000000" text="Loading Projects" />
         </View>

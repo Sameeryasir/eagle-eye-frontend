@@ -8,11 +8,9 @@ import { useAuth } from '../../context/AuthContext';
 import { logoutUser } from '../../services/auth/Logout';
 
 // --- Redux Integration (MCP Context 7) ---
-// Import Redux hooks to clear ALL states and caches on logout
-import { useDispatch } from 'react-redux';
-import { resetProjectsState, clearProjectsCache } from '../../store/slices/projectSlice';
-import { resetTasksState } from '../../store/slices/taskSlice';
-import { clearLogs, clearError as clearLogsError } from '../../store/slices/logSlice';
+// Import utility to clear ALL Redux states and caches on logout
+// Business Rule: Use centralized utility to ensure consistent logout behavior
+import { clearAllReduxStores } from '../../store/utils/clearAllReduxStores';
 
 const { width } = Dimensions.get('window');
 
@@ -27,9 +25,6 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
   const [activeMenuItem, setActiveMenuItem] = React.useState(null); // Track which menu item is active (no auto-selection)
   const navigation = useNavigation();
   const { logout } = useAuth();
-  
-  // --- Redux Integration (MCP Context 7) ---
-  const dispatch = useDispatch();
 
   React.useEffect(() => {
     if (isVisible) {
@@ -119,47 +114,49 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
       setShowLogoutDialog(false);
       onClose();
       
-      // --- Clear ALL Redux States and Caches (MCP Context 7) ---
-      // Clear all project data, errors, loading states, and caches
-      dispatch(resetProjectsState());
-      await clearProjectsCache();
+      // --- Navigate to SignIn FIRST (MCP Context 7) ---
+      // Business Rule: Navigate immediately to prevent showing empty state on current screen
+      // This prevents the "No projects" flash that looks like a bug
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'SignIn' }],
+      });
       
-      // Clear all task data, errors, and loading states
-      dispatch(resetTasksState());
+      // --- Clear ALL Redux States and Caches in Background (MCP Context 7) ---
+      // Business Rule: Clear all Redux state when user logs out to prevent data leakage between users
+      // This ensures one user's data doesn't show up for another user
+      // Do this AFTER navigation so user doesn't see empty state
+      clearAllReduxStores().catch(error => {
+        console.error('Error clearing Redux stores:', error);
+      });
       
-     
-      // Clear all log data and errors
-      dispatch(clearLogs());
-      dispatch(clearLogsError());
-      
-      // --- Clear AsyncStorage User Data (MCP Context 7) ---
+      // --- Clear AsyncStorage User Data in Background (MCP Context 7) ---
       // Clear user-related data from AsyncStorage
-      await AsyncStorage.multiRemove([
+      AsyncStorage.multiRemove([
         'userFirstName',
         'userLastName',
         'userRole',
         'authToken',
         'refreshToken',
         'userId'
-      ]);
-      
-      console.log('✅ All Redux states, caches, and user data cleared on logout');
-      
-      // --- Call Server Logout Service (MCP Context 7) ---
-      // Clear server-side caches and invalidate session
-      const logoutResult = await logoutUser();
-      console.log('🖥️ Server logout result:', logoutResult.message);
-      
-      // Navigate to SignIn screen immediately
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'SignIn' }],
+      ]).catch(error => {
+        console.error('Error clearing AsyncStorage:', error);
       });
       
-      // Handle AuthContext logout in background (if needed)
+      // --- Call Server Logout Service in Background (MCP Context 7) ---
+      // Clear server-side caches and invalidate session
+      logoutUser().then(result => {
+        console.log('🖥️ Server logout result:', result.message);
+      }).catch(error => {
+        console.error('Error calling server logout:', error);
+      });
+      
+      // Handle AuthContext logout in background
       logout().catch(error => {
         console.error('AuthContext logout error:', error);
       });
+      
+      console.log('✅ Logout initiated - navigation complete, cleanup in progress');
       
     } catch (error) {
       console.error('Error during logout:', error);

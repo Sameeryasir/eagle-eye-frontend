@@ -29,6 +29,11 @@ import { getEmployeesToAssignTask } from '../../services/employees/getEmployeesO
 import { taskAssignement } from '../../services/inAppNotification/taskAssignement';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// === Change Summary (2025-11-07) ===
+// What: Removed all previous-assignee notifications (API + Redux) when reassigning tasks.
+// Why: Business rule update prevents duplicates and keeps reassignment history clean for MCP context 7 workflows.
+// Dependencies: No new dependencies; relies on existing new-assignee notification path only.
+
 export default function UpdateTaskModal({ 
   visible, 
   onClose, 
@@ -509,44 +514,6 @@ export default function UpdateTaskModal({
               }
             }
 
-            // Send notification to previous assignee if task was reassigned
-            if (originalTask.assignedTo?.id && originalTask.assignedTo.id !== currentTask.assignedTo?.id) {
-              const previousAssigneeNotification = {
-                type: 'task_reassignment',
-                title: 'Task Reassigned',
-                message: `Task "${currentTask.title}" has been reassigned to someone else`,
-                taskId: task.id,
-                projectId: projectId,
-                fromUserId: currentUserId,
-                fromUserName: currentUserName,
-                assignedToUserId: originalTask.assignedTo.id,
-                priority: currentTask.priority || 'medium'
-              };
-              
-              console.log('🔔 PREVIOUS ASSIGNEE NOTIFICATION BEING STORED IN REDUX:', previousAssigneeNotification);
-              dispatch(addNotification(previousAssigneeNotification));
-              
-              // --- Call API to send notification to previous assignee ---
-              try {
-                const apiNotificationData = {
-                  title: 'Task Reassigned',
-                  message: `Task "${task.title || task.name}" has been reassigned to someone else`,
-                  assignedToUserId: Number(originalTask.assignedTo.id),
-                  fromUserName: currentUserName,
-                  priority: currentTask.priority,
-                  projectName: projectName,
-                  taskId: task.id,
-                  taskName: task.title || task.name
-                };
-                
-                console.log('🔔 CALLING API FOR PREVIOUS ASSIGNEE NOTIFICATION:', apiNotificationData);
-                await taskAssignement(apiNotificationData);
-                console.log('✅ API NOTIFICATION SENT SUCCESSFULLY');
-              } catch (apiError) {
-                console.error('❌ Error sending API notification:', apiError);
-                // Don't throw error - Redux notification was already sent
-              }
-            }
           } catch (error) {
             console.error('Error creating notifications:', error);
           }

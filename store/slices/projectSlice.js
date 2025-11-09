@@ -11,42 +11,74 @@ import { deleteProjectById } from '../../services/projects/deleteProjectById';
 
 // --- Cache Configuration (MCP Context 7) ---
 // Cache settings for offline-first approach and performance optimization
-const CACHE_KEY = 'projects_cache';
+// User-specific cache to prevent data leakage between users
+const CACHE_KEY_PREFIX = 'projects_cache_';
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes cache time-to-live
 
 // --- Cache Helper Functions (MCP Context 7) ---
-// Utility functions for managing cached project data
+// Utility functions for managing cached project data with user association
 
-// Store projects data in cache with timestamp
+// Get user-specific cache key
+const getCacheKey = async () => {
+  try {
+    const userId = await AsyncStorage.getItem('userId');
+    if (!userId) {
+      console.warn('⚠️ No userId found, cannot create user-specific cache key');
+      return null;
+    }
+    return `${CACHE_KEY_PREFIX}${userId}`;
+  } catch (error) {
+    console.error('Error getting cache key:', error);
+    return null;
+  }
+};
+
+// Store projects data in cache with timestamp (user-specific)
 const storeProjectsCache = async (projects) => {
   try {
+    const cacheKey = await getCacheKey();
+    if (!cacheKey) return; // Skip caching if no user ID
+    
     const cacheData = {
       data: projects,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      userId: await AsyncStorage.getItem('userId') // Store userId for validation
     };
-    await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
-    console.log('💾 Projects cached successfully');
+    await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
+    console.log('💾 Projects cached successfully for user');
   } catch (error) {
     console.error('Error storing projects cache:', error);
   }
 };
 
-// Retrieve projects data from cache if still valid
+// Retrieve projects data from cache if still valid (user-specific)
 const getProjectsCache = async () => {
   try {
-    const cachedData = await AsyncStorage.getItem(CACHE_KEY);
+    const cacheKey = await getCacheKey();
+    if (!cacheKey) return null;
+    
+    const cachedData = await AsyncStorage.getItem(cacheKey);
     if (!cachedData) return null;
 
-    const { data, timestamp } = JSON.parse(cachedData);
+    const { data, timestamp, userId } = JSON.parse(cachedData);
+    
+    // Validate that cache belongs to current user
+    const currentUserId = await AsyncStorage.getItem('userId');
+    if (userId !== currentUserId) {
+      console.log('⚠️ Cache belongs to different user, clearing...');
+      await AsyncStorage.removeItem(cacheKey);
+      return null;
+    }
+    
     const isExpired = Date.now() - timestamp > CACHE_TTL;
     
     if (isExpired) {
       console.log('⏰ Projects cache expired, removing...');
-      await AsyncStorage.removeItem(CACHE_KEY);
+      await AsyncStorage.removeItem(cacheKey);
       return null;
     }
 
-    console.log('📱 Using cached projects data');
+    console.log('📱 Using cached projects data for current user');
     return data;
   } catch (error) {
     console.error('Error retrieving projects cache:', error);
@@ -54,11 +86,27 @@ const getProjectsCache = async () => {
   }
 };
 
-// Clear projects cache (used when data is modified)
+// Clear projects cache for current user (used when data is modified)
 export const clearProjectsCache = async () => {
   try {
-    await AsyncStorage.removeItem(CACHE_KEY);
-    console.log('🗑️ Projects cache cleared');
+    const cacheKey = await getCacheKey();
+    if (cacheKey) {
+      await AsyncStorage.removeItem(cacheKey);
+      console.log('🗑️ Projects cache cleared for current user');
+    }
+    
+    // Also clear any old cache keys (cleanup for all users)
+    // This ensures no leftover cache from previous users
+    try {
+      const allKeys = await AsyncStorage.getAllKeys();
+      const oldCacheKeys = allKeys.filter(key => key.startsWith(CACHE_KEY_PREFIX));
+      if (oldCacheKeys.length > 0) {
+        await AsyncStorage.multiRemove(oldCacheKeys);
+        console.log('🗑️ Cleared old project caches:', oldCacheKeys.length);
+      }
+    } catch (error) {
+      console.error('Error clearing old caches:', error);
+    }
   } catch (error) {
     console.error('Error clearing projects cache:', error);
   }

@@ -51,6 +51,12 @@ import CustomBottomNav from "./components/CustomBottomNav";
 import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
 
+// === Change Summary (2025-11-07) ===
+// What: Added a projectId validation guard to render a clear "No project selected" message.
+// Why: Ensures users understand when navigation does not provide a project context, preventing blank states.
+// Dependencies: Relies on existing WidgetScreen state only; no new imports.
+// MCP Context: Implemented following MCP context 7 best practices for clarity and maintainability.
+
 
 function WidgetScreen({ navigation, route }) {
   // --- Redux State (MCP Context 7) ---
@@ -76,6 +82,7 @@ function WidgetScreen({ navigation, route }) {
   const isFirstMount = useRef(true);
 
   const { projectId, projectName } = route.params || {};
+  const isProjectIdMissing = !projectId; // Explains: Track whether navigation failed to pass a project ID so we can show a clear message.
 
   // Load logs function using Redux (MCP Context 7)
   const loadLogs = async (projectId) => {
@@ -109,6 +116,14 @@ function WidgetScreen({ navigation, route }) {
         setIsInitialLoad(true);
       }
       
+      if (isProjectIdMissing) {
+        // --- Project Validation Guard (MCP Context 7) ---
+        // This guard prevents unnecessary network calls and surfaces a clear message when projectId is missing.
+        setIsInitialLoad(false); // Explains: Immediately stop the loading state so the user message can show.
+        setRefreshing(false); // Explains: Ensure pull-to-refresh animations stop if triggered without a project.
+        return;
+      }
+
       // Clear any previous errors
       dispatch(clearError());
       dispatch(clearLogError());
@@ -692,6 +707,18 @@ function WidgetScreen({ navigation, route }) {
           >
             <Text className="text-white text-[16px] font-semibold">Retry</Text>
           </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (isProjectIdMissing) {
+      // --- Missing Project ID Notice (MCP Context 7) ---
+      // Display a simple explanation so users know the project context is unavailable.
+      return (
+        <View className="flex-1 justify-center items-center p-5 min-h-[400px]">
+          <Text className="text-[16px] text-[#3155A1] text-center mb-4 font-medium">
+            No project selected. Please choose a project to continue.
+          </Text>
         </View>
       );
     }

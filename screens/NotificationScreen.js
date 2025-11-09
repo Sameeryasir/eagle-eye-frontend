@@ -166,10 +166,11 @@ export default function NotificationScreen() {
     // Navigate to UserChatScreen if message notification
     else if (notification.conversationId) {
       console.log('💬 Navigating to UserChatScreen from message notification with conversationId:', notification.conversationId);
+      const conversationType = notification.conversationType || notification.type || 'private'; // NOTE: Ensure chat screen knows if this is group vs private.
       navigation.navigate('UserChatScreen', {
         conversationId: notification.conversationId,
         userName: notification.fromUserName || 'User',
-        type: notification.conversationType,
+        type: conversationType,
       });
     }
   };

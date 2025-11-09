@@ -13,6 +13,13 @@ import CreateEventModal from "./components/CreateEventModal";
 import EventDetailsModal from "./components/EventDetailsModal";
 import PastDateDialog from "./components/PastDateDialog";
 import TaskDetailsModal from "./components/TaskDetailsModal";
+import AccessDeniedDialog from "./components/AccessDeniedDialog";
+
+// === Change Summary (2025-11-07) ===
+// What: Added access denied handling for Manager/Employee roles so they see a clear dialog when tapping the FAB.
+// Why: Align CalenderDetailScreen behaviour with week view rules and prevent silent failures for restricted roles.
+// Dependencies: Uses existing AccessDeniedDialog component; no new services required.
+// MCP Context: Implemented per MCP context 7 for clarity, explicit business-rule notes, and safe UX updates.
 
 const { width, height } = Dimensions.get("window");
 
@@ -56,6 +63,7 @@ const CalenderDetailScreen = ({ route, navigation }) => {
   const [showPastDateDialog, setShowPastDateDialog] = useState(false);
   const [dialogEvent, setDialogEvent] = useState(null);
   const [showEventDetailsDialog, setShowEventDetailsDialog] = useState(false);
+  const [accessDeniedDialogVisible, setAccessDeniedDialogVisible] = useState(false); // Explains: Track restricted-role FAB taps so we can notify the user immediately.
 
   // --- Priority-based color mapping function ---
   const getPriorityColor = (priority) => {
@@ -610,27 +618,38 @@ const CalenderDetailScreen = ({ route, navigation }) => {
       {/* --- Custom Bottom Navigation - Always Visible --- */}
       <CustomBottomNav 
         handleFabPress={async () => {
-          // Check user role and only show event creation dialog for Owner
+          // --- FAB Role Guard (MCP Context 7) ---
+          // Business Rule: Only Owners can create events from the calendar detail view.
           const userRole = await getUserRole();
+
           if (userRole === "Owner") {
-            // Check if selected date is in the past
+            // --- Past Date Validation (MCP Context 7) ---
+            // Business Rule: Prevent event creation on past dates even for Owners.
             const today = new Date();
             const selectedDateObj = selectedDate ? new Date(selectedDate) : new Date();
-            
-            // Set time to start of day for accurate comparison
+
             today.setHours(0, 0, 0, 0);
             selectedDateObj.setHours(0, 0, 0, 0);
-            
+
             const isPastDate = selectedDateObj < today;
-            
-            // Only show event creation dialog if date is today or future
+
             if (!isPastDate) {
               setShowEventCreationDialog(true);
             } else {
-              // Show custom dialog for past date
               setShowPastDateDialog(true);
             }
+            return;
           }
+
+          if (userRole === "Manager" || userRole === "Employee") {
+            // --- Restricted Role Feedback (MCP Context 7) ---
+            // Business Rule: Managers and Employees must see the same access denied dialog used in Week View.
+            setAccessDeniedDialogVisible(true);
+            return;
+          }
+
+          // NOTE: For any other roles, default to denying access until business rules expand permissions.
+          setAccessDeniedDialogVisible(true);
         }}
       />
       
@@ -659,6 +678,13 @@ const CalenderDetailScreen = ({ route, navigation }) => {
         onClose={() => setShowEventDetailsDialog(false)}
         event={dialogEvent}
         onEventUpdated={handleEventCreated}
+      />
+
+      <AccessDeniedDialog
+        visible={accessDeniedDialogVisible}
+        onClose={() => setAccessDeniedDialogVisible(false)}
+        title="Access Denied"
+        message="Managers and Employees cannot create events from this calendar."
       />
     </View>
   );

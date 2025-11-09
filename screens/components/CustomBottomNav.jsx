@@ -9,6 +9,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import pusher from "../../pusherClient";
 import appEmitter from "../../utils/appEmitter";
 
+// === Change Summary (2025-11-07) ===
+// What: Use the immediate prop-based user role when available so calendar screens hide the FAB without flicker for Managers/Employees.
+// Why: Prevents a visible flash while the internal role state catches up (MCP context 7 UX smoothness).
+// Dependencies: No new imports; leverages existing propUserRole flow.
+
 const { width, height } = Dimensions.get("window");
 
 // --- Responsive calculations for small screens ---
@@ -34,7 +39,7 @@ export default function CustomBottomNav({
   const navigation = useNavigation();
   const route = useRoute(); // Get current route information
   const [activeTab, setActiveTab] = React.useState("home"); // Track active tab
-  const [userRole, setUserRole] = React.useState(null); // Track user role
+  const [userRole, setUserRole] = React.useState(propUserRole ?? null); // Track user role
   const [hasNewNotification, setHasNewNotification] = React.useState(false); // Track new notifications
   const insets = useSafeAreaInsets(); // Get safe area insets
   const { userInfo } = useAuth(); // Get current user info for Pusher
@@ -96,7 +101,7 @@ export default function CustomBottomNav({
   // Business Rule: Get user role to determine FAB visibility based on current screen
   // Use prop userRole if provided (prevents FAB lag on calendar screens), otherwise load internally
   React.useEffect(() => {
-    if (propUserRole) {
+    if (propUserRole !== null && propUserRole !== undefined) {
       // Use provided user role (prevents FAB lag)
       setUserRole(propUserRole);
       console.log(`CustomBottomNav - Using prop user role: ${propUserRole} on screen: ${route.name}`);
@@ -116,6 +121,8 @@ export default function CustomBottomNav({
     }
   }, [propUserRole]); // Re-run when prop userRole changes
 
+  const effectiveUserRole = propUserRole ?? userRole; // NOTE: Ensures calendar screens respect prop role instantly (no FAB flash).
+
   // --- Check if FAB should be hidden (MCP Context 7) ---
   // Business Rule: Hide FAB for Employee users on ViewAllTasksScreen, HomeScreen, CalenderScreen, CalenderDetailScreen, and WeekView
   // Business Rule: Hide FAB for Manager users on HomeScreen, CalenderScreen, CalenderDetailScreen, and WeekView (but show on ViewAllTasksScreen)
@@ -127,41 +134,45 @@ export default function CustomBottomNav({
   // Hide FAB on calendar screens until userRole is loaded to prevent flashing during navigation
   const isCalendarScreen = route.name === "CalenderScreen" || route.name === "CalenderDetailScreen" || route.name === "WeekView";
   const shouldHideFAB = hideFAB || (
-    userRole === "Employee" && (
+    effectiveUserRole === "Employee" && (
       route.name === "ViewAllTasksScreen" || 
       route.name === "HomeScreen" || 
       isCalendarScreen
     )
   ) || (
-    userRole === "Manager" && (
+    effectiveUserRole === "Manager" && (
       route.name === "HomeScreen" || 
       isCalendarScreen
     )
   ) || (
     // Hide FAB for Owner, Manager, and Employee roles on ViewAllLogScreen
-    (userRole === "Owner" ) && route.name === "ViewAllLogScreen"
+    (effectiveUserRole === "Owner" ) && route.name === "ViewAllLogScreen"
   ) || (
     // Hide FAB for Owner, Manager, and Employee roles on PersonalScreen, ProjectAssignment, and LogsDetail
-    (userRole === "Owner" || userRole === "Manager" || userRole === "Employee") && (route.name === "PersonalScreen" || route.name === "ProjectAssignment" || route.name === "LogsDetail")
+    (effectiveUserRole === "Owner" || effectiveUserRole === "Manager" || effectiveUserRole === "Employee") && (route.name === "PersonalScreen" || route.name === "ProjectAssignment" || route.name === "LogsDetail")
   ) || (
     // Hide FAB for all users on TaskDetailsScreen
     route.name === "TaskDetails"
   ) || (
     // Hide FAB for Manager and Employee roles on CreateLogScreen
-    (userRole === "Manager" || userRole === "Employee") && route.name === "CreatLog"
+    (effectiveUserRole === "Manager" || effectiveUserRole === "Employee") && route.name === "CreatLog"
   ) || (
     // Hide FAB for Manager and Employee roles on CalenderScreen (✅ Owner can see FAB)
-    (userRole === "Manager" || userRole === "Employee") && route.name === "CalenderScreen"
+    (effectiveUserRole === "Manager" || effectiveUserRole === "Employee") && route.name === "CalenderScreen"
   ) || (
     // Hide FAB for Manager and Employee roles on CalenderDetailScreen (✅ Owner can see FAB)
-    (userRole === "Manager" || userRole === "Employee") && route.name === "CalenderDetailScreen"
+    (effectiveUserRole === "Manager" || effectiveUserRole === "Employee") && route.name === "CalenderDetailScreen"
   ) || (
     // Hide FAB for Manager and Employee roles on WeekView (✅ Owner can see FAB)
-    (userRole === "Manager" || userRole === "Employee") && route.name === "WeekView"
+    (effectiveUserRole === "Manager" || effectiveUserRole === "Employee") && route.name === "WeekView"
   ) || (
     // Hide FAB on calendar screens until userRole is loaded to prevent flashing
     // But only if we don't have the userRole from props (prevents FAB lag)
-    isCalendarScreen && userRole === null && !propUserRole
+    isCalendarScreen && effectiveUserRole === null && (propUserRole === null || propUserRole === undefined)
+  ) || (
+    // --- Pending Role Guard for Home Screen (MCP Context 7) ---
+    // Business Rule: Prevent a temporary FAB flash on HomeScreen until the user's role is known.
+    route.name === "HomeScreen" && effectiveUserRole === null && (propUserRole === null || propUserRole === undefined)
   );
 
   // --- Route Change Detection ---
