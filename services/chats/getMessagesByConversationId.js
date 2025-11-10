@@ -1,9 +1,4 @@
-// --- Get Messages By Conversation ID Service (MCP Context 7) ---
-// This service fetches messages for a specific conversation with pagination
-// API Endpoint: GET /chat/conversations/{conversationId}/messages?page={page}&limit={limit}
-// Requires: JWT Authentication
-// Business Rule: Fetches paginated messages for the given conversation ID
-// Parameters: conversationId (required), page (default: 1), limit (default: 20, max: 100)
+
 
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -41,7 +36,8 @@ export async function getMessagesByConversationId(conversationId, page = 1, limi
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        signal, // Inline note: enables upstream AbortController to cancel this request safely (MCP context 7).
       }
     );
     
@@ -61,7 +57,8 @@ export async function getMessagesByConversationId(conversationId, page = 1, limi
           headers: {
             'Authorization': `Bearer ${newToken}`,
             'Content-Type': 'application/json'
-          }
+          },
+          signal,
         }
       );
       return retryResponse.data;

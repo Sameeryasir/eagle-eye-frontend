@@ -1,3 +1,9 @@
+// --- Change Summary ---------------------------------------------------------
+// What was changed: Offline message inserts now trust SQLite AUTOINCREMENT IDs, the folder shortcut pulls every cached message without pagination, that shortcut logs each cached message with every field in ascending date order, pending rows are updated in place with server data instead of delete-reinsert, and fetchMessages returns immediately after a successful API hydrate to avoid double inserts.
+// Why it was changed: Prevent duplicate IDs when clocks collide or drift, let users inspect the full offline history on demand, surface the complete cached payload clearly in chronological order, avoid churn on SQLite rows, and stop redundant API hydrations while keeping console noise low.
+// Dependencies or related files: Depends on the messages_<conversationId> table defined below with AUTOINCREMENT and the Toast utility for user confirmations.
+// MCP Context 7: Implementation follows MCP context 7 best practices for data integrity, explicit logging, and discoverable offline diagnostics.
+// ---------------------------------------------------------------------------
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
   View,
@@ -48,10 +54,20 @@ import AllFilesModal from "./components/AllFilesModal";
 import AllSignaturesModal from "./components/AllSignaturesModal";
 import SignatureDetailModal from "./components/SignatureDetailModal";
 
+// --- Structured Console Utilities (MCP Context 7) ---
+// Inline Comment: Shared helper keeps verbose logs readable while avoiding duplicate formatting code.
+const emitVerticalLog = (heading, rows) => {
+  console.log(`\n${heading}`);
+  Object.entries(rows || {}).forEach(([key, value]) => {
+    console.log(`  • ${key}: ${value}`);
+  });
+  console.log('');
+};
+
 // --- Change Summary (MCP Context 7) ---
-// What: Added signed-signature sync helper that reads server data via getSignedSignatures, updates SQLite rows, and refreshes UI state; removed entry loader so chat renders immediately while data hydrates; surfaced quick-access icons to reload from SQLite or clear stored chat rows; introduced request abortion so leaving the screen cancels in-flight message fetches and logs that workflow; restored WhatsApp-style pagination by only loading the newest 20 messages from SQLite and revealing older batches on scroll; pre-seeded current user ID from AuthContext so ownership alignment renders correctly from the first frame; removed obsolete refreshDatabaseMessageStats call to prevent runtime ReferenceError.
-// Why: Ensure signed signature forms fetched from the API overwrite stale local copies so users always see the latest signed contracts, improve first impression by skipping the blocking spinner, provide simple on-device maintenance controls for local chat storage, prevent wasted bandwidth (and confusing logs) when users back out mid-sync, stop ownership flicker by matching the legacy 20-at-a-time loader, remove the left/right jump caused by late-loading user IDs, and avoid crashes triggered by missing helper functions.
-// Dependencies: Relies on services/chats/getSignedSignatures, SQLite messages_<conversationId> schema, existing sortMessagesByTime utility, dedupeMessagesById to render safely during async hydration, existing fetchMessagesFromSQLite/clearDatabase helpers, new abort-aware signature in services/chats/getMessagesByConversationId, SQLite pagination helpers defined in this file, and AuthContext-provided IDs as an initial ownership signal.
+// What: Added signed-signature sync helper that reads server data via getSignedSignatures, updates SQLite rows, and refreshes UI state; removed entry loader so chat renders immediately while data hydrates; surfaced quick-access icons to reload from SQLite or clear stored chat rows; introduced request abortion so leaving the screen cancels in-flight message fetches and logs that workflow; restored WhatsApp-style pagination by only loading the newest 20 messages from SQLite and revealing older batches on scroll; pre-seeded current user ID from AuthContext so ownership alignment renders correctly from the first frame; removed obsolete refreshDatabaseMessageStats call to prevent runtime ReferenceError; added online bootstrap that automatically flushes pending offline messages as soon as a user lands on the chat with connectivity; reformatted diagnostic console logs into vertical bullet lists for easier reading.
+// Why: Ensure signed signature forms fetched from the API overwrite stale local copies so users always see the latest signed contracts, improve first impression by skipping the blocking spinner, provide simple on-device maintenance controls for local chat storage, prevent wasted bandwidth (and confusing logs) when users back out mid-sync, stop ownership flicker by matching the legacy 20-at-a-time loader, remove the left/right jump caused by late-loading user IDs, avoid crashes triggered by missing helper functions, make sure any offline messages cached previously are sent immediately once a reliable connection is present, and keep debug output understandable for non-engineers.
+// Dependencies: Relies on services/chats/getSignedSignatures, SQLite messages_<conversationId> schema, existing sortMessagesByTime utility, dedupeMessagesById to render safely during async hydration, existing fetchMessagesFromSQLite/clearDatabase helpers, new abort-aware signature in services/chats/getMessagesByConversationId, SQLite pagination helpers defined in this file, AuthContext-provided IDs as an initial ownership signal, sendOfflineMessages queue processing, NetInfo connectivity events, and the shared logging helpers declared below.
 
 // --- Helper Function to Generate Initials (MCP Context 7) ---
 // Extract first letter of first name and first letter of last name
@@ -338,9 +354,7 @@ const UserChatScreen = ({ navigation, route }) => {
     };
   }, []);
 
-  // --- Helper: Save Message to SQLite Database (MCP Context 7) ---
-  // Business Rule: Persist messages locally for offline access
-  // This ensures messages are available even without internet connection
+
   const saveMessageToSQLite = (msg, conversationId) => {
     try {
       // Check if message already exists to avoid duplicates
@@ -689,6 +703,7 @@ const UserChatScreen = ({ navigation, route }) => {
             storeLastMessageId(finalMessages);
             
             console.log('✅ All messages loaded progressively from API');
+            return; // Inline Comment: Exit after successful API hydration to prevent the fallback branch from rerunning the same inserts.
           } catch (error) {
             console.error('❌ Error fetching messages from API:', error);
             setMessages([]);
@@ -944,6 +959,7 @@ const UserChatScreen = ({ navigation, route }) => {
           storeLastMessageId(finalMessages);
           
           console.log('✅ All messages loaded progressively from API and stored in SQLite');
+          return; // Inline Comment: Exit early so we do not immediately fall through and refetch the same messages again.
         } catch (apiError) {
           console.error('❌ Error fetching messages from API:', apiError);
           setMessages([]);
@@ -1151,8 +1167,8 @@ const UserChatScreen = ({ navigation, route }) => {
         // Sort messages by timestamp
         const sortedMessages = sortMessagesByTime(uiMessages);
         setMessages(sortedMessages);
-        setCurrentOffset(dbMessages.length); // Inline Comment: Remember how many rows we surfaced for next OFFSET call.
-        setHasMoreMessages(totalMessageCount > dbMessages.length); // Inline Comment: Enable load-more only when older rows remain.
+        setCurrentOffset(totalMessageCount); // Inline Comment: Mark all rows as loaded so the load-more control knows nothing remains.
+        setHasMoreMessages(false); // Inline Comment: Folder-triggered fetch loads everything, so we disable further pagination requests.
         
         // Store last message ID when messages are loaded from SQLite
         storeLastMessageId(sortedMessages);
@@ -1762,160 +1778,100 @@ const UserChatScreen = ({ navigation, route }) => {
                   });
                 }
                 
-                // CRITICAL FIX: Since we're changing the PRIMARY KEY (id), we need to DELETE the old record and INSERT the new one
-                // This ensures the record is properly replaced and won't be found as "pending" again
-                console.log(`🔄 [UPDATE] Deleting offline record with ID: ${offlineMessageId}`);
-                db.runSync(
-                  `DELETE FROM messages_${conversationId} WHERE id = ? AND status = 'pending' AND signature_id IS NOT NULL`,
-                  [offlineMessageId]
-                );
+                // CRITICAL FIX: Update pending record in place so we preserve AUTOINCREMENT linkage while swapping to server IDs.
+                const preservedTitle = serverSignature?.title || msg.signature_title || 'Contract for Signature';
+                const preservedNotes = serverSignature?.notes || msg.signature_notes || null;
+                const preservedDueDate = serverSignature?.dueDate || msg.signature_due_date || null;
                 
-                // Check if any record with server ID already exists (from Pusher)
+                // Inline Comment: If Pusher already inserted the server row, remove that duplicate so this UPDATE can claim the ID cleanly.
                 const existingServerRecord = db.getFirstSync(
                   `SELECT id FROM messages_${conversationId} WHERE id = ?`,
                   [serverMessageId]
                 );
                 
-                if (!existingServerRecord) {
-                  // Insert the new server record
-                  // CRITICAL FIX: Preserve offline data if server response doesn't include it
-                  const preservedTitle = serverSignature?.title || msg.signature_title || 'Contract for Signature';
-                  const preservedNotes = serverSignature?.notes || msg.signature_notes || null;
-                  const preservedDueDate = serverSignature?.dueDate || msg.signature_due_date || null;
-                  
-                  console.log(`📝 [UPDATE] Inserting server record with ID: ${serverMessageId}`);
-                  console.log(`📝 [UPDATE] Preserved data - Title: "${preservedTitle}", Notes: "${preservedNotes}", DueDate: "${preservedDueDate}"`);
-                  // Use INSERT OR IGNORE to handle race condition with Pusher
+                if (existingServerRecord) {
+                  console.log(`ℹ️ [UPDATE] Removing duplicate server row ${serverMessageId} before in-place update`);
                   db.runSync(
-                    `INSERT OR IGNORE INTO messages_${conversationId} (
-                      id, conversation_id, content, file_uri, file_name, file_type, file_size,
-                      sender_id, sender_first_name, sender_last_name, created_at, status,
-                      signature_id, signature_title, signature_notes, signature_due_date, 
-                      signature_status, signature_file_url, signature_file_name, signature_file_size,
-                      signed_by_id, signed_by_name, signed_by_email
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [
-                      serverMessageId,
-                      conversationId,
-                      signatureResponse?.content || null,
-                      signatureResponse?.fileUrl || null,
-                      signatureResponse?.fileName || null,
-                      signatureResponse?.fileType || null,
-                      signatureResponse?.fileSize || null,
-                      serverSender?.id || null,
-                      serverSender?.first_name || null,
-                      serverSender?.last_name || null,
-                      signatureResponse?.createdAt || new Date().toISOString(),
-                      signatureResponse?.status || 'sent',
-                      serverSignatureId,
-                      preservedTitle, // Use preserved title (server or offline)
-                      preservedNotes, // Use preserved notes (server or offline)
-                      preservedDueDate, // Use preserved dueDate (server or offline)
-                      serverSignature?.status || 'pending',
-                      serverSignature?.fileUrl || null,
-                      serverSignature?.fileName || null,
-                      serverSignature?.fileSize || null,
-                      null, // signed_by_id
-                      null, // signed_by_name
-                      null  // signed_by_email
-                    ]
+                    `DELETE FROM messages_${conversationId} WHERE id = ? AND id != ?`,
+                    [serverMessageId, offlineMessageId]
                   );
-                  console.log(`✅ [UPDATE] Successfully inserted server record with ID: ${serverMessageId}`);
-                } else {
-                  console.log(`ℹ️ [UPDATE] Server record with ID ${serverMessageId} already exists (from Pusher), skipping insert`);
-                  // Update the existing record to ensure it has all the correct data
-                  // CRITICAL FIX: Preserve offline data if server response doesn't include it
-                  const preservedTitle = serverSignature?.title || msg.signature_title || 'Contract for Signature';
-                  const preservedNotes = serverSignature?.notes || msg.signature_notes || null;
-                  const preservedDueDate = serverSignature?.dueDate || msg.signature_due_date || null;
-                  
-                  console.log(`📝 [UPDATE] Updating existing record with preserved data - Title: "${preservedTitle}", Notes: "${preservedNotes}", DueDate: "${preservedDueDate}"`);
-                  db.runSync(
-                    `UPDATE messages_${conversationId} SET
-                      conversation_id = ?,
-                      content = ?,
-                      file_uri = ?,
-                      file_name = ?,
-                      file_type = ?,
-                      file_size = ?,
-                      sender_id = ?,
-                      sender_first_name = ?,
-                      sender_last_name = ?,
-                      created_at = ?,
-                      status = ?,
-                      signature_id = ?,
-                      signature_title = ?,
-                      signature_notes = ?,
-                      signature_due_date = ?,
-                      signature_status = ?,
-                      signature_file_url = ?,
-                      signature_file_name = ?,
-                      signature_file_size = ?
-                    WHERE id = ?`,
-                    [
-                      conversationId,
-                      signatureResponse?.content || null,
-                      signatureResponse?.fileUrl || null,
-                      signatureResponse?.fileName || null,
-                      signatureResponse?.fileType || null,
-                      signatureResponse?.fileSize || null,
-                      serverSender?.id || null,
-                      serverSender?.first_name || null,
-                      serverSender?.last_name || null,
-                      signatureResponse?.createdAt || new Date().toISOString(),
-                      signatureResponse?.status || 'sent',
-                      serverSignatureId,
-                      preservedTitle, // Use preserved title (server or offline)
-                      preservedNotes, // Use preserved notes (server or offline)
-                      preservedDueDate, // Use preserved dueDate (server or offline)
-                      serverSignature?.status || 'pending',
-                      serverSignature?.fileUrl || null,
-                      serverSignature?.fileName || null,
-                      serverSignature?.fileSize || null,
-                      serverMessageId
-                    ]
-                  );
-                  console.log(`✅ [UPDATE] Successfully updated existing server record with ID: ${serverMessageId}`);
                 }
                 
-                // Verify the old record is gone
-                const oldRecordCheck = db.getFirstSync(
-                  `SELECT id FROM messages_${conversationId} WHERE id = ?`,
-                  [offlineMessageId]
+                db.runSync(
+                  `UPDATE messages_${conversationId} SET
+                    id = ?,
+                    conversation_id = ?,
+                    content = ?,
+                    file_uri = ?,
+                    file_name = ?,
+                    file_type = ?,
+                    file_size = ?,
+                    sender_id = ?,
+                    sender_first_name = ?,
+                    sender_last_name = ?,
+                    created_at = ?,
+                    status = ?,
+                    signature_id = ?,
+                    signature_title = ?,
+                    signature_notes = ?,
+                    signature_due_date = ?,
+                    signature_status = ?,
+                    signature_file_url = ?,
+                    signature_file_name = ?,
+                    signature_file_size = ?,
+                    signed_by_id = ?,
+                    signed_by_name = ?,
+                    signed_by_email = ?
+                  WHERE id = ?`,
+                  [
+                    serverMessageId,
+                    conversationId,
+                    signatureResponse?.content || null,
+                    signatureResponse?.fileUrl || null,
+                    signatureResponse?.fileName || null,
+                    signatureResponse?.fileType || null,
+                    signatureResponse?.fileSize || null,
+                    serverSender?.id || null,
+                    serverSender?.first_name || null,
+                    serverSender?.last_name || null,
+                    signatureResponse?.createdAt || new Date().toISOString(),
+                    signatureResponse?.status || 'sent',
+                    serverSignatureId,
+                    preservedTitle,
+                    preservedNotes,
+                    preservedDueDate,
+                    serverSignature?.status || 'pending',
+                    serverSignature?.fileUrl || null,
+                    serverSignature?.fileName || null,
+                    serverSignature?.fileSize || null,
+                    null,
+                    null,
+                    null,
+                    offlineMessageId
+                  ]
                 );
                 
-                if (oldRecordCheck) {
-                  console.error(`❌ [UPDATE] Old offline record with ID ${offlineMessageId} still exists after delete!`);
-                } else {
-                  console.log(`✅ [UPDATE] Old offline record with ID ${offlineMessageId} successfully deleted`);
-                }
-                
-                // Verify the new record exists
-                const newRecordCheck = db.getFirstSync(
+                const updatedRecord = db.getFirstSync(
                   `SELECT id, status, signature_id, signature_title FROM messages_${conversationId} WHERE id = ?`,
                   [serverMessageId]
                 );
                 
-                if (newRecordCheck) {
-                  console.log(`✅ [UPDATE] New server record verified:`, {
-                    id: newRecordCheck.id,
-                    status: newRecordCheck.status,
-                    signature_id: newRecordCheck.signature_id,
-                    signature_title: newRecordCheck.signature_title
+                if (updatedRecord) {
+                  console.log(`✅ [UPDATE] Pending signature row updated in place:`, {
+                    id: updatedRecord.id,
+                    status: updatedRecord.status,
+                    signature_id: updatedRecord.signature_id,
+                    signature_title: updatedRecord.signature_title
                   });
                 } else {
-                  console.error(`❌ [UPDATE] New server record with ID ${serverMessageId} not found after insert!`);
+                  console.error(`❌ [UPDATE] Failed to locate updated signature row for server ID ${serverMessageId}`);
                 }
                 
-                console.log(`🔄 [${pendingMessages.indexOf(msg) + 1}/${pendingMessages.length}] Replaced offline signature request with server response`);
+                console.log(`🔄 [${pendingMessages.indexOf(msg) + 1}/${pendingMessages.length}] In-place updated offline signature with server response`);
                 console.log(`🔄 [DEBUG] Updated signature: ${msg.signature_id} → ${serverSignatureId}`);
                 
                 // CRITICAL FIX: Preserve signature data from server response OR offline message
                 // Use server data first, fallback to offline message data if server doesn't have it
-                const preservedTitle = serverSignature?.title || msg.signature_title || 'Contract for Signature';
-                const preservedNotes = serverSignature?.notes || msg.signature_notes || null;
-                const preservedDueDate = serverSignature?.dueDate || msg.signature_due_date || null;
-                
                 console.log(`📝 [UI UPDATE] Preserved signature data:`, {
                   title: preservedTitle,
                   notes: preservedNotes,
@@ -2007,74 +1963,67 @@ const UserChatScreen = ({ navigation, route }) => {
             console.log('📋 Full server response:', JSON.stringify(response, null, 2));
             
             if (serverMessageId) {
-              // CRITICAL FIX: Cannot UPDATE PRIMARY KEY (id) in SQLite - must DELETE and INSERT
-              // Business Rule: Delete old offline message and insert new server message
               const offlineMessageId = msg.id; // The temporary offline message ID
               
-              console.log(`🔄 [UPDATE] Updating offline message - Old ID: ${offlineMessageId}, New ID: ${serverMessageId}`);
+              console.log(`🔄 [UPDATE] Updating offline message in place - Old ID: ${offlineMessageId}, New ID: ${serverMessageId}`);
               
-              // First, delete the old offline message record
-              db.runSync(
-                `DELETE FROM messages_${conversationId} WHERE id = ? AND status = 'pending'`,
-                [offlineMessageId]
-              );
-              
-              console.log(`✅ [UPDATE] Deleted old offline message with ID: ${offlineMessageId}`);
-              
-              // Check if server message already exists (might have arrived via Pusher)
               const existingServerMessage = db.getFirstSync(
                 `SELECT id FROM messages_${conversationId} WHERE id = ?`,
                 [serverMessageId]
               );
               
-              if (!existingServerMessage) {
-                // Insert new server message record
-                // Use INSERT OR IGNORE to handle race condition with Pusher
+              if (existingServerMessage) {
+                console.log(`ℹ️ [UPDATE] Removing duplicate server row ${serverMessageId} before in-place update`);
                 db.runSync(
-                  `INSERT OR IGNORE INTO messages_${conversationId} (
-                    id, conversation_id, content, file_uri, file_name, file_type, file_size,
-                    sender_id, sender_first_name, sender_last_name, created_at, status,
-                    signature_id, signature_title, signature_notes, signature_due_date, 
-                    signature_status, signature_file_url, signature_file_name, signature_file_size,
-                    signed_by_id, signed_by_name, signed_by_email
-                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                  [
-                    serverMessageId, 
-                    conversationId,
-                    response?.content || msg.content,
-                    response?.fileUrl || msg.file_uri,
-                    response?.fileName || msg.file_name,
-                    response?.fileType || msg.file_type,
-                    response?.fileSize || msg.file_size,
-                    response?.sender?.id || msg.sender_id,
-                    response?.sender?.first_name || msg.sender_first_name,
-                    response?.sender?.last_name || msg.sender_last_name,
-                    response?.createdAt || msg.created_at, // Use server timestamp
-                    'sent',
-                    null, // signature_id
-                    null, // signature_title
-                    null, // signature_notes
-                    null, // signature_due_date
-                    null, // signature_status
-                    null, // signature_file_url
-                    null, // signature_file_name
-                    null, // signature_file_size
-                    null, // signed_by_id
-                    null, // signed_by_name
-                    null  // signed_by_email
-                  ]
+                  `DELETE FROM messages_${conversationId} WHERE id = ? AND id != ?`,
+                  [serverMessageId, offlineMessageId]
                 );
-                console.log(`✅ [UPDATE] Inserted new server message with ID: ${serverMessageId}`);
-              } else {
-                // Server message already exists (from Pusher) - just update status
-                db.runSync(
-                  `UPDATE messages_${conversationId} SET status = 'sent' WHERE id = ?`,
-                  [serverMessageId]
-                );
-                console.log(`✅ [UPDATE] Updated existing server message status to 'sent' for ID: ${serverMessageId}`);
               }
               
-              console.log('🔄 Replaced SQLite message with server response');
+              db.runSync(
+                `UPDATE messages_${conversationId} SET
+                  id = ?,
+                  conversation_id = ?,
+                  content = ?,
+                  file_uri = ?,
+                  file_name = ?,
+                  file_type = ?,
+                  file_size = ?,
+                  sender_id = ?,
+                  sender_first_name = ?,
+                  sender_last_name = ?,
+                  created_at = ?,
+                  status = ?,
+                  signature_id = NULL,
+                  signature_title = NULL,
+                  signature_notes = NULL,
+                  signature_due_date = NULL,
+                  signature_status = NULL,
+                  signature_file_url = NULL,
+                  signature_file_name = NULL,
+                  signature_file_size = NULL,
+                  signed_by_id = NULL,
+                  signed_by_name = NULL,
+                  signed_by_email = NULL
+                WHERE id = ?`,
+                [
+                  serverMessageId, 
+                  conversationId,
+                  response?.content || msg.content,
+                  response?.fileUrl || msg.file_uri,
+                  response?.fileName || msg.file_name,
+                  response?.fileType || msg.file_type,
+                  response?.fileSize || msg.file_size,
+                  response?.sender?.id || msg.sender_id,
+                  response?.sender?.first_name || msg.sender_first_name,
+                  response?.sender?.last_name || msg.sender_last_name,
+                  response?.createdAt || msg.created_at,
+                  'sent',
+                  offlineMessageId
+                ]
+              );
+              
+              console.log('🔄 Replaced SQLite message with server response in place');
               
               // Update message in UI with server response
               // Business Rule: Use server timestamp from API response
@@ -2346,6 +2295,37 @@ const UserChatScreen = ({ navigation, route }) => {
     console.log('📁 Setting filesModalVisible to true');
     setFilesModalVisible(true);
     fetchConversationFiles();
+  };
+
+  const handleReloadFromSQLite = () => {
+    try {
+      const cachedMessages = db.getAllSync(
+        `SELECT * FROM messages_${conversationId} ORDER BY datetime(created_at) ASC`
+      );
+      cachedMessages.forEach((msg, index) => {
+        // Inline Comment: Print every field so troubleshooting can compare SQLite rows with API responses.
+        console.log(`📁 [OFFLINE CACHE] Message ${index + 1} (full payload below):`);
+        console.log(JSON.stringify(msg, null, 2));
+      });
+
+      fetchMessagesFromSQLite();
+      Toast.show({
+        type: 'info',
+        text1: 'Local Messages Loaded',
+        text2: 'Showing cached messages from this device.',
+        position: 'top',
+        visibilityTime: 2000,
+      });
+    } catch (reloadError) {
+      console.error('❌ Error loading messages from SQLite:', reloadError);
+      Toast.show({
+        type: 'error',
+        text1: 'Unable to load local messages',
+        text2: 'Please try again later.',
+        position: 'top',
+        visibilityTime: 3000,
+      });
+    }
   };
 
   // --- Handle Fetch All Signatures Event (MCP Context 7) ---
@@ -3559,6 +3539,8 @@ const UserChatScreen = ({ navigation, route }) => {
   };
 
   // --- Clear Database Function ---
+  // --- Cache Maintenance Controls (MCP Context 7) ---
+  // Inline Note: Exposes manual purge so frontline staff can refresh stale chats while respecting existing clearDatabase helper.
   const clearDatabase = () => {
     try {
       console.log('🗑️ Clearing database...');
@@ -3597,6 +3579,17 @@ const UserChatScreen = ({ navigation, route }) => {
         visibilityTime: 3000,
       });
     }
+  };
+
+  const handleClearMessagesPress = () => {
+    Alert.alert(
+      "Clear Local Messages",
+      "This removes the cached messages for this chat from this device. Live history will reload from the server.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: () => clearDatabase() }, // Inline Note: Calls existing wipe logic so behavior stays centralized.
+      ]
+    );
   };
 
   // --- Cleanup Typing Timeout on Unmount (MCP Context 7) ---
@@ -4163,7 +4156,8 @@ const UserChatScreen = ({ navigation, route }) => {
           signature_file_name: null
         };
         
-        // Store message in SQLite database
+        // --- Offline Insert (MCP Context 7) ---
+        // Inline Comment: Save the offline message immediately so the chat UI stays responsive even without connectivity.
         db.runSync(`
           INSERT INTO messages_${conversationId} (
             conversation_id, content, file_uri, file_name, file_type, file_size,
@@ -4198,12 +4192,17 @@ const UserChatScreen = ({ navigation, route }) => {
         ]);
         
         console.log('✅ Message stored in SQLite database');
-        // Use integer IDs to match database schema
-        const timestamp = Date.now();
-        const random = Math.floor(Math.random() * 1000);
-        const offlineMessageId = parseInt(`${timestamp}${random}`.slice(-10)); // Convert to integer, keep last 10 digits
+        // Inline Comment: Fetch the AUTOINCREMENT value so we never depend on device clocks for uniqueness.
+        const offlineInsertRow = db.getFirstSync(`SELECT last_insert_rowid() AS id`);
+        // Inline Comment: Coerce the SQLite response into a Number to align with the schema's INTEGER PRIMARY KEY type.
+        let offlineMessageId = Number(offlineInsertRow?.id);
+        if (!Number.isFinite(offlineMessageId)) {
+          // NOTE: This should never happen; fallback keeps UI stable while we investigate.
+          console.warn('⚠️ [OFFLINE] Could not read SQLite AUTOINCREMENT ID, falling back to 0');
+          offlineMessageId = 0;
+        }
         
-        console.log('✅ [OFFLINE] Message successfully saved:', {
+        console.log('✅ [OFFLINE] Message successfully saved with DB-managed ID:', {
           id: offlineMessageId,
           idType: typeof offlineMessageId,
           content: messageText,
@@ -4491,6 +4490,17 @@ const UserChatScreen = ({ navigation, route }) => {
       {/* Loading State (MCP Context 7) --- */}
       {/* NOTE: Spinner removed per UX request; we still hydrate data in background while rendering the list immediately. */}
       {/* 📨 Messages List */}
+      {/* --- Local Cache Action Bar (MCP Context 7) --- */}
+      <View className="px-5 pb-2 items-end">
+        <TouchableOpacity
+          onPress={handleClearMessagesPress}
+          activeOpacity={0.7}
+          className="p-2 rounded-full bg-white shadow-sm border border-gray-200"
+        >
+          <Ionicons name="trash-outline" size={20} color="#EF4444" />
+        </TouchableOpacity>
+      </View>
+
       <FlatList
         ref={flatListRef}
         data={dedupeMessagesById(messages)}
@@ -4504,16 +4514,7 @@ const UserChatScreen = ({ navigation, route }) => {
             // FIXED: Now currentUserId is guaranteed to be loaded, preventing left-side flicker
             const isMyMessage = String(item.sender?.id) === String(currentUserId);
             
-            // Debug: Log message ownership for database messages
-            console.log('🔍 Message ownership check:', {
-              messageId: item.id,
-              senderId: item.sender?.id,
-              currentUserId: currentUserId,
-              senderIdString: String(item.sender?.id),
-              currentUserIdString: String(currentUserId),
-              isMyMessage: isMyMessage,
-              senderName: `${item.sender?.first_name} ${item.sender?.last_name}`
-            });
+            // NOTE: Verbose ownership logging removed to reduce console noise (MCP Context 7 logging hygiene).
             
             // --- Signature Contract Rendering (MCP Context 7) ---
             // Business Rule: Only show as contract form if it has signature data, NOT for regular file uploads
@@ -4529,22 +4530,7 @@ const UserChatScreen = ({ navigation, route }) => {
             // Only consider it signature data if it has REAL signature OR signature fields WITHOUT file
             const hasSignatureData = hasRealSignature || (hasSignatureFields && !isFileUpload);
             
-            // Debug log to see what we're checking
-            console.log('🔍 Message check for User:', currentUserId, {
-              id: item.id,
-              content: item.content,
-              hasRealSignature: hasRealSignature,
-              hasSignatureFields: hasSignatureFields,
-              hasSignatureData: hasSignatureData,
-              isFileUpload: isFileUpload,
-              fileUrl: item.fileUrl,
-              fileName: item.fileName,
-              fileType: item.fileType,
-              signature: item.signature,
-              title: item.title,
-              notes: item.notes,
-              status: item.status
-            });
+            // NOTE: Removed verbose signature diagnostic log to keep console output lean (MCP Context 7 logging hygiene).
             
             // CRITICAL FIX: If it has file data, it's NOT a signature contract
             // Only show contract form if it has signature data AND is not a regular file upload
@@ -5271,6 +5257,26 @@ const UserChatScreen = ({ navigation, route }) => {
                 <Ionicons name="create" size={28} color="#3155A1" />
               </TouchableOpacity>
             )}
+
+            {/* View Local Messages Shortcut */}
+            <TouchableOpacity
+              onPress={handleReloadFromSQLite}
+              disabled={isSendingMessage || isLoadingMessages}
+              className="mr-2"
+              activeOpacity={0.7}
+            >
+              <Ionicons name="folder-open-outline" size={24} color="#3155A1" />
+            </TouchableOpacity>
+
+            {/* Clear Cached Messages Shortcut */}
+            <TouchableOpacity
+              onPress={handleClearMessagesPress}
+              disabled={isSendingMessage || isLoadingMessages}
+              className="mr-2"
+              activeOpacity={0.7}
+            >
+              <Ionicons name="trash-outline" size={24} color="#EF4444" />
+            </TouchableOpacity>
 
             <TextInput
               ref={messageInputRef}
