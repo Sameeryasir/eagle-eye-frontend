@@ -1,6 +1,6 @@
 // --- Change Summary ---------------------------------------------------------
-// What was changed: Offline message inserts now trust SQLite AUTOINCREMENT IDs, the folder shortcut pulls every cached message without pagination, that shortcut logs each cached message with every field in ascending date order, pending rows are updated in place with server data instead of delete-reinsert, and fetchMessages returns immediately after a successful API hydrate to avoid double inserts.
-// Why it was changed: Prevent duplicate IDs when clocks collide or drift, let users inspect the full offline history on demand, surface the complete cached payload clearly in chronological order, avoid churn on SQLite rows, and stop redundant API hydrations while keeping console noise low.
+// What was changed: Offline message inserts now trust SQLite AUTOINCREMENT IDs, the folder shortcut pulls every cached message without pagination, that shortcut logs each cached message with every field in ascending date order, pending rows are updated in place with server data instead of delete-reinsert, fetchMessages returns immediately after a successful API hydrate to avoid double inserts, all bulk inserts now run inside one SQLite transaction per page to reduce per-message overhead, the batch helper now skips pages that are already cached without printing duplicate logs to keep the console clean, and signature resyncs now only touch rows still marked pending so fully-signed conversations are left untouched.
+// Why it was changed: Prevent duplicate IDs when clocks collide or drift, let users inspect the full offline history on demand, surface the complete cached payload clearly in chronological order, avoid churn on SQLite rows, stop redundant API hydrations while keeping console noise low, speed up hydrations so large chat histories sync without hammering the database, avoid noisy duplicate-skip logs whenever the API returns a page we already saved, and ensure background signature refreshes only update outstanding forms.
 // Dependencies or related files: Depends on the messages_<conversationId> table defined below with AUTOINCREMENT and the Toast utility for user confirmations.
 // MCP Context 7: Implementation follows MCP context 7 best practices for data integrity, explicit logging, and discoverable offline diagnostics.
 // ---------------------------------------------------------------------------
@@ -355,57 +355,99 @@ const UserChatScreen = ({ navigation, route }) => {
   }, []);
 
 
-  const saveMessageToSQLite = (msg, conversationId) => {
-    try {
-      // Check if message already exists to avoid duplicates
-      const existingMessage = db.getFirstSync(
-        `SELECT id FROM messages_${conversationId} WHERE id = ?`,
-        [msg.id]
-      );
-      
-      if (existingMessage) {
-        console.log(`ℹ️ Message ${msg.id} already exists - skipping`);
-        return;
+const messageExistsInSQLite = (messageId, conversationId) => {
+  try {
+    const existingMessage = db.getFirstSync(
+      `SELECT id FROM messages_${conversationId} WHERE id = ?`,
+      [messageId]
+    );
+    return Boolean(existingMessage);
+  } catch (lookupError) {
+    console.error('❌ Error checking message existence:', lookupError);
+    return false;
+  }
+};
+
+const saveMessageToSQLite = (msg, conversationId, logLabel = 'DEFAULT', logSkips = true) => {
+  try {
+    // Check if message already exists to avoid duplicates
+    const isDuplicate = messageExistsInSQLite(msg.id, conversationId);
+
+    if (isDuplicate) {
+      if (logSkips) {
+        console.log(`ℹ️ [${logLabel}] Message ${msg.id} already exists - skipping insert`);
       }
-      
-      // Save message to SQLite
-      db.runSync(`
-        INSERT OR REPLACE INTO messages_${conversationId} (
-          id, conversation_id, content, file_uri, file_name, file_type, file_size,
-          sender_id, sender_first_name, sender_last_name, created_at, status,
-          signature_id, signature_title, signature_notes, signature_due_date, 
-          signature_status, signature_file_url, signature_file_name, signature_file_size,
-          signed_by_id, signed_by_name, signed_by_email
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        msg.id,
-        conversationId,
-        msg.content || null,
-        msg.fileUrl || null,
-        msg.fileName || null,
-        msg.fileType || null,
-        msg.fileSize || null,
-        msg.sender?.id || null,
-        msg.sender?.first_name || null,
-        msg.sender?.last_name || null,
-        msg.createdAt || new Date().toISOString(),
-        msg.status || 'sent',
-        msg.signature?.id || null,
-        msg.signature?.title || null,
-        msg.signature?.notes || null,
-        msg.signature?.dueDate || null,
-        msg.signature?.status || null,
-        msg.signature?.fileUrl || null,
-        msg.signature?.fileName || null,
-        msg.signature?.fileSize || null,
-        msg.signature?.signedBy?.id || null,
-        msg.signature?.signedBy?.name || null,
-        msg.signature?.signedBy?.email || null
-      ]);
-    } catch (dbError) {
-      console.error('❌ Error saving message to database:', dbError);
+      return;
     }
-  };
+
+    // Save message to SQLite
+    db.runSync(`
+      INSERT OR REPLACE INTO messages_${conversationId} (
+        id, conversation_id, content, file_uri, file_name, file_type, file_size,
+        sender_id, sender_first_name, sender_last_name, created_at, status,
+        signature_id, signature_title, signature_notes, signature_due_date, 
+        signature_status, signature_file_url, signature_file_name, signature_file_size,
+        signed_by_id, signed_by_name, signed_by_email
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      msg.id,
+      conversationId,
+      msg.content || null,
+      msg.fileUrl || null,
+      msg.fileName || null,
+      msg.fileType || null,
+      msg.fileSize || null,
+      msg.sender?.id || null,
+      msg.sender?.first_name || null,
+      msg.sender?.last_name || null,
+      msg.createdAt || new Date().toISOString(),
+      msg.status || 'sent',
+      msg.signature?.id || null,
+      msg.signature?.title || null,
+      msg.signature?.notes || null,
+      msg.signature?.dueDate || null,
+      msg.signature?.status || null,
+      msg.signature?.fileUrl || null,
+      msg.signature?.fileName || null,
+      msg.signature?.fileSize || null,
+      msg.signature?.signedBy?.id || null,
+      msg.signature?.signedBy?.name || null,
+      msg.signature?.signedBy?.email || null
+    ]);
+  } catch (dbError) {
+    console.error('❌ Error saving message to database:', dbError);
+  }
+};
+
+// --- Batch Persistence Helper (MCP Context 7) ---
+// Business Rule: Process entire API pages inside a single transaction so large syncs finish faster without sacrificing duplicate protection.
+const saveMessagesBatchToSQLite = (messages, conversationId, logLabel = 'BATCH') => {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return;
+  }
+
+  try {
+    // Inline Comment: Filter out messages that are already cached so we only touch SQLite when there is new data.
+    const messagesToInsert = messages.filter((message) => !messageExistsInSQLite(message.id, conversationId));
+
+    if (messagesToInsert.length === 0) {
+      return; // NOTE: Entire batch already cached; no transaction needed so console stays quiet.
+    }
+
+    db.execSync('BEGIN TRANSACTION'); // Inline Comment: Group all inserts so SQLite only commits once, dramatically reducing IO.
+    messagesToInsert.forEach((message) => {
+      saveMessageToSQLite(message, conversationId, logLabel, false);
+    });
+    db.execSync('COMMIT');
+  } catch (transactionError) {
+    console.error(`❌ [${logLabel}] Failed to persist message batch:`, transactionError);
+    try {
+      db.execSync('ROLLBACK'); // Inline Comment: Roll back the whole batch if anything fails so the cache stays consistent.
+    } catch (rollbackError) {
+      console.error(`❌ [${logLabel}] Failed to rollback batch transaction:`, rollbackError);
+    }
+  }
+};
 
   // --- Helper: Fetch All Messages from API and Save to SQLite (MCP Context 7) ---
   // Business Rule: When SQLite is empty, fetch all messages from API and cache locally
@@ -460,7 +502,7 @@ const UserChatScreen = ({ navigation, route }) => {
     
     // Save all messages to SQLite
     console.log('💾 Saving messages to SQLite...');
-    allMessages.forEach(msg => saveMessageToSQLite(msg, conversationId));
+    saveMessagesBatchToSQLite(allMessages, conversationId, 'INITIAL-API-BATCH');
     console.log('✅ All messages saved to SQLite');
     
     // Update pagination state
@@ -616,56 +658,7 @@ const UserChatScreen = ({ navigation, route }) => {
             
             // Store all messages in SQLite database
             console.log('💾 Storing all API messages in SQLite database...');
-            allMessages.forEach(msg => {
-              try {
-                // Check if message already exists to avoid duplicates
-                const existingMessage = db.getFirstSync(
-                  `SELECT id FROM messages_${conversationId} WHERE id = ?`,
-                  [msg.id]
-                );
-                
-                if (existingMessage) {
-                  console.log(`ℹ️ Message ${msg.id} already exists in database - skipping insert`);
-                  return;
-                }
-                
-                db.runSync(`
-                  INSERT OR REPLACE INTO messages_${conversationId} (
-                    id, conversation_id, content, file_uri, file_name, file_type, file_size,
-                    sender_id, sender_first_name, sender_last_name, created_at, status,
-                    signature_id, signature_title, signature_notes, signature_due_date, 
-                    signature_status, signature_file_url, signature_file_name, signature_file_size,
-                    signed_by_id, signed_by_name, signed_by_email
-                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                `, [
-                  msg.id,
-                  conversationId,
-                  msg.content || null,
-                  msg.fileUrl || null,
-                  msg.fileName || null,
-                  msg.fileType || null,
-                  msg.fileSize || null,
-                  msg.sender?.id || null,
-                  msg.sender?.first_name || null,
-                  msg.sender?.last_name || null,
-                  msg.createdAt || new Date().toISOString(),
-                  msg.status || 'sent',
-                  msg.signature?.id || null,
-                  msg.signature?.title || null,
-                  msg.signature?.notes || null,
-                  msg.signature?.dueDate || null,
-                  msg.signature?.status || null,
-                  msg.signature?.fileUrl || null,
-                  msg.signature?.fileName || null,
-                  msg.signature?.fileSize || null,
-                  msg.signature?.signedBy?.id || null,
-                  msg.signature?.signedBy?.name || null,
-                  msg.signature?.signedBy?.email || null
-                ]);
-              } catch (dbError) {
-                console.error('❌ Error storing API message in database:', dbError);
-              }
-            });
+            saveMessagesBatchToSQLite(allMessages, conversationId, 'API-PROGRESSIVE-BATCH');
             console.log('✅ All API messages stored in SQLite database');
 
             // Reset pagination state - no more pages to load
@@ -872,56 +865,7 @@ const UserChatScreen = ({ navigation, route }) => {
           
           // Store all messages in SQLite database
           console.log('💾 Storing all API messages in SQLite database...');
-          allMessages.forEach(msg => {
-            try {
-              // Check if message already exists to avoid duplicates
-              const existingMessage = db.getFirstSync(
-                `SELECT id FROM messages_${conversationId} WHERE id = ?`,
-                [msg.id]
-              );
-              
-              if (existingMessage) {
-                console.log(`ℹ️ Message ${msg.id} already exists in database - skipping insert`);
-                return;
-              }
-              
-              db.runSync(`
-                INSERT OR REPLACE INTO messages_${conversationId} (
-                  id, conversation_id, content, file_uri, file_name, file_type, file_size,
-                  sender_id, sender_first_name, sender_last_name, created_at, status,
-                  signature_id, signature_title, signature_notes, signature_due_date, 
-                  signature_status, signature_file_url, signature_file_name, signature_file_size,
-                  signed_by_id, signed_by_name, signed_by_email
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-              `, [
-                msg.id,
-                conversationId,
-                msg.content || null,
-                msg.fileUrl || null,
-                msg.fileName || null,
-                msg.fileType || null,
-                msg.fileSize || null,
-                msg.sender?.id || null,
-                msg.sender?.first_name || null,
-                msg.sender?.last_name || null,
-                msg.createdAt || new Date().toISOString(),
-                msg.status || 'sent',
-                msg.signature?.id || null,
-                msg.signature?.title || null,
-                msg.signature?.notes || null,
-                msg.signature?.dueDate || null,
-                msg.signature?.status || null,
-                msg.signature?.fileUrl || null,
-                msg.signature?.fileName || null,
-                msg.signature?.fileSize || null,
-                msg.signature?.signedBy?.id || null,
-                msg.signature?.signedBy?.name || null,
-                msg.signature?.signedBy?.email || null
-              ]);
-            } catch (dbError) {
-              console.error('❌ Error storing API message in database:', dbError);
-            }
-          });
+          saveMessagesBatchToSQLite(allMessages, conversationId, 'API-PROGRESSIVE-BATCH');
           console.log('✅ All API messages stored in SQLite database');
 
           // Reset pagination state - no more pages to load
@@ -1249,6 +1193,29 @@ const UserChatScreen = ({ navigation, route }) => {
       return;
     }
 
+    let pendingSignatureIds = new Set();
+
+    try {
+      const pendingSignatureRows = db.getAllSync(
+        `SELECT signature_id FROM messages_${conversationId} WHERE signature_status = 'pending' AND signature_id IS NOT NULL`
+      );
+
+      pendingSignatureIds = new Set(
+        (pendingSignatureRows || [])
+          .map((row) => row?.signature_id)
+          .filter((id) => id !== null && id !== undefined)
+          .map((id) => String(id))
+      );
+    } catch (pendingLookupError) {
+      console.error('❌ [SIGNED SYNC] Unable to inspect pending signatures:', pendingLookupError);
+      pendingSignatureIds = new Set();
+    }
+
+    if (pendingSignatureIds.size === 0) {
+      console.log('ℹ️ [SIGNED SYNC] No pending signatures found locally – skipping server sync');
+      return;
+    }
+
     try {
       console.log('🔄 [SIGNED SYNC] Fetching signed signatures via getSignedSignatures()');
       
@@ -1271,6 +1238,12 @@ const UserChatScreen = ({ navigation, route }) => {
           return;
         }
 
+        const signatureIdAsString = String(signatureId);
+
+        if (!pendingSignatureIds.has(signatureIdAsString)) {
+          return; // NOTE: Only reconcile forms we still expect to be pending locally.
+        }
+
         // Inline Note: Only skip when a signature explicitly belongs to another conversation.
         const signatureConversationId =
           signature.conversationId ??
@@ -1287,7 +1260,13 @@ const UserChatScreen = ({ navigation, route }) => {
           return;
         }
 
-        const status = signature.status ?? signature.signatureStatus ?? 'signed';
+        const status = (signature.status ?? signature.signatureStatus ?? 'pending').toLowerCase();
+
+        if (status !== 'signed') {
+          console.log(`ℹ️ [SIGNED SYNC] Signature ${signatureIdAsString} is still ${status} on server – keeping local pending state`);
+          return;
+        }
+
         const fileUrl = signature.fileUrl ?? signature.file_url ?? null;
         const fileName = signature.fileName ?? signature.file_name ?? null;
         const fileSize = signature.fileSize ?? signature.file_size ?? null;
@@ -3893,12 +3872,7 @@ const UserChatScreen = ({ navigation, route }) => {
     
     try {
       // Create signature request data matching Pusher response format
-      // Use integer IDs to match database schema
-      const timestamp = Date.now();
-      const random = Math.floor(Math.random() * 1000);
-      const messageId = parseInt(`${timestamp}${random}`.slice(-10)); // Convert to integer, keep last 10 digits
-      const signatureId = messageId + 1; // Different integer ID for signature
-      
+      // NOTE: ID is omitted so SQLite AUTOINCREMENT can provide the same numbering strategy as regular messages.
       const signatureRequestData = {
         conversation_id: conversationId,
         content: null, // Signature requests have no text content
@@ -3911,7 +3885,7 @@ const UserChatScreen = ({ navigation, route }) => {
         sender_last_name: userInfo?.lastName || 'User',
         created_at: new Date().toISOString(),
         status: 'pending',
-        signature_id: signatureId, // Use signatureId from Pusher format
+        signature_id: null, // Placeholder until AUTOINCREMENT value is known
         signature_title: signatureData.title || 'Contract for Signature',
         signature_notes: signatureData.notes || null,
         signature_due_date: signatureData.dueDate && signatureData.dueDate.trim() 
@@ -3928,12 +3902,7 @@ const UserChatScreen = ({ navigation, route }) => {
       
       // Store signature request in SQLite database
       console.log('📝 [OFFLINE] Inserting signature request with data:', {
-        id: messageId,
-        messageId: messageId,
         conversationId: signatureRequestData.conversation_id,
-        signatureId: signatureRequestData.signature_id,
-        signatureIdType: typeof signatureRequestData.signature_id,
-        messageIdType: typeof messageId,
         title: signatureRequestData.signature_title,
         notes: signatureRequestData.signature_notes,
         dueDate: signatureRequestData.signature_due_date,
@@ -3950,14 +3919,13 @@ const UserChatScreen = ({ navigation, route }) => {
       
       db.runSync(`
         INSERT INTO messages_${conversationId} (
-          id, conversation_id, content, file_uri, file_name, file_type, file_size,
+          conversation_id, content, file_uri, file_name, file_type, file_size,
           sender_id, sender_first_name, sender_last_name, created_at, status,
           signature_id, signature_title, signature_notes, signature_due_date, 
           signature_status, signature_file_url, signature_file_name, signature_file_size,
           signed_by_id, signed_by_name, signed_by_email
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
-        messageId, // Temporary offline message ID (integer)
         signatureRequestData.conversation_id,
         signatureRequestData.content,
         signatureRequestData.file_uri,
@@ -3983,11 +3951,29 @@ const UserChatScreen = ({ navigation, route }) => {
       ]);
       
       console.log('✅ [OFFLINE] Signature request stored in database');
+
+      // Retrieve AUTOINCREMENT id to align with standard offline message handling
+      const offlineInsertRow = db.getFirstSync(`SELECT last_insert_rowid() AS id`);
+      let offlineMessageId = Number(offlineInsertRow?.id);
+      if (!Number.isFinite(offlineMessageId) || offlineMessageId <= 0) {
+        console.warn('⚠️ [OFFLINE] Could not read AUTOINCREMENT id for signature request; defaulting to 0');
+        offlineMessageId = 0;
+      }
+
+      // Use a stable negative placeholder so later sync logic can identify this signature request.
+      const offlineSignatureId = offlineMessageId === 0 ? null : -offlineMessageId;
+
+      if (offlineSignatureId !== null) {
+        db.runSync(
+          `UPDATE messages_${conversationId} SET signature_id = ? WHERE id = ?`,
+          [offlineSignatureId, offlineMessageId]
+        );
+      }
       
       // Create UI message object
       
       const uiMessage = {
-        id: messageId,
+        id: offlineMessageId,
         content: null,
         fileUrl: null,
         fileName: null,
@@ -4001,7 +3987,7 @@ const UserChatScreen = ({ navigation, route }) => {
         createdAt: signatureRequestData.created_at,
         status: 'pending',
         signature: {
-          id: signatureId,
+          id: offlineSignatureId,
           title: signatureRequestData.signature_title,
           notes: signatureRequestData.signature_notes,
           dueDate: signatureRequestData.signature_due_date,

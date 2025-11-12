@@ -1,5 +1,3 @@
-// Simple Custom Event Emitter for App Communication (MCP Context 7)
-// This allows different parts of the app to communicate without complex refs
 
 class SimpleEventEmitter {
   constructor() {
@@ -25,11 +23,6 @@ class SimpleEventEmitter {
     }
   }
 }
-
-// Create a global event emitter instance
 const appEmitter = new SimpleEventEmitter();
-
-// Make it available globally
 global.appEmitter = appEmitter;
-
 export default appEmitter;
