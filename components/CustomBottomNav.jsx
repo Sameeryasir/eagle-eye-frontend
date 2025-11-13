@@ -23,6 +23,23 @@ const iconSize = isVerySmallScreen ? 20 : isSmallScreen ? 22 : 24;
 const navHeight = isVerySmallScreen ? 60 : isSmallScreen ? 65 : 70;
 const fabSize = isVerySmallScreen ? 55 : isSmallScreen ? 60 : 65;
 
+const mapRouteNameToTab = (routeName) => {
+  switch (routeName) {
+    case "HomeScreen":
+      return "home";
+    case "CalenderScreen":
+    case "CalenderDetailScreen":
+    case "WeekView":
+      return "profile";
+    case "ChatScreen":
+      return "chats";
+    case "NotificationScreen":
+      return "notifications";
+    default:
+      return null;
+  }
+};
+
 export default function CustomBottomNav({
   keyboardVisible = false,
   task = false,
@@ -38,7 +55,10 @@ export default function CustomBottomNav({
 }) {
   const navigation = useNavigation();
   const route = useRoute();
-  const [activeTab, setActiveTab] = React.useState("home");
+  const [activeTab, setActiveTab] = React.useState(() => {
+    const initialTab = mapRouteNameToTab(route.name);
+    return initialTab ?? "home";
+  });
   const [userRole, setUserRole] = React.useState(propUserRole ?? null);
   const [hasNewNotification, setHasNewNotification] = React.useState(false);
   const insets = useSafeAreaInsets();
@@ -170,25 +190,10 @@ export default function CustomBottomNav({
       (propUserRole === null || propUserRole === undefined));
 
   React.useEffect(() => {
-    const getActiveTabFromRoute = (routeName) => {
-      switch (routeName) {
-        case "HomeScreen":
-          return "home";
-        case "CalenderScreen":
-        case "CalenderDetailScreen":
-        case "WeekView":
-          return "profile";
-        case "ChatScreen":
-          return "chats";
-        case "NotificationScreen":
-          return "notifications";
-        default:
-          return null;
-      }
-    };
-
-    const currentTab = getActiveTabFromRoute(route.name);
-    setActiveTab(currentTab);
+    const currentTab = mapRouteNameToTab(route.name);
+    if (currentTab !== null) {
+      setActiveTab(currentTab);
+    }
   }, [route.name]);
 
   const isSubscribedRef = React.useRef(false);
@@ -398,6 +403,7 @@ export default function CustomBottomNav({
   };
 
   const navigateToHome = async () => {
+    setActiveTab("home");
     const userRole = await getUserRole();
 
     if (
@@ -413,10 +419,12 @@ export default function CustomBottomNav({
   };
 
   const navigateToChats = () => {
+    setActiveTab("chats");
     navigation.navigate("ChatScreen");
   };
 
   const navigateToNotifications = () => {
+    setActiveTab("notifications");
     navigation.navigate("NotificationScreen");
 
     setHasNewNotification(false);
@@ -426,6 +434,7 @@ export default function CustomBottomNav({
   };
 
   const navigateToProfile = () => {
+    setActiveTab("profile");
     navigation.navigate("CalenderScreen");
   };
 
@@ -469,6 +478,7 @@ export default function CustomBottomNav({
           elevation: transparentBackground ? 0 : 6,
 
           position: "relative",
+          overflow: "visible",
         }}
       >
         <TouchableOpacity
@@ -482,7 +492,16 @@ export default function CustomBottomNav({
         >
           <Ionicons name="home-outline" size={iconSize} color="#fff" />
           {activeTab === "home" && (
-            <View className="absolute bottom-[-6px] w-5 h-[3px] bg-white rounded-[2px]" />
+            <View
+              style={{
+                position: "absolute",
+                bottom: -6,
+                width: 22,
+                height: 3,
+                backgroundColor: "#ffffff",
+                borderRadius: 2,
+              }}
+            />
           )}
         </TouchableOpacity>
         <TouchableOpacity
@@ -498,7 +517,16 @@ export default function CustomBottomNav({
           <Ionicons name="calendar-outline" size={iconSize} color="#fff" />
 
           {activeTab === "profile" && (
-            <View className="absolute bottom-[-6px] w-5 h-[3px] bg-white rounded-[2px]" />
+            <View
+              style={{
+                position: "absolute",
+                bottom: -6,
+                width: 22,
+                height: 3,
+                backgroundColor: "#ffffff",
+                borderRadius: 2,
+              }}
+            />
           )}
         </TouchableOpacity>
 
@@ -517,7 +545,16 @@ export default function CustomBottomNav({
         >
           <Ionicons name="chatbubble-outline" size={iconSize} color="#fff" />
           {activeTab === "chats" && (
-            <View className="absolute bottom-[-6px] w-5 h-[3px] bg-white rounded-[2px]" />
+            <View
+              style={{
+                position: "absolute",
+                bottom: -6,
+                width: 22,
+                height: 3,
+                backgroundColor: "#ffffff",
+                borderRadius: 2,
+              }}
+            />
           )}
         </TouchableOpacity>
 
@@ -550,7 +587,16 @@ export default function CustomBottomNav({
             />
           )}
           {activeTab === "notifications" && (
-            <View className="absolute bottom-[-6px] w-5 h-[3px] bg-white rounded-[2px]" />
+            <View
+              style={{
+                position: "absolute",
+                bottom: -6,
+                width: 22,
+                height: 3,
+                backgroundColor: "#ffffff",
+                borderRadius: 2,
+              }}
+            />
           )}
         </TouchableOpacity>
       </View>
