@@ -190,7 +190,24 @@ export default function CustomBottomNav({
       (propUserRole === null || propUserRole === undefined));
 
   React.useEffect(() => {
-    const currentTab = mapRouteNameToTab(route.name);
+    const getActiveTabFromRoute = (routeName) => {
+      switch (routeName) {
+        case "HomeScreen":
+          return "home";
+        case "CalenderScreen":
+        case "CalenderDetailScreen":
+        case "WeekView":
+          return "profile";
+        case "ChatScreen":
+          return "chats";
+        case "NotificationScreen":
+          return "notifications";
+        default:
+          return null;
+      }
+    };
+
+    const currentTab = getActiveTabFromRoute(route.name);
     if (currentTab !== null) {
       setActiveTab(currentTab);
     }

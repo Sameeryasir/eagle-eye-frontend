@@ -2,8 +2,8 @@ import Pusher from 'pusher-js/react-native';
 
 Pusher.logToConsole = true;
 
-const pusher = new Pusher("2a365c8d4fd51cd8b223", {
-  cluster: "ap2",
+const pusher = new Pusher("", {
+  cluster: "",
   forceTLS: true,
 });
 

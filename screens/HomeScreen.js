@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
 import {
   View,
   Text,
@@ -17,23 +23,26 @@ import {
   Dimensions,
   ActivityIndicator,
 } from "react-native";
-import Toast from 'react-native-toast-message';
+import Toast from "react-native-toast-message";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
-import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
+import {
+  Menu,
+  MenuOptions,
+  MenuOption,
+  MenuTrigger,
+} from "react-native-popup-menu";
 
-// --- Redux Integration (MCP Context 7) ---
-// Import Redux hooks and actions for centralized state management
-import { useSelector, useDispatch } from 'react-redux';
-import { 
-  fetchProjects, 
+import { useSelector, useDispatch } from "react-redux";
+import {
+  fetchProjects,
   refreshProjects,
   deleteProject,
   selectProjects,
   selectProjectLoading,
-  selectProjectError
-} from '../store/slices/projectSlice';
+  selectProjectError,
+} from "../store/slices/projectSlice";
 
 import Sidebar from "../components/Sidebar";
 import CustomBottomNav from "../components/CustomBottomNav";
@@ -46,13 +55,11 @@ import { sendInvite } from "../services/auth/SendInvite";
 import { getUserById } from "../services/user/getUserById";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// --- Responsive Design Constants (MCP Context 7) ---
-// More comprehensive screen size detection for better responsive design
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
-const isVerySmallScreen = screenWidth < 380 || screenHeight < 650; // Very small devices (more aggressive)
-const isSmallScreen = screenWidth < 400 || screenHeight < 700; // Small devices
-const isMediumScreen = screenWidth < 450; // Medium devices
-const isLargeScreen = screenWidth >= 450; // Large devices
+const isVerySmallScreen = screenWidth < 380 || screenHeight < 650;
+const isSmallScreen = screenWidth < 400 || screenHeight < 700;
+const isMediumScreen = screenWidth < 450;
+const isLargeScreen = screenWidth >= 450;
 
 const searchBarClasses = `flex-row items-center rounded-2xl px-4 py-3 bg-[#F8FAFC] border border-[#EAECF0]`;
 
@@ -92,22 +99,20 @@ const SearchBarHeader = React.memo(function SearchBarHeader({
 });
 
 function HomeScreen({ navigation, route }) {
-  // --- Redux State Management (MCP Context 7) ---
-  // Use Redux for project data, keep search functionality local
   const dispatch = useDispatch();
   const projects = useSelector(selectProjects);
   const loading = useSelector(selectProjectLoading);
   const error = useSelector(selectProjectError);
-  
-  // --- Local State for Search and UI (MCP Context 7) ---
-  // Keep search functionality local as requested
+
   const [filteredProjects, setFilteredProjects] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
-  const [createProjectModalVisible, setCreateProjectModalVisible] = useState(false);
-  const [updateProjectModalVisible, setUpdateProjectModalVisible] = useState(false);
+  const [createProjectModalVisible, setCreateProjectModalVisible] =
+    useState(false);
+  const [updateProjectModalVisible, setUpdateProjectModalVisible] =
+    useState(false);
   const [userRole, setUserRole] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
@@ -116,28 +121,27 @@ function HomeScreen({ navigation, route }) {
   const [isLoading, setIsLoading] = useState(false);
   const [invitePopupVisible, setInvitePopupVisible] = useState(false);
   const [projectToInvite, setProjectToInvite] = useState(null);
-  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteEmail, setInviteEmail] = useState("");
   const [isSendingInvite, setIsSendingInvite] = useState(false);
-  const [inviteErrorDialogVisible, setInviteErrorDialogVisible] = useState(false);
-  const [inviteErrorMessage, setInviteErrorMessage] = useState('');
+  const [inviteErrorDialogVisible, setInviteErrorDialogVisible] =
+    useState(false);
+  const [inviteErrorMessage, setInviteErrorMessage] = useState("");
   const { width: screenWidth } = useWindowDimensions();
   const [hideCompanyAfterCreate, setHideCompanyAfterCreate] = useState(false);
-  const [currentUserCompanyId, setCurrentUserCompanyId] = useState(null); // Store current user's company ID to compare with project companies
+  const [currentUserCompanyId, setCurrentUserCompanyId] = useState(null);
 
   const numColumns = screenWidth >= 1024 ? 3 : screenWidth >= 768 ? 2 : 1;
-  const horizontalPadding = 40; // px-5 on container (20 left + 20 right)
-  const interItemSpacing = 16; // mb-4 used for vertical; also used between columns
+  const horizontalPadding = 40;
+  const interItemSpacing = 16;
   const cardWidth =
     (screenWidth - horizontalPadding - (numColumns - 1) * interItemSpacing) /
     numColumns;
 
-  // --- Load Data on Component Mount (MCP Context 7) ---
-  // Use Redux action to fetch projects with local loading state
   useEffect(() => {
     const loadProjects = async () => {
       setIsLoading(true);
       setIsInitialLoad(true);
-      
+
       try {
         await dispatch(fetchProjects());
       } finally {
@@ -148,31 +152,6 @@ function HomeScreen({ navigation, route }) {
     loadProjects();
   }, [dispatch]);
 
-  // --- TIMEZONE DEBUGGING (MCP Context 7) ---
-  // Fetch and display user's local timezone information
-  useEffect(() => {
-    const debugTimezone = () => {
-      console.log("🌍 TIMEZONE DEBUG INFO - HomeScreen:");
-      console.log("Browser timezone:", Intl.DateTimeFormat().resolvedOptions().timeZone);
-      console.log("Current time:", new Date().toString());
-      console.log("Current time (ISO):", new Date().toISOString());
-      console.log("Current time (Local):", new Date().toLocaleString());
-      console.log("Timezone offset (minutes):", new Date().getTimezoneOffset());
-      console.log("Timezone offset (hours):", new Date().getTimezoneOffset() / 60);
-      console.log("---");
-    };
-
-    // Call immediately
-    debugTimezone();
-
-    // Also call every 30 seconds to see if timezone changes
-    const interval = setInterval(debugTimezone, 30000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // --- Update Filtered Projects When Projects Change (MCP Context 7) ---
-  // Keep search functionality local as requested
   useEffect(() => {
     if (searchTerm.trim() === "") {
       setFilteredProjects(projects);
@@ -186,17 +165,12 @@ function HomeScreen({ navigation, route }) {
     }
   }, [projects, searchTerm]);
 
-  // NOTE: OTP verification success messages are now handled directly 
-  // in OtpScreen using react-native-toast-message for consistent cross-platform experience
-
-  // Get user role and disable swipe back for admin/owner
   useEffect(() => {
     const loadUserRole = async () => {
       const role = await getUserRole();
       setUserRole(role);
 
-      // Disable swipe back gesture for admin or owner
-      if (role === 'Admin' || role === 'Owner') {
+      if (role === "Admin" || role === "Owner") {
         navigation.setOptions({
           gestureEnabled: false,
         });
@@ -210,23 +184,20 @@ function HomeScreen({ navigation, route }) {
     loadUserRole();
   }, [navigation]);
 
-  // --- Load Current User's Company (MCP Context 7) ---
-  // Business Rule: Get current user's company ID to compare with project companies
-  // Only show company name for collaborated projects (different company)
   useEffect(() => {
     const loadCurrentUserCompany = async () => {
       try {
-        const userId = await AsyncStorage.getItem('userId');
+        const userId = await AsyncStorage.getItem("userId");
         if (userId) {
           const userData = await getUserById(userId);
-          // Get company ID from user data (can be company.id or company_id)
-          const companyId = userData?.company?.id || userData?.company_id || null;
+
+          const companyId =
+            userData?.company?.id || userData?.company_id || null;
           setCurrentUserCompanyId(companyId);
-          console.log('Current user company ID:', companyId);
+          console.log("Current user company ID:", companyId);
         }
       } catch (error) {
-        console.error('Error loading current user company:', error);
-        // Don't show error to user - just continue without company comparison
+        console.error("Error loading current user company:", error);
       }
     };
 
@@ -249,12 +220,10 @@ function HomeScreen({ navigation, route }) {
     };
   }, []);
 
-  // --- Refresh Handler (MCP Context 7) ---
-  // Use refreshProjects to bypass cache and fetch fresh data from API
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
     setIsLoading(true);
-    
+
     dispatch(refreshProjects()).finally(() => {
       setRefreshing(false);
       setIsLoading(false);
@@ -267,8 +236,6 @@ function HomeScreen({ navigation, route }) {
     return date.toLocaleDateString();
   };
 
-  // --- Search Handler (MCP Context 7) ---
-  // Handle search locally as requested
   const handleSearch = (text) => {
     setSearchTerm(text);
   };
@@ -278,8 +245,6 @@ function HomeScreen({ navigation, route }) {
     setUpdateProjectModalVisible(true);
   };
 
-  // --- Invite Handler (MCP Context 7) ---
-  // Handle project invitation functionality
   const handleInvite = (project) => {
     const projectId = project?.id;
     const projectName = project?.name;
@@ -289,14 +254,11 @@ function HomeScreen({ navigation, route }) {
       return;
     }
 
-    // Set the project to invite and show popup
     setProjectToInvite(project);
-    setInviteEmail(''); // Clear previous email
+    setInviteEmail("");
     setInvitePopupVisible(true);
   };
 
-  // --- Delete Handler (MCP Context 7) ---
-  // Show confirmation dialog for project deletion
   const handleDelete = (project) => {
     const projectId = project?.id;
     const projectName = project?.name;
@@ -306,48 +268,41 @@ function HomeScreen({ navigation, route }) {
       return;
     }
 
-    // Show beautiful custom dialog instead of Alert
     setProjectToDelete(project);
     setDeleteDialogVisible(true);
   };
 
-  // --- Confirm Delete (MCP Context 7) ---
-  // Use Redux action for deletion instead of direct API call
   const confirmDelete = async () => {
     if (!projectToDelete) return;
 
     const projectId = projectToDelete.id;
     const projectName = projectToDelete.name;
 
-    // Close dialog immediately when delete button is tapped
     setDeleteDialogVisible(false);
     setProjectToDelete(null);
 
     try {
-      // Use Redux action for deletion
       const resultAction = await dispatch(deleteProject(projectId));
-      
+
       if (deleteProject.fulfilled.match(resultAction)) {
-        // --- Show Success Toast Message ---
         Toast.show({
-          type: 'success',
-          text1: 'Project Deleted Successfully!',
+          type: "success",
+          text1: "Project Deleted Successfully!",
           text2: `"${projectName}" has been permanently deleted`,
           visibilityTime: 3000,
           autoHide: true,
           topOffset: 80,
         });
       } else {
-        throw new Error('Delete failed');
+        throw new Error("Delete failed");
       }
     } catch (error) {
       console.error("Error deleting project:", error);
-      
-      // --- Show Error Toast Message ---
+
       Toast.show({
-        type: 'error',
-        text1: 'Delete Failed',
-        text2: 'Failed to delete project. Please try again.',
+        type: "error",
+        text1: "Delete Failed",
+        text2: "Failed to delete project. Please try again.",
         visibilityTime: 4000,
         autoHide: true,
         topOffset: 80,
@@ -360,14 +315,12 @@ function HomeScreen({ navigation, route }) {
     setProjectToDelete(null);
   };
 
-  // --- Invite Popup Handlers (MCP Context 7) ---
-  // Handle sending invite via email
   const handleSendInvite = async () => {
     if (!inviteEmail.trim()) {
       Toast.show({
-        type: 'error',
-        text1: 'Email Required',
-        text2: 'Please enter an email address',
+        type: "error",
+        text1: "Email Required",
+        text2: "Please enter an email address",
         visibilityTime: 3000,
         autoHide: true,
         topOffset: 80,
@@ -375,13 +328,12 @@ function HomeScreen({ navigation, route }) {
       return;
     }
 
-    // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(inviteEmail.trim())) {
       Toast.show({
-        type: 'error',
-        text1: 'Invalid Email',
-        text2: 'Please enter a valid email address',
+        type: "error",
+        text1: "Invalid Email",
+        text2: "Please enter a valid email address",
         visibilityTime: 3000,
         autoHide: true,
         topOffset: 80,
@@ -389,12 +341,11 @@ function HomeScreen({ navigation, route }) {
       return;
     }
 
-    // Ensure we have a valid project ID
     if (!projectToInvite?.id) {
       Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Project information is missing',
+        type: "error",
+        text1: "Error",
+        text2: "Project information is missing",
         visibilityTime: 3000,
         autoHide: true,
         topOffset: 80,
@@ -402,78 +353,62 @@ function HomeScreen({ navigation, route }) {
       return;
     }
 
-    // Show loading indicator
     setIsSendingInvite(true);
 
     try {
-      // Call the sendInvite service with email and projectId
       await sendInvite(inviteEmail.trim(), projectToInvite.id);
-      
-      // Close popup and show success message
+
       setInvitePopupVisible(false);
-      const sentEmail = inviteEmail; // Store before clearing
+      const sentEmail = inviteEmail;
       setProjectToInvite(null);
-      setInviteEmail('');
-      
+      setInviteEmail("");
+
       Toast.show({
-        type: 'success',
-        text1: 'Invite Sent Successfully!',
+        type: "success",
+        text1: "Invite Sent Successfully!",
         text2: `Invitation sent to ${sentEmail}`,
         visibilityTime: 3000,
         autoHide: true,
         topOffset: 80,
       });
     } catch (error) {
-      console.error('Error sending invite:', error);
-      
-      // Parse error message from backend if available
-      // Business Rule: Check multiple error formats
-      // 1. error.message (when SendInvite service throws new Error)
-      // 2. error.response?.data?.message (direct axios error)
-      // 3. Default fallback message
-      const errorMessage = error?.message || 
-                          error?.response?.data?.message || 
-                          'Failed to send invitation. Please try again.';
-      
-      // Close the invite popup first
+      console.error("Error sending invite:", error);
+
+      const errorMessage =
+        error?.message ||
+        error?.response?.data?.message ||
+        "Failed to send invitation. Please try again.";
+
       setInvitePopupVisible(false);
-      
-      // Show custom error dialog instead of toast
+
       setInviteErrorMessage(errorMessage);
       setInviteErrorDialogVisible(true);
     } finally {
-      // Hide loading indicator
       setIsSendingInvite(false);
     }
   };
 
-  // Handle canceling invite popup
   const handleCancelInvitePopup = () => {
     setInvitePopupVisible(false);
     setProjectToInvite(null);
-    setInviteEmail('');
+    setInviteEmail("");
     setIsSendingInvite(false);
   };
 
-  // --- Create Project Success Handler (MCP Context 7) ---
-  // Close modal - Redux will automatically update the UI when project is created
   const handleCreateProjectSuccess = () => {
     setCreateProjectModalVisible(false);
-    // Hide company name briefly right after creation to satisfy business rule
+
     setHideCompanyAfterCreate(true);
-    
-    // --- Show Success Toast Message ---
+
     Toast.show({
-      type: 'success',
-      text1: 'Project Created Successfully!',
-      text2: 'Your new project has been added to the list',
+      type: "success",
+      text1: "Project Created Successfully!",
+      text2: "Your new project has been added to the list",
       visibilityTime: 3000,
       autoHide: true,
       topOffset: 80,
     });
-    
-    // No need to manually refresh - Redux will automatically update the UI
-    // Re-enable company display after a short delay (simple, non-invasive)
+
     setTimeout(() => setHideCompanyAfterCreate(false), 2000);
   };
 
@@ -481,23 +416,18 @@ function HomeScreen({ navigation, route }) {
     setCreateProjectModalVisible(false);
   };
 
-  // --- Update Project Success Handler (MCP Context 7) ---
-  // Close modal - Redux will automatically update the UI when project is updated
   const handleUpdateProjectSuccess = () => {
     setUpdateProjectModalVisible(false);
     setSelectedProject(null);
-    
-    // --- Show Success Toast Message ---
+
     Toast.show({
-      type: 'success',
-      text1: 'Project Updated Successfully!',
-      text2: 'Your project changes have been saved',
+      type: "success",
+      text1: "Project Updated Successfully!",
+      text2: "Your project changes have been saved",
       visibilityTime: 3000,
       autoHide: true,
       topOffset: 80,
     });
-    
-    // No need to manually refresh - Redux will automatically update the UI
   };
 
   const handleUpdateProjectClose = () => {
@@ -505,25 +435,23 @@ function HomeScreen({ navigation, route }) {
     setSelectedProject(null);
   };
 
-
-
   const ProjectCard = ({ project, cardWidth, userRole }) => (
     <TouchableOpacity
       key={project.id}
       className="bg-white rounded-2xl p-0 mb-4 border border-[#f0f0f0] overflow-hidden"
       style={{ width: cardWidth }}
       onPress={() => {
-        console.log('🔍 NAVIGATION DEBUG - HomeScreen:');
-        console.log('📱 Project ID:', project.id);
-        console.log('📝 Project Name:', project.name);
-        console.log('🚀 Navigating to WidgetScreen with params:', {
+        console.log("🔍 NAVIGATION DEBUG - HomeScreen:");
+        console.log("📱 Project ID:", project.id);
+        console.log("📝 Project Name:", project.name);
+        console.log("🚀 Navigating to WidgetScreen with params:", {
           projectId: project.id,
-          projectName: project.name
+          projectName: project.name,
         });
-        
-        navigation.navigate("WidgetScreen", { 
+
+        navigation.navigate("WidgetScreen", {
           projectId: project.id,
-          projectName: project.name 
+          projectName: project.name,
         });
       }}
     >
@@ -535,71 +463,105 @@ function HomeScreen({ navigation, route }) {
         >
           {project.name}
         </Text>
-{userRole !== 'Employee' && userRole !== 'Manager' && (
-          <Menu rendererProps={{
-            placement: 'bottom-end',
-            anchorStyle: { marginRight: 0 },
-            triggerStyle: { marginRight: 0 }
-          }}>
+        {userRole !== "Employee" && userRole !== "Manager" && (
+          <Menu
+            rendererProps={{
+              placement: "bottom-end",
+              anchorStyle: { marginRight: 0 },
+              triggerStyle: { marginRight: 0 },
+            }}
+          >
             <MenuTrigger>
               <View style={{ activeOpacity: 1 }}>
                 <Ionicons name="ellipsis-vertical" size={20} color="white" />
               </View>
             </MenuTrigger>
-            <MenuOptions customStyles={{
-              optionsContainer: {
-                backgroundColor: 'white',
-                borderRadius: 8,
-                padding: 8,
-                width: 140,
-                marginRight: -40,
-                marginTop: 15,
-                shadowColor: "#000",
-                shadowOpacity: 0.15,
-                shadowRadius: 6,
-                shadowOffset: { width: 0, height: 3 },
-                elevation: 3,
-              }
-            }}>
-              <MenuOption onSelect={() => handleUpdate(project)} customStyles={{
-                optionWrapper: {
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingVertical: 6,
-                  paddingHorizontal: 12,
-                  borderRadius: 4,
-                }
-              }}>
+            <MenuOptions
+              customStyles={{
+                optionsContainer: {
+                  backgroundColor: "white",
+                  borderRadius: 8,
+                  padding: 8,
+                  width: 140,
+                  marginRight: -40,
+                  marginTop: 15,
+                  shadowColor: "#000",
+                  shadowOpacity: 0.15,
+                  shadowRadius: 6,
+                  shadowOffset: { width: 0, height: 3 },
+                  elevation: 3,
+                },
+              }}
+            >
+              <MenuOption
+                onSelect={() => handleUpdate(project)}
+                customStyles={{
+                  optionWrapper: {
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: 6,
+                    paddingHorizontal: 12,
+                    borderRadius: 4,
+                  },
+                }}
+              >
                 <Ionicons name="create-outline" size={18} color="#000" />
-                <Text style={{ marginLeft: 10, fontSize: 14, fontWeight: '600', color: 'black' }}>
+                <Text
+                  style={{
+                    marginLeft: 10,
+                    fontSize: 14,
+                    fontWeight: "600",
+                    color: "black",
+                  }}
+                >
                   Update
                 </Text>
               </MenuOption>
-              <MenuOption onSelect={() => handleInvite(project)} customStyles={{
-                optionWrapper: {
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingVertical: 6,
-                  paddingHorizontal: 12,
-                  borderRadius: 4,
-                }
-              }}>
+              <MenuOption
+                onSelect={() => handleInvite(project)}
+                customStyles={{
+                  optionWrapper: {
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: 6,
+                    paddingHorizontal: 12,
+                    borderRadius: 4,
+                  },
+                }}
+              >
                 <Ionicons name="person-add-outline" size={18} color="#000000" />
-                <Text style={{ marginLeft: 10, fontSize: 14, fontWeight: '600', color: '#000000' }}>
+                <Text
+                  style={{
+                    marginLeft: 10,
+                    fontSize: 14,
+                    fontWeight: "600",
+                    color: "#000000",
+                  }}
+                >
                   Invite
                 </Text>
               </MenuOption>
-              <MenuOption onSelect={() => handleDelete(project)} customStyles={{
-                optionWrapper: {
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingVertical: 6,
-                  paddingHorizontal: 12,
-                  borderRadius: 4,
-                }
-              }}>
+              <MenuOption
+                onSelect={() => handleDelete(project)}
+                customStyles={{
+                  optionWrapper: {
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: 6,
+                    paddingHorizontal: 12,
+                    borderRadius: 4,
+                  },
+                }}
+              >
                 <Ionicons name="trash-outline" size={18} color="#dc3545" />
-                <Text style={{ marginLeft: 10, fontSize: 14, fontWeight: '600', color: '#dc3545' }}>
+                <Text
+                  style={{
+                    marginLeft: 10,
+                    fontSize: 14,
+                    fontWeight: "600",
+                    color: "#dc3545",
+                  }}
+                >
                   Delete
                 </Text>
               </MenuOption>
@@ -612,30 +574,30 @@ function HomeScreen({ navigation, route }) {
       <View className="p-6 py-8">
         {/* Company Tag - Show only for collaborated projects (different company) (MCP Context 7) --- */}
         {/* Business Rule: Hide company name for projects from user's own company, show only for collaborated projects */}
-        {project.company && 
-         currentUserCompanyId && 
-         project.company.id !== currentUserCompanyId && (
-          <View className="mb-3">
-            <View className="flex-row items-center self-start">
-              <Ionicons name="business" size={14} color="black" />
-              <Text className="text-[14px] text-black font-semibold ml-1.5">
-                {project.company.name}
-              </Text>
+        {project.company &&
+          currentUserCompanyId &&
+          project.company.id !== currentUserCompanyId && (
+            <View className="mb-3">
+              <View className="flex-row items-center self-start">
+                <Ionicons name="business" size={14} color="black" />
+                <Text className="text-[14px] text-black font-semibold ml-1.5">
+                  {project.company.name}
+                </Text>
+              </View>
             </View>
-          </View>
-        )}
-        
+          )}
+
         <View className="flex-row items-start justify-between">
-          <Text 
+          <Text
             className="text-[14px] text-[#666] leading-[22px] flex-1 mr-3"
             numberOfLines={3}
             ellipsizeMode="tail"
           >
             {project.description}
           </Text>
-          <Text 
+          <Text
             className="text-[12px] text-[#999] font-medium"
-            style={{ marginTop: '1%' }}
+            style={{ marginTop: "1%" }}
           >
             {formatDate(project.startDate)}
           </Text>
@@ -645,13 +607,10 @@ function HomeScreen({ navigation, route }) {
   );
 
   const renderContent = () => {
-    // Only return null if still loading - let FlatList handle empty state
     if (isLoading) {
       return null;
     }
 
-    // --- Simple Fix: When empty, ensure FlatList is scrollable for easy pull-to-refresh (MCP Context 7) ---
-    // Business Rule: Empty list must allow smooth pull-to-refresh on first swipe
     const isEmpty = filteredProjects.length === 0;
 
     return (
@@ -660,8 +619,6 @@ function HomeScreen({ navigation, route }) {
         key={numColumns}
         numColumns={numColumns}
         keyExtractor={(item) => String(item.id)}
-        // --- Simple Solution: Use flexGrow when empty to make list scrollable (MCP Context 7) ---
-        // This ensures users can pull-to-refresh smoothly without multiple swipes
         contentContainerStyle={
           isEmpty
             ? { flexGrow: 1, paddingHorizontal: 20, paddingBottom: 100 }
@@ -684,14 +641,13 @@ function HomeScreen({ navigation, route }) {
         }
         ListHeaderComponentStyle={{ marginHorizontal: -20 }}
         ListEmptyComponent={() => (
-          // --- Simple Empty Component: Takes full height to enable smooth scrolling (MCP Context 7) ---
-          <View 
-            style={{ 
-              flex: 1, 
-              justifyContent: 'center', 
-              alignItems: 'center',
+          <View
+            style={{
+              flex: 1,
+              justifyContent: "center",
+              alignItems: "center",
               paddingVertical: 40,
-              minHeight: screenHeight * 0.7 // Simple: 70% of screen height for easy pull-to-refresh
+              minHeight: screenHeight * 0.7,
             }}
           >
             {error ? (
@@ -718,7 +674,11 @@ function HomeScreen({ navigation, route }) {
           </View>
         )}
         renderItem={({ item }) => (
-          <ProjectCard project={item} cardWidth={cardWidth} userRole={userRole} />
+          <ProjectCard
+            project={item}
+            cardWidth={cardWidth}
+            userRole={userRole}
+          />
         )}
       />
     );
@@ -737,24 +697,20 @@ function HomeScreen({ navigation, route }) {
         </TouchableWithoutFeedback>
       )}
 
-
-
       {/* Sidebar */}
       <Sidebar
         isVisible={sidebarVisible}
         onClose={() => setSidebarVisible(false)}
-        onNavigate={() => { }}
+        onNavigate={() => {}}
       />
 
       {/* Bottom Nav */}
       <CustomBottomNav
         keyboardVisible={keyboardVisible}
         project
-        currentScreen="home" // ✅ ADD: Tell bottom nav we're on home screen
+        currentScreen="home"
         onAddPress={() => {
-          // Only allow project creation for Owner role
           if (userRole === "Employee" || userRole === "Manager") {
-            // Do nothing for Employee and Manager roles
             return;
           }
           setCreateProjectModalVisible(true);
@@ -792,118 +748,138 @@ function HomeScreen({ navigation, route }) {
         animationType="fade"
         onRequestClose={cancelDelete}
       >
-        <View style={{
-          flex: 1,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          justifyContent: 'center',
-          alignItems: 'center',
-          paddingHorizontal: 20,
-        }}>
-          <View style={{
-            backgroundColor: 'white',
-            borderRadius: 16,
-            padding: 20,
-            width: '100%',
-            maxWidth: 320,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: 0.2,
-            shadowRadius: 16,
-            elevation: 8,
-          }}>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            justifyContent: "center",
+            alignItems: "center",
+            paddingHorizontal: 20,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "white",
+              borderRadius: 16,
+              padding: 20,
+              width: "100%",
+              maxWidth: 320,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.2,
+              shadowRadius: 16,
+              elevation: 8,
+            }}
+          >
             {/* Warning Icon */}
-            <View style={{
-              alignItems: 'center',
-              marginBottom: 16,
-            }}>
-              <View style={{
-                width: 48,
-                height: 48,
-                borderRadius: 24,
-                backgroundColor: '#FEF2F2',
-                justifyContent: 'center',
-                alignItems: 'center',
-                marginBottom: 12,
-              }}>
+            <View
+              style={{
+                alignItems: "center",
+                marginBottom: 16,
+              }}
+            >
+              <View
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: "#FEF2F2",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  marginBottom: 12,
+                }}
+              >
                 <Ionicons name="warning" size={24} color="#EF4444" />
               </View>
-              <Text style={{
-                fontSize: 18,
-                fontWeight: 'bold',
-                color: '#1F2937',
-                textAlign: 'center',
-                marginBottom: 4,
-              }}>
+              <Text
+                style={{
+                  fontSize: 18,
+                  fontWeight: "bold",
+                  color: "#1F2937",
+                  textAlign: "center",
+                  marginBottom: 4,
+                }}
+              >
                 Delete Project
               </Text>
             </View>
 
             {/* Message */}
-            <Text style={{
-              fontSize: 15,
-              color: '#6B7280',
-              textAlign: 'center',
-              lineHeight: 22,
-              marginBottom: 16,
-            }}>
-              Are you sure you want to delete{' '}
-              <Text style={{ fontWeight: '600', color: '#1F2937' }}>
+            <Text
+              style={{
+                fontSize: 15,
+                color: "#6B7280",
+                textAlign: "center",
+                lineHeight: 22,
+                marginBottom: 16,
+              }}
+            >
+              Are you sure you want to delete{" "}
+              <Text style={{ fontWeight: "600", color: "#1F2937" }}>
                 "{projectToDelete?.name}"
-              </Text>
-              {' '}permanently?
+              </Text>{" "}
+              permanently?
             </Text>
-            
-            <Text style={{
-              fontSize: 13,
-              color: '#EF4444',
-              textAlign: 'center',
-              fontWeight: '500',
-              marginBottom: 20,
-            }}>
+
+            <Text
+              style={{
+                fontSize: 13,
+                color: "#EF4444",
+                textAlign: "center",
+                fontWeight: "500",
+                marginBottom: 20,
+              }}
+            >
               This action cannot be undone.
             </Text>
 
             {/* Action Buttons */}
-            <View style={{
-              flexDirection: 'row',
-              gap: 10,
-            }}>
+            <View
+              style={{
+                flexDirection: "row",
+                gap: 10,
+              }}
+            >
               <TouchableOpacity
                 style={{
                   flex: 1,
-                  backgroundColor: '#F3F4F6',
+                  backgroundColor: "#F3F4F6",
                   paddingVertical: 12,
                   borderRadius: 10,
-                  alignItems: 'center',
+                  alignItems: "center",
                 }}
                 onPress={cancelDelete}
                 activeOpacity={0.8}
               >
-                <Text style={{
-                  fontSize: 15,
-                  fontWeight: '600',
-                  color: '#374151',
-                }}>
+                <Text
+                  style={{
+                    fontSize: 15,
+                    fontWeight: "600",
+                    color: "#374151",
+                  }}
+                >
                   Cancel
                 </Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity
                 style={{
                   flex: 1,
-                  backgroundColor: '#EF4444',
+                  backgroundColor: "#EF4444",
                   paddingVertical: 12,
                   borderRadius: 10,
-                  alignItems: 'center',
+                  alignItems: "center",
                 }}
                 onPress={confirmDelete}
                 activeOpacity={0.8}
               >
-                <Text style={{
-                  fontSize: 15,
-                  fontWeight: '600',
-                  color: 'white',
-                }}>
+                <Text
+                  style={{
+                    fontSize: 15,
+                    fontWeight: "600",
+                    color: "white",
+                  }}
+                >
                   Delete
                 </Text>
               </TouchableOpacity>
@@ -920,69 +896,81 @@ function HomeScreen({ navigation, route }) {
         onRequestClose={handleCancelInvitePopup}
       >
         <TouchableWithoutFeedback onPress={handleCancelInvitePopup}>
-          <View style={{
-            flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.3)',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(0, 0, 0, 0.3)",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
             <TouchableWithoutFeedback>
-              <View style={{
-                backgroundColor: 'white',
-                borderRadius: 12,
-                padding: 16,
-                width: 280,
-                shadowColor: "#000",
-                shadowOpacity: 0.15,
-                shadowRadius: 6,
-                shadowOffset: { width: 0, height: 3 },
-                elevation: 3,
-              }}>
+              <View
+                style={{
+                  backgroundColor: "white",
+                  borderRadius: 12,
+                  padding: 16,
+                  width: 280,
+                  shadowColor: "#000",
+                  shadowOpacity: 0.15,
+                  shadowRadius: 6,
+                  shadowOffset: { width: 0, height: 3 },
+                  elevation: 3,
+                }}
+              >
                 {/* Header */}
-                <View style={{
-                  alignItems: 'center',
-                  marginBottom: 16,
-                }}>
-                  <View style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    backgroundColor: '#F3F4F6',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    marginBottom: 8,
-                  }}>
+                <View
+                  style={{
+                    alignItems: "center",
+                    marginBottom: 16,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: "#F3F4F6",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      marginBottom: 8,
+                    }}
+                  >
                     <Ionicons name="person-add" size={20} color="#000000" />
                   </View>
-                  <Text style={{
-                    fontSize: 16,
-                    fontWeight: '600',
-                    color: '#374151',
-                    textAlign: 'center',
-                  }}>
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "600",
+                      color: "#374151",
+                      textAlign: "center",
+                    }}
+                  >
                     Invite to {projectToInvite?.name}
                   </Text>
                 </View>
 
-                 {/* Email Input */}
-                 <View style={{ marginBottom: 16 }}>
-                   <Text style={{
-                     fontSize: 14,
-                     fontWeight: '500',
-                     color: '#374151',
-                     marginBottom: 8,
-                   }}>
-                     Enter the owner email address
-                   </Text>
-                   <TextInput
+                {/* Email Input */}
+                <View style={{ marginBottom: 16 }}>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "500",
+                      color: "#374151",
+                      marginBottom: 8,
+                    }}
+                  >
+                    Enter the owner email address
+                  </Text>
+                  <TextInput
                     style={{
                       borderWidth: 1,
-                      borderColor: '#D1D5DB',
+                      borderColor: "#D1D5DB",
                       borderRadius: 8,
                       paddingHorizontal: 12,
                       paddingVertical: 10,
                       fontSize: 14,
-                      backgroundColor: '#F9FAFB',
+                      backgroundColor: "#F9FAFB",
                     }}
                     placeholder="Enter email address"
                     placeholderTextColor="#9CA3AF"
@@ -997,39 +985,43 @@ function HomeScreen({ navigation, route }) {
                 </View>
 
                 {/* Action Buttons */}
-                <View style={{
-                  flexDirection: 'row',
-                  gap: 8,
-                }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    gap: 8,
+                  }}
+                >
                   <TouchableOpacity
                     style={{
                       flex: 1,
-                      backgroundColor: isSendingInvite ? '#E5E7EB' : '#F3F4F6',
+                      backgroundColor: isSendingInvite ? "#E5E7EB" : "#F3F4F6",
                       paddingVertical: 10,
                       borderRadius: 8,
-                      alignItems: 'center',
+                      alignItems: "center",
                     }}
                     onPress={handleCancelInvitePopup}
                     activeOpacity={0.8}
                     disabled={isSendingInvite}
                   >
-                    <Text style={{
-                      fontSize: 14,
-                      fontWeight: '600',
-                      color: isSendingInvite ? '#9CA3AF' : '#374151',
-                    }}>
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        fontWeight: "600",
+                        color: isSendingInvite ? "#9CA3AF" : "#374151",
+                      }}
+                    >
                       Cancel
                     </Text>
                   </TouchableOpacity>
-                  
+
                   <TouchableOpacity
                     style={{
                       flex: 1,
-                      backgroundColor: isSendingInvite ? '#4B5563' : '#000000',
+                      backgroundColor: isSendingInvite ? "#4B5563" : "#000000",
                       paddingVertical: 10,
                       borderRadius: 8,
-                      alignItems: 'center',
-                      justifyContent: 'center',
+                      alignItems: "center",
+                      justifyContent: "center",
                     }}
                     onPress={handleSendInvite}
                     activeOpacity={0.8}
@@ -1038,11 +1030,13 @@ function HomeScreen({ navigation, route }) {
                     {isSendingInvite ? (
                       <ActivityIndicator size="small" color="white" />
                     ) : (
-                      <Text style={{
-                        fontSize: 14,
-                        fontWeight: '600',
-                        color: 'white',
-                      }}>
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          fontWeight: "600",
+                          color: "white",
+                        }}
+                      >
                         Send Invite
                       </Text>
                     )}
@@ -1061,82 +1055,96 @@ function HomeScreen({ navigation, route }) {
         animationType="fade"
         onRequestClose={() => setInviteErrorDialogVisible(false)}
       >
-        <View style={{
-          flex: 1,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          justifyContent: 'center',
-          alignItems: 'center',
-          paddingHorizontal: 20,
-        }}>
-          <View style={{
-            backgroundColor: 'white',
-            borderRadius: 16,
-            padding: 20,
-            width: '100%',
-            maxWidth: 320,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: 0.2,
-            shadowRadius: 16,
-            elevation: 8,
-          }}>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            justifyContent: "center",
+            alignItems: "center",
+            paddingHorizontal: 20,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "white",
+              borderRadius: 16,
+              padding: 20,
+              width: "100%",
+              maxWidth: 320,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.2,
+              shadowRadius: 16,
+              elevation: 8,
+            }}
+          >
             {/* Error Icon */}
-            <View style={{
-              alignItems: 'center',
-              marginBottom: 16,
-            }}>
-              <View style={{
-                width: 48,
-                height: 48,
-                borderRadius: 24,
-                backgroundColor: '#FEF2F2',
-                justifyContent: 'center',
-                alignItems: 'center',
-                marginBottom: 12,
-              }}>
+            <View
+              style={{
+                alignItems: "center",
+                marginBottom: 16,
+              }}
+            >
+              <View
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: "#FEF2F2",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  marginBottom: 12,
+                }}
+              >
                 <Ionicons name="close-circle" size={28} color="#EF4444" />
               </View>
-              <Text style={{
-                fontSize: 18,
-                fontWeight: 'bold',
-                color: '#1F2937',
-                textAlign: 'center',
-                marginBottom: 4,
-              }}>
+              <Text
+                style={{
+                  fontSize: 18,
+                  fontWeight: "bold",
+                  color: "#1F2937",
+                  textAlign: "center",
+                  marginBottom: 4,
+                }}
+              >
                 Invite Failed
               </Text>
             </View>
 
             {/* Error Message */}
-            <Text style={{
-              fontSize: 15,
-              color: '#6B7280',
-              textAlign: 'center',
-              lineHeight: 22,
-              marginBottom: 20,
-            }}>
+            <Text
+              style={{
+                fontSize: 15,
+                color: "#6B7280",
+                textAlign: "center",
+                lineHeight: 22,
+                marginBottom: 20,
+              }}
+            >
               {inviteErrorMessage}
             </Text>
 
             {/* OK Button */}
             <TouchableOpacity
               style={{
-                backgroundColor: '#000000',
+                backgroundColor: "#000000",
                 paddingVertical: 12,
                 borderRadius: 10,
-                alignItems: 'center',
+                alignItems: "center",
               }}
               onPress={() => {
                 setInviteErrorDialogVisible(false);
-                setInviteErrorMessage('');
+                setInviteErrorMessage("");
               }}
               activeOpacity={0.8}
             >
-              <Text style={{
-                fontSize: 15,
-                fontWeight: '600',
-                color: 'white',
-              }}>
+              <Text
+                style={{
+                  fontSize: 15,
+                  fontWeight: "600",
+                  color: "white",
+                }}
+              >
                 OK
               </Text>
             </TouchableOpacity>

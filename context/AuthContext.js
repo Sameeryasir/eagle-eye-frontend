@@ -1,17 +1,22 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { setupNotifications, clearExpoToken } from '../services/notifications/expoTokenService';
-import { saveTokenToServer, removeTokenFromServer } from '../services/notifications/sendTokenToServer';
-// --- Clear All Redux Stores on Logout (MCP Context 7) ---
-// Business Rule: Clear all Redux state when user logs out to prevent data leakage
-import { clearAllReduxStores } from '../store/utils/clearAllReduxStores';
+import React, { createContext, useContext, useState, useEffect } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  setupNotifications,
+  clearExpoToken,
+} from "../services/notifications/expoTokenService";
+import {
+  saveTokenToServer,
+  removeTokenFromServer,
+} from "../services/notifications/sendTokenToServer";
+
+import { clearAllReduxStores } from "../store/utils/clearAllReduxStores";
 
 const AuthContext = createContext();
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };
@@ -21,7 +26,7 @@ export const AuthProvider = ({ children }) => {
   const [userRole, setUserRole] = useState(null);
   const [userInfo, setUserInfo] = useState(null);
   const [expoPushToken, setExpoPushToken] = useState(null);
-  const [isLoading, setIsLoading] = useState(true); // Show loading while checking auth
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     checkAuthStatus();
@@ -29,18 +34,15 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuthStatus = async () => {
     try {
-      // Simple check: get tokens from storage
-      const token = await AsyncStorage.getItem('token');
-      const refreshToken = await AsyncStorage.getItem('refreshToken');
-      
-      // Get user info
-      const userRole = await AsyncStorage.getItem('userRole');
-      const firstName = await AsyncStorage.getItem('userFirstName');
-      const lastName = await AsyncStorage.getItem('userLastName');
-      const userId = await AsyncStorage.getItem('userId');
-      const expoToken = await AsyncStorage.getItem('expoPushToken');
+      const token = await AsyncStorage.getItem("token");
+      const refreshToken = await AsyncStorage.getItem("refreshToken");
 
-      // If both tokens exist, user is logged in
+      const userRole = await AsyncStorage.getItem("userRole");
+      const firstName = await AsyncStorage.getItem("userFirstName");
+      const lastName = await AsyncStorage.getItem("userLastName");
+      const userId = await AsyncStorage.getItem("userId");
+      const expoToken = await AsyncStorage.getItem("expoPushToken");
+
       if (token && refreshToken) {
         setIsAuthenticated(true);
         setUserRole(userRole);
@@ -48,140 +50,124 @@ export const AuthProvider = ({ children }) => {
           firstName: firstName,
           lastName: lastName,
           role: userRole,
-          id: userId
+          id: userId,
         });
         setExpoPushToken(expoToken);
-        // SplashScreen will handle navigation routing
       } else {
-        // No tokens, user needs to login
         setIsAuthenticated(false);
         setUserRole(null);
         setUserInfo(null);
         setExpoPushToken(null);
-        // SplashScreen will handle navigation routing
       }
     } catch (error) {
-      console.error('Auth check error:', error);
-      // On error, go to sign in
+      console.error("Auth check error:", error);
+
       setIsAuthenticated(false);
       setUserRole(null);
       setUserInfo(null);
       setExpoPushToken(null);
-      // SplashScreen will handle navigation routing
     } finally {
-      // Always stop loading when done
       setIsLoading(false);
     }
   };
 
   const login = async (userData) => {
     try {
-      // --- Clear Redux State Before Login (MCP Context 7) ---
-      // Business Rule: Clear all Redux state when user logs in to ensure fresh data for new user
-      // This prevents any leftover data from previous sessions
-      console.log('🧹 Clearing Redux stores before login...');
+      console.log("🧹 Clearing Redux stores before login...");
       await clearAllReduxStores();
-      
-      // Store tokens
-      await AsyncStorage.setItem('token', userData.access_token);
-      await AsyncStorage.setItem('refreshToken', userData.refresh_token);
-      
-      // Store user info
-      await AsyncStorage.setItem('userRole', userData.user?.role?.name);
-      await AsyncStorage.setItem('userFirstName', userData.user?.first_name);
-      await AsyncStorage.setItem('userLastName', userData.user?.last_name);
-      await AsyncStorage.setItem('userId', userData.user?.id?.toString());
 
-      // Setup notifications (optional)
+      await AsyncStorage.setItem("token", userData.access_token);
+      await AsyncStorage.setItem("refreshToken", userData.refresh_token);
+
+      await AsyncStorage.setItem("userRole", userData.user?.role?.name);
+      await AsyncStorage.setItem("userFirstName", userData.user?.first_name);
+      await AsyncStorage.setItem("userLastName", userData.user?.last_name);
+      await AsyncStorage.setItem("userId", userData.user?.id?.toString());
+
       const notificationResult = await setupNotifications();
       if (notificationResult.success) {
         setExpoPushToken(notificationResult.token);
-        await AsyncStorage.setItem('expoPushToken', notificationResult.token);
-        console.log('🔔 Expo Push Token:', notificationResult.token);
-        
-        // Send to server and get token ID
+        await AsyncStorage.setItem("expoPushToken", notificationResult.token);
+        console.log("🔔 Expo Push Token:", notificationResult.token);
+
         try {
           const saveResult = await saveTokenToServer(notificationResult.token);
           if (saveResult.success && saveResult.data) {
             const tokenId = saveResult.data.id || saveResult.data.tokenId;
-            console.log('✅ Token saved to server with ID:', tokenId);
-            await AsyncStorage.setItem('expoTokenId', tokenId.toString());
-            console.log('💾 Token ID stored in AsyncStorage:', tokenId);
+            console.log("✅ Token saved to server with ID:", tokenId);
+            await AsyncStorage.setItem("expoTokenId", tokenId.toString());
+            console.log("💾 Token ID stored in AsyncStorage:", tokenId);
           } else {
-            console.error('❌ Failed to save token to server:', saveResult.error);
+            console.error(
+              "❌ Failed to save token to server:",
+              saveResult.error
+            );
           }
         } catch (error) {
-          console.error('❌ Error saving token to server:', error);
+          console.error("❌ Error saving token to server:", error);
         }
       }
 
-      // Update state
       setIsAuthenticated(true);
       setUserRole(userData.user?.role?.name);
       setUserInfo({
         firstName: userData.user?.first_name,
         lastName: userData.user?.last_name,
         role: userData.user?.role?.name,
-        id: userData.user?.id?.toString()
+        id: userData.user?.id?.toString(),
       });
-      console.log('✅ Login successful, Redux stores cleared, ready for fresh data');
-      // Navigation will be handled by the current screen
+      console.log(
+        "✅ Login successful, Redux stores cleared, ready for fresh data"
+      );
     } catch (error) {
-      console.error('Login error:', error);
+      console.error("Login error:", error);
       throw error;
     }
   };
 
   const logout = async () => {
     try {
-      // Get token ID and remove from server
-      const expoTokenId = await AsyncStorage.getItem('expoTokenId');
+      const expoTokenId = await AsyncStorage.getItem("expoTokenId");
       if (expoTokenId) {
-        console.log('Removing expo token from server:', expoTokenId);
+        console.log("Removing expo token from server:", expoTokenId);
         const removeResult = await removeTokenFromServer(expoTokenId);
         if (removeResult.success) {
-          console.log('Successfully removed expo token from server');
+          console.log("Successfully removed expo token from server");
         } else {
-          console.error('Failed to remove expo token from server:', removeResult.error);
+          console.error(
+            "Failed to remove expo token from server:",
+            removeResult.error
+          );
         }
       } else {
-        console.log('No expo token ID found to remove');
+        console.log("No expo token ID found to remove");
       }
 
-      // Clear all stored data
       await AsyncStorage.multiRemove([
-        'token',
-        'refreshToken',
-        'userRole',
-        'userFirstName',
-        'userLastName',
-        'userId',
-        'lastVisitedScreen',
-        'expoPushToken',
-        'expoTokenId'
+        "token",
+        "refreshToken",
+        "userRole",
+        "userFirstName",
+        "userLastName",
+        "userId",
+        "lastVisitedScreen",
+        "expoPushToken",
+        "expoTokenId",
       ]);
-      
-      // Clear Expo token from notification service
+
       await clearExpoToken();
 
-      // --- Clear ALL Redux Stores and Caches (MCP Context 7) ---
-      // Business Rule: Clear all Redux state when user logs out to prevent data leakage between users
-      // This ensures one user's data doesn't show up for another user
       await clearAllReduxStores();
 
-      // Update state
       setIsAuthenticated(false);
       setUserRole(null);
       setUserInfo(null);
       setExpoPushToken(null);
-      // Navigation will be handled by the current screen
     } catch (error) {
-      console.error('Error during logout:', error);
+      console.error("Error during logout:", error);
       throw error;
     }
   };
-
-
 
   const value = {
     isAuthenticated,
@@ -190,12 +176,8 @@ export const AuthProvider = ({ children }) => {
     expoPushToken,
     login,
     logout,
-    checkAuthStatus
+    checkAuthStatus,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
