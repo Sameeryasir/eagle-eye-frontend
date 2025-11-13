@@ -46,8 +46,8 @@ const isSmallScreen = screenWidth < 400 || screenHeight < 700; // Small devices
 const isMediumScreen = screenWidth < 450; // Medium devices
 const isLargeScreen = screenWidth >= 450; // Large devices
 
-import Sidebar from "./components/Sidebar";
-import CustomBottomNav from "./components/CustomBottomNav";
+import Sidebar from "../components/Sidebar";
+import CustomBottomNav from "../components/CustomBottomNav";
 import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
 

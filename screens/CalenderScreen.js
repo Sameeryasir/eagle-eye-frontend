@@ -13,10 +13,10 @@ import {
 import { Calendar } from "react-native-calendars";
 import Toast from 'react-native-toast-message';
 import { getUserRole } from "../services/utils/userRole";
-import CustomBottomNav from "./components/CustomBottomNav";
-import MyWeekView from "./components/WeekView";
-import CalendarToggle from "./components/CalendarToggle";
-import CreateEventModal from "./components/CreateEventModal";
+import CustomBottomNav from "../components/CustomBottomNav";
+import MyWeekView from "../components/WeekView";
+import CalendarToggle from "../components/CalendarToggle";
+import CreateEventModal from "../components/CreateEventModal";
 // --- API Services ---
 import { getEventsForLogInUser } from "../services/event/getEventsForLogInUser";
 import getAllTasks from "../services/tasks/getAllTasks";

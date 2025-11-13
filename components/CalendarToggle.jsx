@@ -1,14 +1,6 @@
 import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 
-/**
- * Reusable Calendar Toggle Component
- * 
- * What was changed: Created a new reusable component for Weekly/Monthly toggle buttons
- * Why it was changed: To eliminate code duplication between WeekView and CalenderScreen
- * Dependencies: Used in WeekView.jsx and CalenderScreen.js
- * MCP Context Reference: Following MCP context 7 best practices for clean, maintainable code
- */
 export default function CalendarToggle({ 
   currentView, 
   onWeeklyPress, 
@@ -50,7 +42,7 @@ export default function CalendarToggle({
   );
 }
 
-// --- Toggle Button Styles (consistent across all calendar views) ---
+
 const styles = StyleSheet.create({
   toggleContainer: {
     flexDirection: 'row',
@@ -72,7 +64,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   activeButton: {
-    backgroundColor: '#000000', // Black background for selected button
+    backgroundColor: '#000000', 
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -80,7 +72,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   inactiveButton: {
-    backgroundColor: 'transparent', // Transparent for inactive button
+    backgroundColor: 'transparent', 
   },
   toggleText: {
     fontSize: 16,
@@ -88,9 +80,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   activeText: {
-    color: '#FFFFFF', // White text for active button
+    color: '#FFFFFF', 
   },
   inactiveText: {
-    color: '#6B7280', // Gray text for inactive button
+    color: '#6B7280', 
   },
 });

@@ -35,10 +35,10 @@ import {
   selectProjectError
 } from '../store/slices/projectSlice';
 
-import Sidebar from "./components/Sidebar";
-import CustomBottomNav from "./components/CustomBottomNav";
-import CreateProject from "./components/CreateProject";
-import UpdateProjectModal from "./components/UpdateProjectModal";
+import Sidebar from "../components/Sidebar";
+import CustomBottomNav from "../components/CustomBottomNav";
+import CreateProject from "../components/CreateProject";
+import UpdateProjectModal from "../components/UpdateProjectModal";
 import Header from "../components/Header";
 import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";

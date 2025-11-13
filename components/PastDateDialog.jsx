@@ -13,7 +13,7 @@ const PastDateDialog = ({
       animationType="fade"
       onRequestClose={onClose}
     >
-      {/* --- Transparent backdrop --- */}
+      {}
       <View className="flex-1 bg-transparent justify-center items-center px-6">
         <View 
           className="bg-white rounded-3xl w-full max-w-sm overflow-hidden"
@@ -28,7 +28,7 @@ const PastDateDialog = ({
             elevation: 10,
           }}
         >
-          {/* --- Gradient Header --- */}
+          {}
           <View 
             className="px-6 py-5"
             style={{
@@ -47,7 +47,7 @@ const PastDateDialog = ({
             </View>
           </View>
           
-          {/* --- Dialog Content --- */}
+          {}
           <View className="p-6 bg-gray-50">
             <View className="bg-white rounded-2xl p-4 mb-6 shadow-sm">
               <View className="flex-row items-center justify-center mb-3">
@@ -60,7 +60,7 @@ const PastDateDialog = ({
               </Text>
             </View>
             
-            {/* --- Action Button --- */}
+            {}
             <TouchableOpacity
               onPress={onClose}
               className="bg-black py-4 rounded-xl"

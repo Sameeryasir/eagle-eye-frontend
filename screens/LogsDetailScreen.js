@@ -13,10 +13,10 @@ import {
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import Sidebar from "./components/Sidebar";
-import CustomBottomNav from "./components/CustomBottomNav";
-import UpdateLogModal from "./components/UpdateLogModal";
-import DeleteLogModal from "./components/DeleteLogModal";
+import Sidebar from "../components/Sidebar";
+import CustomBottomNav from "../components/CustomBottomNav";
+import UpdateLogModal from "../components/UpdateLogModal";
+import DeleteLogModal from "../components/DeleteLogModal";
 import { getUserRole } from "../services/utils/userRole";
 import { deleteLogById } from "../services/log/deleteLogById";
 import { getLogById } from "../services/log/getLogById";

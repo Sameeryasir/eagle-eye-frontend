@@ -1,4 +1,3 @@
-// screens/SplashScreen.js
 import React, { useEffect, useRef } from "react";
 import {
   View,
@@ -8,20 +7,17 @@ import {
   Animated,
   Easing,
 } from "react-native";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../context/AuthContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function SplashScreen({ navigation }) {
-  // This component handles splash screen animation and initial navigation routing
   const { isAuthenticated } = useAuth();
 
-  // Animation values - only for logo
-  const fadeAnim = useRef(new Animated.Value(0)).current; // opacity
-  const scaleAnim = useRef(new Animated.Value(0.3)).current; // zoom-in (start very small)
-  const pulseAnim = useRef(new Animated.Value(1)).current; // pulsing effect
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.3)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // Run logo fade + bounce
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -37,7 +33,6 @@ export default function SplashScreen({ navigation }) {
       }),
     ]).start();
 
-    // Pulse effect (looping scale) - starts after logo entrance
     setTimeout(() => {
       Animated.loop(
         Animated.sequence([
@@ -55,33 +50,27 @@ export default function SplashScreen({ navigation }) {
           }),
         ])
       ).start();
-    }, 1000); // Start pulsing after logo entrance completes
+    }, 1000);
 
-    // Navigation logic - check auth status after animation completes
     const checkAuthAndNavigate = async () => {
       try {
-        // Wait for animation to complete (3.5 seconds total)
         setTimeout(async () => {
-          // Check if user has valid tokens
-          const token = await AsyncStorage.getItem('token');
-          const refreshToken = await AsyncStorage.getItem('refreshToken');
-          
+          const token = await AsyncStorage.getItem("token");
+          const refreshToken = await AsyncStorage.getItem("refreshToken");
+
           if (token && refreshToken) {
-            // User is authenticated, navigate to HomeScreen
-            navigation.replace('HomeScreen');
+            navigation.replace("HomeScreen");
           } else {
-            // User is not authenticated, navigate to SignIn
-            navigation.replace('SignIn');
+            navigation.replace("SignIn");
           }
-        }, 3500); // Wait 3.5 seconds for full animation
+        }, 3500);
       } catch (error) {
-        console.error('Navigation error:', error);
-        // On error, go to sign in
-        navigation.replace('SignIn');
+        console.error("Navigation error:", error);
+
+        navigation.replace("SignIn");
       }
     };
 
-    // Start navigation check
     checkAuthAndNavigate();
   }, [fadeAnim, scaleAnim, pulseAnim, navigation]);
 
@@ -89,7 +78,7 @@ export default function SplashScreen({ navigation }) {
     <View style={styles.container}>
       <StatusBar hidden />
 
-      {/* Animated Logo Only */}
+      {}
       <Animated.View
         style={[
           styles.logoContainer,
@@ -100,7 +89,7 @@ export default function SplashScreen({ navigation }) {
         ]}
       >
         <Image
-            source={require("../../assets/icons/splash-icon.png")}
+          source={require("../assets/icons/splash-icon.png")}
           style={styles.logoImage}
           resizeMode="contain"
         />

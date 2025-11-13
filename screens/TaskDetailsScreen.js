@@ -18,9 +18,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Toast from 'react-native-toast-message';
-import Sidebar from "./components/Sidebar";
-import CustomBottomNav from "./components/CustomBottomNav";
-import UpdateTaskModal from "./components/UpdateTaskModal";
+import Sidebar from "../components/Sidebar";
+import CustomBottomNav from "../components/CustomBottomNav";
+import UpdateTaskModal from "../components/UpdateTaskModal";
 import { deleteTaskById } from "../services/tasks/deleteTaskById";
 import { getUserRole } from "../services/utils/userRole";
 import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';

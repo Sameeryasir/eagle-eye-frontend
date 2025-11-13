@@ -49,10 +49,10 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import appEmitter from "../utils/appEmitter";
 import pusher from "../pusherClient";
 import { createMessageNotification } from "../services/inAppNotification/createMessageNotification";
-import SignatureRequestModal from "./components/SignatureRequestModal";
-import AllFilesModal from "./components/AllFilesModal";
-import AllSignaturesModal from "./components/AllSignaturesModal";
-import SignatureDetailModal from "./components/SignatureDetailModal";
+import SignatureRequestModal from "../components/SignatureRequestModal";
+import AllFilesModal from "../components/AllFilesModal";
+import AllSignaturesModal from "../components/AllSignaturesModal";
+import SignatureDetailModal from "../components/SignatureDetailModal";
 
 // --- Structured Console Utilities (MCP Context 7) ---
 // Inline Comment: Shared helper keeps verbose logs readable while avoiding duplicate formatting code.

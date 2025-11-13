@@ -23,12 +23,12 @@ import Toast from 'react-native-toast-message';
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
-import CustomBottomNav from "./components/CustomBottomNav";
+import CustomBottomNav from "../components/CustomBottomNav";
 import { getUserRole } from "../services/utils/userRole";
 import { deleteLogById } from "../services/log/deleteLogById";
 import { updateLogById } from "../services/log/updateLogById";
 import { getLogs } from "../services/log/getLogs";
-import UpdateLogModal from "./components/UpdateLogModal";
+import UpdateLogModal from "../components/UpdateLogModal";
 import {
   Menu,
   MenuOptions,

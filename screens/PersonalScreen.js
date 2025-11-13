@@ -16,7 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { getEmployeesToAssignTask } from '../services/employees/getEmployeesOfTheCompany';
 import Loader from '../services/utils/loader';
-import CustomBottomNav from './components/CustomBottomNav';
+import CustomBottomNav from '../components/CustomBottomNav';
 import Toast from 'react-native-toast-message';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');

@@ -24,8 +24,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 
-import Sidebar from "./components/Sidebar";
-import CustomBottomNav from "./components/CustomBottomNav";
+import Sidebar from "../components/Sidebar";
+import CustomBottomNav from "../components/CustomBottomNav";
 import getTodaysTask from "../services/tasks/getTodayTask";
 import { getProjectById } from "../services/projects/getProject";
 import { getTaskByProjectId } from "../services/tasks/getTaskByProjectId";

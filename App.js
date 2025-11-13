@@ -56,8 +56,8 @@ import SignIn from "./screens/SignInScreen";
 import LogIn from "./screens/LogInScreen";
 import Code from "./screens/OtpScreen";
 import Header from "./components/Header";
-import Sidebar from "./screens/components/Sidebar";
-import SplashScreen from "./screens/components/SplashScreen";
+import Sidebar from "./components/Sidebar";
+import SplashScreen from "./components/SplashScreen";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import appEmitter from "./utils/appEmitter";
 

@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { MaterialIcons } from '@expo/vector-icons';
 import { getMyProjects } from '../services/projects/getProjectsByLoginUserId';
-import CustomBottomNav from './components/CustomBottomNav';
+import CustomBottomNav from '../components/CustomBottomNav';
 
 const FilesScreen = ({ navigation }) => {
   const [projects, setProjects] = useState([]);

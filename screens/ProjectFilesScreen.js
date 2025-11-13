@@ -14,7 +14,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import { getFilesByProjectId } from '../services/files/getFilesByProjectId';
-import CustomBottomNav from './components/CustomBottomNav';
+import CustomBottomNav from '../components/CustomBottomNav';
 
 const ProjectFilesScreen = ({ navigation, route }) => {
   const { projectId, projectName } = route.params || {};

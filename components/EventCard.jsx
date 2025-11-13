@@ -1,43 +1,40 @@
-import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React from "react";
+import { View, Text, TouchableOpacity } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 const EventCard = ({ event, onPress }) => {
-  // Format time for display
   const formatTime = (isoString) => {
     const date = new Date(isoString);
-    return date.toLocaleTimeString([], { 
-      hour: '2-digit', 
-      minute: '2-digit', 
-      hour12: true 
+    return date.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
     });
   };
 
-  // Format date for display
   const formatDate = (isoString) => {
     const date = new Date(isoString);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric'
+    return date.toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
     });
   };
 
-  // Get priority color
   const getPriorityColor = (priority) => {
     switch (priority?.toLowerCase()) {
-      case 'high':
-      case 'urgent':
-      case 'critical':
-        return '#EF4444';
-      case 'medium':
-      case 'normal':
-        return '#F59E0B';
-      case 'low':
-      case 'lowest':
-        return '#10B981';
+      case "high":
+      case "urgent":
+      case "critical":
+        return "#EF4444";
+      case "medium":
+      case "normal":
+        return "#F59E0B";
+      case "low":
+      case "lowest":
+        return "#10B981";
       default:
-        return '#6B7280';
+        return "#6B7280";
     }
   };
 
@@ -46,7 +43,7 @@ const EventCard = ({ event, onPress }) => {
       onPress={() => onPress && onPress(event)}
       className="bg-white rounded-xl p-4 mb-3 shadow-sm border border-gray-100"
       style={{
-        shadowColor: '#000',
+        shadowColor: "#000",
         shadowOffset: {
           width: 0,
           height: 1,
@@ -57,25 +54,25 @@ const EventCard = ({ event, onPress }) => {
       }}
       activeOpacity={0.7}
     >
-      {/* Header with title and priority */}
+      {}
       <View className="flex-row items-start justify-between mb-2">
         <View className="flex-1 mr-2">
-          <Text 
+          <Text
             className="text-lg font-bold text-gray-800 leading-5"
             numberOfLines={2}
           >
             {event.title}
           </Text>
         </View>
-        <View 
+        <View
           className="w-3 h-3 rounded-full"
           style={{ backgroundColor: getPriorityColor(event.priority) }}
         />
       </View>
 
-      {/* Description */}
+      {}
       {event.description && (
-        <Text 
+        <Text
           className="text-sm text-gray-600 mb-3 leading-4"
           numberOfLines={2}
         >
@@ -83,7 +80,7 @@ const EventCard = ({ event, onPress }) => {
         </Text>
       )}
 
-      {/* Time and Date Info */}
+      {}
       <View className="flex-row items-center justify-between">
         <View className="flex-row items-center">
           <Ionicons name="time-outline" size={16} color="#6B7280" />
@@ -91,7 +88,7 @@ const EventCard = ({ event, onPress }) => {
             {formatTime(event.startTime)} - {formatTime(event.endTime)}
           </Text>
         </View>
-        
+
         <View className="flex-row items-center">
           <Ionicons name="calendar-outline" size={16} color="#6B7280" />
           <Text className="text-sm text-gray-600 ml-1">
@@ -100,19 +97,20 @@ const EventCard = ({ event, onPress }) => {
         </View>
       </View>
 
-      {/* Status Badge */}
+      {}
       {event.status && (
         <View className="mt-3">
-          <View 
+          <View
             className="self-start px-2 py-1 rounded-full"
-            style={{ 
-              backgroundColor: event.status === 'completed' ? '#D1FAE5' : '#FEF3C7' 
+            style={{
+              backgroundColor:
+                event.status === "completed" ? "#D1FAE5" : "#FEF3C7",
             }}
           >
-            <Text 
+            <Text
               className="text-xs font-medium capitalize"
-              style={{ 
-                color: event.status === 'completed' ? '#065F46' : '#92400E' 
+              style={{
+                color: event.status === "completed" ? "#065F46" : "#92400E",
               }}
             >
               {event.status}

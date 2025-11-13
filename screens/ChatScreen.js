@@ -13,8 +13,8 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { getUserConversations } from '../services/chats/getConversation';
-import SelectUserModal from './components/SelectUserModal';
-import CustomBottomNav from './components/CustomBottomNav';
+import SelectUserModal from '../components/SelectUserModal';
+import CustomBottomNav from '../components/CustomBottomNav';
 import Toast from 'react-native-toast-message';
 import { useAuth } from '../context/AuthContext';
 import pusher from '../pusherClient';

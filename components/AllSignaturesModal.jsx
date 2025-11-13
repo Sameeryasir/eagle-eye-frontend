@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 import {
   View,
   Text,
@@ -7,25 +7,20 @@ import {
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
-// --- All Signatures Modal Component (MCP Context 7) ---
-// Business Rule: Reusable modal for displaying all signature requests in a conversation
-// This component shows signature list with status indicators and tap to view details
-const AllSignaturesModal = ({ 
-  visible, 
-  onClose, 
-  signatures = [], 
+const AllSignaturesModal = ({
+  visible,
+  onClose,
+  signatures = [],
   isLoading = false,
-  onSignaturePress
+  onSignaturePress,
 }) => {
-  // --- Render Signature Item (MCP Context 7) ---
-  // Business Rule: Display each signature with title and status indicator
   const renderSignatureItem = ({ item }) => {
-    const title = item.title || 'Untitled Signature';
-    const status = item.status || 'pending';
-    
+    const title = item.title || "Untitled Signature";
+    const status = item.status || "pending";
+
     return (
       <TouchableOpacity
         className="mx-4 mb-3 p-4 bg-white rounded-xl shadow-sm border border-gray-100"
@@ -38,16 +33,19 @@ const AllSignaturesModal = ({
       >
         <View className="flex-row items-center justify-between">
           <View className="flex-1">
-            <Text className="text-base font-semibold text-gray-900" numberOfLines={2}>
+            <Text
+              className="text-base font-semibold text-gray-900"
+              numberOfLines={2}
+            >
               {title}
             </Text>
           </View>
-          
+
           <View className="ml-3">
-            <Ionicons 
-              name={status === 'signed' ? 'checkmark-circle' : 'time'} 
-              size={24} 
-              color={status === 'signed' ? '#10B981' : '#F59E0B'} 
+            <Ionicons
+              name={status === "signed" ? "checkmark-circle" : "time"}
+              size={24}
+              color={status === "signed" ? "#10B981" : "#F59E0B"}
             />
           </View>
         </View>
@@ -56,13 +54,9 @@ const AllSignaturesModal = ({
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView className="flex-1 bg-white">
-        {/* Header */}
+        {}
         <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
           <TouchableOpacity
             onPress={onClose}
@@ -71,21 +65,27 @@ const AllSignaturesModal = ({
           >
             <Ionicons name="arrow-back" size={24} color="#000000" />
           </TouchableOpacity>
-          <Text className="text-lg font-bold text-gray-900">All Signatures</Text>
+          <Text className="text-lg font-bold text-gray-900">
+            All Signatures
+          </Text>
           <View className="w-8" />
         </View>
 
-        {/* Content */}
+        {}
         <View className="flex-1">
           {isLoading ? (
             <View className="flex-1 items-center justify-center">
               <ActivityIndicator size="large" color="#000000" />
-              <Text className="text-base text-gray-500 mt-4">Loading signatures...</Text>
+              <Text className="text-base text-gray-500 mt-4">
+                Loading signatures...
+              </Text>
             </View>
           ) : signatures.length > 0 ? (
             <FlatList
               data={signatures}
-              keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+              keyExtractor={(item) =>
+                item.id?.toString() || Math.random().toString()
+              }
               renderItem={renderSignatureItem}
               className="flex-1"
               contentContainerStyle={{ paddingVertical: 16 }}

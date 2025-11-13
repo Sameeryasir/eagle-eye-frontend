@@ -2,18 +2,18 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, ScrollView, Dimensions, Alert } from "react-native";
 import Timetable from "react-native-calendar-timetable";
-import CustomBottomNav from "./components/CustomBottomNav";
+import CustomBottomNav from "../components/CustomBottomNav";
 import { Ionicons } from "@expo/vector-icons";
 import * as Localization from 'expo-localization';
 import { useDispatch } from 'react-redux';
 // --- REMOVED: eventSlice import (file doesn't exist) ---
 import { getUserRole } from "../services/utils/userRole";
 import { getEventsForLogInUser } from "../services/event/getEventsForLogInUser";
-import CreateEventModal from "./components/CreateEventModal";
-import EventDetailsModal from "./components/EventDetailsModal";
-import PastDateDialog from "./components/PastDateDialog";
-import TaskDetailsModal from "./components/TaskDetailsModal";
-import AccessDeniedDialog from "./components/AccessDeniedDialog";
+import CreateEventModal from "../components/CreateEventModal";
+import EventDetailsModal from "../components/EventDetailsModal";
+import PastDateDialog from "../components/PastDateDialog";
+import TaskDetailsModal from "../components/TaskDetailsModal";
+import AccessDeniedDialog from "../components/AccessDeniedDialog";
 
 // === Change Summary (2025-11-07) ===
 // What: Added access denied handling for Manager/Employee roles so they see a clear dialog when tapping the FAB.

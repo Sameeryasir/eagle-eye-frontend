@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import CustomBottomNav from './components/CustomBottomNav';
+import CustomBottomNav from '../components/CustomBottomNav';
 import { getMyProjects } from '../services/projects/getProjectsByLoginUserId';
 import { assignProjectToEmployees } from '../services/projects/assignProject';
 import { getUserById } from '../services/user/getUserById';

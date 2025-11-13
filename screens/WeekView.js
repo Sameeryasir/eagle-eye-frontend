@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { SafeAreaView, StyleSheet, View, Text, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import CustomBottomNav from './components/CustomBottomNav';
-import CreateEventModal from './components/CreateEventModal';
+import CustomBottomNav from '../components/CustomBottomNav';
+import CreateEventModal from '../components/CreateEventModal';
 
 const { width } = Dimensions.get('window');
 

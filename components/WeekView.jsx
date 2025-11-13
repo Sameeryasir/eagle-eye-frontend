@@ -1,165 +1,163 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, ScrollView, Dimensions, TouchableOpacity, RefreshControl } from 'react-native';
-import WeekView from 'react-native-week-view';
-import Toast from 'react-native-toast-message';
-import getAllTasks from "../../services/tasks/getAllTasks";
-import { getEventsForLogInUser } from "../../services/event/getEventsForLogInUser";
-import { getUserRole } from "../../services/utils/userRole";
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  StyleSheet,
+  Text,
+  ScrollView,
+  Dimensions,
+  TouchableOpacity,
+  RefreshControl,
+} from "react-native";
+import WeekView from "react-native-week-view";
+import Toast from "react-native-toast-message";
+import getAllTasks from "../services/tasks/getAllTasks";
+import { getEventsForLogInUser } from "../services/event/getEventsForLogInUser";
+import { getUserRole } from "../services/utils/userRole";
 import CustomBottomNav from "./CustomBottomNav";
 import TaskDetailsModal from "./TaskDetailsModal";
 import EventDetailsModal from "./EventDetailsModal";
 import CreateEventModal from "./CreateEventModal";
 
 export default function MyWeekView({ navigation }) {
-  // --- State Management ---
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState([]);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-  
-  // --- State for modals (same pattern as CalenderDetailScreen) ---
+
   const [dialogTask, setDialogTask] = useState(null);
   const [showTaskDialog, setShowTaskDialog] = useState(false);
   const [dialogEvent, setDialogEvent] = useState(null);
   const [showEventDetailsDialog, setShowEventDetailsDialog] = useState(false);
-  
-  // --- State for create event modal ---
-  const [showEventCreationDialog, setShowEventCreationDialog] = useState(false);
-  
-  // --- Screen dimensions removed - using flexible approach ---
 
-  // --- Priority-based color mapping function (same as CalenderDetailScreen) ---
+  const [showEventCreationDialog, setShowEventCreationDialog] = useState(false);
+
   const getPriorityColor = (priority) => {
     switch (priority?.toLowerCase()) {
-      case 'high':
-      case 'urgent':
-      case 'critical':
-        return '#EF4444'; // Red for high priority
-      case 'medium':
-      case 'normal':
-        return '#F59E0B'; // Orange for medium priority
-      case 'low':
-      case 'lowest':
-        return '#10B981'; // Green for low priority
+      case "high":
+      case "urgent":
+      case "critical":
+        return "#EF4444";
+      case "medium":
+      case "normal":
+        return "#F59E0B";
+      case "low":
+      case "lowest":
+        return "#10B981";
       default:
-        return '#6B7280'; // Gray for unknown/no priority
+        return "#6B7280";
     }
   };
 
-  // --- Fetch Tasks and Events from API ---
   const fetchData = async () => {
     try {
       setError(null);
 
-      // --- Fetch tasks and events in parallel ---
       const [tasksResponse, eventsResponse] = await Promise.all([
         getAllTasks(),
-        fetchEventsWithRoleCheck()
+        fetchEventsWithRoleCheck(),
       ]);
 
       const calendarEvents = [];
 
-      // --- Process tasks ---
       if (tasksResponse.success && tasksResponse.data) {
-        tasksResponse.data.forEach(task => {
+        tasksResponse.data.forEach((task) => {
           if (task.startTime) {
             calendarEvents.push({
               id: `task-${task.id}`,
               description: task.title,
               startDate: new Date(task.startTime),
-              endDate: task.endTime ? new Date(task.endTime) : new Date(new Date(task.startTime).getTime() + 60 * 60 * 1000),
-              color: getPriorityColor(task.priority), // Use priority-based color
-              type: 'task',
+              endDate: task.endTime
+                ? new Date(task.endTime)
+                : new Date(new Date(task.startTime).getTime() + 60 * 60 * 1000),
+              color: getPriorityColor(task.priority),
+              type: "task",
               priority: task.priority,
               status: task.status,
               assignedTo: task.assignedTo,
-              originalTaskId: task.id
+              originalTaskId: task.id,
             });
           }
         });
       }
 
-      // --- Process events ---
       if (eventsResponse && eventsResponse.length > 0) {
-        eventsResponse.forEach(event => {
+        eventsResponse.forEach((event) => {
           if (event.startTime) {
             calendarEvents.push({
               id: `event-${event.id}`,
               description: event.title,
               startDate: new Date(event.startTime),
-              endDate: event.endTime ? new Date(event.endTime) : new Date(new Date(event.startTime).getTime() + 60 * 60 * 1000),
-              color: '#3B82F6', // Blue color for events
-              type: 'event',
-              priority: event.priority || 'medium',
-              status: event.status || 'pending',
+              endDate: event.endTime
+                ? new Date(event.endTime)
+                : new Date(
+                    new Date(event.startTime).getTime() + 60 * 60 * 1000
+                  ),
+              color: "#3B82F6",
+              type: "event",
+              priority: event.priority || "medium",
+              status: event.status || "pending",
               originalEventId: event.id,
               assignedTo: event.assignedTo || [],
-              projects: event.projects || []
+              projects: event.projects || [],
             });
           }
         });
       }
 
       setEvents(calendarEvents);
-
     } catch (err) {
-      console.error('WeekView - Error fetching data:', err);
+      console.error("WeekView - Error fetching data:", err);
       setError(err.message);
-      
+
       Toast.show({
-        type: 'error',
-        text1: 'Error Loading Calendar Data',
-        text2: 'Failed to load tasks and events',
+        type: "error",
+        text1: "Error Loading Calendar Data",
+        text2: "Failed to load tasks and events",
         visibilityTime: 3000,
         autoHide: true,
         topOffset: 80,
       });
-      
+
       setEvents([]);
     }
   };
 
-  // --- Helper function to fetch events with role check ---
   const fetchEventsWithRoleCheck = async () => {
     try {
       const userRole = await getUserRole();
       const allowedRoles = ["Owner", "Employee", "Manager"];
-      
+
       if (!allowedRoles.includes(userRole)) {
-        console.log('WeekView - User role not allowed for events:', userRole);
+        console.log("WeekView - User role not allowed for events:", userRole);
         return [];
       }
 
       const response = await getEventsForLogInUser();
       return response.success ? response.data : [];
     } catch (err) {
-      console.error('WeekView - Error fetching events:', err);
+      console.error("WeekView - Error fetching events:", err);
       return [];
     }
   };
 
-  // --- Load data on component mount ---
   useEffect(() => {
     fetchData();
   }, []);
 
-  // --- Handler for when event is created ---
   const handleEventCreated = () => {
-    // Refresh events when a new event is created
     fetchData();
   };
 
-  // --- Handle refresh (same pattern as CalenderScreen) ---
   const onRefresh = async () => {
     setRefreshing(true);
     try {
       await fetchData();
     } catch (err) {
-      console.error('WeekView - Error during refresh:', err);
+      console.error("WeekView - Error during refresh:", err);
       Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to refresh calendar data',
+        type: "error",
+        text1: "Error",
+        text2: "Failed to refresh calendar data",
         visibilityTime: 3000,
       });
     } finally {
@@ -167,18 +165,15 @@ export default function MyWeekView({ navigation }) {
     }
   };
 
-  // --- Handler for FAB press (same pattern as CalenderScreen) ---
   const handleFabPress = async () => {
-    // Check user role and only show event creation dialog for Owner
     const userRole = await getUserRole();
     if (userRole === "Owner") {
       setShowEventCreationDialog(true);
     } else {
-      // Show message for non-Owner users
       Toast.show({
-        type: 'info',
-        text1: 'Access Restricted',
-        text2: 'Only Owners can create events',
+        type: "info",
+        text1: "Access Restricted",
+        text2: "Only Owners can create events",
         visibilityTime: 3000,
         autoHide: true,
         topOffset: 80,
@@ -186,32 +181,30 @@ export default function MyWeekView({ navigation }) {
     }
   };
 
-  // --- Handler for task navigation (same as CalenderDetailScreen) ---
   const handleViewTask = (task) => {
-    navigation.navigate('TaskDetails', { taskId: task.originalTaskId || task.id });
+    navigation.navigate("TaskDetails", {
+      taskId: task.originalTaskId || task.id,
+    });
   };
 
-  // --- Handle event press (same pattern as CalenderDetailScreen) ---
   const onEventPress = (event) => {
-    // Check if it's a task or event and open appropriate modal
-    if (event.type === 'task') {
+    if (event.type === "task") {
       setDialogTask(event);
       setShowTaskDialog(true);
-    } else if (event.type === 'event') {
+    } else if (event.type === "event") {
       setDialogEvent(event);
       setShowEventDetailsDialog(true);
     } else {
-      // Fallback to Toast for unknown types
       Toast.show({
-        type: 'info',
+        type: "info",
         text1: event.description,
         text2: `${event.startDate.toLocaleTimeString([], {
-          hour: 'numeric',
-          minute: '2-digit',
+          hour: "numeric",
+          minute: "2-digit",
           hour12: true,
         })} - ${event.endDate.toLocaleTimeString([], {
-          hour: 'numeric',
-          minute: '2-digit',
+          hour: "numeric",
+          minute: "2-digit",
           hour12: true,
         })}`,
         visibilityTime: 3000,
@@ -221,18 +214,17 @@ export default function MyWeekView({ navigation }) {
     }
   };
 
-
   return (
     <View style={styles.container}>
-      {/* --- WeekView with RefreshControl - maintaining original size --- */}
+      {}
       <View style={styles.weekViewContainer}>
-        <ScrollView 
+        <ScrollView
           style={styles.scrollView}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={[ "#3155A1"]}
+              colors={["#3155A1"]}
               tintColor="#3155A1"
               progressBackgroundColor="#ffffff"
             />
@@ -240,15 +232,13 @@ export default function MyWeekView({ navigation }) {
         >
           <WeekView
             events={events}
-            selectedDate={currentDate}     // Controls which week to show
-            numberOfDays={7}              // Show full week
-            formatDateHeader="ddd M/D"    // Day format (e.g. Sun 9/21, Mon 9/22)
-            hoursInDisplay={8}  // Reduced from 12 to 8 hours for better fit in smaller height
-            startHour={6}        // Start from 6 AM instead of midnight
-            endHour={22}         // End at 10 PM instead of midnight
+            selectedDate={currentDate}
+            numberOfDays={7}
+            formatDateHeader="ddd M/D"
+            hoursInDisplay={8}
+            startHour={6}
+            endHour={22}
             formatTimeLabel="h:mm a"
-
-            // Navigation
             onSwipeNext={() => {
               const next = new Date(currentDate);
               next.setDate(currentDate.getDate() + 7);
@@ -259,11 +249,7 @@ export default function MyWeekView({ navigation }) {
               prev.setDate(currentDate.getDate() - 7);
               setCurrentDate(prev);
             }}
-
-            // Event click
             onEventPress={onEventPress}
-
-            // Styles (same as CalenderDetailScreen)
             headerStyle={styles.header}
             todayHeaderStyle={styles.todayHeader}
             hourTextStyle={styles.hourText}
@@ -271,10 +257,10 @@ export default function MyWeekView({ navigation }) {
           />
         </ScrollView>
       </View>
-      
+
       <CustomBottomNav handleFabPress={handleFabPress} />
-      
-      {/* --- Modal Components (same pattern as CalenderDetailScreen) --- */}
+
+      {}
       <TaskDetailsModal
         visible={showTaskDialog}
         onClose={() => setShowTaskDialog(false)}
@@ -287,16 +273,15 @@ export default function MyWeekView({ navigation }) {
         onClose={() => setShowEventDetailsDialog(false)}
         event={dialogEvent}
         onEventUpdated={() => {
-          // Refresh data when event is updated
           fetchData();
         }}
       />
 
-      {/* --- Create Event Modal (same pattern as CalenderScreen) --- */}
+      {}
       <CreateEventModal
         visible={showEventCreationDialog}
         onClose={() => setShowEventCreationDialog(false)}
-        selectedDate={null} // Let CreateEventModal use current date (fixes timezone issue)
+        selectedDate={null}
         onEventCreated={handleEventCreated}
       />
     </View>
@@ -304,36 +289,36 @@ export default function MyWeekView({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#fff',
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
   },
-  // --- WeekView Container with Natural Flexible Height ---
+
   weekViewContainer: {
-    flex: 0.85, // Takes all available space since no toggle buttons above
+    flex: 0.85,
   },
-  // --- ScrollView style to maintain original WeekView size ---
+
   scrollView: {
-    flex: 1, // Fill the container completely
+    flex: 1,
   },
-  header: { 
-    backgroundColor: '#f8f9fa',
+  header: {
+    backgroundColor: "#f8f9fa",
     paddingVertical: 10,
     paddingHorizontal: 5,
     borderBottomWidth: 0,
   },
   todayHeader: {
-    backgroundColor: '#007AFF',
-    color: 'white'
+    backgroundColor: "#007AFF",
+    color: "white",
   },
-  hourText: { 
-    color: '#333' 
+  hourText: {
+    color: "#333",
   },
   eventContainer: {
     borderRadius: 4,
     padding: 2,
     margin: 1,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,

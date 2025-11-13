@@ -32,7 +32,7 @@ const NoChangesDialog = ({
           shadowRadius: 16,
           elevation: 8,
         }}>
-          {/* Info Icon */}
+          {}
           <View style={{
             alignItems: 'center',
             marginBottom: 16,
@@ -59,7 +59,7 @@ const NoChangesDialog = ({
             </Text>
           </View>
 
-          {/* Message */}
+          {}
           <Text style={{
             fontSize: 15,
             color: '#6B7280',
@@ -70,7 +70,7 @@ const NoChangesDialog = ({
             No changes have been made. Please modify at least one field before updating.
           </Text>
 
-          {/* Action Button */}
+          {}
           <TouchableOpacity
             style={{
               backgroundColor: 'black',

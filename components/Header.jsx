@@ -18,7 +18,7 @@ const Header = ({
       className="flex-row items-center justify-between px-5 py-5 pt-2.5 border-b border-[#f0f0f0]"
       style={{ backgroundColor }}
     >
-      {/* Menu Button */}
+      {}
       {showMenu && (
         <TouchableOpacity
           className="p-2 rounded-lg"
@@ -28,7 +28,7 @@ const Header = ({
         </TouchableOpacity>
       )}
 
-      {/* Title */}
+      {}
       <Text 
         className="text-[20px] font-bold tracking-[0.5px]"
         style={{ color: textColor }}
@@ -36,7 +36,7 @@ const Header = ({
         {title}
       </Text>
 
-      {/* Right Icon */}
+      {}
       {showRight && (
         <TouchableOpacity 
           className="p-2 rounded-lg"

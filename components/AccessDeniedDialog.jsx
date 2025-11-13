@@ -34,7 +34,7 @@ const AccessDeniedDialog = ({
           shadowRadius: 16,
           elevation: 8,
         }}>
-          {/* Warning Icon */}
+          {}
           <View style={{
             alignItems: 'center',
             marginBottom: 16,
@@ -61,7 +61,7 @@ const AccessDeniedDialog = ({
             </Text>
           </View>
 
-          {/* Message */}
+          {}
           <Text style={{
             fontSize: 15,
             color: '#6B7280',
@@ -72,7 +72,7 @@ const AccessDeniedDialog = ({
             {message}
           </Text>
 
-          {/* OK Button */}
+          {}
           <TouchableOpacity
             style={{
               backgroundColor: '#EF4444',
