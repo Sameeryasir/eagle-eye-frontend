@@ -560,8 +560,7 @@ function CalenderScreen({ navigation }) {
             <Text className="text-white text-base font-semibold">Retry</Text>
           </TouchableOpacity>
         </View>
-        {/* --- Custom Bottom Navigation - Always Visible --- */}
-        <CustomBottomNav />
+        {/* --- Bottom Nav handled globally in App.js --- */}
       </View>
     );
   }

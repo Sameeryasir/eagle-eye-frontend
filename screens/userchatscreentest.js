@@ -36,32 +36,9 @@ import * as ImagePicker from 'expo-image-picker';
 import NetInfo from '@react-native-community/netinfo';
 import { useAuth } from "../context/AuthContext";
 import { useSQLiteContext } from 'expo-sqlite';
-import { 
-  getMessagesTableName 
-} from "../database/schema";
-import {
-  messageExistsInSQLite,
-  saveMessageToSQLite,
-  saveMessagesBatchToSQLite,
-  getAllMessagesFromSQLite,
-  getMessageCountFromSQLite,
-  clearAllMessagesFromSQLite,
-  initializeMessagesTable,
-  messagesTableExists,
-  updateMessageStatus,
-  updateSignatureFields,
-  updateSignatureFieldsBySignatureId,
-  updateSignatureId,
-  getLastInsertRowId,
-  deletePendingMessage,
-  insertOfflineMessage,
-  getPendingSignatureIds,
-  getPendingMessages,
-  getAllMessagesAscending,
-  getMessageFromSQLite
-} from "../database/messageStorage";
 import { getMessagesByConversationId } from "../services/chats/getMessagesByConversationId";
 import { sendMessage } from "../services/chats/sendMessage";
+import { isTyping } from "../services/chats/isTyping";
 import { getFilesForConversation } from "../services/chats/getFilesForConversation";
 import { getSignaturesOfConversation } from "../services/chats/getSignaturesOfConversation";
 import { createSignature } from "../services/chats/createSignature";
@@ -88,9 +65,9 @@ const emitVerticalLog = (heading, rows) => {
 };
 
 // --- Change Summary (MCP Context 7) ---
-// What: Added signed-signature sync helper that reads server data via getSignedSignatures, updates SQLite rows, and refreshes UI state; removed entry loader so chat renders immediately while data hydrates; surfaced quick-access icons to reload from SQLite or clear stored chat rows; introduced request abortion so leaving the screen cancels in-flight message fetches and logs that workflow; restored WhatsApp-style pagination by only loading the newest 20 messages from SQLite and revealing older batches on scroll; pre-seeded current user ID from AuthContext so ownership alignment renders correctly from the first frame; removed obsolete refreshDatabaseMessageStats call to prevent runtime ReferenceError; removed automatic offline message sending when internet is restored; reformatted diagnostic console logs into vertical bullet lists for easier reading.
-// Why: Ensure signed signature forms fetched from the API overwrite stale local copies so users always see the latest signed contracts, improve first impression by skipping the blocking spinner, provide simple on-device maintenance controls for local chat storage, prevent wasted bandwidth (and confusing logs) when users back out mid-sync, stop ownership flicker by matching the legacy 20-at-a-time loader, remove the left/right jump caused by late-loading user IDs, avoid crashes triggered by missing helper functions, simplify offline message handling by removing automatic sending logic, and keep debug output understandable for non-engineers.
-// Dependencies: Relies on services/chats/getSignedSignatures, SQLite messages_<conversationId> schema, existing sortMessagesByTime utility, dedupeMessagesById to render safely during async hydration, existing fetchMessagesFromSQLite/clearDatabase helpers, new abort-aware signature in services/chats/getMessagesByConversationId, SQLite pagination helpers defined in this file, AuthContext-provided IDs as an initial ownership signal, NetInfo connectivity events, and the shared logging helpers declared below.
+// What: Added signed-signature sync helper that reads server data via getSignedSignatures, updates SQLite rows, and refreshes UI state; removed entry loader so chat renders immediately while data hydrates; surfaced quick-access icons to reload from SQLite or clear stored chat rows; introduced request abortion so leaving the screen cancels in-flight message fetches and logs that workflow; restored WhatsApp-style pagination by only loading the newest 20 messages from SQLite and revealing older batches on scroll; pre-seeded current user ID from AuthContext so ownership alignment renders correctly from the first frame; removed obsolete refreshDatabaseMessageStats call to prevent runtime ReferenceError; added online bootstrap that automatically flushes pending offline messages as soon as a user lands on the chat with connectivity; reformatted diagnostic console logs into vertical bullet lists for easier reading.
+// Why: Ensure signed signature forms fetched from the API overwrite stale local copies so users always see the latest signed contracts, improve first impression by skipping the blocking spinner, provide simple on-device maintenance controls for local chat storage, prevent wasted bandwidth (and confusing logs) when users back out mid-sync, stop ownership flicker by matching the legacy 20-at-a-time loader, remove the left/right jump caused by late-loading user IDs, avoid crashes triggered by missing helper functions, make sure any offline messages cached previously are sent immediately once a reliable connection is present, and keep debug output understandable for non-engineers.
+// Dependencies: Relies on services/chats/getSignedSignatures, SQLite messages_<conversationId> schema, existing sortMessagesByTime utility, dedupeMessagesById to render safely during async hydration, existing fetchMessagesFromSQLite/clearDatabase helpers, new abort-aware signature in services/chats/getMessagesByConversationId, SQLite pagination helpers defined in this file, AuthContext-provided IDs as an initial ownership signal, sendOfflineMessages queue processing, NetInfo connectivity events, and the shared logging helpers declared below.
 
 // --- Helper Function to Generate Initials (MCP Context 7) ---
 // Extract first letter of first name and first letter of last name
@@ -212,6 +189,8 @@ const UserChatScreen = ({ navigation, route }) => {
   // Business Rule: Track who is currently typing in the conversation
   // Used to show typing indicators below the input bar (WhatsApp-style)
   const [typingUsers, setTypingUsers] = useState([]); // Array of user objects who are typing
+  const [isUserTyping, setIsUserTyping] = useState(false); // Whether current user is typing
+  const typingTimeoutRef = useRef(null); // For debouncing typing status
 
   // --- API Request Cancellation State (MCP Context 7) ---
   // Business Rule: Track in-flight API calls so we can cancel them when user leaves the chat screen.
@@ -376,11 +355,99 @@ const UserChatScreen = ({ navigation, route }) => {
   }, []);
 
 
-// --- Database Helper Functions (MCP Context 7) ---
-// What: All database operations now use centralized functions from database/messageStorage.ts
-// Why: Eliminates code duplication and ensures consistent database operations across the app
-// Dependencies: database/messageStorage.ts exports
-// NOTE: All imported functions require 'db' as the first parameter
+const messageExistsInSQLite = (messageId, conversationId) => {
+  try {
+    const existingMessage = db.getFirstSync(
+      `SELECT id FROM messages_${conversationId} WHERE id = ?`,
+      [messageId]
+    );
+    return Boolean(existingMessage);
+  } catch (lookupError) {
+    console.error('❌ Error checking message existence:', lookupError);
+    return false;
+  }
+};
+
+const saveMessageToSQLite = (msg, conversationId, logLabel = 'DEFAULT', logSkips = true) => {
+  try {
+    // Check if message already exists to avoid duplicates
+    const isDuplicate = messageExistsInSQLite(msg.id, conversationId);
+
+    if (isDuplicate) {
+      if (logSkips) {
+        console.log(`ℹ️ [${logLabel}] Message ${msg.id} already exists - skipping insert`);
+      }
+      return;
+    }
+
+    // Save message to SQLite
+    db.runSync(`
+      INSERT OR REPLACE INTO messages_${conversationId} (
+        id, conversation_id, content, file_uri, file_name, file_type, file_size,
+        sender_id, sender_first_name, sender_last_name, created_at, status,
+        signature_id, signature_title, signature_notes, signature_due_date, 
+        signature_status, signature_file_url, signature_file_name, signature_file_size,
+        signed_by_id, signed_by_name, signed_by_email
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      msg.id,
+      conversationId,
+      msg.content || null,
+      msg.fileUrl || null,
+      msg.fileName || null,
+      msg.fileType || null,
+      msg.fileSize || null,
+      msg.sender?.id || null,
+      msg.sender?.first_name || null,
+      msg.sender?.last_name || null,
+      msg.createdAt || new Date().toISOString(),
+      msg.status || 'sent',
+      msg.signature?.id || null,
+      msg.signature?.title || null,
+      msg.signature?.notes || null,
+      msg.signature?.dueDate || null,
+      msg.signature?.status || null,
+      msg.signature?.fileUrl || null,
+      msg.signature?.fileName || null,
+      msg.signature?.fileSize || null,
+      msg.signature?.signedBy?.id || null,
+      msg.signature?.signedBy?.name || null,
+      msg.signature?.signedBy?.email || null
+    ]);
+  } catch (dbError) {
+    console.error('❌ Error saving message to database:', dbError);
+  }
+};
+
+// --- Batch Persistence Helper (MCP Context 7) ---
+// Business Rule: Process entire API pages inside a single transaction so large syncs finish faster without sacrificing duplicate protection.
+const saveMessagesBatchToSQLite = (messages, conversationId, logLabel = 'BATCH') => {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return;
+  }
+
+  try {
+    // Inline Comment: Filter out messages that are already cached so we only touch SQLite when there is new data.
+    const messagesToInsert = messages.filter((message) => !messageExistsInSQLite(message.id, conversationId));
+
+    if (messagesToInsert.length === 0) {
+      return; // NOTE: Entire batch already cached; no transaction needed so console stays quiet.
+    }
+
+    db.execSync('BEGIN TRANSACTION'); // Inline Comment: Group all inserts so SQLite only commits once, dramatically reducing IO.
+    messagesToInsert.forEach((message) => {
+      saveMessageToSQLite(message, conversationId, logLabel, false);
+    });
+    db.execSync('COMMIT');
+  } catch (transactionError) {
+    console.error(`❌ [${logLabel}] Failed to persist message batch:`, transactionError);
+    try {
+      db.execSync('ROLLBACK'); // Inline Comment: Roll back the whole batch if anything fails so the cache stays consistent.
+    } catch (rollbackError) {
+      console.error(`❌ [${logLabel}] Failed to rollback batch transaction:`, rollbackError);
+    }
+  }
+};
 
   // --- Helper: Fetch All Messages from API and Save to SQLite (MCP Context 7) ---
   // Business Rule: When SQLite is empty, fetch all messages from API and cache locally
@@ -435,7 +502,7 @@ const UserChatScreen = ({ navigation, route }) => {
     
     // Save all messages to SQLite
     console.log('💾 Saving messages to SQLite...');
-    saveMessagesBatchToSQLite(db, allMessages, conversationId, 'INITIAL-API-BATCH');
+    saveMessagesBatchToSQLite(allMessages, conversationId, 'INITIAL-API-BATCH');
     console.log('✅ All messages saved to SQLite');
     
     // Update pagination state
@@ -452,22 +519,13 @@ const UserChatScreen = ({ navigation, route }) => {
   };
 
   // --- Helper: Sort Messages by Timestamp (MCP Context 7) ---
-  // Business Rule: Sort messages newest-first for inverted FlatList using local timestamp
+  // Business Rule: Sort messages newest-first for inverted FlatList
   // When FlatList is inverted, newest-first data displays as oldest-first visually (like WhatsApp)
-  // Uses local timestamp (created_at from database) and ID as tiebreaker for messages with same timestamp
+  // This ensures correct order even when messages arrive out of sequence via Pusher
   const sortMessagesByTime = (messages) => {
     return messages.sort((a, b) => {
-      // Use local timestamp (created_at from database), not server timestamp
-      const timeA = new Date(a.createdAt || a.created_at).getTime();
-      const timeB = new Date(b.createdAt || b.created_at).getTime();
-      
-      // If timestamps are the same, differentiate by ID (higher ID = newer message)
-      if (timeA === timeB) {
-        const idA = Number(a.id) || 0;
-        const idB = Number(b.id) || 0;
-        return idB - idA; // Higher ID first (newer message)
-      }
-      
+      const timeA = new Date(a.createdAt).getTime();
+      const timeB = new Date(b.createdAt).getTime();
       return timeB - timeA; // Newest first (descending order) - will be inverted visually
     });
   };
@@ -514,9 +572,8 @@ const UserChatScreen = ({ navigation, route }) => {
       console.log('🔍 Checking if messages table exists for conversation:', conversationId);
       
       try {
-        // Inline Comment: Uses centralized function from messageStorage.ts
-        const tableExists = messagesTableExists(db, conversationId);
-        if (!tableExists) {
+        const tableCheck = db.getAllSync(`SELECT name FROM sqlite_master WHERE type='table' AND name='messages_${conversationId}'`);
+        if (tableCheck.length === 0) {
           console.log('⚠️ Messages table does not exist yet - skipping SQLite query');
           console.log('📭 No messages found in SQLite database - fetching from API');
           
@@ -601,7 +658,7 @@ const UserChatScreen = ({ navigation, route }) => {
             
             // Store all messages in SQLite database
             console.log('💾 Storing all API messages in SQLite database...');
-            saveMessagesBatchToSQLite(db, allMessages, conversationId, 'API-PROGRESSIVE-BATCH');
+            saveMessagesBatchToSQLite(allMessages, conversationId, 'API-PROGRESSIVE-BATCH');
             console.log('✅ All API messages stored in SQLite database');
 
             // Reset pagination state - no more pages to load
@@ -653,26 +710,23 @@ const UserChatScreen = ({ navigation, route }) => {
         // Continue with API fallback
       }
 
-      // --- Load Messages from SQLite (MCP Context 7) ---
-      // Business Rule: Load latest 20 messages initially, load more when user scrolls up
-      console.log('📡 Loading messages from SQLite database for conversation:', conversationId);
+      // --- Load All Messages from SQLite (MCP Context 7) ---
+      // Business Rule: Load all messages at once to ensure signature forms appear immediately
+      // This prevents delay in showing signature forms that might be beyond first 20 messages
+      console.log('📡 Loading all messages from SQLite database for conversation:', conversationId);
       
-      // Get total message count and latest 20 messages (same logic as test.js)
       const totalMessageCountRow = db.getFirstSync(`SELECT COUNT(*) as count FROM messages_${conversationId}`);
       const totalMessageCount = totalMessageCountRow?.count || 0;
+
       const dbMessages = db.getAllSync(
         `SELECT * FROM messages_${conversationId} ORDER BY datetime(created_at) DESC LIMIT ${SQLITE_MESSAGES_PAGE_SIZE}`
       );
       
-      // Debug: Show what columns are available in the first message
-      if (dbMessages.length > 0) {
-        console.log('🔍 First message columns:', Object.keys(dbMessages[0]));
-      }
-      
-      console.log('📋 Found', dbMessages.length, 'messages in SQLite database (total stored:', totalMessageCount, ')');
+      console.log('📨 SQLite Response received:', dbMessages);
+      console.log(`📋 Found ${dbMessages.length} messages in SQLite database (total stored: ${totalMessageCount})`);
       
       if (dbMessages && dbMessages.length > 0) {
-        // Convert database messages to UI format with signature fields
+        // Convert database messages to UI format
         const uiMessages = dbMessages.map(msg => ({
           id: msg.id?.toString() || `db_${msg.created_at}`,
           content: msg.content,
@@ -705,16 +759,16 @@ const UserChatScreen = ({ navigation, route }) => {
           } : null
         }));
         
-        // SQL query already sorted messages by created_at DESC, so no need to sort again
-        // Messages are already in correct order (newest first) from SQL query
-        setMessages(uiMessages);
+        // Sort messages to ensure chronological order
+        const sortedMessages = sortMessagesByTime([...uiMessages]);
+        setMessages(sortedMessages);
         
-        // Set pagination state - enable pagination if more messages exist
-        setCurrentOffset(SQLITE_MESSAGES_PAGE_SIZE); // Offset = 20 (ready to load next 20)
-        setHasMoreMessages(totalMessageCount > SQLITE_MESSAGES_PAGE_SIZE); // Enable pagination if more than 20 messages exist
+        // Reset pagination state
+        setCurrentOffset(dbMessages.length); // Inline Comment: Offset tracks how many rows are already rendered.
+        setHasMoreMessages(totalMessageCount > dbMessages.length); // Inline Comment: If more than a page remains, enable scroll pagination.
         
         // Store the last message ID in AsyncStorage
-        storeLastMessageId(uiMessages);
+        storeLastMessageId(sortedMessages);
         
         // Kick off background sync to replace any pending contracts with signed data from server
         syncSignedSignaturesFromAPI().catch((error) => {
@@ -936,9 +990,11 @@ const UserChatScreen = ({ navigation, route }) => {
         }
       } else {
         // Load next 20 messages from SQLite
-        // Inline Comment: Uses centralized functions from messageStorage.ts
-        const totalMessageCount = getMessageCountFromSQLite(db, conversationId);
-        const olderMessages = getAllMessagesFromSQLite(db, conversationId, SQLITE_MESSAGES_PAGE_SIZE, currentOffset);
+        const totalMessageCountRow = db.getFirstSync(`SELECT COUNT(*) as count FROM messages_${conversationId}`);
+        const totalMessageCount = totalMessageCountRow?.count || 0;
+        const olderMessages = db.getAllSync(
+          `SELECT * FROM messages_${conversationId} ORDER BY datetime(created_at) DESC LIMIT ${SQLITE_MESSAGES_PAGE_SIZE} OFFSET ${currentOffset}`
+        );
 
         console.log(`📋 Found ${olderMessages.length} older messages (current offset: ${currentOffset}, total stored: ${totalMessageCount})`);
 
@@ -1000,16 +1056,16 @@ const UserChatScreen = ({ navigation, route }) => {
 
   // --- Fetch Messages from SQLite Database (MCP Context 7) ---
   // Business Rule: Get all messages from local database when offline
-  // What: Uses centralized getAllMessagesFromSQLite and getMessageCountFromSQLite functions
-  // Why: Eliminates duplicate database query code
   const fetchMessagesFromSQLite = () => {
     try {
       console.log('🔄 Fetching messages from SQLite database for conversation:', conversationId);
       
       // Get all messages from database (both sent and pending)
-      // Inline Comment: Uses centralized function from messageStorage.ts
-      const totalMessageCount = getMessageCountFromSQLite(db, conversationId);
-      const dbMessages = getAllMessagesFromSQLite(db, conversationId, SQLITE_MESSAGES_PAGE_SIZE);
+      const totalMessageCountRow = db.getFirstSync(`SELECT COUNT(*) as count FROM messages_${conversationId}`);
+      const totalMessageCount = totalMessageCountRow?.count || 0;
+      const dbMessages = db.getAllSync(
+        `SELECT * FROM messages_${conversationId} ORDER BY datetime(created_at) DESC LIMIT ${SQLITE_MESSAGES_PAGE_SIZE}`
+      );
       
       // Debug: Show what columns are available in the first message
       if (dbMessages.length > 0) {
@@ -1052,14 +1108,14 @@ const UserChatScreen = ({ navigation, route }) => {
           } : null
         }));
         
-        // SQL query already sorted messages by created_at DESC, so no need to sort again
-        // Messages are already in correct order (newest first) from SQL query
-        setMessages(uiMessages);
+        // Sort messages by timestamp
+        const sortedMessages = sortMessagesByTime(uiMessages);
+        setMessages(sortedMessages);
         setCurrentOffset(totalMessageCount); // Inline Comment: Mark all rows as loaded so the load-more control knows nothing remains.
         setHasMoreMessages(false); // Inline Comment: Folder-triggered fetch loads everything, so we disable further pagination requests.
         
         // Store last message ID when messages are loaded from SQLite
-        storeLastMessageId(uiMessages);
+        storeLastMessageId(sortedMessages);
         
         console.log('✅ Messages loaded from SQLite database');
       } else {
@@ -1140,9 +1196,16 @@ const UserChatScreen = ({ navigation, route }) => {
     let pendingSignatureIds = new Set();
 
     try {
-      // Inline Comment: Uses centralized function from messageStorage.ts
-      const pendingIds = getPendingSignatureIds(db, conversationId);
-      pendingSignatureIds = new Set(pendingIds);
+      const pendingSignatureRows = db.getAllSync(
+        `SELECT signature_id FROM messages_${conversationId} WHERE signature_status = 'pending' AND signature_id IS NOT NULL`
+      );
+
+      pendingSignatureIds = new Set(
+        (pendingSignatureRows || [])
+          .map((row) => row?.signature_id)
+          .filter((id) => id !== null && id !== undefined)
+          .map((id) => String(id))
+      );
     } catch (pendingLookupError) {
       console.error('❌ [SIGNED SYNC] Unable to inspect pending signatures:', pendingLookupError);
       pendingSignatureIds = new Set();
@@ -1238,16 +1301,23 @@ const UserChatScreen = ({ navigation, route }) => {
 
         try {
           console.log('📝 [SIGNED SYNC] Updating SQLite record for signature:', signatureId);
-          // Inline Comment: Uses centralized function from messageStorage.ts
-          updateSignatureFieldsBySignatureId(db, signatureId, conversationId, {
-            status: status || undefined,
-            fileUrl: fileUrl || null,
-            fileName: fileName || null,
-            fileSize: fileSize || null,
-            signedById: signedBy?.id ?? null,
-            signedByName: signedBy?.name ?? null,
-            signedByEmail: signedBy?.email ?? null,
-          });
+          db.runSync(
+            `
+              UPDATE messages_${conversationId}
+              SET signature_status = ?, signature_file_url = ?, signature_file_name = ?, signature_file_size = ?, signed_by_id = ?, signed_by_name = ?, signed_by_email = ?
+              WHERE signature_id = ?
+            `,
+            [
+              status,
+              fileUrl,
+              fileName,
+              fileSize,
+              signedBy?.id ?? null,
+              signedBy?.name ?? null,
+              signedBy?.email ?? null,
+              signatureId,
+            ]
+          );
         } catch (dbError) {
           console.error('❌ [SIGNED SYNC] Failed to update SQLite for signature:', signatureId, dbError);
         }
@@ -1359,13 +1429,47 @@ const UserChatScreen = ({ navigation, route }) => {
             pageMessages.forEach(msg => {
               try {
                 // Check if message already exists in database
-                // Inline Comment: Uses centralized function from messageStorage.ts
-                const existingMessage = messageExistsInSQLite(db, msg.id, conversationId);
+                const existingMessage = db.getFirstSync(
+                  `SELECT id FROM messages_${conversationId} WHERE id = ?`,
+                  [msg.id]
+                );
                 
                 if (!existingMessage) {
                   // Store message in SQLite database
-                  // Inline Comment: Uses centralized function from messageStorage.ts (handles duplicates automatically)
-                  saveMessageToSQLite(db, msg, conversationId, 'NEW-MESSAGES', false);
+                  // Use INSERT OR IGNORE to handle race condition
+                  db.runSync(`
+                    INSERT OR IGNORE INTO messages_${conversationId} (
+                      id, conversation_id, content, file_uri, file_name, file_type, file_size,
+                      sender_id, sender_first_name, sender_last_name, created_at, status,
+                      signature_id, signature_title, signature_notes, signature_due_date, 
+                      signature_status, signature_file_url, signature_file_name, signature_file_size,
+                      signed_by_id, signed_by_name, signed_by_email
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  `, [
+                    msg.id,
+                    conversationId,
+                    msg.content || null,
+                    msg.fileUrl || null,
+                    msg.fileName || null,
+                    msg.fileType || null,
+                    msg.fileSize || null,
+                    msg.sender?.id || null,
+                    msg.sender?.first_name || null,
+                    msg.sender?.last_name || null,
+                    msg.createdAt || new Date().toISOString(),
+                    msg.status || 'sent',
+                    msg.signature?.id || null,
+                    msg.signature?.title || null,
+                    msg.signature?.notes || null,
+                    msg.signature?.dueDate || null,
+                    msg.signature?.status || null,
+                    msg.signature?.fileUrl || null,
+                    msg.signature?.fileName || null,
+                    msg.signature?.fileSize || null,
+                    msg.signature?.signedBy?.id || null,
+                    msg.signature?.signedBy?.name || null,
+                    msg.signature?.signedBy?.email || null
+                  ]);
                   
                   console.log(`✅ [NEW MESSAGES] Stored message ${msg.id} in database`);
                 } else {
@@ -1474,15 +1578,13 @@ const UserChatScreen = ({ navigation, route }) => {
     const loadMessagesAndCheckForNew = async () => {
       try {
         // Check if messages table exists and has data
-        // Inline Comment: Uses centralized function from messageStorage.ts
-        const tableExists = messagesTableExists(db, conversationId);
+        const tableCheck = db.getAllSync(`SELECT name FROM sqlite_master WHERE type='table' AND name='messages_${conversationId}'`);
         
-        if (tableExists) {
+        if (tableCheck.length > 0) {
           // Table exists - check if it has messages
-          // Inline Comment: Uses centralized function from messageStorage.ts
-          const messageCount = getMessageCountFromSQLite(db, conversationId);
+          const messageCount = db.getFirstSync(`SELECT COUNT(*) as count FROM messages_${conversationId}`);
           
-          if (messageCount > 0) {
+          if (messageCount && messageCount.count > 0) {
             console.log('📱 Database has messages - loading from SQLite and checking for new messages');
             // Load existing messages from SQLite
             await fetchMessages();
@@ -1515,8 +1617,9 @@ const UserChatScreen = ({ navigation, route }) => {
   // --- Load Messages on Focus (MCP Context 7) ---
   // REMOVED: Navigation focus listener to prevent automatic refresh when signature modal closes
   // The app already handles message updates via:
-  // 1. Pusher real-time updates
-  // 2. Manual message sending
+  // 1. Internet connectivity monitoring (sendOfflineMessages)
+  // 2. Pusher real-time updates
+  // 3. Manual message sending
   // This prevents unnecessary API calls and app refresh
   // useEffect(() => {
   //   const unsubscribe = navigation.addListener('focus', () => {
@@ -1536,6 +1639,9 @@ const UserChatScreen = ({ navigation, route }) => {
   // }, [navigation, conversationId]);
 
 
+  // --- Send Pending Offline Messages When Internet Restored (MCP Context 7) ---
+  const [isInternetRestored, setIsInternetRestored] = useState(false);
+  const [isSendingOfflineMessages, setIsSendingOfflineMessages] = useState(false);
 
   // --- Signature Notification Targeting (MCP Context 7) ---
   // Business Rule: Mirror message notification logic so signature alerts reach the correct recipient.
@@ -1568,6 +1674,505 @@ const UserChatScreen = ({ navigation, route }) => {
     return isGroupChat ? 'group' : 'private';
   }, [type, conversation, isGroupChat]);
   
+  const sendOfflineMessages = async () => {
+    // Prevent multiple calls
+    if (isSendingOfflineMessages) {
+      console.log('⚠️ Already sending offline messages, skipping...');
+      return;
+    }
+    
+    Keyboard.dismiss(); // NOTE: Close keyboard while queued offline messages sync to keep UI stable (MCP Context 7).
+    messageInputRef.current?.blur(); // Ensure composer can't regain focus during sync.
+
+    console.log('📡 Internet restored - checking for pending messages to send');
+    setIsSendingOfflineMessages(true);
+    setIsInternetRestored(true); // Set flag to indicate internet restoration
+    
+    try {
+      // Get all pending messages from database
+      const pendingMessages = db.getAllSync(
+        `SELECT * FROM messages_${conversationId} WHERE status = 'pending' ORDER BY created_at ASC`
+      );
+      
+      if (pendingMessages && pendingMessages.length > 0) {
+        console.log(`📤 Found ${pendingMessages.length} pending messages to send`);
+        
+        // Debug: Show the order of messages being sent
+        console.log('📋 Messages will be sent in this order:');
+        pendingMessages.forEach((msg, index) => {
+          console.log(`${index + 1}. Message: "${msg.content}" - Created: ${msg.created_at}`);
+        });
+        
+        // Send messages one by one (sequentially)
+        for (const msg of pendingMessages) {
+          try {
+            // Handle signature requests - send them to API when internet is restored
+            if (msg.signature_id) {
+              console.log(`📝 [${pendingMessages.indexOf(msg) + 1}/${pendingMessages.length}] Sending signature request: "${msg.signature_title}" to server...`);
+              console.log(`📝 [DEBUG] Offline signature ID: ${msg.signature_id}, Title: "${msg.signature_title}", Notes: "${msg.signature_notes}"`);
+              
+              // Prepare signature data for API
+              const signatureData = {
+                title: msg.signature_title,
+                notes: msg.signature_notes,
+                dueDate: msg.signature_due_date
+              };
+              
+              // Send signature request to API
+              const signatureResponse = await createSignature(conversationId, signatureData);
+              console.log('✅ Signature request sent successfully, server response:', JSON.stringify(signatureResponse, null, 2));
+              
+              // Extract data from server response
+              const serverMessageId = signatureResponse?.id;
+              const serverSignatureId = signatureResponse?.signature?.id;
+              const serverSignature = signatureResponse?.signature;
+              const serverSender = signatureResponse?.sender;
+              
+              console.log('🆔 Server Message ID:', serverMessageId);
+              console.log('🆔 Server Signature ID:', serverSignatureId);
+              
+              if (serverMessageId && serverSignatureId) {
+                // Replace offline message with complete server response data
+                // CRITICAL FIX: Use the message ID (primary key) to ensure we update the exact offline record
+                const offlineMessageId = msg.id; // The temporary offline message ID
+                
+                console.log(`🔄 [UPDATE] Updating offline signature record with ID: ${offlineMessageId} to server ID: ${serverMessageId}`);
+                console.log(`🔄 [UPDATE] Offline signature_id: ${msg.signature_id} → Server signature_id: ${serverSignatureId}`);
+                console.log(`🔄 [UPDATE] Server response signature data:`, JSON.stringify(serverSignature, null, 2));
+                
+                // First, verify the offline record exists before updating
+                const offlineRecord = db.getFirstSync(
+                  `SELECT id, status, signature_id FROM messages_${conversationId} WHERE id = ?`,
+                  [offlineMessageId]
+                );
+                
+                if (!offlineRecord) {
+                  console.error(`❌ [UPDATE] Offline record with ID ${offlineMessageId} not found in database!`);
+                  continue; // Skip this message if record not found
+                } else {
+                  console.log(`✅ [UPDATE] Found offline record:`, {
+                    id: offlineRecord.id,
+                    status: offlineRecord.status,
+                    signature_id: offlineRecord.signature_id
+                  });
+                }
+                
+                // CRITICAL FIX: Update pending record in place so we preserve AUTOINCREMENT linkage while swapping to server IDs.
+                const preservedTitle = serverSignature?.title || msg.signature_title || 'Contract for Signature';
+                const preservedNotes = serverSignature?.notes || msg.signature_notes || null;
+                const preservedDueDate = serverSignature?.dueDate || msg.signature_due_date || null;
+                
+                // Inline Comment: If Pusher already inserted the server row, remove that duplicate so this UPDATE can claim the ID cleanly.
+                const existingServerRecord = db.getFirstSync(
+                  `SELECT id FROM messages_${conversationId} WHERE id = ?`,
+                  [serverMessageId]
+                );
+                
+                if (existingServerRecord) {
+                  console.log(`ℹ️ [UPDATE] Removing duplicate server row ${serverMessageId} before in-place update`);
+                  db.runSync(
+                    `DELETE FROM messages_${conversationId} WHERE id = ? AND id != ?`,
+                    [serverMessageId, offlineMessageId]
+                  );
+                }
+                
+                db.runSync(
+                  `UPDATE messages_${conversationId} SET
+                    id = ?,
+                    conversation_id = ?,
+                    content = ?,
+                    file_uri = ?,
+                    file_name = ?,
+                    file_type = ?,
+                    file_size = ?,
+                    sender_id = ?,
+                    sender_first_name = ?,
+                    sender_last_name = ?,
+                    created_at = ?,
+                    status = ?,
+                    signature_id = ?,
+                    signature_title = ?,
+                    signature_notes = ?,
+                    signature_due_date = ?,
+                    signature_status = ?,
+                    signature_file_url = ?,
+                    signature_file_name = ?,
+                    signature_file_size = ?,
+                    signed_by_id = ?,
+                    signed_by_name = ?,
+                    signed_by_email = ?
+                  WHERE id = ?`,
+                  [
+                    serverMessageId,
+                    conversationId,
+                    signatureResponse?.content || null,
+                    signatureResponse?.fileUrl || null,
+                    signatureResponse?.fileName || null,
+                    signatureResponse?.fileType || null,
+                    signatureResponse?.fileSize || null,
+                    serverSender?.id || null,
+                    serverSender?.first_name || null,
+                    serverSender?.last_name || null,
+                    signatureResponse?.createdAt || new Date().toISOString(),
+                    signatureResponse?.status || 'sent',
+                    serverSignatureId,
+                    preservedTitle,
+                    preservedNotes,
+                    preservedDueDate,
+                    serverSignature?.status || 'pending',
+                    serverSignature?.fileUrl || null,
+                    serverSignature?.fileName || null,
+                    serverSignature?.fileSize || null,
+                    null,
+                    null,
+                    null,
+                    offlineMessageId
+                  ]
+                );
+                
+                const updatedRecord = db.getFirstSync(
+                  `SELECT id, status, signature_id, signature_title FROM messages_${conversationId} WHERE id = ?`,
+                  [serverMessageId]
+                );
+                
+                if (updatedRecord) {
+                  console.log(`✅ [UPDATE] Pending signature row updated in place:`, {
+                    id: updatedRecord.id,
+                    status: updatedRecord.status,
+                    signature_id: updatedRecord.signature_id,
+                    signature_title: updatedRecord.signature_title
+                  });
+                } else {
+                  console.error(`❌ [UPDATE] Failed to locate updated signature row for server ID ${serverMessageId}`);
+                }
+                
+                console.log(`🔄 [${pendingMessages.indexOf(msg) + 1}/${pendingMessages.length}] In-place updated offline signature with server response`);
+                console.log(`🔄 [DEBUG] Updated signature: ${msg.signature_id} → ${serverSignatureId}`);
+                
+                // CRITICAL FIX: Preserve signature data from server response OR offline message
+                // Use server data first, fallback to offline message data if server doesn't have it
+                console.log(`📝 [UI UPDATE] Preserved signature data:`, {
+                  title: preservedTitle,
+                  notes: preservedNotes,
+                  dueDate: preservedDueDate,
+                  serverTitle: serverSignature?.title,
+                  offlineTitle: msg.signature_title,
+                  serverNotes: serverSignature?.notes,
+                  offlineNotes: msg.signature_notes
+                });
+                
+                // Update message in UI with complete server response
+                // CRITICAL FIX: Match by offline message ID (not signature_id) to find the exact pending record
+                setMessages(prevMessages => 
+                  prevMessages.map(prevMsg => {
+                    // Match by offline message ID - this is the exact record we just updated in database
+                    const isOfflineSignature = (
+                      String(prevMsg.id) === String(offlineMessageId) && 
+                      prevMsg.status === 'pending' &&
+                      prevMsg.signature // Ensure it's a signature message
+                    );
+                    
+                    if (isOfflineSignature) {
+                      console.log(`🔄 [UI] Replacing offline signature UI message ID ${offlineMessageId} with server ID ${serverMessageId}`);
+                      console.log(`🔄 [UI] Preserving signature data - Title: "${preservedTitle}", Notes: "${preservedNotes}", DueDate: "${preservedDueDate}"`);
+                      return { 
+                        ...prevMsg, 
+                        id: serverMessageId,
+                        content: signatureResponse?.content || null,
+                        fileUrl: signatureResponse?.fileUrl || null,
+                        fileName: signatureResponse?.fileName || null,
+                        fileType: signatureResponse?.fileType || null,
+                        fileSize: signatureResponse?.fileSize || null,
+                        sender: {
+                          id: serverSender?.id,
+                          first_name: serverSender?.first_name,
+                          last_name: serverSender?.last_name,
+                          name: `${serverSender?.first_name || ''} ${serverSender?.last_name || ''}`.trim(),
+                          email: serverSender?.email
+                        },
+                        createdAt: signatureResponse?.createdAt,
+                        status: signatureResponse?.status || 'sent',
+                        signature: {
+                          id: serverSignatureId,
+                          title: preservedTitle, // Use preserved title (server or offline)
+                          notes: preservedNotes, // Use preserved notes (server or offline)
+                          dueDate: preservedDueDate, // Use preserved dueDate (server or offline)
+                          status: serverSignature?.status || 'pending',
+                          fileUrl: serverSignature?.fileUrl,
+                          fileName: serverSignature?.fileName,
+                          fileSize: serverSignature?.fileSize
+                        },
+                        serverResponse: signatureResponse
+                      };
+                    }
+                    return prevMsg;
+                  })
+                );
+                
+                console.log('✅ Signature request updated in UI with complete server data');
+              } else {
+                console.log('⚠️ Missing server IDs in response, keeping as pending');
+              }
+              
+              // Continue to next message (message already sent, no need for fixed delay)
+              continue;
+            }
+            
+            // Regular message (not signature request)
+            console.log(`📤 Sending message: "${msg.content}" to server...`);
+            
+            // Prepare file object if exists
+            let fileToSend = null;
+            if (msg.file_uri) {
+              fileToSend = {
+                uri: msg.file_uri,
+                name: msg.file_name,
+                mimeType: msg.file_type,
+                size: msg.file_size
+              };
+            }
+            
+            // Send message to API and wait for response
+            const response = await sendMessage(conversationId, msg.content, fileToSend);
+            console.log('✅ Message sent successfully, server response:', response);
+            
+            // Extract message ID from server response
+            const serverMessageId = response?.id || response?.data?.id || response?.message?.id;
+            console.log('🆔 Server message ID:', serverMessageId);
+            console.log('📋 Full server response:', JSON.stringify(response, null, 2));
+            
+            if (serverMessageId) {
+              const offlineMessageId = msg.id; // The temporary offline message ID
+              
+              console.log(`🔄 [UPDATE] Updating offline message in place - Old ID: ${offlineMessageId}, New ID: ${serverMessageId}`);
+              
+              const existingServerMessage = db.getFirstSync(
+                `SELECT id FROM messages_${conversationId} WHERE id = ?`,
+                [serverMessageId]
+              );
+              
+              if (existingServerMessage) {
+                console.log(`ℹ️ [UPDATE] Removing duplicate server row ${serverMessageId} before in-place update`);
+                db.runSync(
+                  `DELETE FROM messages_${conversationId} WHERE id = ? AND id != ?`,
+                  [serverMessageId, offlineMessageId]
+                );
+              }
+              
+              db.runSync(
+                `UPDATE messages_${conversationId} SET
+                  id = ?,
+                  conversation_id = ?,
+                  content = ?,
+                  file_uri = ?,
+                  file_name = ?,
+                  file_type = ?,
+                  file_size = ?,
+                  sender_id = ?,
+                  sender_first_name = ?,
+                  sender_last_name = ?,
+                  created_at = ?,
+                  status = ?,
+                  signature_id = NULL,
+                  signature_title = NULL,
+                  signature_notes = NULL,
+                  signature_due_date = NULL,
+                  signature_status = NULL,
+                  signature_file_url = NULL,
+                  signature_file_name = NULL,
+                  signature_file_size = NULL,
+                  signed_by_id = NULL,
+                  signed_by_name = NULL,
+                  signed_by_email = NULL
+                WHERE id = ?`,
+                [
+                  serverMessageId, 
+                  conversationId,
+                  response?.content || msg.content,
+                  response?.fileUrl || msg.file_uri,
+                  response?.fileName || msg.file_name,
+                  response?.fileType || msg.file_type,
+                  response?.fileSize || msg.file_size,
+                  response?.sender?.id || msg.sender_id,
+                  response?.sender?.first_name || msg.sender_first_name,
+                  response?.sender?.last_name || msg.sender_last_name,
+                  response?.createdAt || msg.created_at,
+                  'sent',
+                  offlineMessageId
+                ]
+              );
+              
+              console.log('🔄 Replaced SQLite message with server response in place');
+              
+              // Update message in UI with server response
+              // Business Rule: Use server timestamp from API response
+              // Match by offline message ID (more reliable than content + timestamp)
+              // Extract server timestamp from response
+              // Note: offlineMessageId is already declared above, reusing it here
+              const serverCreatedAt = response?.createdAt; // Get server timestamp from response
+              setMessages(prevMessages => {
+                const updatedMessages = prevMessages.map(prevMsg => {
+                  // Match by offline message ID first (most reliable)
+                  const isOfflineMessage = (
+                    String(prevMsg.id) === String(offlineMessageId) && 
+                    prevMsg.status === 'pending'
+                  );
+                  
+                  // Fallback: Match by content and timestamp if ID doesn't match
+                  const isMatchingMessage = (
+                    prevMsg.content === msg.content && 
+                    prevMsg.createdAt === msg.created_at && 
+                    prevMsg.status === 'pending'
+                  );
+                  
+                  if (isOfflineMessage || isMatchingMessage) {
+                    console.log(`🔄 [UI] Updating message - Offline ID: ${offlineMessageId}, Server ID: ${serverMessageId}, Content: "${msg.content}"`);
+                    return { 
+                      ...prevMsg, 
+                      id: serverMessageId,
+                      content: response?.content || prevMsg.content,
+                      fileUrl: response?.fileUrl || prevMsg.fileUrl,
+                      fileName: response?.fileName || prevMsg.fileName,
+                      fileType: response?.fileType || prevMsg.fileType,
+                      fileSize: response?.fileSize || prevMsg.fileSize,
+                      createdAt: serverCreatedAt || prevMsg.createdAt, // Use server timestamp
+                      status: 'sent',
+                      serverResponse: response
+                    };
+                  }
+                  
+                  return prevMsg;
+                });
+                
+                // Re-sort messages after update to ensure correct order
+                return sortMessagesByTime(updatedMessages);
+              });
+              
+              console.log('✅ Message updated in UI with server ID:', serverMessageId);
+            } else {
+              console.log('⚠️ No message ID in server response, keeping as pending');
+            }
+            
+            // --- Notify Recipient (MCP Context 7) ---
+            // Business Rule: Mirror the online send path so recipients still get alerts when offline messages flush.
+            try {
+              const conversationType = type || conversation?.type || 'private';
+              const isGroup = conversationType === 'group' || isGroupChat;
+              const messageTextForNotification =
+                response?.content ||
+                msg.content ||
+                (response?.fileName || msg.file_name
+                  ? `Sent a file: ${response?.fileName || msg.file_name}`
+                  : 'Sent a message');
+
+              if (isGroup) {
+                const groupChatName = userName || conversation?.project?.name || 'Group Chat';
+                const notificationData = {
+                  title: 'New message',
+                  message: messageTextForNotification,
+                  conversationId,
+                  fromUserName: groupChatName,
+                  conversationType: 'group',
+                };
+
+                console.log('🔔 Offline group notification payload:', notificationData);
+                console.log('🔔 createMessageNotification payload (offline/group):', JSON.stringify(notificationData));
+                await createMessageNotification(notificationData);
+                console.log('✅ Offline group message notification sent successfully');
+              } else {
+                let recipientUserId = null;
+
+                if (conversation?.participants && conversation.participants.length > 0) {
+                  const otherParticipant = conversation.participants.find(
+                    participant => participant.user?.id?.toString() !== currentUserId?.toString()
+                  );
+                  recipientUserId = otherParticipant?.user?.id;
+                }
+
+                if (!recipientUserId && userId) {
+                  recipientUserId = userId;
+                }
+
+                if (recipientUserId) {
+                  const fromUserName = `${userInfo?.firstName || ''} ${userInfo?.lastName || ''}`.trim() || 'Unknown User';
+                  const notificationData = {
+                    title: 'New message',
+                    message: messageTextForNotification,
+                    conversationId,
+                    assignedToUserId: Number(recipientUserId),
+                    fromUserName,
+                    conversationType: 'private',
+                  };
+
+                  console.log('🔔 Offline private notification payload:', notificationData);
+                  console.log('🔔 createMessageNotification payload (offline/private):', JSON.stringify(notificationData));
+                  await createMessageNotification(notificationData);
+                  console.log('✅ Offline private message notification sent successfully');
+                }
+              }
+            } catch (notificationError) {
+              console.error('❌ Error sending offline message notification:', notificationError);
+              // Do not interrupt the offline loop; message already synced.
+            }
+
+            // Message already sent (await sendMessage() waits for completion)
+            // No fixed delay needed - will proceed to next message immediately
+
+          } catch (error) {
+            console.error('❌ Failed to send pending message:', error);
+            console.error('❌ Error details:', error.message);
+            // Keep message as pending for retry later
+          }
+        }
+        
+        // Count only regular messages (not signature requests)
+        const regularMessagesCount = pendingMessages.filter(msg => !msg.signature_id).length;
+        const signatureRequestsCount = pendingMessages.filter(msg => msg.signature_id).length;
+        
+        Toast.show({
+          type: 'success',
+          text1: 'Messages Sent',
+          text2: `${regularMessagesCount} messages sent successfully${signatureRequestsCount > 0 ? `, ${signatureRequestsCount} signature requests kept offline` : ''}`,
+          position: 'top',
+          visibilityTime: 3000,
+        });
+      } else {
+        console.log('📭 No pending messages found');
+      }
+      
+      // Check SQLite database for pending messages and reset flag when none remain
+      const checkAndResetFlag = () => {
+        try {
+          const remainingPendingMessages = db.getAllSync(
+            `SELECT * FROM messages_${conversationId} WHERE status = 'pending'`
+          );
+          
+          if (remainingPendingMessages.length === 0) {
+            // No pending messages left, reset flag
+            setIsInternetRestored(false);
+            console.log('🔄 Internet restoration flag reset - no pending messages in database');
+          } else {
+            // Still have pending messages, check again in 2 seconds
+            console.log(`📋 Still have ${remainingPendingMessages.length} pending messages, checking again...`);
+            setTimeout(checkAndResetFlag, 2000);
+          }
+        } catch (error) {
+          console.error('❌ Error checking pending messages:', error);
+          // Reset flag anyway to prevent infinite checking
+          setIsInternetRestored(false);
+        }
+      };
+      
+      // Start checking after a short delay
+      setTimeout(checkAndResetFlag, 3000);
+      
+    } catch (error) {
+      console.error('❌ Error handling pending messages:', error);
+    } finally {
+      // Reset the sending flag
+      setIsSendingOfflineMessages(false);
+    }
+  };
 
   // --- Reload Messages When Internet Connection Changes (MCP Context 7) ---
   // Business Rule: Only send pending messages when internet is restored, don't reload all messages
@@ -1673,8 +2278,9 @@ const UserChatScreen = ({ navigation, route }) => {
 
   const handleReloadFromSQLite = () => {
     try {
-      // Inline Comment: Uses centralized function from messageStorage.ts
-      const cachedMessages = getAllMessagesAscending(db, conversationId);
+      const cachedMessages = db.getAllSync(
+        `SELECT * FROM messages_${conversationId} ORDER BY datetime(created_at) ASC`
+      );
       cachedMessages.forEach((msg, index) => {
         // Inline Comment: Print every field so troubleshooting can compare SQLite rows with API responses.
         console.log(`📁 [OFFLINE CACHE] Message ${index + 1} (full payload below):`);
@@ -1706,6 +2312,14 @@ const UserChatScreen = ({ navigation, route }) => {
   // Added guard to prevent automatic fetching during offline-to-online transition
   const handleFetchAllSignatures = () => {
     console.log('📝 Received fetchSignatures event in UserChatScreen');
+    
+    // Guard: Don't fetch signatures if we're currently processing offline messages
+    // This prevents automatic signature fetching when internet comes back online
+    if (isSendingOfflineMessages) {
+      console.log('⚠️ [SIGNATURES] Skipping signature fetch - currently processing offline messages');
+      return;
+    }
+    
     console.log('📝 Setting signaturesModalVisible to true');
     setSignaturesModalVisible(true);
     fetchConversationSignatures();
@@ -1827,13 +2441,11 @@ const UserChatScreen = ({ navigation, route }) => {
 
       // Add message to state
       setMessages((prevMessages) => {
-        // CRITICAL: Check for duplicates FIRST before any processing
-        // Use Set for O(1) lookup instead of O(n) array search - more scalable for large message lists
-        const messageIds = new Set(prevMessages.map(msg => String(msg.id)));
-        const existsById = messageIds.has(String(newMessage.id));
+        // Check if message already exists (by ID) - prevent duplicates
+        const exists = prevMessages.some(msg => msg.id === newMessage.id);
         
-        if (existsById) {
-          console.log('⚠️ [PUSHER] Message already exists in chat (by ID) - skipping duplicate and updating signature if needed');
+        if (exists) {
+          console.log('⚠️ [PUSHER] Message already exists in chat - updating signature data if needed');
           
           // Check if this is a signature update and update the database
           if (newMessage.signature?.id) {
@@ -1855,50 +2467,54 @@ const UserChatScreen = ({ navigation, route }) => {
               console.log('📊 [PUSHER] Values to be stored in database:', JSON.stringify(updateValues, null, 2));
               
               // Update by message ID first
-              // Inline Comment: Uses centralized function from messageStorage.ts
-              updateSignatureFields(db, newMessage.id, conversationId, {
-                status: updateValues.signature_status || undefined,
-                fileUrl: updateValues.signature_file_url || null,
-                fileName: updateValues.signature_file_name || null,
-                fileSize: updateValues.signature_file_size || null,
-                signedById: updateValues.signed_by_id || null,
-                signedByName: updateValues.signed_by_name || null,
-                signedByEmail: updateValues.signed_by_email || null,
-              });
+              db.runSync(`
+                UPDATE messages_${conversationId} 
+                SET signature_status = ?, signature_file_url = ?, signature_file_name = ?, 
+                    signature_file_size = ?, signed_by_id = ?, signed_by_name = ?, signed_by_email = ?
+                WHERE id = ?
+              `, [
+                updateValues.signature_status,
+                updateValues.signature_file_url,
+                updateValues.signature_file_name,
+                updateValues.signature_file_size,
+                updateValues.signed_by_id,
+                updateValues.signed_by_name,
+                updateValues.signed_by_email,
+                newMessage.id
+              ]);
               
               console.log('✅ [PUSHER] Updated message with ID:', newMessage.id);
               
               // Also update by signature_id to catch any messages with the same signature
-              // Inline Comment: Uses centralized function from messageStorage.ts
-              if (newMessage.signature?.id) {
-                updateSignatureFieldsBySignatureId(db, newMessage.signature.id, conversationId, {
-                  status: updateValues.signature_status || undefined,
-                  fileUrl: updateValues.signature_file_url || null,
-                  fileName: updateValues.signature_file_name || null,
-                  fileSize: updateValues.signature_file_size || null,
-                  signedById: updateValues.signed_by_id || null,
-                  signedByName: updateValues.signed_by_name || null,
-                  signedByEmail: updateValues.signed_by_email || null,
-                });
-              }
+              db.runSync(`
+                UPDATE messages_${conversationId} 
+                SET signature_status = ?, signature_file_url = ?, signature_file_name = ?, 
+                    signature_file_size = ?, signed_by_id = ?, signed_by_name = ?, signed_by_email = ?
+                WHERE signature_id = ?
+              `, [
+                updateValues.signature_status,
+                updateValues.signature_file_url,
+                updateValues.signature_file_name,
+                updateValues.signature_file_size,
+                updateValues.signed_by_id,
+                updateValues.signed_by_name,
+                updateValues.signed_by_email,
+                newMessage.signature.id
+              ]);
               
               console.log('✅ [PUSHER] Updated signature with ID:', newMessage.signature.id);
               console.log('✅ [PUSHER] Signature data updated in database for existing message');
             } catch (error) {
               console.error('❌ [PUSHER] Error updating signature in database:', error);
+            }
           }
           
-            // Update the message in state with new signature data and return early
+          // Update the message in state with new signature data
           return prevMessages.map(msg => 
             (msg.id === newMessage.id || msg.signature?.id === newMessage.signature?.id) && newMessage.signature
               ? { ...msg, signature: newMessage.signature }
               : msg
           );
-          }
-          
-          // Message exists but no signature update - return early to prevent duplicate
-          console.log('⚠️ [PUSHER] Message already exists, no signature update needed - returning early');
-          return prevMessages;
         }
 
         // --- Replace Pending Messages with Real Pusher Response (MCP Context 7) ---
@@ -1929,24 +2545,13 @@ const UserChatScreen = ({ navigation, route }) => {
             console.log('✅ [PUSHER] Found pending message to replace at index:', pendingMessageIndex);
             
             // Replace pending message with real message from Pusher
-            // CRITICAL: Preserve the local timestamp to maintain correct order
             const updatedMessages = [...prevMessages];
-            const pendingMessage = updatedMessages[pendingMessageIndex];
-            updatedMessages[pendingMessageIndex] = {
-              ...newMessage,
-              createdAt: pendingMessage.createdAt, // Keep local timestamp (when message was created offline)
-            };
+            updatedMessages[pendingMessageIndex] = newMessage;
             
-            console.log('🔄 [PUSHER] Replaced pending message with real message from server (preserved local timestamp)');
-            console.log('🔄 [PUSHER] Local timestamp:', pendingMessage.createdAt, 'Server timestamp:', newMessage.createdAt);
-            
-            // Store the last message ID in AsyncStorage
-            const sortedMessages = sortMessagesByTime(updatedMessages);
-            storeLastMessageId(sortedMessages);
-            
-            return sortedMessages; // Return early to prevent duplicate addition
+            console.log('🔄 [PUSHER] Replaced pending message with real message from server');
+            return sortMessagesByTime(updatedMessages);
           } else {
-            console.log('ℹ️ [PUSHER] No matching pending message found - will add as new message');
+            console.log('ℹ️ [PUSHER] No matching pending message found - adding as new message');
           }
         }
 
@@ -2027,103 +2632,99 @@ const UserChatScreen = ({ navigation, route }) => {
             });
             
             // Check if message already exists (by ID or by signature_id)
-            // Inline Comment: Uses centralized function from messageStorage.ts
-            const existingMessage = messageExistsInSQLite(db, newMessage.id, conversationId);
+            const existingMessage = db.getFirstSync(
+              `SELECT id FROM messages_${conversationId} WHERE id = ?`,
+              [newMessage.id]
+            );
             
             // Also check if signature exists in database by signature_id
-            // NOTE: We need to check by signature_id separately - this is a special case
-            let existingSignatureMessage = false;
+            let existingSignatureMessage = null;
             if (dataToStore.signature_id) {
-              // For signature_id check, we need to query directly as there's no helper for this
-              const tableName = getMessagesTableName(conversationId);
-              const sigCheck = db.getFirstSync(
-                `SELECT id FROM ${tableName} WHERE signature_id = ?`,
+              existingSignatureMessage = db.getFirstSync(
+                `SELECT id FROM messages_${conversationId} WHERE signature_id = ?`,
                 [dataToStore.signature_id]
               );
-              existingSignatureMessage = Boolean(sigCheck);
             }
             
             if (existingMessage || existingSignatureMessage) {
-              // Message exists in database - UPDATE signature data if it's a signature message
-              console.log('ℹ️ [PUSHER] Message already exists in database (ID:', newMessage.id, ') - skipping insert');
+              // Message exists - UPDATE signature data if it's a signature message
               if (dataToStore.signature_id) {
                 console.log('🔄 [PUSHER] Message exists, updating signature data');
                 console.log('🔍 [PUSHER] Updating by message ID:', newMessage.id);
                 console.log('🔍 [PUSHER] Updating by signature ID:', dataToStore.signature_id);
                 
                 // Update by message ID
-                // Inline Comment: Uses centralized function from messageStorage.ts
-                updateSignatureFields(db, newMessage.id, conversationId, {
-                  status: dataToStore.signature_status || undefined,
-                  fileUrl: dataToStore.signature_file_url || null,
-                  fileName: dataToStore.signature_file_name || null,
-                  fileSize: dataToStore.signature_file_size || null,
-                  signedById: dataToStore.signed_by_id || null,
-                  signedByName: dataToStore.signed_by_name || null,
-                  signedByEmail: dataToStore.signed_by_email || null,
-                });
+                db.runSync(`
+                  UPDATE messages_${conversationId} 
+                  SET signature_status = ?, signature_file_url = ?, signature_file_name = ?, 
+                      signature_file_size = ?, signed_by_id = ?, signed_by_name = ?, signed_by_email = ?
+                  WHERE id = ?
+                `, [
+                  dataToStore.signature_status,
+                  dataToStore.signature_file_url,
+                  dataToStore.signature_file_name,
+                  dataToStore.signature_file_size,
+                  dataToStore.signed_by_id,
+                  dataToStore.signed_by_name,
+                  dataToStore.signed_by_email,
+                  newMessage.id
+                ]);
                 
                 // Also update by signature_id to catch any messages with the same signature
-                // Inline Comment: Uses centralized function from messageStorage.ts
-                if (dataToStore.signature_id) {
-                  updateSignatureFieldsBySignatureId(db, dataToStore.signature_id, conversationId, {
-                    status: dataToStore.signature_status || undefined,
-                    fileUrl: dataToStore.signature_file_url || null,
-                    fileName: dataToStore.signature_file_name || null,
-                    fileSize: dataToStore.signature_file_size || null,
-                    signedById: dataToStore.signed_by_id || null,
-                    signedByName: dataToStore.signed_by_name || null,
-                    signedByEmail: dataToStore.signed_by_email || null,
-                  });
-                }
+                db.runSync(`
+                  UPDATE messages_${conversationId} 
+                  SET signature_status = ?, signature_file_url = ?, signature_file_name = ?, 
+                      signature_file_size = ?, signed_by_id = ?, signed_by_name = ?, signed_by_email = ?
+                  WHERE signature_id = ?
+                `, [
+                  dataToStore.signature_status,
+                  dataToStore.signature_file_url,
+                  dataToStore.signature_file_name,
+                  dataToStore.signature_file_size,
+                  dataToStore.signed_by_id,
+                  dataToStore.signed_by_name,
+                  dataToStore.signed_by_email,
+                  dataToStore.signature_id
+                ]);
                 
                 console.log('✅ [PUSHER] Signature data updated in database by both message ID and signature ID');
               }
             } else {
-              // Message doesn't exist in database - INSERT new message
+              // Message doesn't exist - INSERT new message
               console.log('📝 [PUSHER] Inserting new message to database');
-              // Inline Comment: Uses centralized function from messageStorage.ts
-              // Convert dataToStore to MessageData format
-              const messageData = {
-                id: newMessage.id,
-                content: dataToStore.content || null,
-                fileUrl: dataToStore.file_uri || null,
-                fileName: dataToStore.file_name || null,
-                fileType: dataToStore.file_type || null,
-                fileSize: dataToStore.file_size || null,
-                sender: {
-                  id: dataToStore.sender_id || null,
-                  first_name: dataToStore.sender_first_name || null,
-                  last_name: dataToStore.sender_last_name || null,
-                },
-                createdAt: dataToStore.created_at || new Date().toISOString(),
-                status: dataToStore.status || 'sent',
-                signature: dataToStore.signature_id ? {
-                  id: dataToStore.signature_id,
-                  title: dataToStore.signature_title || null,
-                  notes: dataToStore.signature_notes || null,
-                  dueDate: dataToStore.signature_due_date || null,
-                  status: dataToStore.signature_status || null,
-                  fileUrl: dataToStore.signature_file_url || null,
-                  fileName: dataToStore.signature_file_name || null,
-                  fileSize: dataToStore.signature_file_size || null,
-                  signedBy: dataToStore.signed_by_id ? {
-                    id: dataToStore.signed_by_id,
-                    name: dataToStore.signed_by_name || null,
-                    email: dataToStore.signed_by_email || null,
-                  } : null,
-                } : null,
-              };
-              saveMessageToSQLite(db, messageData, conversationId, 'PUSHER-MESSAGE', true);
+              db.runSync(`
+                INSERT INTO messages_${conversationId} (
+                  conversation_id, content, file_uri, file_name, file_type, file_size,
+                  sender_id, sender_first_name, sender_last_name, created_at, status,
+                  signature_id, signature_title, signature_notes, signature_due_date, 
+                  signature_status, signature_file_url, signature_file_name, signature_file_size,
+                  signed_by_id, signed_by_name, signed_by_email
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `, [
+                dataToStore.conversation_id,
+                dataToStore.content,
+                dataToStore.file_uri,
+                dataToStore.file_name,
+                dataToStore.file_type,
+                dataToStore.file_size,
+                dataToStore.sender_id,
+                dataToStore.sender_first_name,
+                dataToStore.sender_last_name,
+                dataToStore.created_at,
+                dataToStore.status,
+                dataToStore.signature_id,
+                dataToStore.signature_title,
+                dataToStore.signature_notes,
+                dataToStore.signature_due_date,
+                dataToStore.signature_status,
+                dataToStore.signature_file_url,
+                dataToStore.signature_file_name,
+                dataToStore.signature_file_size,
+                dataToStore.signed_by_id,
+                dataToStore.signed_by_name,
+                dataToStore.signed_by_email
+              ]);
               console.log('✅ Pusher message from other user saved to database');
-            }
-            
-            // CRITICAL: After saving to database, check if message already exists in UI
-            // This prevents duplicates when message was already loaded from database or API
-            const messageIdsSet = new Set(prevMessages.map(msg => String(msg.id)));
-            if (messageIdsSet.has(String(newMessage.id))) {
-              console.log('⚠️ [PUSHER] Message already exists in UI (ID:', newMessage.id, ') - skipping UI update');
-              return prevMessages; // Return early to prevent duplicate in UI
             }
           } catch (e) {
             console.log('❌ Database save failed for Pusher message:', e);
@@ -2136,12 +2737,12 @@ const UserChatScreen = ({ navigation, route }) => {
             
             // Find any pending message with matching content and sender
             // We'll check timestamp difference in JavaScript for better reliability
-            // Inline Comment: Uses centralized function from messageStorage.ts
-            const allPendingMessages = getPendingMessages(
-              db, 
-              conversationId, 
-              currentUserIdRef.current, 
-              newMessage.content || ''
+            const allPendingMessages = db.getAllSync(
+              `SELECT * FROM messages_${conversationId} 
+               WHERE status = 'pending' 
+               AND sender_id = ? 
+               AND content = ?`,
+              [currentUserIdRef.current, newMessage.content || '']
             );
             
             // Filter by timestamp difference (within 30 seconds)
@@ -2160,84 +2761,101 @@ const UserChatScreen = ({ navigation, route }) => {
               console.log(`🔄 [PUSHER] Found pending message with ID ${offlineMessageId} - replacing with server ID ${newMessage.id}`);
               
               // Delete old pending message
-              // Inline Comment: Uses centralized function from messageStorage.ts
-              deletePendingMessage(db, offlineMessageId, conversationId);
+              db.runSync(
+                `DELETE FROM messages_${conversationId} WHERE id = ? AND status = 'pending'`,
+                [offlineMessageId]
+              );
               
               // Insert server message (with sent status)
-              // CRITICAL: Use local timestamp from pending message, not server timestamp
-              // Inline Comment: Uses centralized function from messageStorage.ts (handles duplicates automatically)
-              const serverMessageData = {
-                id: newMessage.id,
-                content: newMessage.content || null,
-                fileUrl: newMessage.fileUrl || null,
-                fileName: newMessage.fileName || null,
-                fileType: newMessage.fileType || null,
-                fileSize: newMessage.fileSize || null,
-                sender: {
-                  id: newMessage.sender?.id || null,
-                  first_name: newMessage.sender?.first_name || null,
-                  last_name: newMessage.sender?.last_name || null,
-                },
-                createdAt: pendingMsg.created_at || new Date().toISOString(), // Keep local timestamp (when message was created offline)
-                status: 'sent',
-                signature: newMessage.signature ? {
-                  id: newMessage.signature.id || null,
-                  title: newMessage.signature.title || null,
-                  notes: newMessage.signature.notes || null,
-                  dueDate: newMessage.signature.dueDate || null,
-                  status: newMessage.signature.status || null,
-                  fileUrl: newMessage.signature.fileUrl || null,
-                  fileName: newMessage.signature.fileName || null,
-                  fileSize: newMessage.signature.fileSize || null,
-                  signedBy: newMessage.signature.signedBy || null,
-                } : null,
-              };
-              saveMessageToSQLite(db, serverMessageData, conversationId, 'PUSHER-OWN-MESSAGE', false);
+              // Use INSERT OR IGNORE to handle race condition
+              db.runSync(`
+                INSERT OR IGNORE INTO messages_${conversationId} (
+                  id, conversation_id, content, file_uri, file_name, file_type, file_size,
+                  sender_id, sender_first_name, sender_last_name, created_at, status,
+                  signature_id, signature_title, signature_notes, signature_due_date, 
+                  signature_status, signature_file_url, signature_file_name, signature_file_size,
+                  signed_by_id, signed_by_name, signed_by_email
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `, [
+                newMessage.id,
+                conversationId,
+                newMessage.content || null,
+                newMessage.fileUrl || null,
+                newMessage.fileName || null,
+                newMessage.fileType || null,
+                newMessage.fileSize || null,
+                newMessage.sender?.id || null,
+                newMessage.sender?.first_name || null,
+                newMessage.sender?.last_name || null,
+                newMessage.createdAt || new Date().toISOString(),
+                'sent',
+                newMessage.signature?.id || null,
+                newMessage.signature?.title || null,
+                newMessage.signature?.notes || null,
+                newMessage.signature?.dueDate || null,
+                newMessage.signature?.status || null,
+                newMessage.signature?.fileUrl || null,
+                newMessage.signature?.fileName || null,
+                newMessage.signature?.fileSize || null,
+                newMessage.signature?.signedBy?.id || null,
+                newMessage.signature?.signedBy?.name || null,
+                newMessage.signature?.signedBy?.email || null
+              ]);
               
               console.log(`✅ [PUSHER] Replaced pending message (ID: ${offlineMessageId}) with server message (ID: ${newMessage.id})`);
             } else {
-              // Check if server message already exists
-              // Inline Comment: Uses centralized function from messageStorage.ts
-              const existingMessage = getMessageFromSQLite(db, newMessage.id, conversationId);
+              // Check if server message already exists (might have been inserted by sendOfflineMessages)
+              const existingMessage = db.getFirstSync(
+                `SELECT id, status FROM messages_${conversationId} WHERE id = ?`,
+                [newMessage.id]
+              );
               
               if (existingMessage) {
                 // Just update status to 'sent' if it's not already
                 if (existingMessage.status !== 'sent') {
-                  // Inline Comment: Uses centralized function from messageStorage.ts
-                  updateMessageStatus(db, newMessage.id, conversationId, 'sent');
+                  db.runSync(
+                    `UPDATE messages_${conversationId} SET status = 'sent' WHERE id = ?`,
+                    [newMessage.id]
+                  );
                   console.log(`✅ [PUSHER] Updated message status to 'sent' for ID: ${newMessage.id}`);
                 }
               } else {
                 // No pending message found and no server message - insert it
                 console.log('📝 [PUSHER] No pending message found - inserting new server message');
-                // Inline Comment: Uses centralized function from messageStorage.ts (handles duplicates automatically)
-                const serverMessageData2 = {
-                  id: newMessage.id,
-                  content: newMessage.content || null,
-                  fileUrl: newMessage.fileUrl || null,
-                  fileName: newMessage.fileName || null,
-                  fileType: newMessage.fileType || null,
-                  fileSize: newMessage.fileSize || null,
-                  sender: {
-                    id: newMessage.sender?.id || null,
-                    first_name: newMessage.sender?.first_name || null,
-                    last_name: newMessage.sender?.last_name || null,
-                  },
-                  createdAt: newMessage.createdAt || new Date().toISOString(),
-                  status: 'sent',
-                  signature: newMessage.signature ? {
-                    id: newMessage.signature.id || null,
-                    title: newMessage.signature.title || null,
-                    notes: newMessage.signature.notes || null,
-                    dueDate: newMessage.signature.dueDate || null,
-                    status: newMessage.signature.status || null,
-                    fileUrl: newMessage.signature.fileUrl || null,
-                    fileName: newMessage.signature.fileName || null,
-                    fileSize: newMessage.signature.fileSize || null,
-                    signedBy: newMessage.signature.signedBy || null,
-                  } : null,
-                };
-                saveMessageToSQLite(db, serverMessageData2, conversationId, 'PUSHER-OWN-MESSAGE-2', false);
+                // Use INSERT OR IGNORE to handle race condition
+                db.runSync(`
+                  INSERT OR IGNORE INTO messages_${conversationId} (
+                    id, conversation_id, content, file_uri, file_name, file_type, file_size,
+                    sender_id, sender_first_name, sender_last_name, created_at, status,
+                    signature_id, signature_title, signature_notes, signature_due_date, 
+                    signature_status, signature_file_url, signature_file_name, signature_file_size,
+                    signed_by_id, signed_by_name, signed_by_email
+                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `, [
+                  newMessage.id,
+                  conversationId,
+                  newMessage.content || null,
+                  newMessage.fileUrl || null,
+                  newMessage.fileName || null,
+                  newMessage.fileType || null,
+                  newMessage.fileSize || null,
+                  newMessage.sender?.id || null,
+                  newMessage.sender?.first_name || null,
+                  newMessage.sender?.last_name || null,
+                  newMessage.createdAt || new Date().toISOString(),
+                  'sent',
+                  newMessage.signature?.id || null,
+                  newMessage.signature?.title || null,
+                  newMessage.signature?.notes || null,
+                  newMessage.signature?.dueDate || null,
+                  newMessage.signature?.status || null,
+                  newMessage.signature?.fileUrl || null,
+                  newMessage.signature?.fileName || null,
+                  newMessage.signature?.fileSize || null,
+                  newMessage.signature?.signedBy?.id || null,
+                  newMessage.signature?.signedBy?.name || null,
+                  newMessage.signature?.signedBy?.email || null
+                ]);
                 console.log(`✅ [PUSHER] Inserted new server message with ID: ${newMessage.id}`);
               }
             }
@@ -2246,9 +2864,13 @@ const UserChatScreen = ({ navigation, route }) => {
           }
         }
         
-        // Final duplicate check before adding (using Set for O(1) lookup - scalable)
-        const messageIdsSet = new Set(prevMessages.map(msg => String(msg.id)));
-        const isDuplicate = messageIdsSet.has(String(newMessage.id));
+        // Check for duplicates before adding
+        const isDuplicate = prevMessages.some(msg => 
+          String(msg.id) === String(newMessage.id) ||
+          (msg.content === newMessage.content && 
+           msg.createdAt === newMessage.createdAt && 
+           String(msg.senderId) === String(newMessage.senderId))
+        );
 
         // If duplicate, don't add
         if (isDuplicate) {
@@ -2263,6 +2885,32 @@ const UserChatScreen = ({ navigation, route }) => {
         storeLastMessageId(sortedMessages);
         
         return sortedMessages;
+      });
+    };
+
+    // Define typing handler
+    const handleTypingEvent = (data) => {
+      console.log('⌨️ [PUSHER] Typing event received:', data);
+      
+      const { userId, userName, isTyping: userIsTyping } = data;
+      
+      // Don't show typing indicator for current user
+      if (userId === currentUserIdRef.current) {
+        return;
+      }
+
+      setTypingUsers(prevTypingUsers => {
+        if (userIsTyping) {
+          // Add user to typing list if not already there
+          const userExists = prevTypingUsers.some(user => user.id === userId);
+          if (!userExists) {
+            return [...prevTypingUsers, { id: userId, name: userName }];
+          }
+        } else {
+          // Remove user from typing list
+          return prevTypingUsers.filter(user => user.id !== userId);
+        }
+        return prevTypingUsers;
       });
     };
 
@@ -2419,38 +3067,40 @@ const UserChatScreen = ({ navigation, route }) => {
             signature_status: signatureDataToStore.signature_status
           });
           
-          // Inline Comment: Uses centralized function from messageStorage.ts (handles duplicates automatically)
-          const signatureMessageData = {
-            id: signatureMessage.messageId || signatureMessage.id,
-            content: signatureDataToStore.content || null,
-            fileUrl: signatureDataToStore.file_uri || null,
-            fileName: signatureDataToStore.file_name || null,
-            fileType: signatureDataToStore.file_type || null,
-            fileSize: signatureDataToStore.file_size || null,
-            sender: {
-              id: signatureDataToStore.sender_id || null,
-              first_name: signatureDataToStore.sender_first_name || null,
-              last_name: signatureDataToStore.sender_last_name || null,
-            },
-            createdAt: signatureDataToStore.created_at || new Date().toISOString(),
-            status: signatureDataToStore.status || 'sent',
-            signature: signatureDataToStore.signature_id ? {
-              id: signatureDataToStore.signature_id,
-              title: signatureDataToStore.signature_title || null,
-              notes: signatureDataToStore.signature_notes || null,
-              dueDate: signatureDataToStore.signature_due_date || null,
-              status: signatureDataToStore.signature_status || null,
-              fileUrl: signatureDataToStore.signature_file_url || null,
-              fileName: signatureDataToStore.signature_file_name || null,
-              fileSize: signatureDataToStore.signature_file_size || null,
-              signedBy: signatureDataToStore.signed_by_id ? {
-                id: signatureDataToStore.signed_by_id,
-                name: signatureDataToStore.signed_by_name || null,
-                email: signatureDataToStore.signed_by_email || null,
-              } : null,
-            } : null,
-          };
-          saveMessageToSQLite(db, signatureMessageData, conversationId, 'PUSHER-SIGNATURE', false);
+          // Use INSERT OR IGNORE to handle race condition
+          db.runSync(`
+            INSERT OR IGNORE INTO messages_${conversationId} (
+              id, conversation_id, content, file_uri, file_name, file_type, file_size,
+              sender_id, sender_first_name, sender_last_name, created_at, status,
+              signature_id, signature_title, signature_notes, signature_due_date, 
+              signature_status, signature_file_url, signature_file_name, signature_file_size,
+              signed_by_id, signed_by_name, signed_by_email
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [
+            signatureMessage.messageId || signatureMessage.id, // Use messageId from Pusher response
+            signatureDataToStore.conversation_id,
+            signatureDataToStore.content,
+            signatureDataToStore.file_uri,
+            signatureDataToStore.file_name,
+            signatureDataToStore.file_type,
+            signatureDataToStore.file_size,
+            signatureDataToStore.sender_id,
+            signatureDataToStore.sender_first_name,
+            signatureDataToStore.sender_last_name,
+            signatureDataToStore.created_at,
+            signatureDataToStore.status,
+            signatureDataToStore.signature_id,
+            signatureDataToStore.signature_title,
+            signatureDataToStore.signature_notes,
+            signatureDataToStore.signature_due_date,
+            signatureDataToStore.signature_status,
+            signatureDataToStore.signature_file_url,
+            signatureDataToStore.signature_file_name,
+            signatureDataToStore.signature_file_size,
+            signatureDataToStore.signed_by_id,
+            signatureDataToStore.signed_by_name,
+            signatureDataToStore.signed_by_email
+          ]);
           
           console.log('✅ [PUSHER] Signature message stored in database');
           
@@ -2507,16 +3157,21 @@ const UserChatScreen = ({ navigation, route }) => {
             try {
               console.log('📝 [PUSHER] Updating signature in database for ID:', signatureId);
               
-              // Inline Comment: Uses centralized function from messageStorage.ts
-              updateSignatureFieldsBySignatureId(db, signatureId, conversationId, {
-                status: status || 'signed',
-                fileUrl: fileUrl || null,
-                fileName: fileName || null,
-                fileSize: fileSize || null,
-                signedById: signedById || null,
-                signedByName: signedByName || null,
-                signedByEmail: signedByEmail || null,
-              });
+              db.runSync(`
+                UPDATE messages_${conversationId} 
+                SET signature_status = ?, signature_file_url = ?, signature_file_name = ?, 
+                    signature_file_size = ?, signed_by_id = ?, signed_by_name = ?, signed_by_email = ?
+                WHERE signature_id = ?
+              `, [
+                status || 'signed',
+                fileUrl,
+                fileName,
+                fileSize || null,
+                signedById,
+                signedByName,
+                signedByEmail,
+                signatureId
+              ]);
               
               console.log('✅ [PUSHER] Signature updated in database with all fields');
               
@@ -2543,9 +3198,10 @@ const UserChatScreen = ({ navigation, route }) => {
 
     // Bind the listeners
     channel.bind('new-message', handleNewMessage);
+    channel.bind('typing', handleTypingEvent);
     signatureChannel.bind('message-with-signature', handleSignatureMessage);
     signatureChannel.bind('signature-file-uploaded', handleSignatureFileUpload);
-    console.log('✅ [PUSHER] Listening for new messages on:', channelName);
+    console.log('✅ [PUSHER] Listening for new messages and typing events on:', channelName);
     console.log('✅ [PUSHER] Listening for signature messages on:', signatureChannelName);
     console.log('✅ [PUSHER] Listening for signature file uploads on:', signatureChannelName);
 
@@ -2555,6 +3211,7 @@ const UserChatScreen = ({ navigation, route }) => {
       console.log('🔌 [PUSHER] Unbinding listeners from:', channelName);
       console.log('🔌 [PUSHER] Unbinding signature listeners from:', signatureChannelName);
       channel.unbind('new-message', handleNewMessage);
+      channel.unbind('typing', handleTypingEvent);
       signatureChannel.unbind('message-with-signature', handleSignatureMessage);
       signatureChannel.unbind('signature-file-uploaded', handleSignatureFileUpload);
       // Note: We do NOT unsubscribe - ChatScreen manages subscriptions
@@ -2562,15 +3219,110 @@ const UserChatScreen = ({ navigation, route }) => {
   }, [conversationId]);
 
 
-  // --- Simple Database Setup with Error Handling (MCP Context 7) ---
-  // What: Uses centralized initializeMessagesTable function from database/messageStorage.ts
-  // Why: Eliminates duplicate initialization code and ensures consistent table setup
-  // Dependencies: database/messageStorage.ts initializeMessagesTable function
+  // --- Simple Database Setup with Error Handling ---
   useEffect(() => {
     const initializeDatabase = async () => {
       try {
-        // Inline Comment: Uses centralized function that handles all table creation and column additions
-        await initializeMessagesTable(db, conversationId);
+        console.log('🔄 Initializing database for conversation:', conversationId);
+        console.log('✅ Database connection established via context');
+        
+        // Create the messages table ONLY if it doesn't exist
+        console.log('🔨 Checking if messages table exists for conversation:', conversationId);
+        db.execSync(`
+          CREATE TABLE IF NOT EXISTS messages_${conversationId} (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id TEXT,
+            content TEXT,
+            file_uri TEXT,
+            file_name TEXT,
+            file_type TEXT,
+            file_size INTEGER,
+            sender_id TEXT,
+            sender_first_name TEXT,
+            sender_last_name TEXT,
+            created_at TEXT,
+            status TEXT DEFAULT 'sent',
+            signature_id INTEGER,
+            signature_title TEXT,
+            signature_notes TEXT,
+            signature_due_date TEXT,
+            signature_status TEXT,
+            signature_file_url TEXT,
+            signature_file_name TEXT,
+            signature_file_size INTEGER,
+            signed_by_id TEXT,
+            signed_by_name TEXT,
+            signed_by_email TEXT
+          )
+        `);
+        
+        // Add missing columns if they don't exist (for existing tables)
+        try {
+          db.execSync(`ALTER TABLE messages_${conversationId} ADD COLUMN status TEXT DEFAULT 'sent'`);
+          console.log('✅ Added status column to existing table');
+        } catch (e) {
+          // Column already exists, ignore error
+          console.log('ℹ️ status column already exists');
+        }
+        
+        try {
+          db.execSync(`ALTER TABLE messages_${conversationId} ADD COLUMN conversation_id TEXT`);
+          console.log('✅ Added conversation_id column to existing table');
+        } catch (e) {
+          // Column already exists, ignore error
+          console.log('ℹ️ conversation_id column already exists');
+        }
+        
+        // Add signature columns if they don't exist
+        const signatureColumns = [
+          'signature_id INTEGER',
+          'signature_title TEXT', 
+          'signature_notes TEXT',
+          'signature_due_date TEXT',
+          'signature_status TEXT',
+          'signature_file_url TEXT',
+          'signature_file_name TEXT',
+          'signature_file_size INTEGER',
+          'signed_by_id TEXT',
+          'signed_by_name TEXT',
+          'signed_by_email TEXT'
+        ];
+        
+        signatureColumns.forEach(column => {
+          try {
+            db.execSync(`ALTER TABLE messages_${conversationId} ADD COLUMN ${column}`);
+            console.log(`✅ Added ${column} column to existing table`);
+          } catch (e) {
+            // Column already exists, ignore error
+            console.log(`ℹ️ ${column} column already exists`);
+          }
+        });
+        
+        
+        
+        console.log('✅ Messages table ready (created once only)');
+        
+        // Debug: Check table structure
+        try {
+          const tableInfo = db.getAllSync(`PRAGMA table_info(messages_${conversationId})`);
+          console.log('🔍 Table structure for messages_${conversationId}:', tableInfo);
+          console.log('📋 Available columns:', tableInfo.map(col => col.name));
+        } catch (e) {
+          console.log('❌ Could not get table info:', e);
+        }
+
+        // Delete entire database file and create fresh new one
+        console.log('🗑️ Deleting old database file...');
+        try {
+          const dbName = `chat_${conversationId}.db`;
+          const dbPath = `${FileSystem.documentDirectory}SQLite/${dbName}`;
+          await FileSystem.deleteAsync(dbPath, { idempotent: true });
+          console.log(`✅ Deleted database file: ${dbName}`);
+        } catch (error) {
+          console.log('ℹ️ No database file to delete');
+        }
+      
+        console.log('✅ Database setup completed for conversation', conversationId);
       } catch (error) {
         console.error('❌ Database initialization failed:', error);
         console.error('❌ Error details:', error.message);
@@ -2661,16 +3413,14 @@ const UserChatScreen = ({ navigation, route }) => {
   };
 
   // --- Get All Messages from Database with Better Error Handling ---
-  // What: Uses centralized getAllMessagesFromSQLite function
-  // Why: Eliminates direct SQL queries
   const getAllMessagesFromDB = () => {
     try {
       console.log('🔄 Getting all messages from database...');
       console.log('✅ Database connection successful via context');
       
       // Get messages from database without clearing
-      // Inline Comment: Uses centralized function from messageStorage.ts
-      const messages = getAllMessagesFromSQLite(db, conversationId);
+      
+      const messages = db.getAllSync(`SELECT * FROM messages_${conversationId} ORDER BY created_at DESC`);
       console.log('✅ Query executed successfully');
       
       console.log('=== ALL MESSAGES FROM DATABASE ===');
@@ -2717,187 +3467,18 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Send Pending Messages Queue (MCP Context 7) ---
-  // What: Gets all pending messages and sends them to server one at a time, replacing local messages with server responses
-  // Why: Ensures offline messages are sent when internet is restored
-  // Business Rule: Send messages in order, one at a time, and replace local timestamp with server timestamp
-  const sendPendingMessagesQueue = async () => {
-    if (!conversationId) {
-      console.log('⚠️ [PENDING QUEUE] No conversation ID, skipping pending messages');
-      return;
-    }
-
-    try {
-      console.log('📤 [PENDING QUEUE] Starting to send pending messages...');
-      
-      // Get all pending messages from database (only from current user)
-      // Inline Comment: Uses centralized function from messageStorage.ts
-      const allPendingMessages = getPendingMessages(db, conversationId, currentUserId);
-      
-      // Filter out signature messages (they need to be sent via createSignature, not sendMessage)
-      const pendingMessages = allPendingMessages.filter(msg => !msg.signature_id);
-      
-      if (pendingMessages.length === 0) {
-        console.log('ℹ️ [PENDING QUEUE] No pending regular messages found (signature messages are handled separately)');
-        return;
-      }
-
-      console.log(`📋 [PENDING QUEUE] Found ${pendingMessages.length} pending messages to send`);
-
-      // Send messages one at a time
-      for (let i = 0; i < pendingMessages.length; i++) {
-        const pendingMsg = pendingMessages[i];
-        console.log(`📤 [PENDING QUEUE] Sending message ${i + 1}/${pendingMessages.length} (ID: ${pendingMsg.id})`);
-
-        try {
-          // Prepare file object if message has a file
-          let fileToSend = null;
-          if (pendingMsg.file_uri) {
-            // Check if it's a local file path (starts with file:// or is a local path)
-            const isLocalFile = pendingMsg.file_uri.startsWith('file://') || 
-                               pendingMsg.file_uri.startsWith('/') ||
-                               !pendingMsg.file_uri.startsWith('http');
-            
-            if (isLocalFile) {
-              // Create file object from local file
-              fileToSend = {
-                uri: pendingMsg.file_uri,
-                name: pendingMsg.file_name || 'file',
-                type: pendingMsg.file_type || 'application/octet-stream',
-                mimeType: pendingMsg.file_type || 'application/octet-stream',
-              };
-              console.log(`📎 [PENDING QUEUE] Prepared local file: ${pendingMsg.file_name}`);
-            } else {
-              // File is already a URL (might have been uploaded), skip file attachment
-              console.log(`ℹ️ [PENDING QUEUE] File is already a URL, skipping file attachment`);
-            }
-          }
-
-          // Send message to server
-          const serverResponse = await sendMessage(
-            conversationId,
-            pendingMsg.content || '',
-            fileToSend,
-            null // messageId - let server generate new ID
-          );
-
-          console.log(`✅ [PENDING QUEUE] Message ${i + 1} sent successfully. Server ID: ${serverResponse?.id}`);
-
-          // Replace local message with server response
-          // Delete the old pending message
-          deletePendingMessage(db, pendingMsg.id, conversationId);
-
-          // Insert server message with server data (ID, but keep local timestamp)
-          const serverMessageData = {
-            id: serverResponse?.id || pendingMsg.id,
-            content: serverResponse?.content || pendingMsg.content || null,
-            fileUrl: serverResponse?.fileUrl || pendingMsg.file_uri || null,
-            fileName: serverResponse?.fileName || pendingMsg.file_name || null,
-            fileType: serverResponse?.fileType || pendingMsg.file_type || null,
-            fileSize: serverResponse?.fileSize || pendingMsg.file_size || null,
-            sender: {
-              id: serverResponse?.sender?.id || pendingMsg.sender_id || null,
-              first_name: serverResponse?.sender?.first_name || pendingMsg.sender_first_name || null,
-              last_name: serverResponse?.sender?.last_name || pendingMsg.sender_last_name || null,
-            },
-            createdAt: pendingMsg.created_at || new Date().toISOString(), // Keep local timestamp (when message was created offline)
-            status: 'sent', // Update status to sent
-          };
-
-          // Save server message to database
-          saveMessageToSQLite(db, serverMessageData, conversationId, 'PENDING-QUEUE', false);
-
-          // Update UI state to replace pending message with server message
-          // Business Rule: Replace pending message in place to maintain order, don't re-sort unnecessarily
-          setMessages(prevMessages => {
-            // Find the index of the pending message to maintain its position
-            const pendingIndex = prevMessages.findIndex(msg => 
-              String(msg.id) === String(pendingMsg.id) && msg.status === 'pending'
-            );
-            
-            if (pendingIndex === -1) {
-              console.log(`⚠️ [PENDING QUEUE] Pending message ${pendingMsg.id} not found in UI, adding as new message`);
-              // Message not found in UI, add it as new message
-              const newMessage = {
-                id: serverResponse?.id || pendingMsg.id,
-                content: serverResponse?.content || pendingMsg.content || null,
-                fileUrl: serverResponse?.fileUrl || pendingMsg.file_uri || null,
-                fileName: serverResponse?.fileName || pendingMsg.file_name || null,
-                fileType: serverResponse?.fileType || pendingMsg.file_type || null,
-                fileSize: serverResponse?.fileSize || pendingMsg.file_size || null,
-                sender: {
-                  id: serverResponse?.sender?.id || pendingMsg.sender_id || null,
-                  first_name: serverResponse?.sender?.first_name || pendingMsg.sender_first_name || null,
-                  last_name: serverResponse?.sender?.last_name || pendingMsg.sender_last_name || null,
-                },
-                createdAt: pendingMsg.created_at || new Date().toISOString(), // Keep local timestamp
-                status: 'sent',
-              };
-              
-              // Add and sort to maintain correct order
-              const combinedMessages = [...prevMessages, newMessage];
-              const sortedMessages = sortMessagesByTime(combinedMessages);
-              storeLastMessageId(sortedMessages);
-              return sortedMessages;
-            }
-            
-            // Replace the pending message in place to maintain its position
-            console.log(`🔄 [PENDING QUEUE] Replacing pending message ${pendingMsg.id} with server message ${serverResponse?.id} at index ${pendingIndex}`);
-            const updatedMessages = [...prevMessages];
-            updatedMessages[pendingIndex] = {
-              ...updatedMessages[pendingIndex],
-              id: serverResponse?.id || pendingMsg.id,
-              content: serverResponse?.content || updatedMessages[pendingIndex].content,
-              fileUrl: serverResponse?.fileUrl || updatedMessages[pendingIndex].fileUrl,
-              fileName: serverResponse?.fileName || updatedMessages[pendingIndex].fileName,
-              fileType: serverResponse?.fileType || updatedMessages[pendingIndex].fileType,
-              fileSize: serverResponse?.fileSize || updatedMessages[pendingIndex].fileSize,
-              createdAt: updatedMessages[pendingIndex].createdAt, // Keep original local timestamp to maintain order
-              status: 'sent',
-            };
-            
-            // Only sort if timestamps might have changed (they shouldn't, but just in case)
-            // Since we're keeping the same timestamp, the order should remain the same
-            const sortedMessages = sortMessagesByTime(updatedMessages);
-            storeLastMessageId(sortedMessages);
-            
-            return sortedMessages;
-          });
-
-          console.log(`✅ [PENDING QUEUE] Message ${i + 1} replaced with server data`);
-
-          // Small delay between messages to avoid overwhelming the server
-          if (i < pendingMessages.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-
-        } catch (error) {
-          console.error(`❌ [PENDING QUEUE] Failed to send message ${i + 1}:`, error);
-          // Continue with next message even if one fails
-          continue;
-        }
-      }
-
-      console.log(`✅ [PENDING QUEUE] Finished sending pending messages queue`);
-
-    } catch (error) {
-      console.error('❌ [PENDING QUEUE] Error in sendPendingMessagesQueue:', error);
-    }
-  };
-
   // --- Internet Connectivity Monitoring Effect (MCP Context 7) ---
-  // Business Rule: Fetch new messages and send pending messages when internet is restored
+  // Business Rule: Send pending messages and fetch new messages when internet is restored
   useEffect(() => {
     if (netInfo.isConnected === true) {
       console.log('📡 Internet connection restored');
       
+      // Send any pending offline messages only
+      sendOfflineMessages();
+      
       // Load messages from SQLite database (fast loading)
       console.log('📡 Loading messages from SQLite database after internet restoration');
       fetchMessages();
-      
-      // Send pending messages queue (one at a time)
-      console.log('📤 Sending pending messages queue...');
-      sendPendingMessagesQueue();
       
       // Also fetch new messages from API (after last stored message ID)
       console.log('📡 Fetching new messages from API after internet restoration');
@@ -2938,20 +3519,14 @@ const UserChatScreen = ({ navigation, route }) => {
 
   // --- Clear Database Function ---
   // --- Cache Maintenance Controls (MCP Context 7) ---
-  // What: Uses centralized clearAllMessagesFromSQLite function from messageStorage.ts
-  // Why: Eliminates duplicate database deletion code
   // Inline Note: Exposes manual purge so frontline staff can refresh stale chats while respecting existing clearDatabase helper.
   const clearDatabase = () => {
     try {
       console.log('🗑️ Clearing database...');
       
-      // Inline Comment: Uses centralized function from messageStorage.ts
-      const success = clearAllMessagesFromSQLite(db, conversationId);
-      if (success) {
+        // Delete all messages from the table
+        db.runSync(`DELETE FROM messages_${conversationId}`);
       console.log('✅ Database cleared successfully');
-      } else {
-        throw new Error('Failed to clear database');
-      }
       
       // --- Local State Reset (MCP Context 7) ---
       // Inline Comment: Also reset React state so UI matches the empty table immediately.
@@ -2996,6 +3571,15 @@ const UserChatScreen = ({ navigation, route }) => {
     );
   };
 
+  // --- Cleanup Typing Timeout on Unmount (MCP Context 7) ---
+  // Business Rule: Clear typing timeout when component unmounts to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
 
 
   // --- Helper: Get File Icon Based on File Name (MCP Context 7) ---
@@ -3228,15 +3812,57 @@ const UserChatScreen = ({ navigation, route }) => {
     setSelectedFile(null);
   };
 
+  // --- Typing Detection and Management (MCP Context 7) ---
+  // Business Rule: Send typing status to server when user starts/stops typing
+  // Uses debouncing to prevent excessive API calls (WhatsApp-style behavior)
+  const handleTypingStatus = async (isTypingStatus) => {
+    if (!conversationId) {
+      console.log('No conversation ID, skipping typing status');
+      return;
+    }
 
-
-  // --- Text Input Handler (MCP Context 7) ---
-  // Business Rule: Update input text when user types
-  const handleTextChange = (text) => {
-    setInputText(text);
+    try {
+      // Only send if status actually changed
+      if (isTypingStatus !== isUserTyping) {
+        console.log('📝 Sending typing status:', isTypingStatus ? 'started' : 'stopped');
+        await isTyping(conversationId, isTypingStatus);
+        setIsUserTyping(isTypingStatus);
+      }
+    } catch (error) {
+      console.error('❌ Error sending typing status:', error);
+      // Don't show error to user - typing is not critical functionality
+    }
   };
 
 
+  // --- Debounced Typing Handler (MCP Context 7) ---
+  // Business Rule: Start typing immediately, stop typing after 2 seconds of inactivity
+  // This prevents spam while providing responsive feedback
+  const handleTextChange = (text) => {
+    setInputText(text);
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // If user is typing and text is not empty, send "started typing"
+    if (text.trim().length > 0 && !isUserTyping) {
+      handleTypingStatus(true);
+    }
+
+    // Set timeout to send "stopped typing" after 2 seconds of inactivity
+    typingTimeoutRef.current = setTimeout(() => {
+      if (isUserTyping) {
+        handleTypingStatus(false);
+      }
+    }, 2000);
+  };
+
+
+  // --- Handle Offline Signature Request (MCP Context 7) ---
+  // Business Rule: Store signature requests in SQLite when offline, send when internet is restored
+  // This ensures signature requests work offline just like regular messages
   const handleOfflineSignatureRequest = async (signatureData) => {
     console.log('📝 [OFFLINE] Storing signature request in database');
     console.log('🔍 [DEBUG] handleOfflineSignatureRequest - received signatureData:', signatureData);
@@ -3245,6 +3871,8 @@ const UserChatScreen = ({ navigation, route }) => {
     console.log('🔍 [DEBUG] handleOfflineSignatureRequest - dueDate is null?', signatureData.dueDate === null || signatureData.dueDate === undefined);
     
     try {
+      // Create signature request data matching Pusher response format
+      // NOTE: ID is omitted so SQLite AUTOINCREMENT can provide the same numbering strategy as regular messages.
       const signatureRequestData = {
         conversation_id: conversationId,
         content: null, // Signature requests have no text content
@@ -3272,6 +3900,7 @@ const UserChatScreen = ({ navigation, route }) => {
         signed_by_email: signatureData.signedBy?.email || null
       };
       
+      // Store signature request in SQLite database
       console.log('📝 [OFFLINE] Inserting signature request with data:', {
         conversationId: signatureRequestData.conversation_id,
         title: signatureRequestData.signature_title,
@@ -3288,52 +3917,60 @@ const UserChatScreen = ({ navigation, route }) => {
         createdAt: signatureRequestData.created_at
       });
       
-      // Inline Comment: Uses centralized function from messageStorage.ts for offline inserts
-      const offlineMessageData = {
-        content: signatureRequestData.content || null,
-        fileUrl: signatureRequestData.file_uri || null,
-        fileName: signatureRequestData.file_name || null,
-        fileType: signatureRequestData.file_type || null,
-        fileSize: signatureRequestData.file_size || null,
-        sender: {
-          id: signatureRequestData.sender_id || null,
-          first_name: signatureRequestData.sender_first_name || null,
-          last_name: signatureRequestData.sender_last_name || null,
-        },
-        createdAt: signatureRequestData.created_at || new Date().toISOString(),
-        status: signatureRequestData.status || 'pending',
-        signature: signatureRequestData.signature_title ? {
-          id: signatureRequestData.signature_id || null,
-          title: signatureRequestData.signature_title || null,
-          notes: signatureRequestData.signature_notes || null,
-          dueDate: signatureRequestData.signature_due_date || null,
-          status: signatureRequestData.signature_status || null,
-          fileUrl: signatureRequestData.signature_file_url || null,
-          fileName: signatureRequestData.signature_file_name || null,
-          fileSize: signatureRequestData.signature_file_size || null,
-          signedBy: signatureRequestData.signed_by_id ? {
-            id: signatureRequestData.signed_by_id || null,
-            name: signatureRequestData.signed_by_name || null,
-            email: signatureRequestData.signed_by_email || null,
-          } : null,
-        } : null,
-      };
+      db.runSync(`
+        INSERT INTO messages_${conversationId} (
+          conversation_id, content, file_uri, file_name, file_type, file_size,
+          sender_id, sender_first_name, sender_last_name, created_at, status,
+          signature_id, signature_title, signature_notes, signature_due_date, 
+          signature_status, signature_file_url, signature_file_name, signature_file_size,
+          signed_by_id, signed_by_name, signed_by_email
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        signatureRequestData.conversation_id,
+        signatureRequestData.content,
+        signatureRequestData.file_uri,
+        signatureRequestData.file_name,
+        signatureRequestData.file_type,
+        signatureRequestData.file_size,
+        signatureRequestData.sender_id,
+        signatureRequestData.sender_first_name,
+        signatureRequestData.sender_last_name,
+        signatureRequestData.created_at,
+        signatureRequestData.status,
+        signatureRequestData.signature_id,
+        signatureRequestData.signature_title,
+        signatureRequestData.signature_notes,
+        signatureRequestData.signature_due_date,
+        signatureRequestData.signature_status,
+        signatureRequestData.signature_file_url,
+        signatureRequestData.signature_file_name,
+        signatureRequestData.signature_file_size,
+        signatureRequestData.signed_by_id,
+        signatureRequestData.signed_by_name,
+        signatureRequestData.signed_by_email
+      ]);
       
-      const offlineInsertRowId = insertOfflineMessage(db, offlineMessageData, conversationId);
       console.log('✅ [OFFLINE] Signature request stored in database');
-      let offlineMessageId = offlineInsertRowId ? Number(offlineInsertRowId) : 0;
+
+      // Retrieve AUTOINCREMENT id to align with standard offline message handling
+      const offlineInsertRow = db.getFirstSync(`SELECT last_insert_rowid() AS id`);
+      let offlineMessageId = Number(offlineInsertRow?.id);
       if (!Number.isFinite(offlineMessageId) || offlineMessageId <= 0) {
         console.warn('⚠️ [OFFLINE] Could not read AUTOINCREMENT id for signature request; defaulting to 0');
         offlineMessageId = 0;
       }
 
+      // Use a stable negative placeholder so later sync logic can identify this signature request.
       const offlineSignatureId = offlineMessageId === 0 ? null : -offlineMessageId;
 
       if (offlineSignatureId !== null) {
-        // Inline Comment: Uses centralized function from messageStorage.ts
-        updateSignatureId(db, offlineMessageId, conversationId, offlineSignatureId);
+        db.runSync(
+          `UPDATE messages_${conversationId} SET signature_id = ? WHERE id = ?`,
+          [offlineSignatureId, offlineMessageId]
+        );
       }
       
+      // Create UI message object
       
       const uiMessage = {
         id: offlineMessageId,
@@ -3360,7 +3997,9 @@ const UserChatScreen = ({ navigation, route }) => {
         }
       };
       
+      // Add signature request to UI immediately (with duplicate checking)
       setMessages(prevMessages => {
+        // Check if message already exists (by ID) - prevent duplicates
         const exists = prevMessages.some(msg => msg.id === uiMessage.id);
         
         if (exists) {
@@ -3378,6 +4017,7 @@ const UserChatScreen = ({ navigation, route }) => {
         return sortedMessages;
       });
       
+      // Show success message
       Toast.show({
         type: 'info',
         text1: 'Signature Request Saved',
@@ -3405,6 +4045,7 @@ const UserChatScreen = ({ navigation, route }) => {
           createdAt: typeof signatureRequestData.created_at
         });
         
+        // Try to get table info to debug
         try {
           const tableInfo = db.getAllSync(`PRAGMA table_info(messages_${conversationId})`);
           console.log('🔍 [OFFLINE] Table structure:', tableInfo);
@@ -3423,12 +4064,21 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
+  // --- Simple Handle Send Message (MCP Context 7) ---
+  // Business Rule: Store messages in SQLite when offline, send to API when online
+  // This ensures message persistence and better offline/online synchronization
   const handleSendMessage = async () => {
+    if (isSendingOfflineMessages) {
+      console.log('⚠️ Offline sync in progress; disabling new sends until queue finishes');
+      return;
+    }
+    // Validation: Must have text content OR file attachment
     if (!inputText.trim() && !selectedFile) {
       console.log('Empty message and no file, not sending');
       return;
     }
 
+    // Validation: Must have conversation ID
     if (!conversationId) {
       console.error('No conversation ID found');
       alert('Cannot send message: Conversation ID not found');
@@ -3451,6 +4101,11 @@ const UserChatScreen = ({ navigation, route }) => {
     setSelectedFile(null);
     Keyboard.dismiss();
     setIsSendingMessage(true);
+
+    // Stop typing status when sending message
+    if (isUserTyping) {
+      handleTypingStatus(false);
+    }
 
     // CHECK INTERNET CONNECTION
     if (netInfo.isConnected === false) {
@@ -3489,26 +4144,44 @@ const UserChatScreen = ({ navigation, route }) => {
         
         // --- Offline Insert (MCP Context 7) ---
         // Inline Comment: Save the offline message immediately so the chat UI stays responsive even without connectivity.
-        // Inline Comment: Uses centralized function from messageStorage.ts for offline inserts
-        const offlineMessageData = {
-          content: messageData.content || null,
-          fileUrl: messageData.file_uri || null,
-          fileName: messageData.file_name || null,
-          fileType: messageData.file_type || null,
-          fileSize: messageData.file_size || null,
-          sender: {
-            id: messageData.sender_id || null,
-            first_name: messageData.sender_first_name || null,
-            last_name: messageData.sender_last_name || null,
-          },
-          createdAt: messageData.created_at || new Date().toISOString(),
-          status: messageData.status || 'pending',
-        };
+        db.runSync(`
+          INSERT INTO messages_${conversationId} (
+            conversation_id, content, file_uri, file_name, file_type, file_size,
+            sender_id, sender_first_name, sender_last_name, created_at, status,
+            signature_id, signature_title, signature_notes, signature_due_date, 
+            signature_status, signature_file_url, signature_file_name, signature_file_size,
+            signed_by_id, signed_by_name, signed_by_email
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          messageData.conversation_id,
+          messageData.content,
+          messageData.file_uri,
+          messageData.file_name,
+          messageData.file_type,
+          messageData.file_size,
+          messageData.sender_id,
+          messageData.sender_first_name,
+          messageData.sender_last_name,
+          messageData.created_at,
+          messageData.status,
+          messageData.signature_id || null,
+          messageData.signature_title || null,
+          messageData.signature_notes || null,
+          messageData.signature_due_date || null,
+          messageData.signature_status || null,
+          messageData.signature_file_url || null,
+          messageData.signature_file_name || null,
+          messageData.signature_file_size || null,
+          messageData.signed_by_id || null,
+          messageData.signed_by_name || null,
+          messageData.signed_by_email || null
+        ]);
         
-        const offlineInsertRowId = insertOfflineMessage(db, offlineMessageData, conversationId);
         console.log('✅ Message stored in SQLite database');
+        // Inline Comment: Fetch the AUTOINCREMENT value so we never depend on device clocks for uniqueness.
+        const offlineInsertRow = db.getFirstSync(`SELECT last_insert_rowid() AS id`);
         // Inline Comment: Coerce the SQLite response into a Number to align with the schema's INTEGER PRIMARY KEY type.
-        let offlineMessageId = offlineInsertRowId ? Number(offlineInsertRowId) : 0;
+        let offlineMessageId = Number(offlineInsertRow?.id);
         if (!Number.isFinite(offlineMessageId)) {
           // NOTE: This should never happen; fallback keeps UI stable while we investigate.
           console.warn('⚠️ [OFFLINE] Could not read SQLite AUTOINCREMENT ID, falling back to 0');
@@ -3622,8 +4295,7 @@ const UserChatScreen = ({ navigation, route }) => {
       console.log('🔍 Debug - response.message?.id:', response?.message?.id);
       
       // Store message in SQLite database with server response
-      // Business Rule: Use local timestamp (when message was created), not server timestamp
-      const localTimestamp = new Date().toISOString(); // Use local timestamp when message is sent
+      // Business Rule: Use server timestamp from API response
       const messageData = {
         conversation_id: conversationId,
         content: serverContent || messageText || null,
@@ -3634,38 +4306,52 @@ const UserChatScreen = ({ navigation, route }) => {
         sender_id: serverSender?.id || currentUserId,
         sender_first_name: serverSender?.first_name || userInfo?.firstName || 'Unknown',
         sender_last_name: serverSender?.last_name || userInfo?.lastName || 'User',
-        created_at: localTimestamp, // Use local timestamp (when message was created)
+        created_at: serverCreatedAt || new Date().toISOString(), // Use server timestamp
         status: 'sent'
       };
       
       // Store message in SQLite database with server message ID as primary ID
-      // Inline Comment: Uses centralized function from messageStorage.ts (handles duplicates automatically)
-      const serverMessageDataForStorage = {
-        id: serverMessageId,
-        content: messageData.content || null,
-        fileUrl: messageData.file_uri || null,
-        fileName: messageData.file_name || null,
-        fileType: messageData.file_type || null,
-        fileSize: messageData.file_size || null,
-        sender: {
-          id: messageData.sender_id || null,
-          first_name: messageData.sender_first_name || null,
-          last_name: messageData.sender_last_name || null,
-        },
-        createdAt: localTimestamp, // Use local timestamp (when message was created)
-        status: messageData.status || 'sent',
-      };
-      saveMessageToSQLite(db, serverMessageDataForStorage, conversationId, 'ONLINE-SEND', false);
+      // Use INSERT OR IGNORE to handle race condition with Pusher
+      db.runSync(`
+        INSERT OR IGNORE INTO messages_${conversationId} (
+          id, conversation_id, content, file_uri, file_name, file_type, file_size,
+          sender_id, sender_first_name, sender_last_name, created_at, status,
+          signature_id, signature_title, signature_notes, signature_due_date, 
+          signature_status, signature_file_url, signature_file_name, signature_file_size,
+          signed_by_id, signed_by_name, signed_by_email
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        serverMessageId, // Use server message ID as primary ID
+        messageData.conversation_id,
+        messageData.content,
+        messageData.file_uri,
+        messageData.file_name,
+        messageData.file_type,
+        messageData.file_size,
+        messageData.sender_id,
+        messageData.sender_first_name,
+        messageData.sender_last_name,
+        messageData.created_at,
+        messageData.status,
+        messageData.signature_id || null,
+        messageData.signature_title || null,
+        messageData.signature_notes || null,
+        messageData.signature_due_date || null,
+        messageData.signature_status || null,
+        messageData.signature_file_url || null,
+        messageData.signature_file_name || null,
+        messageData.signature_file_size || null,
+        messageData.signed_by_id || null,
+        messageData.signed_by_name || null,
+        messageData.signed_by_email || null
+      ]);
       
       console.log('✅ Message stored in SQLite database with server ID:', serverMessageId);
       console.log('🔍 Debug - Stored messageData.server_message_id:', messageData.server_message_id);
       console.log('🔍 Debug - Stored messageData.id (should be same):', messageData.id);
       
-      // Add or update message in UI with 'sent' status
-      // Business Rule: Add message immediately when sent online (optimistic update), don't wait for Pusher
+      // Update message status in UI to 'sent'
       setMessages(prevMessages => {
-        // First, try to find and update existing pending message (if any)
-        let foundPending = false;
         const updatedMessages = prevMessages.map(prevMsg => {
           // Check if this is the message we just sent
           const isSameMessage = (
@@ -3681,8 +4367,7 @@ const UserChatScreen = ({ navigation, route }) => {
           );
           
           if (isSameMessage) {
-            foundPending = true;
-            console.log('🔄 Updating pending message status to sent:', {
+            console.log('🔄 Updating message status to sent:', {
               content: prevMsg.content,
               fileName: prevMsg.fileName,
               oldStatus: prevMsg.status,
@@ -3698,7 +4383,7 @@ const UserChatScreen = ({ navigation, route }) => {
               fileName: serverFileName || prevMsg.fileName,       // "SameerYasirCV.pdf"
               fileType: serverFileType || prevMsg.fileType,       // "application/pdf"
               fileSize: serverFileSize || prevMsg.fileSize,       // 0.04
-              createdAt: prevMsg.createdAt,    // Keep local timestamp (when message was created)
+              createdAt: serverCreatedAt || prevMsg.createdAt,    // Use server timestamp
               status: 'sent',                                     // "sent"
               serverResponse: response                            // Full server response
             };
@@ -3707,44 +4392,10 @@ const UserChatScreen = ({ navigation, route }) => {
           return prevMsg;
         });
         
-        // If no pending message was found, add the new message directly with 'sent' status
-        // This ensures the message appears immediately when sent online
-        if (!foundPending) {
-          console.log('✅ Adding new message to UI with sent status (optimistic update)');
-          const newMessage = {
-            id: serverMessageId,
-            content: serverContent || messageText || null,
-            fileUrl: serverFileUrl || (fileToSend ? fileToSend.uri : null),
-            fileName: serverFileName || (fileToSend ? fileToSend.name : null),
-            fileType: serverFileType || (fileToSend ? fileToSend.mimeType : null),
-            fileSize: serverFileSize || (fileToSend ? fileToSend.size : null),
-            sender: {
-              id: serverSender?.id || currentUserId,
-              first_name: serverSender?.first_name || userInfo?.firstName || 'Unknown',
-              last_name: serverSender?.last_name || userInfo?.lastName || 'User'
-            },
-            createdAt: localTimestamp, // Use local timestamp (when message was created)
-            status: 'sent',
-            serverResponse: response
-          };
-          
-          // Add new message and sort to maintain correct order
-          const combinedMessages = [...updatedMessages, newMessage];
-          const sortedMessages = sortMessagesByTime(combinedMessages);
-        
         // Store the last message ID in AsyncStorage
-          storeLastMessageId(sortedMessages);
-          
-          return sortedMessages;
-        }
+        storeLastMessageId(updatedMessages);
         
-        // If we updated an existing message, sort to maintain correct order
-        const sortedMessages = sortMessagesByTime(updatedMessages);
-        
-        // Store the last message ID in AsyncStorage
-        storeLastMessageId(sortedMessages);
-        
-        return sortedMessages;
+        return updatedMessages;
       });
       
       console.log('✅ Message status updated to sent in UI');
@@ -4065,16 +4716,21 @@ const UserChatScreen = ({ navigation, route }) => {
                                     console.log('📊 [SIGNATURE] Data to update in database:', JSON.stringify(apiSignatureData, null, 2));
                                     
                                     // Update by original signature ID (contractId)
-                                    // Inline Comment: Uses centralized function from messageStorage.ts
-                                    updateSignatureFieldsBySignatureId(db, contractId, conversationId, {
-                                      status: apiSignatureData.signature_status || undefined,
-                                      fileUrl: apiSignatureData.signature_file_url || null,
-                                      fileName: apiSignatureData.signature_file_name || null,
-                                      fileSize: apiSignatureData.signature_file_size || null,
-                                      signedById: apiSignatureData.signed_by_id || null,
-                                      signedByName: apiSignatureData.signed_by_name || null,
-                                      signedByEmail: apiSignatureData.signed_by_email || null,
-                                    });
+                                    db.runSync(`
+                                      UPDATE messages_${conversationId} 
+                                      SET signature_status = ?, signature_file_url = ?, signature_file_name = ?, 
+                                          signature_file_size = ?, signed_by_id = ?, signed_by_name = ?, signed_by_email = ?
+                                      WHERE signature_id = ?
+                                    `, [
+                                      apiSignatureData.signature_status,
+                                      apiSignatureData.signature_file_url,
+                                      apiSignatureData.signature_file_name,
+                                      apiSignatureData.signature_file_size,
+                                      apiSignatureData.signed_by_id,
+                                      apiSignatureData.signed_by_name,
+                                      apiSignatureData.signed_by_email,
+                                      contractId // Update by original signature ID
+                                    ]);
                                     
                                     console.log('✅ [SIGNATURE] Database updated successfully');
                                   } catch (dbError) {
@@ -4620,18 +5276,23 @@ const UserChatScreen = ({ navigation, route }) => {
               returnKeyType="send"
               onSubmitEditing={handleSendMessage}
               blurOnSubmit={false}
-              editable={!isSendingMessage && !isLoadingMessages}
+              editable={!isSendingMessage && !isLoadingMessages && !isSendingOfflineMessages}
+              onFocus={() => {
+                if (isSendingOfflineMessages) {
+                  messageInputRef.current?.blur();
+                }
+              }}
             />
 
             <TouchableOpacity
               onPress={handleSendMessage}
-              disabled={(!inputText.trim() && !selectedFile) || isSendingMessage || isLoadingMessages}
+              disabled={(!inputText.trim() && !selectedFile) || isSendingMessage || isLoadingMessages || isSendingOfflineMessages}
               className={`ml-3 w-9 h-9 rounded-full items-center justify-center ${
-                (inputText.trim() || selectedFile) && !isSendingMessage && !isLoadingMessages ? "bg-black" : "bg-gray-300"
+                (inputText.trim() || selectedFile) && !isSendingMessage && !isLoadingMessages && !isSendingOfflineMessages ? "bg-black" : "bg-gray-300"
               }`}
               activeOpacity={0.7}
             >
-              {isSendingMessage ? (
+              {isSendingMessage || isSendingOfflineMessages ? (
                 <ActivityIndicator color="white" size="small" />
               ) : (
                 <Ionicons name="send" size={18} color="white" />

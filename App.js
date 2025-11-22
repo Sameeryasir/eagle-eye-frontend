@@ -1,9 +1,3 @@
-// --- Change Summary ---
-// What: Restored the profile icon on the chat screen header so users can reach account info quickly.
-// Why: Business feedback indicated the chat view should match other headers for consistent access.
-// Dependencies: Relies on shared `AppHeader` component and navigation to `AccountInfo`.
-// MCP Context 7: Maintains consistent UI/UX and readability-focused navigation patterns.
-
 import "./global.css";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -13,23 +7,21 @@ import {
   TextInput,
   StatusBar,
   Text,
+  Keyboard,
 } from "react-native";
 import { SafeAreaView, SafeAreaProvider } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { MenuProvider } from "react-native-popup-menu";
+import { MenuProvider, Menu, MenuOptions, MenuOption, MenuTrigger } from "react-native-popup-menu";
 import Toast from "react-native-toast-message";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SQLiteProvider, useSQLiteContext, SQLiteDatabase } from "expo-sqlite";
 import * as Notifications from "expo-notifications";
 
-// --- Redux Store Integration (MCP Context 7) ---
-// Import Redux store and provider for global state management
 import { Provider } from "react-redux";
 import store from "./store";
 
-// Error Boundary Component
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -120,34 +112,122 @@ const AppHeader = ({
   const handleRightPress = () => {
     if (onRightPress) {
       onRightPress();
-    } else if (showRightIcon) {
+    } else if (showRightIcon && rightIconName !== "ellipsis-vertical") {
       navigation?.navigate("AccountInfo");
     }
   };
 
-  const effectiveMenuPress =
-    showMenu && onMenuPress ? onMenuPress : undefined;
+  const handleAllFiles = () => {
+    console.log('📁 All Files option selected');
+    appEmitter.emit('fetchAllFiles');
+  };
+
+  const handleAllSignatures = () => {
+    console.log('📝 All Signatures option selected');
+    appEmitter.emit('fetchSignatures');
+  };
+
+  const effectiveMenuPress = showMenu && onMenuPress ? onMenuPress : undefined;
 
   return (
     <SafeAreaView style={{ backgroundColor: "#3155A1" }} edges={["top"]}>
       <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
-      <Header
-        title={title}
-        onMenuPress={effectiveMenuPress}
-        onRightPress={showRightIcon ? handleRightPress : undefined}
-        rightIcon={showRightIcon ? rightIconName : undefined}
-        leftIconName={leftIconName}
-        showMenu={showMenu}
-        showRight={showRightIcon}
-        backgroundColor="#3155A1"
-        textColor="white"
-        iconColor="white"
-      />
+      <View style={{ position: "relative" }}>
+        <Header
+          title={title}
+          onMenuPress={effectiveMenuPress}
+          onRightPress={showRightIcon && rightIconName !== "ellipsis-vertical" ? handleRightPress : undefined}
+          rightIcon={showRightIcon && rightIconName !== "ellipsis-vertical" ? rightIconName : undefined}
+          leftIconName={leftIconName}
+          showMenu={showMenu}
+          showRight={showRightIcon && rightIconName !== "ellipsis-vertical"}
+          backgroundColor="#3155A1"
+          textColor="white"
+          iconColor="white"
+        />
+        
+        {showRightIcon && rightIconName === "ellipsis-vertical" && (
+          <View style={{ position: "absolute", top: 0, right: 0, bottom: 0, justifyContent: "center", alignItems: "flex-end", paddingRight: 20, zIndex: 1000 }}>
+            <Menu>
+              <MenuTrigger>
+                <View style={{ padding: 8 }}>
+                  <Ionicons name="ellipsis-vertical" size={24} color="white" />
+                </View>
+              </MenuTrigger>
+              <MenuOptions
+                customStyles={{
+                  optionsContainer: {
+                    backgroundColor: "white",
+                    borderRadius: 8,
+                    padding: 8,
+                    width: 150,
+                    marginTop: 40,
+                    marginRight: 10,
+                    shadowColor: "#000",
+                    shadowOpacity: 0.15,
+                    shadowRadius: 6,
+                    shadowOffset: { width: 0, height: 3 },
+                    elevation: 3,
+                  },
+                }}
+              >
+                <MenuOption
+                  onSelect={handleAllFiles}
+                  customStyles={{
+                    optionWrapper: {
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 4,
+                    },
+                  }}
+                >
+                  <Ionicons name="folder-outline" size={18} color="#000" />
+                  <Text
+                    style={{
+                      marginLeft: 10,
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color: "black",
+                    }}
+                  >
+                    All Files
+                  </Text>
+                </MenuOption>
+                <MenuOption
+                  onSelect={handleAllSignatures}
+                  customStyles={{
+                    optionWrapper: {
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 4,
+                    },
+                  }}
+                >
+                  <Ionicons name="create-outline" size={18} color="#000" />
+                  <Text
+                    style={{
+                      marginLeft: 10,
+                      fontSize: 14,
+                      fontWeight: "600",
+                      color: "black",
+                    }}
+                  >
+                    All Signatures
+                  </Text>
+                </MenuOption>
+              </MenuOptions>
+            </Menu>
+          </View>
+        )}
+      </View>
     </SafeAreaView>
   );
 };
 
-// Loading Screen Component
 const LoadingScreen = () => (
   <SafeAreaView
     style={{
@@ -162,11 +242,8 @@ const LoadingScreen = () => (
   </SafeAreaView>
 );
 
-// Navigation component that handles initial routing
 const AppNavigator = () => {
-  // Temporarily comment out useAuth to test
-  // const { isAuthenticated } = useAuth();
-  const isAuthenticated = true; // Temporary fix
+  const isAuthenticated = true;
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const navigationRef = useRef(null);
   const [headerConfig, setHeaderConfig] = useState({
@@ -180,17 +257,12 @@ const AppNavigator = () => {
     onRightPress: undefined,
   });
 
-  // SplashScreen will handle initial routing and auth checking
-
-  // --- Handle notification when app is in background or closed (MCP Context 7) ---
-  // Business Rule: Navigate to appropriate screen when user taps on notification
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         const data = response.notification.request.content.data;
         console.log("📱 Notification clicked:", data);
 
-        // Navigate based on notification type
         if (navigationRef) {
           if (data?.type === "task-assignment" && data.taskId) {
             console.log(
@@ -236,19 +308,15 @@ const AppNavigator = () => {
   }, []);
 
   const handleSidebarNavigate = (itemId) => {
-    // Handle navigation based on sidebar item
     console.log("Navigate to:", itemId);
     if (navigationRef.current) {
-      // Add navigation logic here based on itemId
       switch (itemId) {
         case "chats":
           navigationRef.current.navigate("ChatScreen");
           break;
         case "files":
-          // Navigate to files screenF
           break;
         case "material":
-          // Navigate to material screen
           break;
         case "personnel":
           navigationRef.current.navigate("PersonalScreen");
@@ -346,9 +414,11 @@ const AppNavigator = () => {
           break;
         case "UserChatScreen":
           config.title = route.params?.userName || "Chat";
-          config.showRightIcon = false;
+          config.showRightIcon = true;
+          config.rightIconName = "ellipsis-vertical";
           config.leftIconName = "chevron-back";
           config.onMenuPress = goBack;
+          config.onRightPress = undefined;
           break;
         case "SignatureScreen":
           config.title = "Signature";
@@ -376,472 +446,128 @@ const AppNavigator = () => {
     [goBack, handleMenuPress]
   );
 
+  const syncHeaderWithCurrentRoute = useCallback(() => {
+    const currentRoute = navigationRef.current?.getCurrentRoute();
+    if (currentRoute) {
+      updateHeaderForRoute(currentRoute);
+    }
+  }, [updateHeaderForRoute]);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <MenuProvider>
         <SafeAreaProvider>
-          <NavigationContainer ref={navigationRef}>
-            <Stack.Navigator
-              screenOptions={{ headerShown: false }}
-              initialRouteName="SplashScreen"
+          <View style={{ flex: 1, backgroundColor: "#ffffff" }}>
+            <NavigationContainer
+              ref={navigationRef}
+              onReady={syncHeaderWithCurrentRoute}
+              onStateChange={syncHeaderWithCurrentRoute}
             >
-              <Stack.Screen name="SplashScreen" component={SplashScreen} />
-              <Stack.Screen name="SignIn" component={SignIn} />
-              <Stack.Screen name="LogIn" component={LogIn} />
-              <Stack.Screen name="OtpScreen" component={Code} />
-              <Stack.Screen
-                name="HomeScreen"
-                component={HomeScreen}
-                options={({ navigation }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      title="Projects"
-                      onMenuPress={handleMenuPress}
-                      navigation={navigation}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
+              <View style={{ flex: 1 }}>
+                {headerConfig.visible && (
+                  <AppHeader
+                    title={headerConfig.title}
+                    onMenuPress={headerConfig.onMenuPress}
+                    navigation={navigationRef.current}
+                    showMenu={headerConfig.showMenu}
+                    leftIconName={headerConfig.leftIconName}
+                    showRightIcon={headerConfig.showRightIcon}
+                    rightIconName={headerConfig.rightIconName}
+                    onRightPress={headerConfig.onRightPress}
+                  />
+                )}
+                <Stack.Navigator
+                  screenOptions={{ headerShown: false }}
+                  initialRouteName="SplashScreen"
+                >
+                  <Stack.Screen name="SplashScreen" component={SplashScreen} />
+                  <Stack.Screen name="SignIn" component={SignIn} />
+                  <Stack.Screen name="LogIn" component={LogIn} />
+                  <Stack.Screen name="OtpScreen" component={Code} />
+                  <Stack.Screen name="HomeScreen" component={HomeScreen} />
+                  <Stack.Screen name="WidgetScreen" component={WidgetScreen} />
+                  <Stack.Screen
+                    name="CalenderScreen"
+                    component={CalenderScreen}
+                  />
+                  <Stack.Screen
+                    name="CalenderDetailScreen"
+                    component={CalenderDetailScreen}
+                  />
+                  <Stack.Screen
+                    name="ViewAllTasksScreen"
+                    component={ViewAllTasksScreen}
+                  />
+                  <Stack.Screen
+                    name="ViewAllLogScreen"
+                    component={ViewAllLogScreen}
+                  />
+                  <Stack.Screen
+                    name="CreateProject"
+                    component={CreateProjectScreen}
+                  />
+                  <Stack.Screen
+                    name="CreateTask"
+                    component={CreateTaskScreen}
+                  />
+                  <Stack.Screen
+                    name="UpdateTask"
+                    component={UpdateTaskScreen}
+                  />
+                  <Stack.Screen
+                    name="UpdateProject"
+                    component={UpdateProjectScreen}
+                  />
+                  <Stack.Screen
+                    name="TaskDetails"
+                    component={TaskDetailsScreen}
+                  />
+                  <Stack.Screen
+                    name="LogsDetail"
+                    component={LogsDetailScreen}
+                  />
+                  <Stack.Screen name="CreatLog" component={CreatLogScreen} />
+                  <Stack.Screen
+                    name="PersonalScreen"
+                    component={PersonalScreen}
+                  />
+                  <Stack.Screen name="FilesScreen" component={FilesScreen} />
+                  <Stack.Screen
+                    name="ProjectAssignment"
+                    component={ProjectAssignment}
+                  />
+                  <Stack.Screen name="WeekView" component={WeekView} />
+                  <Stack.Screen name="ChatScreen" component={ChatScreen} />
+                  <Stack.Screen
+                    name="UserChatScreen"
+                    component={UserChatScreen}
+                  />
+                  <Stack.Screen
+                    name="SignatureScreen"
+                    component={SignatureScreen}
+                  />
+                  <Stack.Screen
+                    name="NotificationScreen"
+                    component={NotificationScreen}
+                  />
+                  <Stack.Screen
+                    name="AccountInfo"
+                    component={AccountInfoScreen}
+                  />
+                  <Stack.Screen
+                    name="ProjectFiles"
+                    component={ProjectFilesScreen}
+                  />
+                </Stack.Navigator>
 
-              <Stack.Screen
-                name="WidgetScreen"
-                component={WidgetScreen}
-                options={({ navigation }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      onMenuPress={handleMenuPress}
-                      title="Dashboard"
-                      navigation={navigation}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-              <Stack.Screen
-                name="CalenderScreen"
-                component={CalenderScreen}
-                options={({ navigation }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      onMenuPress={handleMenuPress}
-                      title="Calendar"
-                      navigation={navigation}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-              <Stack.Screen
-                name="CalenderDetailScreen"
-                component={CalenderDetailScreen}
-                options={({ navigation }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      onMenuPress={handleMenuPress}
-                      title="Task Details"
-                      navigation={navigation}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-
-              <Stack.Screen
-                name="ViewAllTasksScreen"
-                component={ViewAllTasksScreen}
-                options={({ navigation }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      onMenuPress={handleMenuPress}
-                      title="All Tasks"
-                      navigation={navigation}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-              <Stack.Screen
-                name="ViewAllLogScreen"
-                component={ViewAllLogScreen}
-                options={({ navigation }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      onMenuPress={handleMenuPress}
-                      title="All Logs"
-                      navigation={navigation}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-              <Stack.Screen
-                name="CreateProject"
-                component={CreateProjectScreen}
-                options={({ navigation }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      onMenuPress={handleMenuPress}
-                      title="Create Project"
-                      navigation={navigation}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-              <Stack.Screen
-                name="CreateTask"
-                component={CreateTaskScreen}
-                options={({ navigation }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      onMenuPress={handleMenuPress}
-                      title="Create Task"
-                      navigation={navigation}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-              <Stack.Screen
-                name="UpdateTask"
-                component={UpdateTaskScreen}
-                options={({ navigation }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      onMenuPress={handleMenuPress}
-                      title="Update Task"
-                      navigation={navigation}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-              <Stack.Screen
-                name="UpdateProject"
-                component={UpdateProjectScreen}
-                options={({ navigation }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      onMenuPress={handleMenuPress}
-                      title="Update Project"
-                      navigation={navigation}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-              <Stack.Screen
-                name="TaskDetails"
-                component={TaskDetailsScreen}
-                options={({ navigation }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      onMenuPress={handleMenuPress}
-                      title="Task Details"
-                      navigation={navigation}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-              <Stack.Screen
-                name="LogsDetail"
-                component={LogsDetailScreen}
-                options={({ navigation }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      onMenuPress={handleMenuPress}
-                      title="Log Details"
-                      navigation={navigation}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-              <Stack.Screen
-                name="CreatLog"
-                component={CreatLogScreen}
-                options={({ navigation }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      onMenuPress={handleMenuPress}
-                      title="Create Logs"
-                      navigation={navigation}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-              <Stack.Screen
-                name="PersonalScreen"
-                component={PersonalScreen}
-                options={({ navigation }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      onMenuPress={handleMenuPress}
-                      title="Personnel"
-                      navigation={navigation}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-              <Stack.Screen
-                name="FilesScreen"
-                component={FilesScreen}
-                options={({ navigation }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      onMenuPress={handleMenuPress}
-                      title="Files"
-                      navigation={navigation}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-              <Stack.Screen
-                name="ProjectAssignment"
-                component={ProjectAssignment}
-                options={({ navigation }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      onMenuPress={handleMenuPress}
-                      title="Assign Project"
-                      navigation={navigation}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-              <Stack.Screen
-                name="WeekView"
-                component={WeekView}
-                options={({ navigation }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      onMenuPress={handleMenuPress}
-                      title="Week View"
-                      navigation={navigation}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-              <Stack.Screen
-                name="ChatScreen"
-                component={ChatScreen}
-                options={({ navigation }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      title="Messages"
-                      onMenuPress={handleMenuPress}
-                      navigation={navigation}
-                      // NOTE: showRightIcon restored to keep quick access to account details (MCP Context 7 consistency).
-                      showRightIcon={true}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-              <Stack.Screen
-                name="UserChatScreen"
-                component={UserChatScreen}
-                options={({ navigation, route }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      title={route.params?.userName || "Chat"}
-                      onMenuPress={() => navigation.goBack()}
-                      navigation={navigation}
-                      showRightIcon={false}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-              <Stack.Screen
-                name="SignatureScreen"
-                component={SignatureScreen}
-                options={({ navigation }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      title="Signature"
-                      onMenuPress={() => navigation.goBack()}
-                      navigation={navigation}
-                      showRightIcon={false}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-              <Stack.Screen
-                name="NotificationScreen"
-                component={NotificationScreen}
-                options={({ navigation }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      onMenuPress={handleMenuPress}
-                      title="Notifications"
-                      navigation={navigation}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-              <Stack.Screen
-                name="AccountInfo"
-                component={AccountInfoScreen}
-                options={({ navigation }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      onMenuPress={handleMenuPress}
-                      title="Account Info"
-                      navigation={navigation}
-                      showRightIcon={false}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-              <Stack.Screen
-                name="ProjectFiles"
-                component={ProjectFilesScreen}
-                options={({ navigation, route }) => ({
-                  headerShown: true,
-                  header: () => (
-                    <AppHeader
-                      onMenuPress={handleMenuPress}
-                      title={route.params?.projectName || "Project Files"}
-                      navigation={navigation}
-                    />
-                  ),
-                  headerBackTitleVisible: false,
-                  headerStyle: {
-                    backgroundColor: "white",
-                  },
-                  headerShadowVisible: false,
-                })}
-              />
-            </Stack.Navigator>
-
-            {/* Sidebar - rendered at app level for proper overlay */}
-            <Sidebar
-              isVisible={sidebarVisible}
-              onClose={handleSidebarClose}
-              onNavigate={handleSidebarNavigate}
-            />
-          </NavigationContainer>
+                <Sidebar
+                  isVisible={sidebarVisible}
+                  onClose={handleSidebarClose}
+                  onNavigate={handleSidebarNavigate}
+                />
+              </View>
+            </NavigationContainer>
+          </View>
           <Toast />
         </SafeAreaProvider>
       </MenuProvider>

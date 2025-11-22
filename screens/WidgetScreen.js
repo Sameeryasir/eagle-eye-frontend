@@ -9,6 +9,7 @@ import {
   Image,
   Dimensions,
   RefreshControl,
+  ActivityIndicator,
 } from "react-native";
 import Toast from 'react-native-toast-message';
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -48,7 +49,6 @@ const isLargeScreen = screenWidth >= 450; // Large devices
 
 import Sidebar from "../components/Sidebar";
 import CustomBottomNav from "../components/CustomBottomNav";
-import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
 
 // === Change Summary (2025-11-07) ===
@@ -761,12 +761,11 @@ function WidgetScreen({ navigation, route }) {
         });
         return shouldShowLoader;
       })() ? (
-        <View className="flex-1 justify-center items-center p-5 min-h-[700px]">
-          <Loader
-            size="large"
-            color="#000000"
-            text="Loading tasks and logs..."
-          />
+        // --- Simple Custom Loader (MCP Context 7) ---
+        // Why: Simple inline loader centered on screen, no external dependencies
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#000000" />
+          <Text className="mt-4 text-base text-gray-500">Loading tasks and logs...</Text>
         </View>
       ) : (
         <ScrollView

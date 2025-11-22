@@ -25,7 +25,6 @@ import UpdateTaskModal from "../components/UpdateTaskModal";
 import FilterModal from "../components/FilterModal";
 import ErrorDialog from "../components/ErrorDialog";
 import { filterTask } from "../services/tasks/filterTask";
-import Loader from "../services/utils/loader";
 import { getUserRole } from "../services/utils/userRole";
 import DropDownPicker from "react-native-dropdown-picker";
 import {
@@ -1520,9 +1519,12 @@ function ViewAllTasksScreen({ navigation, route }) {
       <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
 
       {/* Content */}
+      {/* --- Simple Custom Loader (MCP Context 7) --- */}
+      {/* Why: Simple inline loader centered on screen, no external dependencies */}
       {initialLoading || loading ? (
-        <View className="flex-1 justify-center items-center p-5 min-h-[300px]">
-          <Loader size="large" color="#000000" text="Loading tasks..." />
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#000000" />
+          <Text className="mt-4 text-base text-gray-500">Loading tasks...</Text>
         </View>
       ) : (
         <TouchableWithoutFeedback

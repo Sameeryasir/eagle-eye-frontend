@@ -1,3 +1,8 @@
+// --- Change Summary (2025-11-13) ---
+// What: Increased the header title size and added extra top spacing in the Create Project screen header.
+// Why: Improve readability and shift the title slightly downward per recent UI feedback.
+// Dependencies: No additional files depend on this tweak.
+// MCP Context: Implemented following MCP context 7 best practices for clarity and maintainability.
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -11,6 +16,7 @@ import {
   Dimensions,
   Platform,
   Modal,
+  StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -199,11 +205,13 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
         style={{ flex: 1 }}
       >
         {}
+        {/* // --- Header Banner --- */}
         <View
           className={`bg-black ${isVerySmallScreen ? "px-3 py-2" : "px-4 py-3"} flex-row items-center justify-between`}
         >
+          {/* Increasing the title size and margin to keep the header readable and properly spaced (MCP context 7). */}
           <Text
-            className={`text-black ${isVerySmallScreen ? "text-[16px]" : "text-[18px]"} font-semibold`}
+            className={`text-black ${isVerySmallScreen ? "text-[20px]" : "text-[24px]"} font-semibold mt-2`}
           >
             Create Project
           </Text>

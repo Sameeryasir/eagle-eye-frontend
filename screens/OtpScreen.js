@@ -16,140 +16,124 @@ import {
   ToastAndroid,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import Toast from 'react-native-toast-message';
-import { verifyOtp } from '../services/auth/VerifyOtp';
-import { useAuth } from '../context/AuthContext';
-import Logo from "../assets/Logo.svg"; // Import the SVG logo
+import Toast from "react-native-toast-message";
+import { verifyOtp } from "../services/auth/VerifyOtp";
+import { useAuth } from "../context/AuthContext";
+import Logo from "../assets/Logo.svg";
 
-const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
+const { height: screenHeight, width: screenWidth } = Dimensions.get("window");
 
 const Code = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const { login } = useAuth();
-  const emailOrPhone = route.params?.emailOrPhone || '';
+  const emailOrPhone = route.params?.emailOrPhone || "";
   const [code, setCode] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [appState, setAppState] = React.useState(AppState.currentState);
 
   React.useEffect(() => {
     const handleAppStateChange = (nextAppState) => {
-      if (appState.match(/inactive|background/) && nextAppState === 'active') {
-        // App has come to the foreground - force re-render
+      if (appState.match(/inactive|background/) && nextAppState === "active") {
         setAppState(nextAppState);
-        // Force a small delay to ensure proper layout restoration
         setTimeout(() => {
-          setAppState('active');
+          setAppState("active");
         }, 100);
       } else {
         setAppState(nextAppState);
       }
     };
 
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    const subscription = AppState.addEventListener(
+      "change",
+      handleAppStateChange
+    );
     return () => subscription?.remove();
   }, [appState]);
 
   const handleContinue = async () => {
-    Keyboard.dismiss(); // Dismiss keyboard before proceeding
+    Keyboard.dismiss();
     setLoading(true);
     try {
-      // --- Step 1: Verify OTP ---
       const data = await verifyOtp(emailOrPhone, code.trim());
-      console.log('Full response data:', data);
+      console.log("Full response data:", data);
 
-      // --- Debug: Log data being passed to login ---
-      console.log('=== Data passed to login function ===');
-      console.log('Data structure:', JSON.stringify(data, null, 2));
-      console.log('Has access_token:', !!data?.access_token);
-      console.log('Has refresh_token:', !!data?.refresh_token);
-      console.log('Has user:', !!data?.user);
-      console.log('=====================================');
+      console.log("=== Data passed to login function ===");
+      console.log("Data structure:", JSON.stringify(data, null, 2));
+      console.log("Has access_token:", !!data?.access_token);
+      console.log("Has refresh_token:", !!data?.refresh_token);
+      console.log("Has user:", !!data?.user);
+      console.log("=====================================");
 
-      // --- Step 2: Use AuthContext to handle login (includes Expo token generation) ---
-      // This will automatically generate the Expo push token after successful OTP verification
       await login(data);
 
       setLoading(false);
-      setCode('');
+      setCode("");
 
-      // Check user role and navigate accordingly
       const userRole = data.user?.role?.name;
-      console.log('User role received:', userRole);
-      let targetScreen = 'HomeScreen'; // Default to HomeScreen
+      console.log("User role received:", userRole);
+      let targetScreen = "HomeScreen";
 
-      if (userRole === 'Owner') {
-        targetScreen = 'HomeScreen';
-      } else if (userRole === 'Employee') {
-        targetScreen = 'HomeScreen';
-      } else if (userRole === 'Manager') {
-        targetScreen = 'HomeScreen';
+      if (userRole === "Owner") {
+        targetScreen = "HomeScreen";
+      } else if (userRole === "Employee") {
+        targetScreen = "HomeScreen";
+      } else if (userRole === "Manager") {
+        targetScreen = "HomeScreen";
       }
-      // Other roles will default to HomeScreen
 
-      console.log('Navigating to screen:', targetScreen);
+      console.log("Navigating to screen:", targetScreen);
 
-      // --- Show Success Toast Message ---
-      // Display success message using custom toast config with beautiful styling
       Toast.show({
-        type: 'success',
-        text1: 'OTP Verified Successfully!',
-        text2: data.message || 'Welcome to Eagle Eye!',
-        visibilityTime: 3000, // 3 seconds
+        type: "success",
+        text1: "OTP Verified Successfully!",
+        text2: data.message || "Welcome to Eagle Eye!",
+        visibilityTime: 3000,
         autoHide: true,
-        topOffset: 80, // Positioning from top
+        topOffset: 80,
       });
 
-      // ✅ Navigate to HomeScreen without parameters (Toast handles the success message)
-      // Use navigation.reset() to prevent back navigation to OTP screen
-      // This clears the navigation stack and makes HomeScreen the root screen
       navigation.reset({
         index: 0,
         routes: [{ name: targetScreen }],
       });
-
     } catch (error) {
       setLoading(false);
-      console.log('Verify OTP Error:', error);
-      
-      // --- Show Error Toast Message ---
-      // Display error message using custom toast config with automatic text wrapping
+      console.log("Verify OTP Error:", error);
+
       Toast.show({
-        type: 'error',
-        text1: 'OTP Verification Failed',
-        text2: error.message || 'Please check your code and try again',
-        visibilityTime: 4000, // 4 seconds for error messages
+        type: "error",
+        text1: "OTP Verification Failed",
+        text2: error.message || "Please check your code and try again",
+        visibilityTime: 4000,
         autoHide: true,
-        topOffset: 80, // Positioning from top
+        topOffset: 80,
       });
     }
   };
 
-
   return (
     <>
-      {/* Background layer to ensure full coverage */}
       <View
         style={{
-          position: 'absolute',
+          position: "absolute",
           top: 0,
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: '#FFFFFF',
+          backgroundColor: "#FFFFFF",
           zIndex: 0,
         }}
       />
 
-      {/* Main content layer */}
       <View
         style={{
-          position: 'absolute',
+          position: "absolute",
           top: 0,
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: '#FFFFFF',
+          backgroundColor: "#FFFFFF",
           zIndex: 1,
         }}
       >
@@ -162,11 +146,11 @@ const Code = () => {
         <View
           style={{
             flex: 1,
-            justifyContent: 'center',
-            alignItems: 'center',
+            justifyContent: "center",
+            alignItems: "center",
             paddingHorizontal: 24,
-            paddingTop: Platform.OS === 'android' ? -110 : -160,
-            backgroundColor: '#FFFFFF',
+            paddingTop: Platform.OS === "android" ? -110 : -160,
+            backgroundColor: "#FFFFFF",
           }}
         >
           <Logo width={90} height={90} />
@@ -189,7 +173,7 @@ const Code = () => {
           <TouchableOpacity
             style={[
               styles.continueButton,
-              !code.trim() && styles.disabledButton
+              !code.trim() && styles.disabledButton,
             ]}
             onPress={handleContinue}
             disabled={loading || !code.trim()}
@@ -226,7 +210,7 @@ const styles = StyleSheet.create({
     color: "#3557A6",
     textAlign: "center",
     marginBottom: 24,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   input: {
     width: "100%",
