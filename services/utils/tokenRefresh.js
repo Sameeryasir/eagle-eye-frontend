@@ -1,14 +1,19 @@
+/**
+ * Change Summary:
+ * - What: Refresh uses /auth/token/refresh; fix null-check bug
+ * - Why: Match renamed backend route; was checking wrong variable
+ */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_URL } from "../../config/api";
+import { ApiRoutes } from "../api/routes";
 
-// Function to refresh the access token
 export default async function refreshToken(refreshTokenValue) {
   try {
-    if (!refreshToken) {
+    if (!refreshTokenValue) {
       throw new Error("No refresh token found");
     }
 
-    const response = await fetch(`${API_URL}/auth/refresh-token`, {
+    const response = await fetch(`${API_URL}${ApiRoutes.auth.refreshToken}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -34,7 +39,6 @@ export default async function refreshToken(refreshTokenValue) {
     return data.access_token;
   } catch (error) {
     console.error("Error refreshing token:", error);
-    // Clear tokens on refresh failure
     await AsyncStorage.multiRemove(["token", "refreshToken"]);
     throw error;
   }

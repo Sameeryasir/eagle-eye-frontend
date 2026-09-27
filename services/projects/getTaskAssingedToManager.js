@@ -1,85 +1,27 @@
-import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_URL } from "../../config/api";
-import refreshToken from '../utils/tokenRefresh';
+/**
+ * Change Summary:
+ * - What: Uses shared apiGet + ApiRoutes.projects.assignedTasks
+ * - Why: Nest path is /projects/:id/assigned-tasks
+ * - Dependencies: services/api/client.js
+ * MCP Context 7: shared client (no duplicated refresh)
+ */
+import { apiGet, ApiRoutes } from '../api/client';
 
 export async function getTaskAssignedToManager(projectId) {
-    let token = await AsyncStorage.getItem('token');
-    let refreshTokenValue = await AsyncStorage.getItem('refreshToken');
+  if (!projectId) {
+    throw new Error('Project ID is required');
+  }
 
-    if (!token) {
-        throw new Error('No token found');
-    }
+  // --- Fetch manager-assigned tasks for this project ---
+  const data = await apiGet(ApiRoutes.projects.assignedTasks(projectId));
 
-    if (!projectId) {
-        throw new Error('Project ID is required');
-    }
+  // Business Rule: empty list is treated as a soft error for the create-log UI
+  if (data?.tasks && data.tasks.length === 0) {
+    const error = new Error('No tasks are assigned to you for this project yet.');
+    error.statusCode = 400;
+    error.error = 'Bad Request';
+    throw error;
+  }
 
-    try {
-        // --- Get Tasks Assigned to Manager for Specific Project ---
-        // Business Rule: Fetch all tasks assigned to the current manager for a specific project
-        const response = await axios.get(`${API_URL}/project/manager/employee-tasks/${projectId}`, {
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-        });
-        
-        // --- Console log the response for debugging ---
-        console.log('=== getTaskAssignedToManager Service Response ===');
-        console.log('Project ID:', projectId);
-        console.log('Response Status:', response.status);
-        console.log('Response Data:', JSON.stringify(response.data, null, 2));
-        console.log('Response Data Type:', typeof response.data);
-        console.log('Response Data Keys:', response.data ? Object.keys(response.data) : 'No data');
-        if (response.data?.tasks) {
-            console.log('Tasks Count:', response.data.tasks.length);
-            console.log('First Task:', response.data.tasks[0]);
-        }
-        console.log('================================================');
-        
-        // --- Check if no tasks are available for the project ---
-        // Business Rule: If no tasks are assigned to manager for this project, show appropriate message
-        if (response.data?.tasks && response.data.tasks.length === 0) {
-            const error = new Error('No tasks are assigned to you for this project yet.');
-            error.statusCode = 400;
-            error.error = 'Bad Request';
-            throw error;
-        }
-        
-        return response.data;
-    } catch (err) {
-        if (axios.isAxiosError(err) && err.response?.status === 401 && refreshTokenValue) {
-            // --- Token Refresh Logic ---
-            const newToken = await refreshToken(refreshTokenValue);
-
-            if (!newToken) throw new Error('Unable to refresh token.');
-
-            // Retry the original request with new token
-            const retryResponse = await axios.get(`${API_URL}/project/manager/employee-tasks/${projectId}`, {
-                headers: {
-                    Authorization: `Bearer ${newToken}`,
-                    'Content-Type': 'application/json',
-                },
-            });
-            
-            // --- Console log the retry response for debugging ---
-            console.log('=== getTaskAssignedToManager Service Retry Response ===');
-            console.log('Project ID:', projectId);
-            console.log('Retry Response Status:', retryResponse.status);
-            console.log('Retry Response Data:', JSON.stringify(retryResponse.data, null, 2));
-            console.log('Retry Response Data Type:', typeof retryResponse.data);
-            console.log('Retry Response Data Keys:', retryResponse.data ? Object.keys(retryResponse.data) : 'No data');
-            if (retryResponse.data?.tasks) {
-                console.log('Retry Tasks Count:', retryResponse.data.tasks.length);
-                console.log('Retry First Task:', retryResponse.data.tasks[0]);
-            }
-            console.log('=====================================================');
-            
-            return retryResponse.data;
-        }
-
-        // --- Handle API Errors ---
-        throw new Error(err.response?.data?.message || 'Failed to fetch tasks assigned to manager');
-    }
+  return data;
 }
