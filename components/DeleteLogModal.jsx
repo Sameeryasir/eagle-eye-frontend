@@ -33,7 +33,6 @@ function DeleteLogModal({ visible, onClose, onConfirm, logTitle }) {
             elevation: 8,
           }}
         >
-          {}
           <View
             style={{
               alignItems: "center",
@@ -66,7 +65,6 @@ function DeleteLogModal({ visible, onClose, onConfirm, logTitle }) {
             </Text>
           </View>
 
-          {}
           <Text
             style={{
               fontSize: 15,
@@ -91,7 +89,6 @@ function DeleteLogModal({ visible, onClose, onConfirm, logTitle }) {
             This action cannot be undone.
           </Text>
 
-          {}
           <View
             style={{
               flexDirection: "row",

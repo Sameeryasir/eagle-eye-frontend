@@ -18,6 +18,7 @@ import Toast from "react-native-toast-message";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SQLiteProvider, useSQLiteContext, SQLiteDatabase } from "expo-sqlite";
 import * as Notifications from "expo-notifications";
+import { isRunningInExpoGo } from "expo";
 
 import { Provider } from "react-redux";
 import store from "./store";
@@ -130,8 +131,8 @@ const AppHeader = ({
   const effectiveMenuPress = showMenu && onMenuPress ? onMenuPress : undefined;
 
   return (
-    <SafeAreaView style={{ backgroundColor: "#3155A1" }} edges={["top"]}>
-      <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
+    <SafeAreaView style={{ backgroundColor: "#FFFFFF" }} edges={["top"]}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <View style={{ position: "relative" }}>
         <Header
           title={title}
@@ -141,9 +142,9 @@ const AppHeader = ({
           leftIconName={leftIconName}
           showMenu={showMenu}
           showRight={showRightIcon && rightIconName !== "ellipsis-vertical"}
-          backgroundColor="#3155A1"
-          textColor="white"
-          iconColor="white"
+          backgroundColor="#FFFFFF"
+          textColor="#333"
+          iconColor="#333"
         />
         
         {showRightIcon && rightIconName === "ellipsis-vertical" && (
@@ -151,7 +152,7 @@ const AppHeader = ({
             <Menu>
               <MenuTrigger>
                 <View style={{ padding: 8 }}>
-                  <Ionicons name="ellipsis-vertical" size={24} color="white" />
+                  <Ionicons name="ellipsis-vertical" size={24} color="#333" />
                 </View>
               </MenuTrigger>
               <MenuOptions
@@ -243,7 +244,7 @@ const LoadingScreen = () => (
 );
 
 const AppNavigator = () => {
-  const isAuthenticated = true;
+  const { isLoading: authLoading } = useAuth();
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const navigationRef = useRef(null);
   const [headerConfig, setHeaderConfig] = useState({
@@ -258,38 +259,27 @@ const AppNavigator = () => {
   });
 
   useEffect(() => {
+    if (isRunningInExpoGo()) {
+      return undefined;
+    }
+
     const subscription = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         const data = response.notification.request.content.data;
-        console.log("📱 Notification clicked:", data);
 
         if (navigationRef) {
           if (data?.type === "task-assignment" && data.taskId) {
-            console.log(
-              "📋 Navigating to TaskDetailsScreen with taskId:",
-              data.taskId
-            );
             navigationRef.navigate("TaskDetails", { taskId: data.taskId });
           } else if (data?.type === "project-assignment" && data.projectId) {
-            console.log("📁 Navigating to HomeScreen");
             navigationRef.navigate("HomeScreen");
           } else if (data?.type === "event-assignment" && data.eventId) {
-            console.log("📅 Navigating to CalenderScreen");
             navigationRef.navigate("CalenderScreen");
           } else if (
-            data?.type === "project-conversation-created" &&
+            (data?.type === "project-conversation-created" ||
+              data?.type === "conversation-created" ||
+              data?.type === "chat-message") &&
             data.conversationId
           ) {
-            console.log("💬 Navigating to ChatScreen");
-            navigationRef.navigate("ChatScreen");
-          } else if (
-            data?.type === "conversation-created" &&
-            data.conversationId
-          ) {
-            console.log("💬 Navigating to ChatScreen");
-            navigationRef.navigate("ChatScreen");
-          } else if (data?.type === "chat-message" && data.conversationId) {
-            console.log("💬 Navigating to ChatScreen");
             navigationRef.navigate("ChatScreen");
           }
         }
@@ -339,7 +329,32 @@ const AppNavigator = () => {
         return;
       }
 
-      const baseConfig = {
+      const hideHeaderOn = new Set([
+        "SplashScreen",
+        "SignIn",
+        "LogIn",
+        "OtpScreen",
+        "CreateProject",
+        "CreateTask",
+        "UpdateTask",
+        "UpdateProject",
+        "CreatLog",
+        "ProjectAssignment",
+        "TaskDetails",
+        "LogsDetail",
+        "CalenderDetailScreen",
+        "AccountInfo",
+        "SignatureScreen",
+        "ProjectFiles",
+        "WeekView",
+      ]);
+
+      if (hideHeaderOn.has(route.name)) {
+        setHeaderConfig({ visible: false });
+        return;
+      }
+
+      const config = {
         visible: true,
         title: "Projects",
         showMenu: true,
@@ -350,15 +365,7 @@ const AppNavigator = () => {
         onRightPress: undefined,
       };
 
-      let config = { ...baseConfig };
-
       switch (route.name) {
-        case "SplashScreen":
-        case "SignIn":
-        case "LogIn":
-        case "OtpScreen":
-          config = { visible: false };
-          break;
         case "HomeScreen":
           config.title = "Projects";
           break;
@@ -368,45 +375,17 @@ const AppNavigator = () => {
         case "CalenderScreen":
           config.title = "Calendar";
           break;
-        case "CalenderDetailScreen":
-        case "TaskDetails":
-          config.title = "Task Details";
-          break;
         case "ViewAllTasksScreen":
           config.title = "All Tasks";
           break;
         case "ViewAllLogScreen":
           config.title = "All Logs";
           break;
-        case "CreateProject":
-          config.title = "Create Project";
-          break;
-        case "CreateTask":
-          config.title = "Create Task";
-          break;
-        case "UpdateTask":
-          config.title = "Update Task";
-          break;
-        case "UpdateProject":
-          config.title = "Update Project";
-          break;
-        case "LogsDetail":
-          config.title = "Log Details";
-          break;
-        case "CreatLog":
-          config.title = "Create Logs";
-          break;
         case "PersonalScreen":
           config.title = "Personnel";
           break;
         case "FilesScreen":
           config.title = "Files";
-          break;
-        case "ProjectAssignment":
-          config.title = "Assign Project";
-          break;
-        case "WeekView":
-          config.title = "Week View";
           break;
         case "ChatScreen":
           config.title = "Messages";
@@ -420,21 +399,8 @@ const AppNavigator = () => {
           config.onMenuPress = goBack;
           config.onRightPress = undefined;
           break;
-        case "SignatureScreen":
-          config.title = "Signature";
-          config.showRightIcon = false;
-          config.leftIconName = "chevron-back";
-          config.onMenuPress = goBack;
-          break;
         case "NotificationScreen":
           config.title = "Notifications";
-          break;
-        case "AccountInfo":
-          config.title = "Account Info";
-          config.showRightIcon = false;
-          break;
-        case "ProjectFiles":
-          config.title = route.params?.projectName || "Project Files";
           break;
         default:
           config.title = route.name.replace(/([A-Z])/g, " $1").trim();
@@ -452,6 +418,10 @@ const AppNavigator = () => {
       updateHeaderForRoute(currentRoute);
     }
   }, [updateHeaderForRoute]);
+
+  if (authLoading) {
+    return <LoadingScreen />;
+  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

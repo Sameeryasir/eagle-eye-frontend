@@ -1,11 +1,7 @@
-// --- Notification Slice (MCP Context 7) ---
 // Redux slice for managing in-app notifications
-// Following MCP Context 7 best practices for clean, maintainable state management
 
 import { createSlice, createSelector } from '@reduxjs/toolkit';
 
-// --- Initial State ---
-// Business Rule: Single state for all notifications with user filtering
 const initialState = {
   notifications: [], // Array of all notifications
   isLoading: false,  // Loading state for future API calls
@@ -13,19 +9,14 @@ const initialState = {
   lastUpdated: null  // Timestamp of last update
 };
 
-// --- Helper Functions ---
-// Business Rule: Generate unique IDs for notifications
 const generateId = () => {
   return `notification_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 };
 
-// --- Notification Slice ---
 const notificationSlice = createSlice({
   name: 'notifications',
   initialState,
   reducers: {
-    // --- Add New Notification ---
-    // Business Rule: Add notification to beginning of array for newest first
     addNotification: (state, action) => {
       const newNotification = {
         id: action.payload.id || generateId(),
@@ -52,8 +43,6 @@ const notificationSlice = createSlice({
       state.error = null;
     },
 
-    // --- Mark Specific Notification as Read ---
-    // Business Rule: Mark notification as read (simplified for basic flow)
     markAsRead: (state, action) => {
       const notificationId = action.payload;
       const notification = state.notifications.find(n => n.id === notificationId);
@@ -64,14 +53,10 @@ const notificationSlice = createSlice({
       }
     },
 
-    // --- Mark All Notifications as Read ---
-    // Business Rule: Update timestamp when all marked as read
     markAllAsRead: (state) => {
       state.lastUpdated = new Date().toISOString();
     },
 
-    // --- Remove Specific Notification ---
-    // Business Rule: Remove notification from array
     removeNotification: (state, action) => {
       const notificationId = action.payload;
       
@@ -80,34 +65,24 @@ const notificationSlice = createSlice({
       state.lastUpdated = new Date().toISOString();
     },
 
-    // --- Clear All Notifications ---
-    // Business Rule: Remove all notifications
     clearAllNotifications: (state) => {
       state.notifications = [];
       state.lastUpdated = new Date().toISOString();
     },
 
-    // --- Set Loading State ---
-    // Business Rule: For future API integration
     setLoading: (state, action) => {
       state.isLoading = action.payload;
     },
 
-    // --- Set Error State ---
-    // Business Rule: Handle errors gracefully
     setError: (state, action) => {
       state.error = action.payload;
       state.isLoading = false;
     },
 
-    // --- Clear Error ---
-    // Business Rule: Reset error state
     clearError: (state) => {
       state.error = null;
     },
 
-    // --- Fetch Notifications (Future API Integration) ---
-    // Business Rule: Replace all notifications with new data from server
     fetchNotifications: (state, action) => {
       state.notifications = action.payload || [];
       state.lastUpdated = new Date().toISOString();
@@ -117,7 +92,6 @@ const notificationSlice = createSlice({
   }
 });
 
-// --- Export Actions ---
 export const {
   addNotification,
   markAsRead,
@@ -129,9 +103,6 @@ export const {
   clearError,
   fetchNotifications
 } = notificationSlice.actions;
-
-// --- Selectors ---
-// Business Rule: Provide easy access to filtered notification data with proper memoization
 
 // Base selector for all notifications
 const selectAllNotifications = (state) => state.notifications.notifications;
@@ -166,5 +137,4 @@ export const selectLastUpdated = (state) => state.notifications.lastUpdated;
 // Export the base selector as well
 export { selectAllNotifications };
 
-// --- Export Reducer ---
 export default notificationSlice.reducer;

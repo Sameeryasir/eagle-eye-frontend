@@ -16,7 +16,6 @@ const ErrorDialog = ({
       animationType="fade"
       onRequestClose={onClose}
     >
-      {}
       <View
         style={{
           flex: 1,
@@ -40,7 +39,6 @@ const ErrorDialog = ({
             elevation: 8,
           }}
         >
-          {}
           <View
             style={{
               alignItems: "center",
@@ -73,7 +71,6 @@ const ErrorDialog = ({
             </Text>
           </View>
 
-          {}
           <Text
             style={{
               fontSize: 15,
@@ -86,7 +83,6 @@ const ErrorDialog = ({
             {message}
           </Text>
 
-          {}
           <TouchableOpacity
             style={{
               backgroundColor: "#EF4444",

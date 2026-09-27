@@ -29,14 +29,10 @@ function PersonalScreen({ navigation }) {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // --- Load Employees Data (MCP Context 7) ---
-  // Business Rule: Load all employees to display in personnel management screen
   useEffect(() => {
     loadEmployees();
   }, []);
 
-  // --- Filter Employees Based on Search (MCP Context 7) ---
-  // Business Rule: Allow managers to search employees by name and email for easier assignment
   useEffect(() => {
     if (searchQuery.trim() === '') {
       setFilteredEmployees(employees);
@@ -98,16 +94,10 @@ function PersonalScreen({ navigation }) {
     }
   };
 
-
   const onRefresh = React.useCallback(() => {
     loadEmployees(true);
   }, []);
 
-
-
-
-  // --- Employee Card Component (MCP Context 7) ---
-  // Business Rule: Display employee information in a clean card format
   const EmployeeCard = ({ employee }) => {
     // Safety check: ensure employee object exists
     if (!employee || typeof employee !== 'object') {
@@ -131,8 +121,6 @@ function PersonalScreen({ navigation }) {
 
     return (
       <TouchableOpacity
-        // --- Navigation with Employee ID (MCP Context 7) ---
-        // Business Rule: Pass employee data and ID to ProjectAssignment screen
         onPress={() => navigation.navigate('ProjectAssignment', { 
           employee, 
           employeeId: employee.id
@@ -230,10 +218,6 @@ function PersonalScreen({ navigation }) {
     );
   };
 
-
-
-  // --- Employee Search Bar Component (MCP Context 7) ---
-  // Business Rule: Provide search functionality for employees
   const EmployeeSearchBar = () => (
     <View style={{ marginBottom: Math.min(16, screenHeight * 0.02) }}>
       <View
@@ -280,11 +264,6 @@ function PersonalScreen({ navigation }) {
     </View>
   );
 
-
-
-
-  // --- Header Component (MCP Context 7) ---
-  // Business Rule: Display screen title and search functionality
   const Header = () => (
     <View
       style={{
@@ -298,8 +277,6 @@ function PersonalScreen({ navigation }) {
     </View>
   );
 
-  // --- Empty State Component (MCP Context 7) ---
-  // Business Rule: Show appropriate message when no employees are found
   const EmptyState = () => {
     const isSearchEmpty = searchQuery.trim() !== '' && filteredEmployees.length === 0;
     const isNoEmployees = employees.length === 0;
@@ -392,8 +369,6 @@ function PersonalScreen({ navigation }) {
     );
   };
 
-  // --- Loading State (MCP Context 7) ---
-  // Business Rule: Show loading indicator while fetching employees
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: 'white' }}>
@@ -420,7 +395,6 @@ function PersonalScreen({ navigation }) {
         ListEmptyComponent={EmptyState}
         showsVerticalScrollIndicator={false}
       />
-
 
       {/* Bottom Navigation */}
       <CustomBottomNav />

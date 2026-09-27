@@ -60,8 +60,6 @@ function ProjectAssignment({ navigation, route }) {
     }
   }, [employeeId]);
 
-  // --- Filter Projects Function (MCP Context 7) ---
-  // Business Rule: Filter projects based on search query (same logic as HomeScreen)
   const getFilteredProjects = () => {
     if (searchQuery.trim() === '') {
       return projects;
@@ -114,7 +112,6 @@ function ProjectAssignment({ navigation, route }) {
     }
   };
 
-
   // Modal functions
   const openProjectModal = () => {
     setSearchQuery('');
@@ -166,8 +163,6 @@ function ProjectAssignment({ navigation, route }) {
       
       await assignProjectToEmployees(assignData);
 
-      // --- Send Notification for Project Assignment (MCP Context 7) ---
-      // Business Rule: Send individual notification for each project assigned
       try {
         // Get current user info for notification
         const currentUserId = await AsyncStorage.getItem('userId');
@@ -210,8 +205,6 @@ function ProjectAssignment({ navigation, route }) {
     } catch (error) {
       console.error('Assignment error:', error);
       
-      // --- Handle 403 Error for Shared Projects ---
-      // Business Rule: If error status is 403, show specific message about shared projects
       if (error.response?.status === 403) {
         Toast.show({
           type: 'error',
@@ -238,8 +231,6 @@ function ProjectAssignment({ navigation, route }) {
   const selectAllProjects = () => setSelectedProjects([...getFilteredProjects()]);
   const unselectAllProjects = () => setSelectedProjects([]);
 
-  // --- Project Modal Item Component (MCP Context 7) ---
-  // Business Rule: Render project items in modal dropdown with multiple selection
   const ProjectModalItem = ({ item }) => {
     const isSelected = selectedProjects.some(p => p.id === item.id);
     
@@ -531,7 +522,6 @@ function ProjectAssignment({ navigation, route }) {
         </View>
 
       </ScrollView>
-
 
       {/* Bottom Navigation */}
       <CustomBottomNav navigation={navigation} />

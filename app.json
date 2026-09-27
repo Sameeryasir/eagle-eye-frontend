@@ -33,13 +33,7 @@
         "VIBRATE",
         "WAKE_LOCK",
         "RECEIVE_BOOT_COMPLETED"
-      ],
-      "useNextNotificationsApi": true,
-      "notification": {
-        "icon": "./assets/icon.png",
-        "color": "#ffffff",
-        "channelId": "default"
-      }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -61,7 +55,13 @@
           "color": "#ffffff",
           "sounds": []
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker",
+      "expo-image",
+      "expo-sharing",
+      "expo-splash-screen",
+      "expo-status-bar",
+      "expo-font"
     ]
   }
 }

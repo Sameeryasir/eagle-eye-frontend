@@ -438,7 +438,6 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
           activeOpacity={0.7}
           disabled={isDisabled}
         >
-          {}
           <View
             className="w-16 h-16 rounded-2xl items-center justify-center shadow-sm"
             style={{ backgroundColor: getAvatarColor(fullName) }}
@@ -448,7 +447,6 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
             </Text>
           </View>
 
-          {}
           <View className="flex-1 ml-4">
             <Text
               className="text-base font-bold text-gray-900"
@@ -529,7 +527,6 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
       onRequestClose={handleClose}
     >
       <View className="flex-1 bg-gray-50">
-        {}
         <View className="bg-black px-6 pt-4 pb-6">
           <View className="flex-row items-center justify-between">
             <View className="flex-1">
@@ -550,9 +547,7 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
           </View>
         </View>
 
-        {}
         <View className="px-5 pt-5 pb-4 bg-gray-50">
-          {}
           <View className="bg-white rounded-2xl p-4 shadow-sm mb-4">
             <View className="flex-row items-center mb-3">
               <View className="w-10 h-10 bg-gray-50 rounded-xl items-center justify-center mr-3">
@@ -597,7 +592,6 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
                     : "Choose a project..."}
                 </Text>
 
-                {}
                 <Ionicons
                   name={showProjectPopup ? "chevron-up" : "chevron-down"}
                   size={20}
@@ -605,7 +599,6 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
                 />
               </TouchableOpacity>
 
-              {}
               {selectedProject && (
                 <TouchableOpacity
                   className="ml-2 w-10 h-10 rounded-xl bg-gray-200 items-center justify-center"
@@ -623,7 +616,6 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
             </View>
           </View>
 
-          {}
           <View className="bg-white rounded-2xl p-4 shadow-sm">
             <Text className="text-base font-bold text-gray-900 mb-3">
               Team Members
@@ -653,9 +645,6 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
           </View>
         </View>
 
-        {}
-        {}
-        {}
         {selectedProject && (
           <View className="px-5 pb-4">
             <View className="bg-white rounded-2xl p-4 shadow-sm">
@@ -716,7 +705,6 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
           </View>
         )}
 
-        {}
         {isLoading ? (
           renderLoadingState()
         ) : error ? (
@@ -740,8 +728,6 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
           renderEmptyState()
         )}
 
-        {}
-        {}
         <Modal
           visible={showProjectPopup}
           transparent={true}
@@ -760,7 +746,6 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
               paddingHorizontal: 20,
             }}
           >
-            {}
             <View
               style={{
                 backgroundColor: "white",
@@ -775,7 +760,6 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
                 elevation: 8,
               }}
             >
-              {}
               <View
                 style={{
                   flexDirection: "row",
@@ -814,7 +798,6 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
                 </TouchableOpacity>
               </View>
 
-              {}
               <View
                 style={{
                   paddingHorizontal: 20,
@@ -859,7 +842,6 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
                 </View>
               </View>
 
-              {}
               <ScrollView
                 style={{ maxHeight: 300 }}
                 showsVerticalScrollIndicator={true}
@@ -919,7 +901,6 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
                         alignItems: "center",
                       }}
                     >
-                      {}
                       <View
                         style={{
                           width: 40,
@@ -945,7 +926,6 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
                         />
                       </View>
 
-                      {}
                       <View style={{ flex: 1 }}>
                         <Text
                           style={{
@@ -957,7 +937,6 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
                           {project.name || project.title || "Unnamed Project"}
                         </Text>
 
-                        {}
                         {project.company && (
                           <View
                             style={{
@@ -981,7 +960,6 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
                         )}
                       </View>
 
-                      {}
                       {selectedProject?.id === project.id && (
                         <Ionicons
                           name="checkmark-circle"
@@ -997,8 +975,6 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
           </View>
         </Modal>
 
-        {}
-        {}
         {isCreatingConversation && (
           <View
             className="absolute inset-0 bg-black/50 items-center justify-center"
@@ -1013,35 +989,28 @@ const SelectUserModal = ({ visible, onClose, onUserSelect }) => {
           </View>
         )}
 
-        {}
-        {}
         {showConversationExistsDialog && (
           <View
             className="absolute inset-0 bg-black/50 items-center justify-center"
             style={{ zIndex: 1000 }}
           >
             <View className="bg-white rounded-3xl mx-6 w-11/12 max-w-md shadow-2xl">
-              {}
               <View className="items-center pt-8 pb-4">
                 <View className="w-20 h-20 rounded-full bg-blue-100 items-center justify-center">
                   <Ionicons name="chatbubbles" size={40} color="#3B82F6" />
                 </View>
               </View>
 
-              {}
               <Text className="text-2xl font-bold text-gray-900 text-center px-6 mb-3">
                 Conversation Already Exists
               </Text>
 
-              {}
-              {}
               <Text className="text-base text-gray-600 text-center px-8 mb-8 leading-6">
                 {selectedProject
                   ? "A conversation has already been created for this project. You will be redirected to it."
                   : "A conversation already exists with this person. You will be redirected to it."}
               </Text>
 
-              {}
               <View className="border-t border-gray-200">
                 <TouchableOpacity
                   onPress={handleConversationExistsDialogOk}

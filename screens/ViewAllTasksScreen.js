@@ -34,7 +34,6 @@ import {
   MenuTrigger,
 } from "react-native-popup-menu";
 
-// --- Redux Integration (MCP Context 7) ---
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchTasksByProjectId,
@@ -134,7 +133,6 @@ const SearchBarHeader = React.memo(function SearchBarHeader({
 });
 
 function ViewAllTasksScreen({ navigation, route }) {
-  // --- Redux State (MCP Context 7) ---
   const dispatch = useDispatch();
   const tasks = useSelector(selectTasks);
   const loading = useSelector(selectTaskLoading);
@@ -145,7 +143,6 @@ function ViewAllTasksScreen({ navigation, route }) {
   const deleteError = useSelector(selectTaskDeleteError);
   const employees = useSelector(selectEmployeesForAssignment);
 
-  // --- Local State ---
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [filteredTasks, setFilteredTasks] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -183,7 +180,6 @@ function ViewAllTasksScreen({ navigation, route }) {
   const [taskToDelete, setTaskToDelete] = useState(null);
   const [pastTimeDialogVisible, setPastTimeDialogVisible] = useState(false);
 
-  // --- State for custom error dialog ---
   const [errorDialog, setErrorDialog] = useState({
     visible: false,
     title: '',
@@ -202,7 +198,6 @@ function ViewAllTasksScreen({ navigation, route }) {
 
   const { projectId, projectName, createDraft, showUpcomingTasks } = route.params || {};
 
-  // --- Helper function to show custom error dialog ---
   const showErrorDialog = (title, message) => {
     setErrorDialog({
       visible: true,
@@ -211,7 +206,6 @@ function ViewAllTasksScreen({ navigation, route }) {
     });
   };
 
-  // --- Helper function to close custom error dialog ---
   const closeErrorDialog = () => {
     setErrorDialog({
       visible: false,
@@ -303,7 +297,6 @@ function ViewAllTasksScreen({ navigation, route }) {
       )
     );
   };
-
 
   const removeDraftTask = (draftId) => {
     setDraftTasks((prev) => prev.filter((draft) => draft.id !== draftId));
@@ -451,13 +444,6 @@ function ViewAllTasksScreen({ navigation, route }) {
     }
   };
 
-  /**
-   * CHANGE SUMMARY (MCP Context 7):
-   * - What: Updated validation to match backend logic. Validates startTime >= minStartTime (draft creation time)
-   *   and endTime > startTime. Includes minStartTime in API payload for backend validation.
-   * - Why: Backend expects minStartTime to handle draft-friendly validation allowing past start times.
-   * - Dependencies: Backend API expects minStartTime field in the payload.
-   */
   const handleCreateTaskFromDraft = async (draftTask) => {
     // Validate required fields
     if (!draftTask.title.trim()) {
@@ -465,8 +451,6 @@ function ViewAllTasksScreen({ navigation, route }) {
       return;
     }
 
-    // --- FIXED: Description is now optional (MCP Context 7) ---
-    // Business Rule: Only title is required, description can be empty
     // This allows users to create tasks quickly without detailed descriptions
 
     // Validate that projectId is available
@@ -476,9 +460,6 @@ function ViewAllTasksScreen({ navigation, route }) {
     }
 
     // End time is optional - no validation needed
-
-    // --- Validation: Dates & Times (MCP Context 7) ---
-    // Business Rule: Validate endTime > startTime
 
     // Only validate end time if it's provided (optional field)
     if (draftTask.endTime) {
@@ -512,11 +493,8 @@ function ViewAllTasksScreen({ navigation, route }) {
     setCreatingTaskId(draftTask.id);
 
     try {
-      // --- FIXED: Proper timezone handling for task creation ---
-      // Business Rule: Use same timezone conversion approach as event handling
       // This ensures tasks created "today" appear on "today" in the calendar for all timezones
       
-      // --- Convert to local timezone for date extraction (same as event handling) ---
       // This ensures the task appears on the correct calendar day
       const localStartDate = new Date(draftTask.startTime);
       const localEndDate = draftTask.endTime ? new Date(draftTask.endTime) : null;
@@ -544,7 +522,6 @@ function ViewAllTasksScreen({ navigation, route }) {
       console.log('Task Payload Being Sent:', taskPayload);
       console.log('=== End Task Creation Debug ===');
 
-      // Use Redux action to create task (MCP Context 7)
       const result = await dispatch(createNewTask(taskPayload));
       
       if (createNewTask.fulfilled.match(result)) {
@@ -552,7 +529,6 @@ function ViewAllTasksScreen({ navigation, route }) {
         // Remove the draft task after successful creation
         removeDraftTask(draftTask.id);
 
-        // --- Show Success Toast Message ---
         Toast.show({
           type: 'success',
           text1: 'Task Created Successfully!',
@@ -583,7 +559,6 @@ function ViewAllTasksScreen({ navigation, route }) {
         errorMessage = String(error.message);
       }
 
-      // --- Show Error Toast Message ---
       Toast.show({
         type: 'error',
         text1: 'Task Creation Failed',
@@ -615,8 +590,6 @@ function ViewAllTasksScreen({ navigation, route }) {
         return;
       }
 
-      // --- FIXED: Always fetch from API during refresh (MCP Context 7) ---
-      // Business Rule: During refresh, always call API to get fresh data from server
       // Initial load: Only show loading spinner when not refreshing
       if (!isRefresh) {
         setInitialLoading(true);
@@ -639,8 +612,6 @@ function ViewAllTasksScreen({ navigation, route }) {
 
       setSearchTerm("");
       
-      // --- Reset Filter State (MCP Context 7) ---
-      // Business Rule: When loading all tasks, reset filter state to show all tasks
       setFiltersApplied(false);
       setSelectedFilters({
         createdAt: null, // No default selection
@@ -667,8 +638,6 @@ function ViewAllTasksScreen({ navigation, route }) {
     setRefreshing(true);
     
     try {
-      // --- Smart Refresh Logic (MCP Context 7) ---
-      // Business Rule: If filters are applied, refresh with those filters. Otherwise, load all tasks.
       // IMPORTANT: Always calls API to get fresh data from server
       if (filtersApplied) {
         console.log('ViewAllTasksScreen - Refreshing with applied filters (calling API):', selectedFilters);
@@ -773,7 +742,6 @@ function ViewAllTasksScreen({ navigation, route }) {
   const handleDelete = (task) => {
     // Only allow deleting tasks if user is not an Employee
     if (userRole === "Employee") {
-      // --- Show Access Denied Toast Message ---
       Toast.show({
         type: 'error',
         text1: 'Access Denied',
@@ -808,7 +776,6 @@ function ViewAllTasksScreen({ navigation, route }) {
     setTaskToDelete(null);
 
     try {
-      // Use Redux action to delete task (MCP Context 7)
       const result = await dispatch(deleteExistingTask(taskId));
       
       if (deleteExistingTask.fulfilled.match(result)) {
@@ -878,8 +845,6 @@ function ViewAllTasksScreen({ navigation, route }) {
     setSelectedTask(null);
   };
 
-  // --- Clear Filters Function (MCP Context 7) ---
-  // Business Rule: Reset to show all tasks and clear filter state
   const handleClearFilters = async () => {
     console.log('ViewAllTasksScreen - Clearing all filters');
     setFiltersApplied(false);
@@ -899,8 +864,6 @@ function ViewAllTasksScreen({ navigation, route }) {
       setInitialLoading(true);
       dispatch(clearError()); // Use Redux error clearing
 
-      // --- Apply Filters Using Direct Service Call (MCP Context 7) ---
-      // Business Rule: All roles now use direct filterTask service with projectId
       if (!projectId) {
         console.error('ViewAllTasksScreen - No projectId available for filtering');
         showErrorDialog('Error', 'Project ID is required for filtering');
@@ -919,8 +882,6 @@ function ViewAllTasksScreen({ navigation, route }) {
         setFilteredTasks(backendFilteredTasks || []);
       }
 
-      // --- Update Filter State (MCP Context 7) ---
-      // Business Rule: Track if filters are applied to maintain them during refresh
       setFiltersApplied(true);
       setSelectedFilters(filters);
 
@@ -1180,7 +1141,6 @@ function ViewAllTasksScreen({ navigation, route }) {
                   </View>
                 </View>
               </View>
-
 
               <TouchableOpacity
                 style={{ marginBottom: Math.min(12, screenHeight * 0.015) }}
@@ -1519,7 +1479,6 @@ function ViewAllTasksScreen({ navigation, route }) {
       <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
 
       {/* Content */}
-      {/* --- Simple Custom Loader (MCP Context 7) --- */}
       {/* Why: Simple inline loader centered on screen, no external dependencies */}
       {initialLoading || loading ? (
         <View className="flex-1 items-center justify-center">
@@ -1542,7 +1501,6 @@ function ViewAllTasksScreen({ navigation, route }) {
         >
           <View className="flex-1 bg-white" style={{ position: "relative" }}>
             {renderContent()}
-
 
           </View>
         </TouchableWithoutFeedback>
@@ -1873,7 +1831,6 @@ function ViewAllTasksScreen({ navigation, route }) {
         </View>
       </Modal>
 
-      {/* --- Custom Error Dialog --- */}
       <ErrorDialog
         visible={errorDialog.visible}
         onClose={closeErrorDialog}

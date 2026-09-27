@@ -23,8 +23,6 @@ const ProjectFilesScreen = ({ navigation, route }) => {
   const [error, setError] = useState(null);
   const [downloadedFiles, setDownloadedFiles] = useState(new Set());
 
-  // --- Fetch Files for Project (MCP Context 7) ---
-  // Business Rule: Load project files when screen mounts
   const fetchProjectFiles = async () => {
     if (!projectId) {
       setError('Project ID not found');
@@ -54,12 +52,10 @@ const ProjectFilesScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Load Files on Mount (MCP Context 7) ---
   useEffect(() => {
     fetchProjectFiles();
   }, [projectId]);
 
-  // --- Handle File Share/Download ---
   const handleFileShare = async (fileUrl, fileName) => {
     try {
       console.log('🔄 Sharing file:', fileName, 'URL:', fileUrl);
@@ -102,7 +98,6 @@ const ProjectFilesScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Handle File View/Open ---
   const handleFilePress = async (fileUrl, fileName) => {
     try {
       const supported = await Linking.canOpenURL(fileUrl);
@@ -117,7 +112,6 @@ const ProjectFilesScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Format File Size ---
   const formatFileSize = (sizeInMB) => {
     if (sizeInMB < 1) {
       return `${(sizeInMB * 1024).toFixed(1)} KB`;
@@ -125,7 +119,6 @@ const ProjectFilesScreen = ({ navigation, route }) => {
     return `${sizeInMB.toFixed(2)} MB`;
   };
 
-  // --- Get File Icon Based on Type ---
   const getFileIcon = (fileType) => {
     if (fileType.includes('pdf')) {
       return 'description';
@@ -141,7 +134,6 @@ const ProjectFilesScreen = ({ navigation, route }) => {
     return 'insert-drive-file';
   };
 
-  // --- Render File Item (MCP Context 7) ---
   const renderFileItem = ({ item }) => {
     return (
       <TouchableOpacity
@@ -232,8 +224,6 @@ const ProjectFilesScreen = ({ navigation, route }) => {
         </View>
       )}
       
-      {/* Custom Bottom Navigation (MCP Context 7) */}
-      {/* Business Rule: Show bottom nav without FAB icon */}
       <CustomBottomNav 
         navigation={navigation} 
         hideFAB={true}

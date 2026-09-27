@@ -1,9 +1,3 @@
-/**
- * Change Summary:
- * - What: Canonical API paths matching backend ApiPaths (plural REST)
- * - Why: One map so frontend never drifts into 404s after renames
- * Convention: plural nouns, HTTP method for create/update/delete, kebab-case
- */
 export const ApiRoutes = {
   auth: {
     health: '/auth/health',
@@ -11,12 +5,14 @@ export const ApiRoutes = {
     verifyOtp: '/auth/otp/verify',
     refreshToken: '/auth/token/refresh',
     session: '/auth/session',
+    sendInvitation: '/auth/send-invitation',
   },
   users: {
     list: '/users',
     byId: (id) => `/users/${id}`,
     create: '/users',
     push: '/users/push-notifications',
+    employeesForConversation: '/user/employees-for-conversation',
   },
   companies: {
     list: '/companies',
@@ -29,6 +25,9 @@ export const ApiRoutes = {
     byId: (id) => `/projects/${id}`,
     assignedTasks: (id) => `/projects/${id}/assigned-tasks`,
     create: '/projects',
+    assignToEmployees: '/project/assign-to-employees',
+    employeesAssigned: (id) => `/project/employeesassigned/${id}`,
+    files: (id) => `/project-files/${id}`,
   },
   tasks: {
     list: '/tasks',
@@ -63,5 +62,33 @@ export const ApiRoutes = {
     tokens: '/notifications/tokens',
     tokenById: (id) => `/notifications/tokens/${id}`,
     test: '/notifications/test',
+  },
+  userNotifications: {
+    list: '/users-notifications/user',
+    unread: '/users-notifications/unread',
+    readAll: '/users-notifications/read-all',
+    byId: (id) => `/users-notifications/${id}`,
+    message: '/users-notifications/message',
+    task: '/users-notifications',
+    project: '/users-notifications/project',
+    event: '/users-notifications/event',
+  },
+  chat: {
+    conversations: '/chat/conversations',
+    conversationMessages: (id, page, limit) =>
+      `/chat/conversations/${id}/messages?page=${page}&limit=${limit}`,
+    conversationFiles: (id) => `/chat/conversations/${id}/files`,
+    messagesNew: '/chat/conversations/messages/new',
+    messages: '/chat/messages',
+    typing: '/chat/typing',
+    projectConversation: (projectId) =>
+      `/chat/project-conversations/${projectId}`,
+  },
+  signature: {
+    messageWithSignature: '/signature/message-with-signature',
+    byConversation: (conversationId) =>
+      `/signature/signature/${conversationId}`,
+    signedUser: '/signature/signed/user',
+    uploadFile: (contractId) => `/signature/${contractId}/upload-file`,
   },
 };

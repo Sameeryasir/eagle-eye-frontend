@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, ScrollView, Dimensions, Alert } from "react-native";
 import Timetable from "react-native-calendar-timetable";
@@ -6,7 +5,6 @@ import CustomBottomNav from "../components/CustomBottomNav";
 import { Ionicons } from "@expo/vector-icons";
 import * as Localization from 'expo-localization';
 import { useDispatch } from 'react-redux';
-// --- REMOVED: eventSlice import (file doesn't exist) ---
 import { getUserRole } from "../services/utils/userRole";
 import { getEventsForLogInUser } from "../services/event/getEventsForLogInUser";
 import CreateEventModal from "../components/CreateEventModal";
@@ -15,30 +13,19 @@ import PastDateDialog from "../components/PastDateDialog";
 import TaskDetailsModal from "../components/TaskDetailsModal";
 import AccessDeniedDialog from "../components/AccessDeniedDialog";
 
-// === Change Summary (2025-11-07) ===
-// What: Added access denied handling for Manager/Employee roles so they see a clear dialog when tapping the FAB.
-// Why: Align CalenderDetailScreen behaviour with week view rules and prevent silent failures for restricted roles.
-// Dependencies: Uses existing AccessDeniedDialog component; no new services required.
-// MCP Context: Implemented per MCP context 7 for clarity, explicit business-rule notes, and safe UX updates.
-
 const { width, height } = Dimensions.get("window");
 
-
 const CalenderDetailScreen = ({ route, navigation }) => {
-  // --- FIXED: Removed Redux hooks (eventSlice doesn't exist) ---
   // Using local state instead of Redux since eventSlice is not available
   const dispatch = useDispatch();
   
-  // --- Local state for events (replacing Redux state) ---
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [isFromCache, setIsFromCache] = useState(false);
   
-  // --- Extract data passed from CalenderScreen ---
   const { selectedDate, tasks, selectedTask } = route.params || {};
   
-  // --- Debug: Console log the received params ---
   console.log('=== CalenderDetailScreen Debug Info ===');
   console.log('Selected Date:', selectedDate);
   console.log('Tasks Array:', tasks);
@@ -50,22 +37,18 @@ const CalenderDetailScreen = ({ route, navigation }) => {
   console.log('Redux Error:', error);
   console.log('=====================================');
   
-  // --- State for timetable items ---
   const [items, setItems] = useState([]);
   
-  // --- State for task dialog ---
   const [dialogTask, setDialogTask] = useState(null);
   const [showTaskDialog, setShowTaskDialog] = useState(false);
   
   
-  // --- State for modals ---
   const [showEventCreationDialog, setShowEventCreationDialog] = useState(false);
   const [showPastDateDialog, setShowPastDateDialog] = useState(false);
   const [dialogEvent, setDialogEvent] = useState(null);
   const [showEventDetailsDialog, setShowEventDetailsDialog] = useState(false);
   const [accessDeniedDialogVisible, setAccessDeniedDialogVisible] = useState(false); // Explains: Track restricted-role FAB taps so we can notify the user immediately.
 
-  // --- Priority-based color mapping function ---
   const getPriorityColor = (priority) => {
     switch (priority?.toLowerCase()) {
       case 'high':
@@ -83,7 +66,6 @@ const CalenderDetailScreen = ({ route, navigation }) => {
     }
   };
 
-  // --- FIXED: Direct API Event Fetch Handler (eventSlice doesn't exist) ---
   // Using direct API calls and local state instead of Redux since eventSlice is not available
   const fetchEventsForDate = async () => {
     try {
@@ -124,18 +106,14 @@ const CalenderDetailScreen = ({ route, navigation }) => {
     }
   };
 
-  // --- Handler for when event is created/updated/deleted ---
   const handleEventCreated = () => {
     fetchEventsForDate();
   };
 
-  // --- Handler for task navigation ---
   const handleViewTask = (task) => {
     navigation.navigate('TaskDetails', { taskId: task.originalTaskId || task.id });
   };
 
-
-  // --- Handle Redux Error (MCP Context 7) ---
   // Monitor errors from local state and show appropriate user feedback
   useEffect(() => {
     if (error) {
@@ -146,12 +124,10 @@ const CalenderDetailScreen = ({ route, navigation }) => {
     }
   }, [error]);
 
-  // --- Fetch events on component mount and when selectedDate changes ---
   useEffect(() => {
     fetchEventsForDate();
   }, [selectedDate]);
 
-  // --- Convert task and event data to Timetable format ---
   useEffect(() => {
     console.log('=== useEffect triggered ===');
     console.log('Tasks in useEffect:', tasks);
@@ -162,8 +138,6 @@ const CalenderDetailScreen = ({ route, navigation }) => {
     
     const allItems = [];
     
-    // --- Filter Redux events by selected date (including multi-day events) ---
-    // Business Rule: Show events that start, end, or span across the selected date
     let filteredEvents = [];
     if (events && events.length > 0 && selectedDate) {
       console.log('=== Filtering Redux Events by Selected Date ===');
@@ -197,7 +171,6 @@ const CalenderDetailScreen = ({ route, navigation }) => {
       console.log('Filtered Redux events for selected date:', filteredEvents);
     }
     
-    // --- Process tasks ---
     if (tasks && tasks.length > 0) {
       console.log('Processing tasks for timetable...');
       
@@ -211,8 +184,6 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           endTimeType: typeof task.endTime
         });
         
-        // --- FIXED: Convert task times to local time for proper display ---
-        // Business Rule: Tasks come from server in UTC format, convert to local timezone
         // This fixes the issue where tasks created before 3-4 AM don't show up
         let startDate, endDate;
         
@@ -260,8 +231,6 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           endDateISO: endDate.toISOString()
         });
         
-        // --- Ensure unique key for each task item ---
-        // Business Rule: Create stable, unique keys to prevent React key warnings
         // Use task ID as primary key, with fallback to ensure uniqueness
         const taskId = task.id || `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         const uniqueKey = `task-${taskId}`;
@@ -272,14 +241,12 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           title: task.title || 'Untitled Task',
           startDate: startDate,
           endDate: endDate,
-          // --- Additional task properties for reference ---
           description: task.description,
           priority: task.priority,
           status: task.status,
           assignedTo: task.assignedTo,
           originalTaskId: task.id,
           type: 'task', // Mark as task
-          // --- Add endTime information ---
           hasEndTime: task.hasEndTime,
           endTimeFormatted: task.endTimeFormatted || 'No end time'
         };
@@ -288,7 +255,6 @@ const CalenderDetailScreen = ({ route, navigation }) => {
       allItems.push(...taskItems);
     }
     
-    // --- Process filtered Redux events ---
     if (filteredEvents && filteredEvents.length > 0) {
       console.log('Processing filtered Redux events for timetable...');
       
@@ -300,14 +266,12 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           endTime: event.endTime,
           startTimeType: typeof event.startTime,
           endTimeType: typeof event.endTime,
-          // --- Debug: Log project and employee assignment information ---
           projects: event.projects,
           projectsCount: event.projects ? event.projects.length : 0,
           assignedTo: event.assignedTo,
           assignedToCount: event.assignedTo ? event.assignedTo.length : 0
         });
         
-        // --- Debug: Log detailed project information ---
         if (event.projects && event.projects.length > 0) {
           console.log(`Event "${event.title}" has ${event.projects.length} project(s):`);
           event.projects.forEach((project, projectIndex) => {
@@ -323,7 +287,6 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           console.log(`Event "${event.title}" has no projects assigned`);
         }
         
-        // --- Debug: Log detailed employee assignment information ---
         if (event.assignedTo && event.assignedTo.length > 0) {
           console.log(`Event "${event.title}" has ${event.assignedTo.length} employee(s) assigned:`);
           event.assignedTo.forEach((employee, employeeIndex) => {
@@ -339,8 +302,6 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           console.log(`Event "${event.title}" has no employees assigned`);
         }
         
-        // --- FIXED: Convert UTC times to local time and handle multi-day events ---
-        // Business Rule: Events come from server in UTC format, convert to user's local timezone
         // For multi-day events, adjust display times based on selected date
         let startDate, endDate;
         
@@ -359,8 +320,6 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
         }
         
-        // --- Handle multi-day events display ---
-        // Business Rule: For multi-day events, show appropriate time range for the selected date
         const selectedDateObj = selectedDate ? new Date(selectedDate) : new Date();
         const eventStartDateString = startDate.getFullYear() + '-' + 
           String(startDate.getMonth() + 1).padStart(2, '0') + '-' + 
@@ -384,13 +343,10 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           endDateISO: endDate.toISOString()
         });
         
-        // --- Ensure unique key for each event item ---
-        // Business Rule: Create stable, unique keys to prevent React key warnings
         // Use event ID as primary key, with fallback to ensure uniqueness
         const eventId = event.id || `event-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         const uniqueKey = `event-${eventId}`;
         
-        // --- Determine if this is a multi-day event ---
         const isMultiDayEvent = eventStartDateString !== eventEndDateString;
         
         return {
@@ -399,16 +355,13 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           title: event.title || 'Untitled Event',
           startDate: startDate,
           endDate: endDate,
-          // --- Additional event properties for reference ---
           description: event.description,
           priority: event.priority || 'medium',
           status: event.status || 'pending',
           originalEventId: event.id,
           type: 'event', // Mark as event
-          // --- Add project and employee assignment information ---
           assignedTo: event.assignedTo || [],
           projects: event.projects || [],
-          // --- Multi-day event properties ---
           isMultiDayEvent: isMultiDayEvent,
           originalStartDate: eventStartDateString,
           originalEndDate: eventEndDateString,
@@ -426,19 +379,15 @@ const CalenderDetailScreen = ({ route, navigation }) => {
     setItems(allItems);
   }, [tasks, events, selectedDate]);
 
-  // --- Always show CalenderDetailScreen regardless of task count ---
   // Removed the early return for no tasks - now always displays the screen
 
-  // --- Custom render item component (styled for both tasks and events) ---
   const renderItem = ({ style, item }) => {
     const priorityColor = getPriorityColor(item.priority);
 
-    // --- Calculate duration to determine layout ---
     const duration = item.endDate.getTime() - item.startDate.getTime();
     const durationMinutes = Math.round(duration / (1000 * 60));
     const isShortDuration = durationMinutes < 60; // Less than 1 hour
 
-    // --- Handle item press ---
     const handleItemPress = () => {
       if (isEvent) {
         setDialogEvent(item);
@@ -449,11 +398,9 @@ const CalenderDetailScreen = ({ route, navigation }) => {
       }
     };
 
-    // --- Different styling for tasks vs events ---
     const isEvent = item.type === 'event';
     const isMultiDayEvent = item.isMultiDayEvent;
     
-    // --- Enhanced styling for multi-day events ---
     let backgroundColor, borderColor, borderStyle;
     
     if (isEvent) {
@@ -500,7 +447,6 @@ const CalenderDetailScreen = ({ route, navigation }) => {
         activeOpacity={0.6}
         onPress={handleItemPress}
       >
-        {/* --- Item Title with Multi-day Indicator --- */}
         <Text 
           className="text-gray-800 text-sm font-semibold text-center"
           numberOfLines={1}
@@ -512,7 +458,6 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           {isMultiDayEvent ? `📅 ${item.title}` : item.title}
         </Text>
         
-        {/* --- Time Display - Enhanced for multi-day events --- */}
         <Text 
           className="text-gray-500 text-xs font-medium text-center"
           numberOfLines={1}
@@ -568,7 +513,6 @@ const CalenderDetailScreen = ({ route, navigation }) => {
         showsVerticalScrollIndicator={true}
         bounces={true}
       >
-        {/* --- Header with selected date --- */}
         <View className="bg-white border-b-2 border-gray-200 shadow-sm" style={{ elevation: 3 }}>
           <View className="flex-row justify-between items-center px-5 py-4">
             <View className="flex-1">
@@ -609,22 +553,16 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           is12Hour={true} // 12-hour format
           hourHeight={60}
           timeWidth={60}
-          // --- FIXED: Show events that start on the selected date ---
           // The timetable will automatically filter items by the date prop
         />
       </ScrollView>
       
 
-      {/* --- Custom Bottom Navigation - Always Visible --- */}
       <CustomBottomNav 
         handleFabPress={async () => {
-          // --- FAB Role Guard (MCP Context 7) ---
-          // Business Rule: Only Owners can create events from the calendar detail view.
           const userRole = await getUserRole();
 
           if (userRole === "Owner") {
-            // --- Past Date Validation (MCP Context 7) ---
-            // Business Rule: Prevent event creation on past dates even for Owners.
             const today = new Date();
             const selectedDateObj = selectedDate ? new Date(selectedDate) : new Date();
 
@@ -642,8 +580,6 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           }
 
           if (userRole === "Manager" || userRole === "Employee") {
-            // --- Restricted Role Feedback (MCP Context 7) ---
-            // Business Rule: Managers and Employees must see the same access denied dialog used in Week View.
             setAccessDeniedDialogVisible(true);
             return;
           }
@@ -653,7 +589,6 @@ const CalenderDetailScreen = ({ route, navigation }) => {
         }}
       />
       
-      {/* --- Modal Components --- */}
       <TaskDetailsModal
         visible={showTaskDialog}
         onClose={() => setShowTaskDialog(false)}

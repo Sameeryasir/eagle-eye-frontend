@@ -277,7 +277,6 @@ const UpdateLogModal = ({ visible, onClose, log, onUpdate, userRole }) => {
           resizeMode="cover"
         />
 
-        {}
         {!isExisting && (
           <TouchableOpacity
             onPress={removeNewImage}
@@ -338,7 +337,6 @@ const UpdateLogModal = ({ visible, onClose, log, onUpdate, userRole }) => {
       onRequestClose={onClose}
     >
       <View className="flex-1 bg-white">
-        {}
         <View className="bg-black px-4 py-3 flex-row items-center justify-between">
           <Text className="text-black text-[18px] font-semibold">
             Update Log
@@ -367,7 +365,6 @@ const UpdateLogModal = ({ visible, onClose, log, onUpdate, userRole }) => {
                     </Text>
                   </View>
 
-                  {}
                   <View className="mb-5">
                     <View className="flex-row items-center mb-2">
                       <Ionicons
@@ -392,7 +389,6 @@ const UpdateLogModal = ({ visible, onClose, log, onUpdate, userRole }) => {
                     />
                   </View>
 
-                  {}
                   {existingImages.length > 0 && (
                     <View className="mb-5">
                       <View className="flex-row items-center mb-2">
@@ -419,7 +415,6 @@ const UpdateLogModal = ({ visible, onClose, log, onUpdate, userRole }) => {
                     </View>
                   )}
 
-                  {}
                 </View>
               )}
               keyExtractor={(item) => item.key}
@@ -427,7 +422,6 @@ const UpdateLogModal = ({ visible, onClose, log, onUpdate, userRole }) => {
           </View>
         </TouchableWithoutFeedback>
 
-        {}
         <View className="absolute bottom-0 left-0 right-0 px-5 pt-5 pb-5 bg-transparent items-center">
           <TouchableOpacity
             className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
@@ -448,7 +442,6 @@ const UpdateLogModal = ({ visible, onClose, log, onUpdate, userRole }) => {
         </View>
       </View>
 
-      {}
       <Modal
         visible={noChangesDialogVisible}
         transparent={true}
@@ -479,7 +472,6 @@ const UpdateLogModal = ({ visible, onClose, log, onUpdate, userRole }) => {
               elevation: 8,
             }}
           >
-            {}
             <View
               style={{
                 width: 60,
@@ -494,7 +486,6 @@ const UpdateLogModal = ({ visible, onClose, log, onUpdate, userRole }) => {
               <Ionicons name="information-circle" size={32} color="#F59E0B" />
             </View>
 
-            {}
             <Text
               style={{
                 fontSize: 20,
@@ -507,7 +498,6 @@ const UpdateLogModal = ({ visible, onClose, log, onUpdate, userRole }) => {
               No Changes Made
             </Text>
 
-            {}
             <Text
               style={{
                 fontSize: 16,
@@ -521,7 +511,6 @@ const UpdateLogModal = ({ visible, onClose, log, onUpdate, userRole }) => {
               updating.
             </Text>
 
-            {}
             <TouchableOpacity
               onPress={closeNoChangesDialog}
               style={{

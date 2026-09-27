@@ -1,8 +1,3 @@
-// --- Change Summary (2025-11-13) ---
-// What: Increased the header title size and added extra top spacing in the Create Project screen header.
-// Why: Improve readability and shift the title slightly downward per recent UI feedback.
-// Dependencies: No additional files depend on this tweak.
-// MCP Context: Implemented following MCP context 7 best practices for clarity and maintainability.
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -196,20 +191,14 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
         padding: 0,
       }}
     >
-      {}
-      {}
 
-      {}
       <View
         className={`flex-1 ${isVerySmallScreen ? "bg-blue-50" : "bg-white"}`}
         style={{ flex: 1 }}
       >
-        {}
-        {/* // --- Header Banner --- */}
         <View
           className={`bg-black ${isVerySmallScreen ? "px-3 py-2" : "px-4 py-3"} flex-row items-center justify-between`}
         >
-          {/* Increasing the title size and margin to keep the header readable and properly spaced (MCP context 7). */}
           <Text
             className={`text-black ${isVerySmallScreen ? "text-[20px]" : "text-[24px]"} font-semibold mt-2`}
           >
@@ -269,7 +258,6 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
             <View
               className={`${isVerySmallScreen ? "mb-2" : isSmallScreen ? "mb-3" : "mb-5"}`}
             >
-              {}
               <View
                 className={`${isVerySmallScreen ? "mb-2" : isSmallScreen ? "mb-3" : "mb-5"}`}
               >
@@ -296,7 +284,6 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
                 />
               </View>
 
-              {}
               <View
                 className={`${isVerySmallScreen ? "mb-2" : isSmallScreen ? "mb-3" : "mb-5"}`}
               >
@@ -328,7 +315,6 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
                 />
               </View>
 
-              {}
               <View className={`${isVerySmallScreen ? "mb-3" : "mb-5"}`}>
                 <View className="flex-row items-center mb-2">
                   <Ionicons
@@ -363,7 +349,6 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
           </ScrollView>
         </View>
 
-        {}
         <View className="absolute bottom-0 left-0 right-0 bg-white">
           <View
             className={`${isVerySmallScreen ? "px-2" : "px-5"} pt-4 items-center ${isVerySmallScreen ? "pb-3" : isSmallScreen ? "pb-4" : "pb-6"}`}
@@ -389,7 +374,6 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
           </View>
         </View>
 
-        {}
         {Platform.OS === "ios" && (
           <Modal
             visible={showStartDatePicker}
@@ -423,7 +407,6 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
                   elevation: 10,
                 }}
               >
-                {}
                 <View
                   style={{
                     flexDirection: "row",
@@ -466,7 +449,6 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
                   </TouchableOpacity>
                 </View>
 
-                {}
                 <View style={{ paddingHorizontal: 10, paddingVertical: 10 }}>
                   <DateTimePicker
                     value={startDate}
@@ -481,7 +463,6 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
           </Modal>
         )}
 
-        {}
         {Platform.OS === "android" && showStartDatePicker && (
           <DateTimePicker
             value={startDate}

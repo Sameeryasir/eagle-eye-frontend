@@ -34,7 +34,6 @@ const AccessDeniedDialog = ({
           shadowRadius: 16,
           elevation: 8,
         }}>
-          {}
           <View style={{
             alignItems: 'center',
             marginBottom: 16,
@@ -61,7 +60,6 @@ const AccessDeniedDialog = ({
             </Text>
           </View>
 
-          {}
           <Text style={{
             fontSize: 15,
             color: '#6B7280',
@@ -72,7 +70,6 @@ const AccessDeniedDialog = ({
             {message}
           </Text>
 
-          {}
           <TouchableOpacity
             style={{
               backgroundColor: '#EF4444',

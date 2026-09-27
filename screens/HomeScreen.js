@@ -1,8 +1,3 @@
-// --- Change Summary (2025-11-13) ---
-// What: Ensured the loader visibly displays whenever projects are fetching by combining local and Redux loading flags.
-// Why: Users expected to see a "Loading Projects" indicator while data loads, and it was not always shown.
-// Dependencies: Uses existing `Loader` component; relies on Redux `selectProjectLoading`.
-// MCP Context: Implemented in line with MCP context 7 for clarity and simple maintainability.
 import React, {
   useState,
   useEffect,
@@ -133,7 +128,6 @@ function HomeScreen({ navigation, route }) {
   const [hideCompanyAfterCreate, setHideCompanyAfterCreate] = useState(false);
   const [currentUserCompanyId, setCurrentUserCompanyId] = useState(null);
 
-  // --- Loading State Merge (MCP Context 7) ---
   // We merge the Redux loading flag with the local loading state so the loader covers all fetch scenarios.
   const isProjectsLoading = loading || isLoading;
 
@@ -579,8 +573,6 @@ function HomeScreen({ navigation, route }) {
 
       {/* Rest of the card content */}
       <View className="p-6 py-8">
-        {/* Company Tag - Show only for collaborated projects (different company) (MCP Context 7) --- */}
-        {/* Business Rule: Hide company name for projects from user's own company, show only for collaborated projects */}
         {project.company &&
           currentUserCompanyId &&
           project.company.id !== currentUserCompanyId && (
@@ -694,7 +686,6 @@ function HomeScreen({ navigation, route }) {
   return (
     <View className="flex-1 bg-white">
       {/* Content (Header fixed; search bar scrolls inside list) */}
-      {/* --- Simple Custom Loader (MCP Context 7) --- */}
       {/* Why: Simple inline loader centered on screen, no external dependencies */}
       {isLoading ? (
         <View className="flex-1 items-center justify-center">

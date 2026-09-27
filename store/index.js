@@ -1,4 +1,3 @@
-// --- Redux Store Configuration (MCP Context 7) ---
 // Centralized state management using Redux Toolkit for better performance and developer experience
 import { configureStore } from '@reduxjs/toolkit';
 import projectReducer from './slices/projectSlice';
@@ -7,7 +6,6 @@ import logReducer from './slices/logSlice';
 import notificationReducer from './slices/notificationSlice';
 
 // Configure the Redux store with all reducers
-// This follows MCP Context 7 best practices for clean, maintainable state management
 export const store = configureStore({
   reducer: {
     // Project management slice for all CRUD operations

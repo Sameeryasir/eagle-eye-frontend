@@ -1,9 +1,3 @@
-/**
- * Change Summary:
- * - What: Shared axios client with Authorization + 401 token refresh retry
- * - Why: 50+ services duplicated the same refresh pattern (reuse)
- * MCP Context 7: single HTTP helper for Nest API calls
- */
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../../config/api';
@@ -12,35 +6,36 @@ import refreshToken from '../utils/tokenRefresh';
 export { API_URL };
 export { ApiRoutes } from './routes';
 
-/**
- * Authenticated request against Nest API.
- * @param {'get'|'post'|'put'|'patch'|'delete'} method
- * @param {string} path - path from ApiRoutes (starts with /)
- * @param {object} [options]
- * @param {any} [options.data] - body
- * @param {object} [options.headers] - extra headers
- * @param {boolean} [options.auth=true] - attach Bearer token
- * @param {number} [options.timeout]
- */
 export async function apiRequest(method, path, options = {}) {
   const {
     data,
     headers = {},
     auth = true,
     timeout = 30000,
+    signal,
   } = options;
 
   const url = path.startsWith('http') ? path : `${API_URL}${path}`;
+  const isFormData =
+    data && typeof FormData !== 'undefined' && data instanceof FormData;
 
-  const buildConfig = async (token) => {
+  const buildConfig = (token) => {
     const cfg = {
       method,
       url,
       timeout,
       headers: { ...headers },
     };
+    if (signal) {
+      cfg.signal = signal;
+    }
     if (data !== undefined) {
       cfg.data = data;
+    }
+    if (isFormData) {
+      delete cfg.headers['Content-Type'];
+    } else if (cfg.headers['Content-Type'] === undefined && data !== undefined) {
+      cfg.headers['Content-Type'] = 'application/json';
     }
     if (auth && token) {
       cfg.headers.Authorization = `Bearer ${token}`;
@@ -56,7 +51,7 @@ export async function apiRequest(method, path, options = {}) {
   }
 
   try {
-    const response = await axios(await buildConfig(token));
+    const response = await axios(buildConfig(token));
     return response.data;
   } catch (err) {
     if (
@@ -66,7 +61,7 @@ export async function apiRequest(method, path, options = {}) {
       refreshTokenValue
     ) {
       const newToken = await refreshToken(refreshTokenValue);
-      const response = await axios(await buildConfig(newToken));
+      const response = await axios(buildConfig(newToken));
       return response.data;
     }
     throw err;

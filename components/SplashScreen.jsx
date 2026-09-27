@@ -8,7 +8,6 @@ import {
   Easing,
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function SplashScreen({ navigation }) {
   const { isAuthenticated } = useAuth();
@@ -52,33 +51,21 @@ export default function SplashScreen({ navigation }) {
       ).start();
     }, 1000);
 
-    const checkAuthAndNavigate = async () => {
-      try {
-        setTimeout(async () => {
-          const token = await AsyncStorage.getItem("token");
-          const refreshToken = await AsyncStorage.getItem("refreshToken");
-
-          if (token && refreshToken) {
-            navigation.replace("HomeScreen");
-          } else {
-            navigation.replace("SignIn");
-          }
-        }, 3500);
-      } catch (error) {
-        console.error("Navigation error:", error);
-
+    const timer = setTimeout(() => {
+      if (isAuthenticated) {
+        navigation.replace("HomeScreen");
+      } else {
         navigation.replace("SignIn");
       }
-    };
+    }, 3500);
 
-    checkAuthAndNavigate();
-  }, [fadeAnim, scaleAnim, pulseAnim, navigation]);
+    return () => clearTimeout(timer);
+  }, [fadeAnim, scaleAnim, pulseAnim, navigation, isAuthenticated]);
 
   return (
     <View style={styles.container}>
       <StatusBar hidden />
 
-      {}
       <Animated.View
         style={[
           styles.logoContainer,

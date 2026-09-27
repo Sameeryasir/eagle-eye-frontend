@@ -54,7 +54,6 @@ const EventCard = ({ event, onPress }) => {
       }}
       activeOpacity={0.7}
     >
-      {}
       <View className="flex-row items-start justify-between mb-2">
         <View className="flex-1 mr-2">
           <Text
@@ -70,7 +69,6 @@ const EventCard = ({ event, onPress }) => {
         />
       </View>
 
-      {}
       {event.description && (
         <Text
           className="text-sm text-gray-600 mb-3 leading-4"
@@ -80,7 +78,6 @@ const EventCard = ({ event, onPress }) => {
         </Text>
       )}
 
-      {}
       <View className="flex-row items-center justify-between">
         <View className="flex-row items-center">
           <Ionicons name="time-outline" size={16} color="#6B7280" />
@@ -97,7 +94,6 @@ const EventCard = ({ event, onPress }) => {
         </View>
       </View>
 
-      {}
       {event.status && (
         <View className="mt-3">
           <View

@@ -765,7 +765,6 @@ const CreateEventModal = ({
       onRequestClose={handleClose}
     >
       <View className="flex-1 bg-white">
-        {}
         <View className="bg-black px-4 py-3 flex-row items-center justify-between">
           <Text className="text-white text-[18px] font-semibold">
             Create Event
@@ -797,7 +796,6 @@ const CreateEventModal = ({
                   </View>
 
                   <View className="mb-5">
-                    {}
                     <View className="mb-5">
                       <View className="flex-row items-center mb-2">
                         <Ionicons
@@ -822,7 +820,6 @@ const CreateEventModal = ({
                       />
                     </View>
 
-                    {}
                     <View className="mb-5">
                       <View className="flex-row items-center mb-2">
                         <Ionicons
@@ -850,7 +847,6 @@ const CreateEventModal = ({
                       />
                     </View>
 
-                    {}
                     <View className="mb-5">
                       <View className="flex-row items-center mb-2">
                         <Ionicons
@@ -893,7 +889,6 @@ const CreateEventModal = ({
                       </TouchableOpacity>
                     </View>
 
-                    {}
                     {!eventForm.isProject && (
                       <View className="mb-5">
                         <View className="flex-row items-center justify-between mb-2">
@@ -909,7 +904,6 @@ const CreateEventModal = ({
                             </Text>
                           </View>
 
-                          {}
                           {projects.length > 0 && (
                             <TouchableOpacity
                               onPress={() => {
@@ -953,7 +947,6 @@ const CreateEventModal = ({
                           )}
                         </View>
 
-                        {}
                         <DropDownPicker
                           open={projectDropdownOpen}
                           value={selectedProjectValues}
@@ -1117,7 +1110,6 @@ const CreateEventModal = ({
                                 }}
                                 activeOpacity={0.7}
                               >
-                                {}
                                 <View
                                   style={{
                                     width: 20,
@@ -1143,7 +1135,6 @@ const CreateEventModal = ({
                                   )}
                                 </View>
 
-                                {}
                                 <View
                                   style={{
                                     flex: 1,
@@ -1186,7 +1177,6 @@ const CreateEventModal = ({
                       </View>
                     )}
 
-                    {}
                     {eventForm.isProject && (
                       <View className="mb-5">
                         <View className="flex-row items-center justify-between mb-2">
@@ -1202,7 +1192,6 @@ const CreateEventModal = ({
                             </Text>
                           </View>
 
-                          {}
                           {employees.length > 0 && (
                             <TouchableOpacity
                               onPress={() => {
@@ -1246,7 +1235,6 @@ const CreateEventModal = ({
                           )}
                         </View>
 
-                        {}
                         <DropDownPicker
                           open={employeeDropdownOpen}
                           value={selectedEmployeeValues}
@@ -1409,7 +1397,6 @@ const CreateEventModal = ({
                                 }}
                                 activeOpacity={0.7}
                               >
-                                {}
                                 <View
                                   style={{
                                     width: 20,
@@ -1435,7 +1422,6 @@ const CreateEventModal = ({
                                   )}
                                 </View>
 
-                                {}
                                 <View
                                   style={{
                                     flex: 1,
@@ -1482,7 +1468,6 @@ const CreateEventModal = ({
                       </View>
                     )}
 
-                    {}
                     <View className="mb-5">
                       <View className="flex-row items-center mb-2">
                         <Ionicons
@@ -1529,7 +1514,6 @@ const CreateEventModal = ({
                       </View>
                     </View>
 
-                    {}
                     <View className="mb-5">
                       <View className="flex-row items-center mb-2">
                         <Ionicons
@@ -1583,7 +1567,6 @@ const CreateEventModal = ({
           </View>
         </TouchableWithoutFeedback>
 
-        {}
         <View className="absolute bottom-0 left-0 right-0 px-5 pt-5 pb-5 bg-transparent items-center">
           <TouchableOpacity
             className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
@@ -1603,7 +1586,6 @@ const CreateEventModal = ({
           </TouchableOpacity>
         </View>
 
-        {}
         {showStartDatePicker && (
           <DateTimePicker
             value={startDateTime}
@@ -1654,7 +1636,6 @@ const CreateEventModal = ({
           />
         )}
 
-        {}
         <ErrorDialog
           visible={errorDialog.visible}
           onClose={closeErrorDialog}

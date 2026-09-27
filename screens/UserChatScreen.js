@@ -1,9 +1,5 @@
-// --- Change Summary ---------------------------------------------------------
-// What was changed: Offline message inserts now trust SQLite AUTOINCREMENT IDs, the folder shortcut pulls every cached message without pagination, that shortcut logs each cached message with every field in ascending date order, pending rows are updated in place with server data instead of delete-reinsert, fetchMessages returns immediately after a successful API hydrate to avoid double inserts, all bulk inserts now run inside one SQLite transaction per page to reduce per-message overhead, the batch helper now skips pages that are already cached without printing duplicate logs to keep the console clean, and signature resyncs now only touch rows still marked pending so fully-signed conversations are left untouched.
 // Why it was changed: Prevent duplicate IDs when clocks collide or drift, let users inspect the full offline history on demand, surface the complete cached payload clearly in chronological order, avoid churn on SQLite rows, stop redundant API hydrations while keeping console noise low, speed up hydrations so large chat histories sync without hammering the database, avoid noisy duplicate-skip logs whenever the API returns a page we already saved, and ensure background signature refreshes only update outstanding forms.
 // Dependencies or related files: Depends on the messages_<conversationId> table defined below with AUTOINCREMENT and the Toast utility for user confirmations.
-// MCP Context 7: Implementation follows MCP context 7 best practices for data integrity, explicit logging, and discoverable offline diagnostics.
-// ---------------------------------------------------------------------------
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
   View,
@@ -77,8 +73,6 @@ import AllFilesModal from "../components/AllFilesModal";
 import AllSignaturesModal from "../components/AllSignaturesModal";
 import SignatureDetailModal from "../components/SignatureDetailModal";
 
-// --- Structured Console Utilities (MCP Context 7) ---
-// Inline Comment: Shared helper keeps verbose logs readable while avoiding duplicate formatting code.
 const emitVerticalLog = (heading, rows) => {
   console.log(`\n${heading}`);
   Object.entries(rows || {}).forEach(([key, value]) => {
@@ -87,12 +81,6 @@ const emitVerticalLog = (heading, rows) => {
   console.log('');
 };
 
-// --- Change Summary (MCP Context 7) ---
-// What: Added signed-signature sync helper that reads server data via getSignedSignatures, updates SQLite rows, and refreshes UI state; removed entry loader so chat renders immediately while data hydrates; surfaced quick-access icons to reload from SQLite or clear stored chat rows; introduced request abortion so leaving the screen cancels in-flight message fetches and logs that workflow; restored WhatsApp-style pagination by only loading the newest 20 messages from SQLite and revealing older batches on scroll; pre-seeded current user ID from AuthContext so ownership alignment renders correctly from the first frame; removed obsolete refreshDatabaseMessageStats call to prevent runtime ReferenceError; removed automatic offline message sending when internet is restored; reformatted diagnostic console logs into vertical bullet lists for easier reading.
-// Why: Ensure signed signature forms fetched from the API overwrite stale local copies so users always see the latest signed contracts, improve first impression by skipping the blocking spinner, provide simple on-device maintenance controls for local chat storage, prevent wasted bandwidth (and confusing logs) when users back out mid-sync, stop ownership flicker by matching the legacy 20-at-a-time loader, remove the left/right jump caused by late-loading user IDs, avoid crashes triggered by missing helper functions, simplify offline message handling by removing automatic sending logic, and keep debug output understandable for non-engineers.
-// Dependencies: Relies on services/chats/getSignedSignatures, SQLite messages_<conversationId> schema, existing sortMessagesByTime utility, dedupeMessagesById to render safely during async hydration, existing fetchMessagesFromSQLite/clearDatabase helpers, new abort-aware signature in services/chats/getMessagesByConversationId, SQLite pagination helpers defined in this file, AuthContext-provided IDs as an initial ownership signal, NetInfo connectivity events, and the shared logging helpers declared below.
-
-// --- Helper Function to Generate Initials (MCP Context 7) ---
 // Extract first letter of first name and first letter of last name
 const getInitials = (firstName, lastName) => {
   if (!firstName && !lastName) return '?';
@@ -100,7 +88,6 @@ const getInitials = (firstName, lastName) => {
   return (firstName.charAt(0) + lastName.charAt(0)).toUpperCase();
 };
 
-// --- Helper Function to Generate Avatar Background Color (MCP Context 7) ---
 // Generate consistent background color based on name
 const getAvatarColor = (name) => {
   const colors = [
@@ -137,15 +124,11 @@ const UserChatScreen = ({ navigation, route }) => {
   // Log conversation type
   console.log('💬 Conversation Type:', type);
 
-  // --- Determine if Group Chat (MCP Context 7) ---
-  // Business Rule: Only show sender names in group chats, not in individual chats
   const isGroupChat = isGroupChatParam || conversation?.type === 'group' || type === 'group'; // NOTE: Honor navigation param so group chats hide signature actions.
 
   const { user, userInfo } = useAuth();
   const insets = useSafeAreaInsets(); // Get safe area insets for notch/navigation bar handling
   
-  // --- Resolved Auth User ID (MCP Context 7) ---
-  // Business Rule: Seed ownership with best-known ID immediately so messages render on the correct side before AsyncStorage hydrates.
   const resolvedUserIdFromAuth = useMemo(() => {
     try {
       const candidates = [user?.id, userInfo?.id, userId];
@@ -164,12 +147,8 @@ const UserChatScreen = ({ navigation, route }) => {
     return null;
   }, [user?.id, userInfo?.id, userId]);
 
-  // --- Internet Connectivity Monitoring (MCP Context 7) ---
-  // Business Rule: Monitor internet connection status for better UX
   const netInfo = NetInfo.useNetInfo();
   
-  // --- SQLite Context (MCP Context 7) ---
-  // Business Rule: Use SQLite context for database operations
   const db = useSQLiteContext();
   
   const [messages, setMessages] = useState([]);
@@ -178,8 +157,6 @@ const UserChatScreen = ({ navigation, route }) => {
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
   
-  // --- Pagination State (MCP Context 7) ---
-  // Business Rule: Load messages in chunks for better performance
   const [currentOffset, setCurrentOffset] = useState(0);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
@@ -200,26 +177,17 @@ const UserChatScreen = ({ navigation, route }) => {
   const flatListRef = useRef(null);
   const messageInputRef = useRef(null);
   
-  // --- Request Signature Modal State (MCP Context 7) ---
   const [signatureModalVisible, setSignatureModalVisible] = useState(false);
   const [activeSignatureId, setActiveSignatureId] = useState(null); // Track which signature is being signed
 
-  // --- SQLite Pagination Settings (MCP Context 7) ---
-  // Business Rule: Keep local paging aligned with server default so UI ownership stays stable.
   const SQLITE_MESSAGES_PAGE_SIZE = 20;
 
-  // --- Typing State Management (MCP Context 7) ---
-  // Business Rule: Track who is currently typing in the conversation
   // Used to show typing indicators below the input bar (WhatsApp-style)
   const [typingUsers, setTypingUsers] = useState([]); // Array of user objects who are typing
 
-  // --- API Request Cancellation State (MCP Context 7) ---
-  // Business Rule: Track in-flight API calls so we can cancel them when user leaves the chat screen.
   const apiAbortControllersRef = useRef(new Set());
   const isScreenActiveRef = useRef(true);
 
-  // --- Get Current User ID from AsyncStorage (MCP Context 7) ---
-  // Business Rule: Retrieve user ID from local storage to compare with message sender
   // This ensures we're using the exact same ID that was stored during login
   // CRITICAL FIX: Initialize with loading state to prevent UI flicker
   const [currentUserId, setCurrentUserId] = useState(resolvedUserIdFromAuth);
@@ -231,10 +199,7 @@ const UserChatScreen = ({ navigation, route }) => {
     currentUserIdRef.current = currentUserId;
   }, [currentUserId]);
 
-  // --- Fetch User ID from AsyncStorage (MCP Context 7) ---
-  // Business Rule: Load user ID BEFORE rendering messages to prevent left-side flicker
   useEffect(() => {
-    // Inline Comment: If auth already knows the user ID we can skip storage lookup entirely.
     if (resolvedUserIdFromAuth) {
       setCurrentUserId(resolvedUserIdFromAuth);
       setIsLoadingUserId(false);
@@ -276,8 +241,6 @@ const UserChatScreen = ({ navigation, route }) => {
     };
   }, [resolvedUserIdFromAuth]);
 
-  // --- API Request Cancellation Helpers (MCP Context 7) ---
-  // Inline Note: Bundle creation/removal so every fetch registers its AbortController for cleanup.
   const registerAbortController = (contextLabel) => {
     const entry = { controller: new AbortController(), contextLabel };
     apiAbortControllersRef.current.add(entry);
@@ -329,8 +292,6 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Helper: Convert API Message to UI Format (MCP Context 7) ---
-  // Business Rule: Standardize message format for display consistency
   // This ensures all messages have the same structure regardless of source (API or SQLite)
   const convertMessageToUI = (msg) => ({
     id: msg.id?.toString(),
@@ -359,8 +320,6 @@ const UserChatScreen = ({ navigation, route }) => {
     } : null
   });
 
-  // --- Screen Lifecycle Cleanup (MCP Context 7) ---
-  // Business Rule: Abort any in-flight network calls when the user navigates away to save bandwidth and avoid stray state updates.
   useEffect(() => {
     isScreenActiveRef.current = true;
     return () => {
@@ -375,17 +334,9 @@ const UserChatScreen = ({ navigation, route }) => {
     };
   }, []);
 
-
-// --- Database Helper Functions (MCP Context 7) ---
-// What: All database operations now use centralized functions from database/messageStorage.ts
-// Why: Eliminates code duplication and ensures consistent database operations across the app
-// Dependencies: database/messageStorage.ts exports
 // NOTE: All imported functions require 'db' as the first parameter
 
-  // --- Helper: Fetch All Messages from API and Save to SQLite (MCP Context 7) ---
-  // Business Rule: When SQLite is empty, fetch all messages from API and cache locally
   // This ensures fast subsequent loads and offline access
-  // Change Summary: Simplified version without one-by-one delays, loads all pages efficiently
   const fetchAllMessagesFromAPI = async (conversationId) => {
     console.log('📡 Fetching all messages from API...');
     setIsUsingAPI(true);
@@ -394,7 +345,7 @@ const UserChatScreen = ({ navigation, route }) => {
     let allMessages = [];
     let currentPageNum = 1;
     let hasMorePages = true;
-    let wasCancelled = false; // Inline Note: Track cancellation so we can skip post-processing safely.
+    let wasCancelled = false;
     
     // Load all pages from API
     while (hasMorePages) {
@@ -451,8 +402,6 @@ const UserChatScreen = ({ navigation, route }) => {
     return uiMessages;
   };
 
-  // --- Helper: Sort Messages by Timestamp (MCP Context 7) ---
-  // Business Rule: Sort messages newest-first for inverted FlatList using local timestamp
   // When FlatList is inverted, newest-first data displays as oldest-first visually (like WhatsApp)
   // Uses local timestamp (created_at from database) and ID as tiebreaker for messages with same timestamp
   const sortMessagesByTime = (messages) => {
@@ -472,10 +421,6 @@ const UserChatScreen = ({ navigation, route }) => {
     });
   };
 
-  // --- Dedupe Messages By ID (Simple UI Safeguard - MCP Context 7) ---
-  // What: Ensures we never render duplicate messages in the list even if multiple fetchers run
-  // Why: If two sources append the same server message, UI should still show it once
-  // NOTE: Non-destructive; does not change DB or fetching logic
   const dedupeMessagesById = (items) => {
     try {
       if (!Array.isArray(items) || items.length === 0) return items || [];
@@ -494,10 +439,7 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Fetch Messages from SQLite Database or API (MCP Context 7) ---
-  // Business Rule: Load messages from SQLite database first, fallback to API if empty
   // Loader only shown for API calls (SQLite is fast)
-  // CRITICAL: Disable input immediately if we need to fetch from API (no SQLite data)
   const fetchMessages = async () => {
     console.log('🚀 fetchMessages called - loading from SQLite database or API');
     console.log('🔍 conversationId:', conversationId);
@@ -514,13 +456,11 @@ const UserChatScreen = ({ navigation, route }) => {
       console.log('🔍 Checking if messages table exists for conversation:', conversationId);
       
       try {
-        // Inline Comment: Uses centralized function from messageStorage.ts
         const tableExists = messagesTableExists(db, conversationId);
         if (!tableExists) {
           console.log('⚠️ Messages table does not exist yet - skipping SQLite query');
           console.log('📭 No messages found in SQLite database - fetching from API');
           
-          // CRITICAL: Disable input IMMEDIATELY before API call starts
           console.log('🔒 Disabling input - will fetch from API');
           Keyboard.dismiss(); // Dismiss keyboard during API call
           setIsLoadingMessages(true); // Disable input during API call - SET BEFORE API CALL
@@ -582,7 +522,6 @@ const UserChatScreen = ({ navigation, route }) => {
                   return sortMessagesByTime(combinedMessages);
                 });
 
-                // CRITICAL: Enable input immediately after first page loads (user can type while remaining pages load)
                 if (currentPageNum === 1) {
                   console.log('✅ First page loaded - enabling input immediately');
                   setIsLoadingMessages(false);
@@ -639,7 +578,7 @@ const UserChatScreen = ({ navigation, route }) => {
             storeLastMessageId(finalMessages);
             
             console.log('✅ All messages loaded progressively from API');
-            return; // Inline Comment: Exit after successful API hydration to prevent the fallback branch from rerunning the same inserts.
+            return;
           } catch (error) {
             console.error('❌ Error fetching messages from API:', error);
             setMessages([]);
@@ -653,8 +592,6 @@ const UserChatScreen = ({ navigation, route }) => {
         // Continue with API fallback
       }
 
-      // --- Load Messages from SQLite (MCP Context 7) ---
-      // Business Rule: Load latest 20 messages initially, load more when user scrolls up
       console.log('📡 Loading messages from SQLite database for conversation:', conversationId);
       
       // Get total message count and latest 20 messages (same logic as test.js)
@@ -725,7 +662,6 @@ const UserChatScreen = ({ navigation, route }) => {
       } else {
         console.log('📭 No messages found in SQLite database - fetching from API');
         
-        // CRITICAL: Disable input IMMEDIATELY before API call starts
         console.log('🔒 Disabling input - will fetch from API');
         Keyboard.dismiss(); // Dismiss keyboard during API call
         setIsLoadingMessages(true); // Disable input during API call - SET BEFORE API CALL
@@ -849,7 +785,7 @@ const UserChatScreen = ({ navigation, route }) => {
           storeLastMessageId(finalMessages);
           
           console.log('✅ All messages loaded progressively from API and stored in SQLite');
-          return; // Inline Comment: Exit early so we do not immediately fall through and refetch the same messages again.
+          return;
         } catch (apiError) {
           console.error('❌ Error fetching messages from API:', apiError);
           setMessages([]);
@@ -866,8 +802,6 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Load More Messages Function (MCP Context 7) ---
-  // Business Rule: Load older messages in chunks when user scrolls up
   // Handles both SQLite pagination (offset) and API pagination (page)
   const loadMoreMessages = async () => {
     if (!hasMoreMessages) {
@@ -936,7 +870,6 @@ const UserChatScreen = ({ navigation, route }) => {
         }
       } else {
         // Load next 20 messages from SQLite
-        // Inline Comment: Uses centralized functions from messageStorage.ts
         const totalMessageCount = getMessageCountFromSQLite(db, conversationId);
         const olderMessages = getAllMessagesFromSQLite(db, conversationId, SQLITE_MESSAGES_PAGE_SIZE, currentOffset);
 
@@ -998,16 +931,11 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Fetch Messages from SQLite Database (MCP Context 7) ---
-  // Business Rule: Get all messages from local database when offline
-  // What: Uses centralized getAllMessagesFromSQLite and getMessageCountFromSQLite functions
-  // Why: Eliminates duplicate database query code
   const fetchMessagesFromSQLite = () => {
     try {
       console.log('🔄 Fetching messages from SQLite database for conversation:', conversationId);
       
       // Get all messages from database (both sent and pending)
-      // Inline Comment: Uses centralized function from messageStorage.ts
       const totalMessageCount = getMessageCountFromSQLite(db, conversationId);
       const dbMessages = getAllMessagesFromSQLite(db, conversationId, SQLITE_MESSAGES_PAGE_SIZE);
       
@@ -1055,8 +983,8 @@ const UserChatScreen = ({ navigation, route }) => {
         // SQL query already sorted messages by created_at DESC, so no need to sort again
         // Messages are already in correct order (newest first) from SQL query
         setMessages(uiMessages);
-        setCurrentOffset(totalMessageCount); // Inline Comment: Mark all rows as loaded so the load-more control knows nothing remains.
-        setHasMoreMessages(false); // Inline Comment: Folder-triggered fetch loads everything, so we disable further pagination requests.
+        setCurrentOffset(totalMessageCount);
+        setHasMoreMessages(false);
         
         // Store last message ID when messages are loaded from SQLite
         storeLastMessageId(uiMessages);
@@ -1076,9 +1004,6 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Store Last Message ID in AsyncStorage (MCP Context 7) ---
-  // Business Rule: Store the ID of the last CONFIRMED message (sent status, not pending/offline)
-  // CRITICAL: Only store server message IDs (integers), not Date.now() or offline IDs
   const storeLastMessageId = async (messages) => {
     if (messages && messages.length > 0) {
       try {
@@ -1087,7 +1012,6 @@ const UserChatScreen = ({ navigation, route }) => {
           msg.status === 'sent' && 
           !msg.id.toString().startsWith('offline_') &&
           !msg.id.toString().startsWith('db_') &&
-          // CRITICAL: Only store integer IDs (server IDs), not Date.now() values
           !isNaN(parseInt(msg.id)) && parseInt(msg.id) < 1000000 // Server IDs are usually small integers
         );
         
@@ -1128,10 +1052,7 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Sync Signed Signatures from API (MCP Context 7) ---
-  // Business Rule: Pull the latest signed forms from the server and overwrite any outdated local records.
   const syncSignedSignaturesFromAPI = async () => {
-    // Inline Note: The guard prevents unnecessary work when the screen is initialising without a valid conversation.
     if (!conversationId) {
       console.log('⚠️ [SIGNED SYNC] No conversation ID available, skipping signed signatures sync');
       return;
@@ -1140,7 +1061,6 @@ const UserChatScreen = ({ navigation, route }) => {
     let pendingSignatureIds = new Set();
 
     try {
-      // Inline Comment: Uses centralized function from messageStorage.ts
       const pendingIds = getPendingSignatureIds(db, conversationId);
       pendingSignatureIds = new Set(pendingIds);
     } catch (pendingLookupError) {
@@ -1156,7 +1076,6 @@ const UserChatScreen = ({ navigation, route }) => {
     try {
       console.log('🔄 [SIGNED SYNC] Fetching signed signatures via getSignedSignatures()');
       
-      // Inline Note: We rely on the shared service so the logic stays in one place per MCP context 7 guidelines.
       const signedSignatures = await getSignedSignatures();
 
       if (!Array.isArray(signedSignatures) || signedSignatures.length === 0) {
@@ -1164,7 +1083,6 @@ const UserChatScreen = ({ navigation, route }) => {
         return;
       }
 
-      // Inline Note: Keep a map so we can update React state after SQLite writes complete.
       const signatureUpdatesMap = new Map();
 
       signedSignatures.forEach((signature) => {
@@ -1181,7 +1099,6 @@ const UserChatScreen = ({ navigation, route }) => {
           return; // NOTE: Only reconcile forms we still expect to be pending locally.
         }
 
-        // Inline Note: Only skip when a signature explicitly belongs to another conversation.
         const signatureConversationId =
           signature.conversationId ??
           signature.conversation_id ??
@@ -1208,7 +1125,6 @@ const UserChatScreen = ({ navigation, route }) => {
         const fileName = signature.fileName ?? signature.file_name ?? null;
         const fileSize = signature.fileSize ?? signature.file_size ?? null;
 
-        // Inline Note: Normalise signer info so UI/components only handle one shape.
         const signedByFromApi =
           signature.signedBy ??
           signature.signatureFrom ??
@@ -1227,7 +1143,6 @@ const UserChatScreen = ({ navigation, route }) => {
               email: signature.signedByEmail ?? null,
             };
 
-        // Inline Note: Persist the update for quick lookup during UI refresh.
         signatureUpdatesMap.set(String(signatureId), {
           status,
           fileUrl,
@@ -1238,7 +1153,6 @@ const UserChatScreen = ({ navigation, route }) => {
 
         try {
           console.log('📝 [SIGNED SYNC] Updating SQLite record for signature:', signatureId);
-          // Inline Comment: Uses centralized function from messageStorage.ts
           updateSignatureFieldsBySignatureId(db, signatureId, conversationId, {
             status: status || undefined,
             fileUrl: fileUrl || null,
@@ -1258,7 +1172,6 @@ const UserChatScreen = ({ navigation, route }) => {
         return;
       }
 
-      // Inline Note: Refresh local state so the UI reflects the latest signed form metadata.
       setMessages((prevMessages) => {
         if (!prevMessages || prevMessages.length === 0) {
           console.log('ℹ️ [SIGNED SYNC] No messages in state to reconcile, skipping state update');
@@ -1302,13 +1215,11 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Fetch New Messages After Last Message (MCP Context 7) ---
-  // Business Rule: Get ALL new messages and add them to chat list one by one (WhatsApp-style)
   const fetchNewMessagesAfterLast = async () => {
     try {
       console.log('🔄 [NEW MESSAGES] Checking for new messages...');
 
-      Keyboard.dismiss(); // NOTE: Avoid keyboard overlap while new messages sync runs (MCP Context 7 UX guard).
+      Keyboard.dismiss();
       
       // Get the last message ID from AsyncStorage
       const lastMessageId = await AsyncStorage.getItem('latestMessageId');
@@ -1359,12 +1270,10 @@ const UserChatScreen = ({ navigation, route }) => {
             pageMessages.forEach(msg => {
               try {
                 // Check if message already exists in database
-                // Inline Comment: Uses centralized function from messageStorage.ts
                 const existingMessage = messageExistsInSQLite(db, msg.id, conversationId);
                 
                 if (!existingMessage) {
                   // Store message in SQLite database
-                  // Inline Comment: Uses centralized function from messageStorage.ts (handles duplicates automatically)
                   saveMessageToSQLite(db, msg, conversationId, 'NEW-MESSAGES', false);
                   
                   console.log(`✅ [NEW MESSAGES] Stored message ${msg.id} in database`);
@@ -1461,7 +1370,6 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Load Messages on Mount (MCP Context 7) ---
   // Fetch messages when component mounts and when conversationId changes
   useEffect(() => {
     console.log('🔄 UserChatScreen mounted or conversationId changed - calling API');
@@ -1474,12 +1382,10 @@ const UserChatScreen = ({ navigation, route }) => {
     const loadMessagesAndCheckForNew = async () => {
       try {
         // Check if messages table exists and has data
-        // Inline Comment: Uses centralized function from messageStorage.ts
         const tableExists = messagesTableExists(db, conversationId);
         
         if (tableExists) {
           // Table exists - check if it has messages
-          // Inline Comment: Uses centralized function from messageStorage.ts
           const messageCount = getMessageCountFromSQLite(db, conversationId);
           
           if (messageCount > 0) {
@@ -1512,7 +1418,6 @@ const UserChatScreen = ({ navigation, route }) => {
     loadMessagesAndCheckForNew();
   }, [conversationId]);
 
-  // --- Load Messages on Focus (MCP Context 7) ---
   // REMOVED: Navigation focus listener to prevent automatic refresh when signature modal closes
   // The app already handles message updates via:
   // 1. Pusher real-time updates
@@ -1535,10 +1440,6 @@ const UserChatScreen = ({ navigation, route }) => {
   //   return unsubscribe;
   // }, [navigation, conversationId]);
 
-
-
-  // --- Signature Notification Targeting (MCP Context 7) ---
-  // Business Rule: Mirror message notification logic so signature alerts reach the correct recipient.
   const signatureRecipientUserId = useMemo(() => {
     try {
       if (conversation?.participants && conversation.participants.length > 0) {
@@ -1560,8 +1461,6 @@ const UserChatScreen = ({ navigation, route }) => {
     return null;
   }, [conversation, currentUserId, userId]);
 
-  // --- Signature Conversation Type (MCP Context 7) ---
-  // Business Rule: Pass explicit conversation type to downstream components for consistent notification payloads.
   const signatureConversationType = useMemo(() => {
     if (type) return type;
     if (conversation?.type) return conversation.type;
@@ -1569,12 +1468,8 @@ const UserChatScreen = ({ navigation, route }) => {
   }, [type, conversation, isGroupChat]);
   
 
-  // --- Reload Messages When Internet Connection Changes (MCP Context 7) ---
-  // Business Rule: Only send pending messages when internet is restored, don't reload all messages
   // Removed fetchMessages() call to prevent unnecessary API calls when navigating between screens
 
-  // --- Fetch Files from Conversation (MCP Context 7) ---
-  // Business Rule: Fetch all files shared in this conversation
   const fetchConversationFiles = async () => {
     const currentConversationId = route.params?.conversationId;
     
@@ -1606,8 +1501,6 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Fetch Conversation Signatures (MCP Context 7) ---
-  // Business Rule: Fetch all signatures for the current conversation
   const fetchConversationSignatures = async () => {
     const currentConversationId = route.params?.conversationId;
     
@@ -1652,8 +1545,6 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Handle Signature Card Tap (MCP Context 7) ---
-  // Business Rule: Open signature detail view when card is tapped
   const handleSignatureCardTap = (signature) => {
     console.log('📝 Signature card tapped:', signature);
     console.log('📝 Requested by:', signature.requestedBy);
@@ -1662,8 +1553,6 @@ const UserChatScreen = ({ navigation, route }) => {
     setSignatureDetailModalVisible(true);
   };
 
-  // --- Handle Fetch All Files Event (MCP Context 7) ---
-  // Business Rule: Listen for fetchAllFiles event from App.js header
   const handleFetchAllFiles = () => {
     console.log('📁 Received fetchAllFiles event in UserChatScreen');
     console.log('📁 Setting filesModalVisible to true');
@@ -1673,10 +1562,8 @@ const UserChatScreen = ({ navigation, route }) => {
 
   const handleReloadFromSQLite = () => {
     try {
-      // Inline Comment: Uses centralized function from messageStorage.ts
       const cachedMessages = getAllMessagesAscending(db, conversationId);
       cachedMessages.forEach((msg, index) => {
-        // Inline Comment: Print every field so troubleshooting can compare SQLite rows with API responses.
         console.log(`📁 [OFFLINE CACHE] Message ${index + 1} (full payload below):`);
         console.log(JSON.stringify(msg, null, 2));
       });
@@ -1701,8 +1588,6 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Handle Fetch All Signatures Event (MCP Context 7) ---
-  // Business Rule: Listen for fetchSignatures event from App.js header
   // Added guard to prevent automatic fetching during offline-to-online transition
   const handleFetchAllSignatures = () => {
     console.log('📝 Received fetchSignatures event in UserChatScreen');
@@ -1711,7 +1596,6 @@ const UserChatScreen = ({ navigation, route }) => {
     fetchConversationSignatures();
   };
 
-  // --- Event Listener for fetchAllFiles (MCP Context 7) ---
   useEffect(() => {
     console.log('🔌 Setting up fetchAllFiles event listener');
     // Listen for fetchAllFiles event
@@ -1725,7 +1609,6 @@ const UserChatScreen = ({ navigation, route }) => {
     };
   }, []);
 
-  // --- Event Listener for fetchSignatures (MCP Context 7) ---
   useEffect(() => {
     console.log('🔌 Setting up fetchSignatures event listener');
     // Listen for fetchSignatures event
@@ -1739,9 +1622,6 @@ const UserChatScreen = ({ navigation, route }) => {
     };
   }, []);
 
-
-  // --- Pusher Real-Time Listener (Fixed - MCP Context 7) ---
-  // Business Rule: Always ensure we're listening to the conversation channel
   // For new conversations: subscribe and listen
   // For existing conversations: use existing subscription or create new one
   useEffect(() => {
@@ -1827,7 +1707,6 @@ const UserChatScreen = ({ navigation, route }) => {
 
       // Add message to state
       setMessages((prevMessages) => {
-        // CRITICAL: Check for duplicates FIRST before any processing
         // Use Set for O(1) lookup instead of O(n) array search - more scalable for large message lists
         const messageIds = new Set(prevMessages.map(msg => String(msg.id)));
         const existsById = messageIds.has(String(newMessage.id));
@@ -1855,7 +1734,6 @@ const UserChatScreen = ({ navigation, route }) => {
               console.log('📊 [PUSHER] Values to be stored in database:', JSON.stringify(updateValues, null, 2));
               
               // Update by message ID first
-              // Inline Comment: Uses centralized function from messageStorage.ts
               updateSignatureFields(db, newMessage.id, conversationId, {
                 status: updateValues.signature_status || undefined,
                 fileUrl: updateValues.signature_file_url || null,
@@ -1869,7 +1747,6 @@ const UserChatScreen = ({ navigation, route }) => {
               console.log('✅ [PUSHER] Updated message with ID:', newMessage.id);
               
               // Also update by signature_id to catch any messages with the same signature
-              // Inline Comment: Uses centralized function from messageStorage.ts
               if (newMessage.signature?.id) {
                 updateSignatureFieldsBySignatureId(db, newMessage.signature.id, conversationId, {
                   status: updateValues.signature_status || undefined,
@@ -1901,8 +1778,6 @@ const UserChatScreen = ({ navigation, route }) => {
           return prevMessages;
         }
 
-        // --- Replace Pending Messages with Real Pusher Response (MCP Context 7) ---
-        // Business Rule: If this is a message from current user, check if we have a pending message to replace
         const isMyMessage = String(newMessage.sender?.id) === String(currentUserIdRef.current);
         
         if (isMyMessage) {
@@ -1929,7 +1804,6 @@ const UserChatScreen = ({ navigation, route }) => {
             console.log('✅ [PUSHER] Found pending message to replace at index:', pendingMessageIndex);
             
             // Replace pending message with real message from Pusher
-            // CRITICAL: Preserve the local timestamp to maintain correct order
             const updatedMessages = [...prevMessages];
             const pendingMessage = updatedMessages[pendingMessageIndex];
             updatedMessages[pendingMessageIndex] = {
@@ -1961,8 +1835,6 @@ const UserChatScreen = ({ navigation, route }) => {
           console.log('✅ [PUSHER] Adding message to chat from:', newMessage.sender?.first_name || 'Unknown');
         }
         
-        // --- Store Pusher Messages in Database (MCP Context 7) ---
-        // Business Rule: Only store messages from OTHER users in database
         // Messages from current user are already stored when sent offline
         const isMyOwnMessage = String(newMessage.sender?.id) === String(currentUserIdRef.current);
         
@@ -2027,7 +1899,6 @@ const UserChatScreen = ({ navigation, route }) => {
             });
             
             // Check if message already exists (by ID or by signature_id)
-            // Inline Comment: Uses centralized function from messageStorage.ts
             const existingMessage = messageExistsInSQLite(db, newMessage.id, conversationId);
             
             // Also check if signature exists in database by signature_id
@@ -2052,7 +1923,6 @@ const UserChatScreen = ({ navigation, route }) => {
                 console.log('🔍 [PUSHER] Updating by signature ID:', dataToStore.signature_id);
                 
                 // Update by message ID
-                // Inline Comment: Uses centralized function from messageStorage.ts
                 updateSignatureFields(db, newMessage.id, conversationId, {
                   status: dataToStore.signature_status || undefined,
                   fileUrl: dataToStore.signature_file_url || null,
@@ -2064,7 +1934,6 @@ const UserChatScreen = ({ navigation, route }) => {
                 });
                 
                 // Also update by signature_id to catch any messages with the same signature
-                // Inline Comment: Uses centralized function from messageStorage.ts
                 if (dataToStore.signature_id) {
                   updateSignatureFieldsBySignatureId(db, dataToStore.signature_id, conversationId, {
                     status: dataToStore.signature_status || undefined,
@@ -2082,7 +1951,6 @@ const UserChatScreen = ({ navigation, route }) => {
             } else {
               // Message doesn't exist in database - INSERT new message
               console.log('📝 [PUSHER] Inserting new message to database');
-              // Inline Comment: Uses centralized function from messageStorage.ts
               // Convert dataToStore to MessageData format
               const messageData = {
                 id: newMessage.id,
@@ -2118,7 +1986,6 @@ const UserChatScreen = ({ navigation, route }) => {
               console.log('✅ Pusher message from other user saved to database');
             }
             
-            // CRITICAL: After saving to database, check if message already exists in UI
             // This prevents duplicates when message was already loaded from database or API
             const messageIdsSet = new Set(prevMessages.map(msg => String(msg.id)));
             if (messageIdsSet.has(String(newMessage.id))) {
@@ -2130,13 +1997,11 @@ const UserChatScreen = ({ navigation, route }) => {
           }
         } else {
           // CRITICAL FIX: Update pending messages from current user when Pusher delivers them
-          // Business Rule: When Pusher delivers our own message, update the database to replace pending with sent
           try {
             console.log('🔄 [PUSHER] This is my own message - checking for pending message to update in database');
             
             // Find any pending message with matching content and sender
             // We'll check timestamp difference in JavaScript for better reliability
-            // Inline Comment: Uses centralized function from messageStorage.ts
             const allPendingMessages = getPendingMessages(
               db, 
               conversationId, 
@@ -2160,12 +2025,9 @@ const UserChatScreen = ({ navigation, route }) => {
               console.log(`🔄 [PUSHER] Found pending message with ID ${offlineMessageId} - replacing with server ID ${newMessage.id}`);
               
               // Delete old pending message
-              // Inline Comment: Uses centralized function from messageStorage.ts
               deletePendingMessage(db, offlineMessageId, conversationId);
               
               // Insert server message (with sent status)
-              // CRITICAL: Use local timestamp from pending message, not server timestamp
-              // Inline Comment: Uses centralized function from messageStorage.ts (handles duplicates automatically)
               const serverMessageData = {
                 id: newMessage.id,
                 content: newMessage.content || null,
@@ -2197,20 +2059,17 @@ const UserChatScreen = ({ navigation, route }) => {
               console.log(`✅ [PUSHER] Replaced pending message (ID: ${offlineMessageId}) with server message (ID: ${newMessage.id})`);
             } else {
               // Check if server message already exists
-              // Inline Comment: Uses centralized function from messageStorage.ts
               const existingMessage = getMessageFromSQLite(db, newMessage.id, conversationId);
               
               if (existingMessage) {
                 // Just update status to 'sent' if it's not already
                 if (existingMessage.status !== 'sent') {
-                  // Inline Comment: Uses centralized function from messageStorage.ts
                   updateMessageStatus(db, newMessage.id, conversationId, 'sent');
                   console.log(`✅ [PUSHER] Updated message status to 'sent' for ID: ${newMessage.id}`);
                 }
               } else {
                 // No pending message found and no server message - insert it
                 console.log('📝 [PUSHER] No pending message found - inserting new server message');
-                // Inline Comment: Uses centralized function from messageStorage.ts (handles duplicates automatically)
                 const serverMessageData2 = {
                   id: newMessage.id,
                   content: newMessage.content || null,
@@ -2286,8 +2145,6 @@ const UserChatScreen = ({ navigation, route }) => {
         console.error('❌ [ASYNCSTORAGE] Failed to store signature message ID:', error);
       }
 
-      // --- Normalize Signature Message Structure (MCP Context 7) ---
-      // Business Rule: Pusher sends flat structure, but UI expects nested structure
       // Transform flat signature data into the expected nested format
       const signatureMessage = {
         ...rawSignatureMessage,
@@ -2330,8 +2187,6 @@ const UserChatScreen = ({ navigation, route }) => {
         const myUserId = currentUserIdRef.current;
         const messageSenderId = signatureMessage.sender?.id;
 
-        // --- Replace Pending Signature Messages with Real Pusher Response (MCP Context 7) ---
-        // Business Rule: If this is a signature from current user, check if we have a pending signature to replace
         // Also check if this message was already updated from offline (by checking server message ID)
         const isMySignature = String(messageSenderId) === String(myUserId);
         
@@ -2382,8 +2237,6 @@ const UserChatScreen = ({ navigation, route }) => {
         console.log('👤 [PUSHER] Message sender ID:', messageSenderId, 'Current user ID:', myUserId);
         console.log('📋 [PUSHER] Normalized signature message structure:', JSON.stringify(signatureMessage, null, 2));
         
-        // --- Store Signature Message in Database (MCP Context 7) ---
-        // Business Rule: Store signature requests in database for offline access
         try {
           console.log('📝 [PUSHER] Storing signature message in database');
           
@@ -2419,7 +2272,6 @@ const UserChatScreen = ({ navigation, route }) => {
             signature_status: signatureDataToStore.signature_status
           });
           
-          // Inline Comment: Uses centralized function from messageStorage.ts (handles duplicates automatically)
           const signatureMessageData = {
             id: signatureMessage.messageId || signatureMessage.id,
             content: signatureDataToStore.content || null,
@@ -2502,12 +2354,9 @@ const UserChatScreen = ({ navigation, route }) => {
           if (msg.signature && msg.signature.id === signatureId) {
             console.log('✅ [PUSHER] Updating signature with file URL for signature ID:', signatureId);
             
-            // --- Update Signature in Database (MCP Context 7) ---
-            // Business Rule: Update signature status, file info, and signedBy info in database
             try {
               console.log('📝 [PUSHER] Updating signature in database for ID:', signatureId);
               
-              // Inline Comment: Uses centralized function from messageStorage.ts
               updateSignatureFieldsBySignatureId(db, signatureId, conversationId, {
                 status: status || 'signed',
                 fileUrl: fileUrl || null,
@@ -2561,15 +2410,9 @@ const UserChatScreen = ({ navigation, route }) => {
     };
   }, [conversationId]);
 
-
-  // --- Simple Database Setup with Error Handling (MCP Context 7) ---
-  // What: Uses centralized initializeMessagesTable function from database/messageStorage.ts
-  // Why: Eliminates duplicate initialization code and ensures consistent table setup
-  // Dependencies: database/messageStorage.ts initializeMessagesTable function
   useEffect(() => {
     const initializeDatabase = async () => {
       try {
-        // Inline Comment: Uses centralized function that handles all table creation and column additions
         await initializeMessagesTable(db, conversationId);
       } catch (error) {
         console.error('❌ Database initialization failed:', error);
@@ -2580,7 +2423,6 @@ const UserChatScreen = ({ navigation, route }) => {
     initializeDatabase();
   }, [db, conversationId]);
 
-  // --- Check What Tables Exist in SQLite Database ---
   const checkTablesInDatabase = () => {
     try {
       console.log('🔍 Checking what tables exist in SQLite database...');
@@ -2624,7 +2466,6 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Delete All Tables from SQLite Database ---
   const deleteAllTables = () => {
     try {
       console.log('🗑️ Deleting all tables from SQLite database...');
@@ -2660,16 +2501,12 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Get All Messages from Database with Better Error Handling ---
-  // What: Uses centralized getAllMessagesFromSQLite function
-  // Why: Eliminates direct SQL queries
   const getAllMessagesFromDB = () => {
     try {
       console.log('🔄 Getting all messages from database...');
       console.log('✅ Database connection successful via context');
       
       // Get messages from database without clearing
-      // Inline Comment: Uses centralized function from messageStorage.ts
       const messages = getAllMessagesFromSQLite(db, conversationId);
       console.log('✅ Query executed successfully');
       
@@ -2717,10 +2554,6 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Send Pending Messages Queue (MCP Context 7) ---
-  // What: Gets all pending messages and sends them to server one at a time, replacing local messages with server responses
-  // Why: Ensures offline messages are sent when internet is restored
-  // Business Rule: Send messages in order, one at a time, and replace local timestamp with server timestamp
   const sendPendingMessagesQueue = async () => {
     if (!conversationId) {
       console.log('⚠️ [PENDING QUEUE] No conversation ID, skipping pending messages');
@@ -2731,7 +2564,6 @@ const UserChatScreen = ({ navigation, route }) => {
       console.log('📤 [PENDING QUEUE] Starting to send pending messages...');
       
       // Get all pending messages from database (only from current user)
-      // Inline Comment: Uses centralized function from messageStorage.ts
       const allPendingMessages = getPendingMessages(db, conversationId, currentUserId);
       
       // Filter out signature messages (they need to be sent via createSignature, not sendMessage)
@@ -2808,7 +2640,6 @@ const UserChatScreen = ({ navigation, route }) => {
           saveMessageToSQLite(db, serverMessageData, conversationId, 'PENDING-QUEUE', false);
 
           // Update UI state to replace pending message with server message
-          // Business Rule: Replace pending message in place to maintain order, don't re-sort unnecessarily
           setMessages(prevMessages => {
             // Find the index of the pending message to maintain its position
             const pendingIndex = prevMessages.findIndex(msg => 
@@ -2885,8 +2716,6 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Internet Connectivity Monitoring Effect (MCP Context 7) ---
-  // Business Rule: Fetch new messages and send pending messages when internet is restored
   useEffect(() => {
     if (netInfo.isConnected === true) {
       console.log('📡 Internet connection restored');
@@ -2905,20 +2734,17 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   }, [netInfo.isConnected, conversationId]);
 
-  // --- Test Function to Get All Messages ---
   // Call this function to see all messages in database
   useEffect(() => {
     // Uncomment the line below to automatically get all messages when component loads
     // getAllMessagesFromDB();
   }, []);
 
-  // --- Test Button Handler ---
   const handleTestGetMessages = () => {
     console.log('🧪 Test button pressed - getting all messages from database');
     getAllMessagesFromDB();
   };
 
-  // --- Test Offline Messages Handler ---
   const handleTestOfflineMessages = () => {
     console.log('🧪 Test offline messages button pressed');
     if (netInfo.isConnected === false) {
@@ -2936,16 +2762,10 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Clear Database Function ---
-  // --- Cache Maintenance Controls (MCP Context 7) ---
-  // What: Uses centralized clearAllMessagesFromSQLite function from messageStorage.ts
-  // Why: Eliminates duplicate database deletion code
-  // Inline Note: Exposes manual purge so frontline staff can refresh stale chats while respecting existing clearDatabase helper.
   const clearDatabase = () => {
     try {
       console.log('🗑️ Clearing database...');
       
-      // Inline Comment: Uses centralized function from messageStorage.ts
       const success = clearAllMessagesFromSQLite(db, conversationId);
       if (success) {
       console.log('✅ Database cleared successfully');
@@ -2953,8 +2773,6 @@ const UserChatScreen = ({ navigation, route }) => {
         throw new Error('Failed to clear database');
       }
       
-      // --- Local State Reset (MCP Context 7) ---
-      // Inline Comment: Also reset React state so UI matches the empty table immediately.
       setMessages([]);
 
       // Clear AsyncStorage message ID as well
@@ -2991,14 +2809,11 @@ const UserChatScreen = ({ navigation, route }) => {
       "This removes the cached messages for this chat from this device. Live history will reload from the server.",
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Delete", style: "destructive", onPress: () => clearDatabase() }, // Inline Note: Calls existing wipe logic so behavior stays centralized.
+        { text: "Delete", style: "destructive", onPress: () => clearDatabase() },
       ]
     );
   };
 
-
-
-  // --- Helper: Get File Icon Based on File Name (MCP Context 7) ---
   // Returns appropriate icon name for each file type based on file extension
   const getFileIcon = (fileName) => {
     if (!fileName) return 'insert-drive-file';
@@ -3030,7 +2845,6 @@ const UserChatScreen = ({ navigation, route }) => {
     return 'insert-drive-file';
   };
 
-  // --- Helper: Open Image in Full Screen (MCP Context 7) ---
   // Opens image in full-screen modal viewer
   const handleOpenImage = (imageUrl) => {
     console.log('🖼️ Opening image in full view:', imageUrl);
@@ -3038,7 +2852,6 @@ const UserChatScreen = ({ navigation, route }) => {
     setImageViewerVisible(true);
   };
 
-  // --- Helper: Close Image Viewer (MCP Context 7) ---
   // Closes the full-screen image viewer modal
   const handleCloseImageViewer = () => {
     console.log('❌ Closing image viewer');
@@ -3046,9 +2859,7 @@ const UserChatScreen = ({ navigation, route }) => {
     setSelectedImageUrl(null);
   };
 
-  // --- Helper: Download and Share Image (MCP Context 7) ---
   // Downloads image to device and opens share dialog (WhatsApp-style)
-  // Business Rule: Allow users to download and share images from chat
   const handleDownloadAndShareImage = async (imageUrl, fileName) => {
     try {
       console.log('📥 Downloading image:', fileName || 'image');
@@ -3084,9 +2895,7 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Helper: Download and Share File (MCP Context 7) ---
   // Downloads file to device and opens share dialog using expo-sharing
-  // Business Rule: Allow users to download and share documents from chat
   const handleDownloadAndShareFile = async (fileUrl, fileName) => {
     try {
       console.log('📥 Downloading file:', fileName);
@@ -3121,7 +2930,6 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Helper: Open File/Document (MCP Context 7) ---
   // Opens file URL in browser or appropriate app
   const handleOpenFile = async (fileUrl, fileName) => {
     try {
@@ -3139,14 +2947,11 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Helper: Show Attachment Options (MCP Context 7) ---
   // Shows menu with options to pick image or document (WhatsApp-style)
   const handleShowAttachmentOptions = () => {
     setAttachmentMenuVisible(true);
   };
 
-  // --- Helper: Pick Image from Gallery (MCP Context 7) ---
-  // Business Rule: Allow users to select images from device gallery
   const handlePickImage = async () => {
     try {
       console.log('📸 Opening image picker...');
@@ -3187,8 +2992,6 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Helper: Pick Document (MCP Context 7) ---
-  // Business Rule: Allow users to select documents (PDF, Word, Excel, etc.)
   const handlePickDocument = async () => {
     try {
       console.log('📄 Opening document picker...');
@@ -3221,21 +3024,15 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Helper: Remove Selected File (MCP Context 7) ---
   // Removes the selected file before sending
   const handleRemoveFile = () => {
     console.log('🗑️ Removing selected file');
     setSelectedFile(null);
   };
 
-
-
-  // --- Text Input Handler (MCP Context 7) ---
-  // Business Rule: Update input text when user types
   const handleTextChange = (text) => {
     setInputText(text);
   };
-
 
   const handleOfflineSignatureRequest = async (signatureData) => {
     console.log('📝 [OFFLINE] Storing signature request in database');
@@ -3288,7 +3085,6 @@ const UserChatScreen = ({ navigation, route }) => {
         createdAt: signatureRequestData.created_at
       });
       
-      // Inline Comment: Uses centralized function from messageStorage.ts for offline inserts
       const offlineMessageData = {
         content: signatureRequestData.content || null,
         fileUrl: signatureRequestData.file_uri || null,
@@ -3330,7 +3126,6 @@ const UserChatScreen = ({ navigation, route }) => {
       const offlineSignatureId = offlineMessageId === 0 ? null : -offlineMessageId;
 
       if (offlineSignatureId !== null) {
-        // Inline Comment: Uses centralized function from messageStorage.ts
         updateSignatureId(db, offlineMessageId, conversationId, offlineSignatureId);
       }
       
@@ -3487,9 +3282,6 @@ const UserChatScreen = ({ navigation, route }) => {
           signature_file_name: null
         };
         
-        // --- Offline Insert (MCP Context 7) ---
-        // Inline Comment: Save the offline message immediately so the chat UI stays responsive even without connectivity.
-        // Inline Comment: Uses centralized function from messageStorage.ts for offline inserts
         const offlineMessageData = {
           content: messageData.content || null,
           fileUrl: messageData.file_uri || null,
@@ -3507,7 +3299,6 @@ const UserChatScreen = ({ navigation, route }) => {
         
         const offlineInsertRowId = insertOfflineMessage(db, offlineMessageData, conversationId);
         console.log('✅ Message stored in SQLite database');
-        // Inline Comment: Coerce the SQLite response into a Number to align with the schema's INTEGER PRIMARY KEY type.
         let offlineMessageId = offlineInsertRowId ? Number(offlineInsertRowId) : 0;
         if (!Number.isFinite(offlineMessageId)) {
           // NOTE: This should never happen; fallback keeps UI stable while we investigate.
@@ -3622,7 +3413,6 @@ const UserChatScreen = ({ navigation, route }) => {
       console.log('🔍 Debug - response.message?.id:', response?.message?.id);
       
       // Store message in SQLite database with server response
-      // Business Rule: Use local timestamp (when message was created), not server timestamp
       const localTimestamp = new Date().toISOString(); // Use local timestamp when message is sent
       const messageData = {
         conversation_id: conversationId,
@@ -3639,7 +3429,6 @@ const UserChatScreen = ({ navigation, route }) => {
       };
       
       // Store message in SQLite database with server message ID as primary ID
-      // Inline Comment: Uses centralized function from messageStorage.ts (handles duplicates automatically)
       const serverMessageDataForStorage = {
         id: serverMessageId,
         content: messageData.content || null,
@@ -3662,7 +3451,6 @@ const UserChatScreen = ({ navigation, route }) => {
       console.log('🔍 Debug - Stored messageData.id (should be same):', messageData.id);
       
       // Add or update message in UI with 'sent' status
-      // Business Rule: Add message immediately when sent online (optimistic update), don't wait for Pusher
       setMessages(prevMessages => {
         // First, try to find and update existing pending message (if any)
         let foundPending = false;
@@ -3748,8 +3536,6 @@ const UserChatScreen = ({ navigation, route }) => {
       });
       
       console.log('✅ Message status updated to sent in UI');
-      // --- Send Message Notification (MCP Context 7) ---
-      // Business Rule: Send notification for both group and private chats based on conversation type
       try {
         const conversationType = type || conversation?.type || "private";
         const isGroup = conversationType === 'group' || isGroupChat;
@@ -3819,13 +3605,10 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-
   return (
     <SafeAreaView className="flex-1 bg-gray-100">
-      {/* Loading State (MCP Context 7) --- */}
       {/* NOTE: Spinner removed per UX request; we still hydrate data in background while rendering the list immediately. */}
       {/* 📨 Messages List */}
-      {/* --- Local Cache Action Bar (MCP Context 7) --- */}
       <View className="px-5 pb-2 items-end">
         <TouchableOpacity
           onPress={handleClearMessagesPress}
@@ -3843,16 +3626,11 @@ const UserChatScreen = ({ navigation, route }) => {
         onEndReached={loadMoreMessages}
         onEndReachedThreshold={0.1}
         renderItem={({ item }) => {
-            // --- Message Ownership Logic (MCP Context 7) ---
-            // Business Rule: Compare sender.id with current logged-in user's id
             // Convert both to string for comparison to handle data type mismatch
             // FIXED: Now currentUserId is guaranteed to be loaded, preventing left-side flicker
             const isMyMessage = String(item.sender?.id) === String(currentUserId);
             
-            // NOTE: Verbose ownership logging removed to reduce console noise (MCP Context 7 logging hygiene).
             
-            // --- Signature Contract Rendering (MCP Context 7) ---
-            // Business Rule: Only show as contract form if it has signature data, NOT for regular file uploads
             // Handle both nested (item.signature) and flat (item.title, item.notes, etc.) structures
             
             // Check if it's a real signature contract (not null, not undefined)
@@ -3865,15 +3643,12 @@ const UserChatScreen = ({ navigation, route }) => {
             // Only consider it signature data if it has REAL signature OR signature fields WITHOUT file
             const hasSignatureData = hasRealSignature || (hasSignatureFields && !isFileUpload);
             
-            // NOTE: Removed verbose signature diagnostic log to keep console output lean (MCP Context 7 logging hygiene).
             
             // CRITICAL FIX: If it has file data, it's NOT a signature contract
             // Only show contract form if it has signature data AND is not a regular file upload
             // Additional check: If any file field exists, it's definitely not a signature contract
             if (!item.content && hasSignatureData && !isFileUpload && item && !item.fileUrl && !item.file_name && !item.fileType && !item.file_url && !item.file_type) {
               
-              // --- Subscribe ALL Users to Signature Upload Channel (MCP Context 7) ---
-              // Business Rule: Only subscribe to signature uploads for pending contracts
               const signatureId = item.signature?.id || item.signatureId || item.id;
               const signatureStatus = item.signature?.status || item.status;
               const signatureUploadChannelName = `signature-${signatureId}`;
@@ -4065,7 +3840,6 @@ const UserChatScreen = ({ navigation, route }) => {
                                     console.log('📊 [SIGNATURE] Data to update in database:', JSON.stringify(apiSignatureData, null, 2));
                                     
                                     // Update by original signature ID (contractId)
-                                    // Inline Comment: Uses centralized function from messageStorage.ts
                                     updateSignatureFieldsBySignatureId(db, contractId, conversationId, {
                                       status: apiSignatureData.signature_status || undefined,
                                       fileUrl: apiSignatureData.signature_file_url || null,
@@ -4207,8 +3981,6 @@ const UserChatScreen = ({ navigation, route }) => {
             );
             }
             
-            // Check file type (MCP Context 7)
-            // Business Rule: Display images inline, show document cards for PDFs/docs/archives
             // Support both camelCase and snake_case field names from API
             const fileUrl = item.fileUrl || item.file_url;
             const fileType = item.fileType || item.file_type;
@@ -4217,7 +3989,6 @@ const UserChatScreen = ({ navigation, route }) => {
             const hasDocument = fileUrl && !hasImage;
             const hasFile = hasImage || hasDocument;
             
-            // Format timestamp to 12-hour format with AM/PM (MCP Context 7)
             // Convert UTC time from API to local timezone
             const formatTime = (utcString) => {
               if (!utcString) return '';
@@ -4234,8 +4005,6 @@ const UserChatScreen = ({ navigation, route }) => {
               return `${hour12}:${minutesStr} ${ampm}`;
             };
 
-            // --- Get Sender Info for Display (MCP Context 7) ---
-            // Business Rule: Show sender's name and avatar ONLY in group chats for messages from other users
             const senderFirstName = item.sender?.first_name || '';
             const senderLastName = item.sender?.last_name || '';
             const senderFullName = `${senderFirstName} ${senderLastName}`.trim() || 'Unknown';
@@ -4247,8 +4016,6 @@ const UserChatScreen = ({ navigation, route }) => {
                   isMyMessage ? "items-end" : "items-start"
                 }`}
               >
-                {/* WhatsApp-Style Message Container with Avatar (MCP Context 7) */}
-                {/* Business Rule: Messages from others in group chats show avatar on left side */}
                 <View className={`flex-row ${isMyMessage ? 'flex-row-reverse' : 'flex-row'} items-end`}>
                   {/* Avatar Circle (Only for group chat messages from others) */}
                   {showSenderInfo && (
@@ -4263,14 +4030,11 @@ const UserChatScreen = ({ navigation, route }) => {
                   )}
 
                   {/* Message Content Container - Dynamic width like WhatsApp */}
-                  {/* Business Rule: Documents get more width (90%), images and text get standard width (75%) */}
                   <View className={`${isMyMessage ? 'mr-2' : ''}`} style={{ 
                     maxWidth: hasDocument ? '90%' : '75%', // Increased from 85% to 90% for documents
                     minWidth: hasDocument ? '70%' : 'auto' // Ensure minimum width for documents
                   }}>
                   {/* Display image if fileUrl exists and it's an image type */}
-                  {/* Business Rule: Images are tappable to open in full-screen view */}
-                  {/* WhatsApp-style: Download icon overlay on image */}
                   {hasImage && (
                     <View className="mb-1 relative">
                       <TouchableOpacity 
@@ -4288,7 +4052,6 @@ const UserChatScreen = ({ navigation, route }) => {
                         />
                       </TouchableOpacity>
                       
-                      {/* Download Icon Overlay (WhatsApp-style) */}
                       <TouchableOpacity
                         onPress={(e) => {
                           e.stopPropagation();
@@ -4308,10 +4071,8 @@ const UserChatScreen = ({ navigation, route }) => {
                   )}
                   
                   {/* Display document card for PDFs, Word, Excel, etc. */}
-                  {/* Business Rule: Tap card to open file, tap download icon to share/download */}
                   {hasDocument && (
                     (() => {
-                      // --- Extract File Information (MCP Context 7) ---
                       // Try different possible field names (API might use camelCase or snake_case)
                       const displayFileName = item.fileName || 
                                              item.file_name || 
@@ -4382,7 +4143,6 @@ const UserChatScreen = ({ navigation, route }) => {
                   )}
                   
                   {/* Display text content in bubble (only if text exists) */}
-                  {/* WhatsApp-style bubble with dynamic rounded corners */}
                   {item.content && (
                     <View
                       className={`px-4 py-3 rounded-2xl shadow-sm ${
@@ -4395,7 +4155,6 @@ const UserChatScreen = ({ navigation, route }) => {
                       style={{ alignSelf: isMyMessage ? 'flex-end' : 'flex-start' }}
                     >
                       {/* Show sender name ONLY in group chats for received messages (WhatsApp Style - inside bubble) */}
-                      {/* Business Rule: Individual chats don't need sender names */}
                       {showSenderInfo && (
                         <Text className="text-xs font-semibold text-gray-900 mb-1">
                           {senderFullName}
@@ -4420,8 +4179,6 @@ const UserChatScreen = ({ navigation, route }) => {
                       {formatTime(item.createdAt)}
                     </Text>
                     
-                    {/* Message Status Indicator for my messages (MCP Context 7) */}
-                    {/* Business Rule: Show different icons for different message states */}
                     {isMyMessage && (
                       <View className="ml-1">
                         {item.status === 'pending' ? (
@@ -4480,9 +4237,6 @@ const UserChatScreen = ({ navigation, route }) => {
           )}
       />
 
-
-      {/* Typing Indicator (WhatsApp-style) */}
-      {/* Business Rule: Show who is currently typing above the input bar */}
       {typingUsers.length > 0 && (
         <View 
           className="bg-white border-t border-gray-200 px-4 py-2"
@@ -4566,7 +4320,6 @@ const UserChatScreen = ({ navigation, route }) => {
           )}
           
           <View className="flex-row items-center bg-gray-100 rounded-full px-4 py-2">
-            {/* Plus Icon Button (WhatsApp-style) */}
             <TouchableOpacity
               onPress={handleShowAttachmentOptions}
               disabled={isSendingMessage || isLoadingMessages}
@@ -4641,7 +4394,6 @@ const UserChatScreen = ({ navigation, route }) => {
         </View>
       </KeyboardAvoidingView>
 
-      {/* Attachment Options Modal (WhatsApp-style) */}
       <Modal
         visible={attachmentMenuVisible}
         transparent={true}
@@ -4689,9 +4441,6 @@ const UserChatScreen = ({ navigation, route }) => {
         </TouchableOpacity>
       </Modal>
 
-      {/* Full-Screen Image Viewer Modal (MCP Context 7) */}
-      {/* Business Rule: Allow users to view images in full screen with zoom capability */}
-      {/* WhatsApp-style: Download button in full-screen viewer */}
       <Modal
         visible={imageViewerVisible}
         transparent={true}
@@ -4708,8 +4457,6 @@ const UserChatScreen = ({ navigation, route }) => {
             <Ionicons name="close" size={30} color="#FFFFFF" />
           </TouchableOpacity>
 
-
-          {/* Full-Screen Image */}
           {selectedImageUrl && (
             <Image
               source={{ uri: selectedImageUrl }}
@@ -4720,7 +4467,6 @@ const UserChatScreen = ({ navigation, route }) => {
         </View>
       </Modal>
 
-      {/* All Files Modal (MCP Context 7) */}
       <AllFilesModal
         visible={filesModalVisible}
         onClose={() => {
@@ -4753,7 +4499,6 @@ const UserChatScreen = ({ navigation, route }) => {
         }}
       />
 
-      {/* All Signatures Modal (MCP Context 7) */}
       <AllSignaturesModal
         visible={signaturesModalVisible}
         onClose={() => {
@@ -4765,7 +4510,6 @@ const UserChatScreen = ({ navigation, route }) => {
         onSignaturePress={(signature) => handleSignatureCardTap(signature)}
       />
 
-      {/* Signature Detail Modal (MCP Context 7) */}
       <SignatureDetailModal
         visible={signatureDetailModalVisible}
         onClose={() => {
@@ -4777,8 +4521,6 @@ const UserChatScreen = ({ navigation, route }) => {
         onImagePress={(imageUrl) => handleOpenImage(imageUrl)}
       />
 
-      {/* Request Signature Modal (MCP Context 7) */}
-      {/* Business Rule: Handle both online and offline signature requests */}
       <SignatureRequestModal
         visible={signatureModalVisible}
         onClose={() => setSignatureModalVisible(false)}
@@ -4801,7 +4543,6 @@ const UserChatScreen = ({ navigation, route }) => {
   );
 };
 
-// --- StyleSheet for Image Viewer (MCP Context 7) ---
 // Used for full-screen image modal styling (WhatsApp-style with download button)
 const styles = StyleSheet.create({
   imageViewerContainer: {

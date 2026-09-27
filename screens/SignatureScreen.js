@@ -17,8 +17,6 @@ import * as FileSystem from 'expo-file-system';
 
 const { width, height } = Dimensions.get('window');
 
-// --- Signature Screen Component (MCP Context 7) ---
-// Business Rule: Allow users to sign contracts by drawing their signature
 // Features: White background, signature drawing area, clear/reset, save/cancel actions
 const SignatureScreen = ({ navigation, route }) => {
   const { signatureData, onSignatureComplete } = route.params || {};
@@ -32,7 +30,6 @@ const SignatureScreen = ({ navigation, route }) => {
     }
   }, [route.params?.action]);
   
-  // --- Signature Drawing State (MCP Context 7) ---
   const [paths, setPaths] = useState([]);
   const [currentPath, setCurrentPath] = useState('');
   const [isDrawing, setIsDrawing] = useState(false);
@@ -40,8 +37,6 @@ const SignatureScreen = ({ navigation, route }) => {
   const svgRef = useRef(null);
   const viewShotRef = useRef(null);
 
-  // --- Handle Touch Start (MCP Context 7) ---
-  // Business Rule: Start new signature path when user touches the screen
   const handleTouchStart = (event) => {
     const { locationX, locationY } = event.nativeEvent;
     const newPath = `M${locationX},${locationY}`;
@@ -49,8 +44,6 @@ const SignatureScreen = ({ navigation, route }) => {
     setIsDrawing(true);
   };
 
-  // --- Handle Touch Move (MCP Context 7) ---
-  // Business Rule: Continue drawing signature path as user moves finger
   const handleTouchMove = (event) => {
     if (!isDrawing) return;
     
@@ -59,8 +52,6 @@ const SignatureScreen = ({ navigation, route }) => {
     setCurrentPath(newPath);
   };
 
-  // --- Handle Touch End (MCP Context 7) ---
-  // Business Rule: Complete current signature path when user lifts finger
   const handleTouchEnd = () => {
     if (isDrawing && currentPath) {
       setPaths(prev => [...prev, currentPath]);
@@ -69,8 +60,6 @@ const SignatureScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Clear Signature (MCP Context 7) ---
-  // Business Rule: Allow users to clear their signature and start over
   const handleClearSignature = () => {
     // Check if there's any signature to clear
     if (paths.length === 0 && !currentPath) {
@@ -88,7 +77,6 @@ const SignatureScreen = ({ navigation, route }) => {
     setShowClearDialog(true);
   };
 
-  // --- Handle Clear Confirmation (MCP Context 7) ---
   const handleClearConfirm = () => {
     setPaths([]);
     setCurrentPath('');
@@ -96,13 +84,10 @@ const SignatureScreen = ({ navigation, route }) => {
     setShowClearDialog(false);
   };
 
-  // --- Handle Clear Cancel (MCP Context 7) ---
   const handleClearCancel = () => {
     setShowClearDialog(false);
   };
 
-  // --- Save Signature (MCP Context 7) ---
-  // Business Rule: Save signature and return to previous screen
   const handleSaveSignature = async () => {
     if (paths.length === 0 && !currentPath) {
       Toast.show({
@@ -175,8 +160,6 @@ const SignatureScreen = ({ navigation, route }) => {
     }
   };
 
-  // --- Cancel Signature (MCP Context 7) ---
-  // Business Rule: Allow users to cancel without saving
   const handleCancel = () => {
     if (paths.length > 0 || currentPath) {
       Alert.alert(
@@ -299,7 +282,6 @@ const SignatureScreen = ({ navigation, route }) => {
   );
 };
 
-// --- Styles (MCP Context 7) ---
 // Clean, professional styling for signature screen
 const styles = StyleSheet.create({
   container: {

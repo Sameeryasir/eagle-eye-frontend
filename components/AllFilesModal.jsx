@@ -63,7 +63,6 @@ const AllFilesModal = ({
         className="flex-row items-center p-4 border-b border-gray-100"
         activeOpacity={0.7}
       >
-        {}
         <View className="w-12 h-12 bg-gray-100 rounded-lg items-center justify-center mr-3 flex-shrink-0">
           {isImage ? (
             <Image
@@ -80,7 +79,6 @@ const AllFilesModal = ({
           )}
         </View>
 
-        {}
         <View className="flex-1 mr-3">
           <Text
             className="text-sm font-semibold text-gray-900"
@@ -98,7 +96,6 @@ const AllFilesModal = ({
           </Text>
         </View>
 
-        {}
         <TouchableOpacity
           onPress={(e) => {
             e.stopPropagation();
@@ -118,7 +115,6 @@ const AllFilesModal = ({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView className="flex-1 bg-white">
-        {}
         <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
           <TouchableOpacity
             onPress={onClose}
@@ -131,7 +127,6 @@ const AllFilesModal = ({
           <View className="w-8" />
         </View>
 
-        {}
         <View className="flex-1">
           {isLoading ? (
             <View className="flex-1 items-center justify-center">

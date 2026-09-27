@@ -135,11 +135,8 @@ function CreateProjectScreen({ navigation }) {
       return;
     }
 
-    // --- FIXED: Proper timezone handling for project creation ---
-    // Business Rule: Use same timezone conversion approach as event and task handling
     // This ensures projects created "today" appear on "today" in the calendar for all timezones
     
-    // --- Convert to local timezone for date extraction (same as event/task handling) ---
     // This ensures the project appears on the correct calendar day
     const localStartDate = new Date(startDate);
     const localEndDate = new Date(endDate);
@@ -179,7 +176,6 @@ function CreateProjectScreen({ navigation }) {
 
       const response = await createProject(projectPayload);
       
-      // --- Show Success Toast Message ---
       Toast.show({
         type: 'success',
         text1: 'Project Created Successfully!',
@@ -210,7 +206,6 @@ function CreateProjectScreen({ navigation }) {
         errorMessage = String(error.message);
       }
       
-      // --- Show Error Toast Message ---
       Toast.show({
         type: 'error',
         text1: 'Project Creation Failed',
@@ -247,6 +242,13 @@ function CreateProjectScreen({ navigation }) {
 
   return (
     <View className="flex-1 bg-white">
+      <View className="flex-row items-center px-4 pt-12 pb-3 border-b border-[#f0f0f0] bg-white">
+        <TouchableOpacity className="p-2 mr-2" onPress={handleCancel}>
+          <Ionicons name="chevron-back" size={24} color="#333" />
+        </TouchableOpacity>
+        <Text className="text-[20px] font-bold text-[#333]">Create Project</Text>
+      </View>
+
       <View className="flex-1 p-5">
         <ScrollView
           className="flex-1"
@@ -257,7 +259,6 @@ function CreateProjectScreen({ navigation }) {
         >
    
           <View className="mb-5">
-            {/* Project Name */}
             <View className="mb-5">
               <View className="flex-row items-center mb-2">
                 <Ionicons name="folder" size={20} color="black" style={{ marginRight: 8 }} />

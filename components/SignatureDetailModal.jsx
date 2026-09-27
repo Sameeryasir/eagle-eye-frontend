@@ -23,7 +23,6 @@ const SignatureDetailModal = ({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView className="flex-1 bg-white">
-        {}
         <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
           <TouchableOpacity
             onPress={onClose}
@@ -38,12 +37,10 @@ const SignatureDetailModal = ({
           <View className="w-8" />
         </View>
 
-        {}
         <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
           <View className="p-4">
             <View className="mb-4 px-2">
               <View className="bg-white p-4">
-                {}
                 <View className="flex-row items-center mb-4">
                   <View
                     className="w-12 h-12 rounded-full items-center justify-center mr-4"
@@ -81,7 +78,6 @@ const SignatureDetailModal = ({
                   </View>
                 </View>
 
-                {}
                 <View className="mb-4">
                   <Text className="text-[12px] font-semibold text-[#333] mb-2">
                     Document Title
@@ -91,7 +87,6 @@ const SignatureDetailModal = ({
                   </Text>
                 </View>
 
-                {}
                 {signature.notes && (
                   <View className="mb-4">
                     <Text className="text-[12px] font-semibold text-[#333] mb-2">
@@ -103,7 +98,6 @@ const SignatureDetailModal = ({
                   </View>
                 )}
 
-                {}
                 {signature.requestedBy && (
                   <View className="mb-4">
                     <Text className="text-[12px] font-semibold text-[#333] mb-2">
@@ -117,7 +111,6 @@ const SignatureDetailModal = ({
                   </View>
                 )}
 
-                {}
                 {signature.signatureFrom && (
                   <View className="mb-4">
                     <Text className="text-[12px] font-semibold text-[#333] mb-2">
@@ -131,7 +124,6 @@ const SignatureDetailModal = ({
                   </View>
                 )}
 
-                {}
                 {signature.dueDate && (
                   <View className="mb-4">
                     <Text className="text-[12px] font-semibold text-[#333] mb-2">
@@ -143,7 +135,6 @@ const SignatureDetailModal = ({
                   </View>
                 )}
 
-                {}
                 {signature.createdAt && (
                   <View className="mb-4">
                     <Text className="text-[12px] font-semibold text-[#333] mb-2">
@@ -155,14 +146,12 @@ const SignatureDetailModal = ({
                   </View>
                 )}
 
-                {}
                 {signature.fileUrl && (
                   <View className="mb-4">
                     <Text className="text-[12px] font-semibold text-[#333] mb-2">
                       Document
                     </Text>
 
-                    {}
                     {(() => {
                       const fileUrl = signature.fileUrl;
                       const isImage =

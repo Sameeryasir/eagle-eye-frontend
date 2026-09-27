@@ -15,7 +15,6 @@ import { getUserById } from '../services/user/getUserById';
 import { updateUserById } from '../services/user/updateUserById';
 
 export default function AccountInfoScreen({ navigation }) {
-  // --- State Management ---
   const [userInfo, setUserInfo] = useState({
     first_name: '',
     last_name: '',
@@ -30,12 +29,10 @@ export default function AccountInfoScreen({ navigation }) {
   const [saving, setSaving] = useState(false);
   const [userId, setUserId] = useState(null);
 
-  // --- Load User Data on Component Mount ---
   useEffect(() => {
     loadUserData();
   }, []);
 
-  // --- Load user data from API ---
   const loadUserData = async () => {
     try {
       setLoading(true);
@@ -88,13 +85,10 @@ export default function AccountInfoScreen({ navigation }) {
     }
   };
 
-  // --- Save user data using API (only send changed fields) ---
   const saveUserData = async () => {
     try {
       setSaving(true);
       
-      // Always include all editable fields for update (MCP Context 7)
-      // Business Rule: Send all fields to ensure any changes are captured
       const updateData = {
         first_name: userInfo.first_name || '',
         last_name: userInfo.last_name || '',
@@ -140,7 +134,6 @@ export default function AccountInfoScreen({ navigation }) {
     }
   };
 
-  // --- Handle input changes ---
   const handleInputChange = (field, value) => {
     setUserInfo(prev => ({
       ...prev,
@@ -148,7 +141,6 @@ export default function AccountInfoScreen({ navigation }) {
     }));
   };
 
-  // --- Logout function ---
   const handleLogout = () => {
     Alert.alert(
       'Logout',
@@ -177,7 +169,6 @@ export default function AccountInfoScreen({ navigation }) {
     );
   };
 
-  // --- Render Input Field ---
   const renderInputField = (label, field, placeholder, keyboardType = 'default') => {
     const value = userInfo[field];
     const isEmpty = !value || value.trim() === '';
@@ -208,7 +199,6 @@ export default function AccountInfoScreen({ navigation }) {
     );
   };
 
-  // --- Render Read-Only Field ---
   const renderReadOnlyField = (label, field) => {
     const value = userInfo[field];
     const isEmpty = !value || value.trim() === '';

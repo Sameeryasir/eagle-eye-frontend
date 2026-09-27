@@ -202,7 +202,6 @@ export default function UpdateProjectModal({
       onRequestClose={onClose}
     >
       <View className="flex-1 bg-white">
-        {}
         <View className="bg-black px-4 py-3 flex-row items-center justify-between">
           <Text className="text-black text-[18px] font-semibold">
             Update Project
@@ -232,7 +231,6 @@ export default function UpdateProjectModal({
                   </View>
 
                   <View className="mb-5">
-                    {}
                     <View className="mb-5">
                       <View className="flex-row items-center mb-2">
                         <Ionicons
@@ -257,7 +255,6 @@ export default function UpdateProjectModal({
                       />
                     </View>
 
-                    {}
                     <View className="mb-5">
                       <View className="flex-row items-center mb-2">
                         <Ionicons
@@ -285,7 +282,6 @@ export default function UpdateProjectModal({
                       />
                     </View>
 
-                    {}
                     <View className="mb-5">
                       <View className="flex-row items-center mb-2">
                         <Ionicons
@@ -320,7 +316,6 @@ export default function UpdateProjectModal({
           </View>
         </TouchableWithoutFeedback>
 
-        {}
         <View className="absolute bottom-0 left-0 right-0 px-5 pt-5 pb-5 bg-transparent items-center">
           <TouchableOpacity
             className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
@@ -340,7 +335,6 @@ export default function UpdateProjectModal({
           </TouchableOpacity>
         </View>
 
-        {}
         {Platform.OS === "ios" && (
           <Modal
             visible={showStartDatePicker}
@@ -374,7 +368,6 @@ export default function UpdateProjectModal({
                   elevation: 10,
                 }}
               >
-                {}
                 <View
                   style={{
                     flexDirection: "row",
@@ -417,7 +410,6 @@ export default function UpdateProjectModal({
                   </TouchableOpacity>
                 </View>
 
-                {}
                 <View style={{ paddingHorizontal: 10, paddingVertical: 10 }}>
                   <DateTimePicker
                     value={startDate}
@@ -432,7 +424,6 @@ export default function UpdateProjectModal({
           </Modal>
         )}
 
-        {}
         {Platform.OS === "android" && showStartDatePicker && (
           <DateTimePicker
             value={startDate}
@@ -443,7 +434,6 @@ export default function UpdateProjectModal({
           />
         )}
 
-        {}
         <NoChangesDialog
           visible={showNoChangesDialog}
           onClose={() => setShowNoChangesDialog(false)}

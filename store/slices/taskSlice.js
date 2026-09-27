@@ -1,4 +1,3 @@
-// --- Task Redux Slice (MCP Context 7) ---
 // Centralized state management for all task operations (CRUD)
 // This slice handles loading states, error handling, and data management
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
@@ -16,7 +15,6 @@ import { getTasksAssignedToEmployees } from '../../services/tasks/getTasksAssign
 import { getEmployeesToAssignTasks } from '../../services/tasks/getEmployeeToAssingeTasks';
 import { filterTask } from '../../services/tasks/filterTask';
 
-// --- Async Thunk Actions (MCP Context 7) ---
 // These handle API calls and automatically manage loading/error states
 
 // Fetch all tasks for the logged-in user
@@ -164,8 +162,6 @@ export const assignTaskToUserAction = createAsyncThunk(
   'tasks/assignTaskToUserAction',
   async ({ taskId, userId }, { rejectWithValue }) => {
     try {
-      // --- FIXED: Better handling of assignment API response (MCP Context 7) ---
-      // Business Rule: API should return updated task data with complete assignedTo user object
       const result = await assignTaskToUser(taskId, userId);
       
       console.log('🔧 assignTaskToUserAction - API Response:', result);
@@ -247,7 +243,6 @@ export const fetchEmployeesForTaskAssignment = createAsyncThunk(
   }
 );
 
-// --- Initial State (MCP Context 7) ---
 // Clean, well-structured initial state with clear separation of concerns
 const initialState = {
   // Data
@@ -256,7 +251,6 @@ const initialState = {
   filteredTasks: [],
   employeesForAssignment: [],
   
-  // --- Project-based Caching (MCP Context 7) ---
   // Cache tasks by project ID for better performance and offline support
   tasksByProject: {}, // { projectId: { tasks: [], timestamp: number, isFromCache: boolean } }
   currentProjectId: null,
@@ -284,14 +278,12 @@ const initialState = {
   currentProjectId: null,
 };
 
-// --- Task Slice (MCP Context 7) ---
 // Redux slice with reducers for synchronous state updates
 const taskSlice = createSlice({
   name: 'tasks',
   initialState,
   
   reducers: {
-    // --- Error Clearing Actions ---
     clearError: (state) => {
       state.error = null;
     },
@@ -320,30 +312,24 @@ const taskSlice = createSlice({
       state.fetchEmployeesError = null;
     },
     
-    // --- Reset Actions ---
     resetTasksState: () => initialState,
     
-    // --- Set Current Project ---
     setCurrentProjectId: (state, action) => {
       state.currentProjectId = action.payload;
     },
     
-    // --- Clear Current Task ---
     clearCurrentTask: (state) => {
       state.currentTask = null;
     },
     
-    // --- Clear Filtered Tasks ---
     clearFilteredTasks: (state) => {
       state.filteredTasks = [];
     },
   },
   
-  // --- Extra Reducers for Async Actions (MCP Context 7) ---
   // Handle all the different states of async operations (pending, fulfilled, rejected)
   extraReducers: (builder) => {
     builder
-      // --- Fetch Tasks (User's Tasks) ---
       .addCase(fetchTasks.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -359,7 +345,6 @@ const taskSlice = createSlice({
         state.error = action.payload;
       })
       
-      // --- Fetch All Tasks (Admin/Manager View) ---
       .addCase(fetchAllTasks.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -375,7 +360,6 @@ const taskSlice = createSlice({
         state.error = action.payload;
       })
       
-      // --- Fetch Tasks by Project ID ---
       .addCase(fetchTasksByProjectId.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -391,7 +375,6 @@ const taskSlice = createSlice({
         state.error = action.payload;
       })
       
-      // --- Fetch Today's Tasks ---
       .addCase(fetchTodaysTasks.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -407,7 +390,6 @@ const taskSlice = createSlice({
         state.error = action.payload;
       })
       
-      // --- Fetch Task by ID ---
       .addCase(fetchTaskById.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -422,7 +404,6 @@ const taskSlice = createSlice({
         state.error = action.payload;
       })
       
-      // --- Create Task ---
       .addCase(createNewTask.pending, (state) => {
         state.creating = true;
         state.createError = null;
@@ -437,7 +418,6 @@ const taskSlice = createSlice({
         state.createError = action.payload;
       })
       
-      // --- Update Task ---
       .addCase(updateExistingTask.pending, (state) => {
         state.updating = true;
         state.updateError = null;
@@ -459,7 +439,6 @@ const taskSlice = createSlice({
         state.updateError = action.payload;
       })
       
-      // --- Delete Task ---
       .addCase(deleteExistingTask.pending, (state) => {
         state.deleting = true;
         state.deleteError = null;
@@ -483,7 +462,6 @@ const taskSlice = createSlice({
         state.deleteError = action.payload;
       })
       
-      // --- Assign Task ---
       .addCase(assignTaskToUserAction.pending, (state) => {
         state.assigning = true;
         state.assignError = null;
@@ -495,8 +473,6 @@ const taskSlice = createSlice({
         // Update the task in the tasks array
         const taskIndex = state.tasks.findIndex(task => task.id === taskId);
         if (taskIndex !== -1) {
-          // --- FIXED: Properly update assignedTo field with complete user object (MCP Context 7) ---
-          // Business Rule: API returns complete task data with assignedTo user object
           if (result && result.assignedTo) {
             // API returned updated task with complete assignedTo user object
             state.tasks[taskIndex] = {
@@ -532,7 +508,6 @@ const taskSlice = createSlice({
         state.assignError = action.payload;
       })
       
-      // --- Filter Tasks ---
       .addCase(filterTasks.pending, (state) => {
         state.filtering = true;
         state.filterError = null;
@@ -547,7 +522,6 @@ const taskSlice = createSlice({
         state.filterError = action.payload;
       })
       
-      // --- Fetch Tasks Assigned to Employees ---
       .addCase(fetchTasksAssignedToEmployees.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -563,7 +537,6 @@ const taskSlice = createSlice({
         state.error = action.payload;
       })
       
-      // --- Fetch Employees for Task Assignment ---
       .addCase(fetchEmployeesForTaskAssignment.pending, (state) => {
         state.fetchingEmployees = true;
         state.fetchEmployeesError = null;
@@ -580,7 +553,6 @@ const taskSlice = createSlice({
   },
 });
 
-// --- Export Actions and Reducer (MCP Context 7) ---
 // Export all actions for use in components
 export const {
   clearError,
@@ -599,7 +571,6 @@ export const {
 // Export the reducer for store configuration
 export default taskSlice.reducer;
 
-// --- Selector Functions (MCP Context 7) ---
 // These provide easy access to specific parts of the state
 // Usage: const { tasks, loading } = useSelector(selectTaskState);
 export const selectTaskState = (state) => state.tasks;

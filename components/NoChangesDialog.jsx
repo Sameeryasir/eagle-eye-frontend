@@ -32,7 +32,6 @@ const NoChangesDialog = ({
           shadowRadius: 16,
           elevation: 8,
         }}>
-          {}
           <View style={{
             alignItems: 'center',
             marginBottom: 16,
@@ -59,7 +58,6 @@ const NoChangesDialog = ({
             </Text>
           </View>
 
-          {}
           <Text style={{
             fontSize: 15,
             color: '#6B7280',
@@ -70,7 +68,6 @@ const NoChangesDialog = ({
             No changes have been made. Please modify at least one field before updating.
           </Text>
 
-          {}
           <TouchableOpacity
             style={{
               backgroundColor: 'black',

@@ -216,7 +216,6 @@ export default function MyWeekView({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {}
       <View style={styles.weekViewContainer}>
         <ScrollView
           style={styles.scrollView}
@@ -260,7 +259,6 @@ export default function MyWeekView({ navigation }) {
 
       <CustomBottomNav handleFabPress={handleFabPress} />
 
-      {}
       <TaskDetailsModal
         visible={showTaskDialog}
         onClose={() => setShowTaskDialog(false)}
@@ -277,7 +275,6 @@ export default function MyWeekView({ navigation }) {
         }}
       />
 
-      {}
       <CreateEventModal
         visible={showEventCreationDialog}
         onClose={() => setShowEventCreationDialog(false)}

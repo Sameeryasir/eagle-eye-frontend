@@ -7,14 +7,10 @@ import CreateEventModal from '../components/CreateEventModal';
 const { width } = Dimensions.get('window');
 
 export default function MyWeekView() {
-  // --- State Management for CreateEventModal (MCP Context 7) ---
-  // Business Rule: Modal state controls visibility and handles event creation flow
   const [createEventModalVisible, setCreateEventModalVisible] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [currentWeek, setCurrentWeek] = useState(new Date());
 
-  // --- Sample Events Data (MCP Context 7) ---
-  // Business Rule: Demo events for week view display - replace with real API data
   const [events, setEvents] = useState([
     {
       id: 1,
@@ -39,8 +35,6 @@ export default function MyWeekView() {
     },
   ]);
 
-  // --- Week Navigation (MCP Context 7) ---
-  // Business Rule: Navigate between weeks without UI conflicts
   const goToPreviousWeek = () => {
     const newWeek = new Date(currentWeek);
     newWeek.setDate(newWeek.getDate() - 7);
@@ -53,8 +47,6 @@ export default function MyWeekView() {
     setCurrentWeek(newWeek);
   };
 
-  // --- Get Week Days (MCP Context 7) ---
-  // Business Rule: Generate array of days for current week
   const getWeekDays = () => {
     const days = [];
     const startOfWeek = new Date(currentWeek);
@@ -70,8 +62,6 @@ export default function MyWeekView() {
     return days;
   };
 
-  // --- Get Events for Date (MCP Context 7) ---
-  // Business Rule: Filter events for specific date
   const getEventsForDate = (date) => {
     return events.filter(event => {
       const eventDate = new Date(event.startDate);
@@ -79,16 +69,12 @@ export default function MyWeekView() {
     });
   };
 
-  // --- FAB Handler for CreateEventModal (MCP Context 7) ---
-  // Business Rule: FAB press opens CreateEventModal for event creation
   const handleFabPress = () => {
     console.log('WeekView - FAB pressed, opening CreateEventModal');
     setSelectedDate(new Date()); // Use current date as default
     setCreateEventModalVisible(true);
   };
 
-  // --- Event Creation Handler (MCP Context 7) ---
-  // Business Rule: Handle successful event creation and refresh calendar data
   const handleEventCreated = () => {
     console.log('WeekView - Event created successfully, refreshing calendar');
     // TODO: Replace with real API call to fetch events
@@ -96,22 +82,16 @@ export default function MyWeekView() {
     // In real implementation, fetch events from your API here
   };
 
-  // --- Modal Close Handler (MCP Context 7) ---
-  // Business Rule: Clean up modal state when closed
   const handleCloseModal = () => {
     setCreateEventModalVisible(false);
     setSelectedDate(null);
   };
 
-  // --- Event Press Handler (MCP Context 7) ---
-  // Business Rule: Handle event tap for future details modal
   const handleEventPress = (event) => {
     console.log('Event pressed:', event);
     // TODO: Implement event details modal or navigation
   };
 
-  // --- Day Press Handler (MCP Context 7) ---
-  // Business Rule: Handle day tap to create event for that date
   const handleDayPress = (date) => {
     console.log('Day pressed:', date);
     setSelectedDate(date);
@@ -120,8 +100,6 @@ export default function MyWeekView() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* --- Custom Week View Header (MCP Context 7) --- */}
-      {/* Business Rule: Simple week navigation without library conflicts */}
       <View style={styles.header}>
         <TouchableOpacity onPress={goToPreviousWeek} style={styles.navButton}>
           <Ionicons name="chevron-back" size={24} color="#333" />
@@ -136,8 +114,6 @@ export default function MyWeekView() {
         </TouchableOpacity>
       </View>
 
-      {/* --- Custom Week View Calendar (MCP Context 7) --- */}
-      {/* Business Rule: Simple 7-day week view without UI conflicts */}
       <ScrollView style={styles.weekViewContainer} showsVerticalScrollIndicator={false}>
         {/* Days Header */}
         <View style={styles.daysHeader}>
@@ -203,15 +179,11 @@ export default function MyWeekView() {
         </View>
       </ScrollView>
       
-      {/* --- Custom Bottom Navigation with FAB (MCP Context 7) --- */}
-      {/* Business Rule: Show FAB for Owner role only, hide for Manager and Employee roles */}
       <CustomBottomNav
         handleFabPress={handleFabPress}
         keyboardVisible={false}
       />
 
-      {/* --- Create Event Modal (MCP Context 7) --- */}
-      {/* Business Rule: Modal for creating new events with project/employee assignment */}
       <CreateEventModal
         visible={createEventModalVisible}
         onClose={handleCloseModal}
@@ -227,8 +199,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'white',
   },
-  // --- Header Navigation (MCP Context 7) ---
-  // Business Rule: Clean header with week navigation
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -254,14 +224,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
   },
-  // --- Week View Container (MCP Context 7) ---
-  // Business Rule: Scrollable container for week view
   weekViewContainer: {
     flex: 1,
     backgroundColor: 'white',
   },
-  // --- Days Header (MCP Context 7) ---
-  // Business Rule: Day names and numbers header
   daysHeader: {
     flexDirection: 'row',
     backgroundColor: '#f8f9fa',
@@ -297,8 +263,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
   },
-  // --- Week Grid (MCP Context 7) ---
-  // Business Rule: 7-column grid for days
   weekGrid: {
     flexDirection: 'row',
     flex: 1,
@@ -317,8 +281,6 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 8,
   },
-  // --- Event Styling (MCP Context 7) ---
-  // Business Rule: Event items with proper spacing
   eventItem: {
     borderRadius: 8,
     padding: 8,
@@ -341,8 +303,6 @@ const styles = StyleSheet.create({
     color: 'white',
     lineHeight: 16,
   },
-  // --- Empty Day Styling (MCP Context 7) ---
-  // Business Rule: Placeholder for empty days
   emptyDay: {
     flex: 1,
     justifyContent: 'center',

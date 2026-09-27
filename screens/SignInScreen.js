@@ -14,7 +14,6 @@ import { useNavigation } from "@react-navigation/native";
 const SignIn = () => {
   const navigation = useNavigation(); // Get navigation object
 
-  // --- Removed duplicate authentication check ---
   // AuthContext already handles authentication, no need to check here
 
   return (

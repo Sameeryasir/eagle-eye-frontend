@@ -1,97 +1,80 @@
-// --- Expo Token Service ---
-// This service handles Expo push token generation and notification permissions
-// Following MCP Context 7 best practices for clean, maintainable code
-
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { isRunningInExpoGo } from 'expo';
 
-// --- Notification Configuration ---
-// Configure how notifications are handled when the app is in foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+const pushSupportedInThisRuntime = () => {
+  if (isRunningInExpoGo()) {
+    return false;
+  }
+  return Device.isDevice;
+};
 
-/**
- * Request notification permissions from the user
- * This is required before we can generate an Expo push token
- * @returns {Promise<boolean>} - Returns true if permissions granted, false otherwise
- */
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+} catch (error) {
+  console.warn('Notification handler not available in this runtime:', error?.message);
+}
+
 export const requestNotificationPermissions = async () => {
   try {
-    console.log('Requesting notification permissions...');
-    
-    // Check if device supports push notifications
-    if (!Device.isDevice) {
-      console.log('Must use physical device for push notifications');
+    if (!pushSupportedInThisRuntime()) {
+      console.log(
+        'Skipping push permissions — Expo Go does not support remote push (use a dev build).',
+      );
       return false;
     }
 
-    // Request permissions
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
 
-    // If permissions not granted, request them
     if (existingStatus !== 'granted') {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
 
-    // Check final permission status
-    if (finalStatus !== 'granted') {
-      console.log('Notification permissions denied by user');
-      return false;
-    }
-
-    console.log('Notification permissions granted successfully');
-    return true;
+    return finalStatus === 'granted';
   } catch (error) {
     console.error('Error requesting notification permissions:', error);
     return false;
   }
 };
 
-/**
- * Generate and return Expo push token for the current device
- * This token is used to send push notifications to this specific device
- * @returns {Promise<string|null>} - Returns Expo push token or null if failed
- */
 export const generateExpoPushToken = async () => {
   try {
-    console.log('Generating Expo push token...');
-
-    // First, ensure we have notification permissions
-    const hasPermissions = await requestNotificationPermissions();
-    if (!hasPermissions) {
-      console.log('Cannot generate token without notification permissions');
+    if (!pushSupportedInThisRuntime()) {
       return null;
     }
 
-    // Generate the Expo push token
-    // Auto-detect project ID from app.json (works better in standalone builds)
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId || 
-                     Constants.easConfig?.projectId ||
-                     '965f7868-60cf-4aa7-ac08-a8e4125438de'; // Fallback to hardcoded if auto-detect fails
-    
-    console.log('Using project ID for push token:', projectId);
-    
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: projectId,
-    });
+    const hasPermissions = await requestNotificationPermissions();
+    if (!hasPermissions) {
+      return null;
+    }
 
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+      });
+    }
+
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ||
+      Constants.easConfig?.projectId ||
+      '965f7868-60cf-4aa7-ac08-a8e4125438de';
+
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const expoToken = tokenData.data;
-    console.log('Expo push token generated successfully:', expoToken);
 
-    // Store the token locally for future use
     await AsyncStorage.setItem('expoPushToken', expoToken);
-    console.log('Expo push token stored locally');
-
     return expoToken;
   } catch (error) {
     console.error('Error generating Expo push token:', error);
@@ -99,73 +82,58 @@ export const generateExpoPushToken = async () => {
   }
 };
 
-/**
- * Get the stored Expo push token from local storage
- * @returns {Promise<string|null>} - Returns stored token or null if not found
- */
 export const getStoredExpoToken = async () => {
   try {
-    const token = await AsyncStorage.getItem('expoPushToken');
-    return token;
+    return await AsyncStorage.getItem('expoPushToken');
   } catch (error) {
     console.error('Error retrieving stored Expo token:', error);
     return null;
   }
 };
 
-/**
- * Clear the stored Expo push token
- * This is useful when user logs out or wants to reset notifications
- */
 export const clearExpoToken = async () => {
   try {
     await AsyncStorage.removeItem('expoPushToken');
-    console.log('Expo push token cleared from storage');
   } catch (error) {
     console.error('Error clearing Expo token:', error);
   }
 };
 
-/**
- * Complete notification setup process
- * This function handles the entire flow: permissions + token generation
- * @returns {Promise<{success: boolean, token: string|null, error?: string}>}
- */
 export const setupNotifications = async () => {
   try {
-    console.log('Starting complete notification setup...');
+    if (!pushSupportedInThisRuntime()) {
+      return {
+        success: false,
+        token: null,
+        error: 'Remote push requires a development build (not available in Expo Go)',
+      };
+    }
 
-    // Step 1: Request permissions
     const hasPermissions = await requestNotificationPermissions();
     if (!hasPermissions) {
       return {
         success: false,
         token: null,
-        error: 'Notification permissions denied'
+        error: 'Notification permissions denied',
       };
     }
 
-    // Step 2: Generate token
     const token = await generateExpoPushToken();
     if (!token) {
       return {
         success: false,
         token: null,
-        error: 'Failed to generate Expo push token'
+        error: 'Failed to generate Expo push token',
       };
     }
 
-    console.log('Notification setup completed successfully');
-    return {
-      success: true,
-      token: token
-    };
+    return { success: true, token };
   } catch (error) {
     console.error('Error in notification setup:', error);
     return {
       success: false,
       token: null,
-      error: error.message || 'Unknown error during notification setup'
+      error: error.message || 'Unknown error during notification setup',
     };
   }
 };

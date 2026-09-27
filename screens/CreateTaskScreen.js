@@ -17,7 +17,6 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import DropDownPicker from "react-native-dropdown-picker";
 import Toast from 'react-native-toast-message';
 
-// --- Redux Integration (MCP Context 7) ---
 import { useDispatch, useSelector } from 'react-redux';
 import {
   createNewTask,
@@ -28,7 +27,6 @@ import {
 } from '../store/slices/taskSlice';
 
 function CreateTaskScreen({ navigation, route }) {
-  // --- Redux State (MCP Context 7) ---
   const dispatch = useDispatch();
   const creating = useSelector(selectTaskCreating);
   const createError = useSelector(selectTaskCreateError);
@@ -45,15 +43,11 @@ function CreateTaskScreen({ navigation, route }) {
   const [startDateTime, setStartDateTime] = useState(new Date());
   const [endDateTime, setEndDateTime] = useState(null);
   const [minStartTime] = useState(() => {
-    // --- Set minimum start time to current time rounded down to the minute ---
-    // Business Rule: Allow tasks to start at the current minute or later
     const now = new Date();
     now.setSeconds(0, 0); // Round down to the minute (remove seconds and milliseconds)
     return now;
   });
   
-  // --- Draft Task State Management ---
-  // Business Rule: Create draft tasks that can be saved and edited later, just like ViewAllTasksScreen
   const [isDraftMode, setIsDraftMode] = useState(false);
   const [draftTaskId, setDraftTaskId] = useState(null);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
@@ -68,8 +62,6 @@ function CreateTaskScreen({ navigation, route }) {
   const [isDropdownInteracting, setIsDropdownInteracting] = useState(false);
   const [flatListRef, setFlatListRef] = useState(null);
   
-  // --- Smooth Animation References ---
-  // Business Rule: Provide smooth UI transitions for better user experience
   const buttonPositionAnim = useRef(new Animated.Value(0)).current;
   const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
   const [priorityOptions] = useState([
@@ -80,8 +72,6 @@ function CreateTaskScreen({ navigation, route }) {
   ]);
 
   useEffect(() => {
-    // --- Smooth Keyboard Animation Setup ---
-    // Business Rule: Provide smooth transitions when keyboard shows/hides
     const keyboardDidShowListener = Keyboard.addListener(
       'keyboardDidShow',
       (event) => {
@@ -147,8 +137,6 @@ function CreateTaskScreen({ navigation, route }) {
     }
   }, [employees]);
 
-  // --- Draft Task Management Functions ---
-  // Business Rule: Create and manage draft tasks like ViewAllTasksScreen
   const createDraftTask = () => {
     const now = new Date();
     now.setSeconds(0, 0); // Round down to the minute
@@ -167,7 +155,6 @@ function CreateTaskScreen({ navigation, route }) {
     setDraftTaskId(newDraftTask.id);
     setIsDraftMode(true);
     
-    // --- Show Success Toast Message ---
     Toast.show({
       type: 'success',
       text1: 'Draft Saved!',
@@ -204,8 +191,6 @@ function CreateTaskScreen({ navigation, route }) {
     }
   };
 
-  // --- Smooth Dropdown Opening Function ---
-  // Business Rule: Smoothly dismiss keyboard when opening dropdowns
   const openDropdown = (dropdownType) => {
     // Smoothly dismiss keyboard with animation
     Keyboard.dismiss();
@@ -324,9 +309,6 @@ function CreateTaskScreen({ navigation, route }) {
 
     // Description is now optional - no validation required
 
-    // --- Validation: Dates & Times (MCP Context 7) ---
-    // Business Rule: Validate startTime >= minStartTime (when draft was created) and endTime > startTime
-
     // Ensure start time is not before the minimum start time (when draft was created)
     // Allow start time to be equal to minStartTime (same minute) with small buffer
     if (minStartTime && startDateTime < minStartTime) {
@@ -373,11 +355,8 @@ function CreateTaskScreen({ navigation, route }) {
     }
 
     try {
-      // --- FIXED: Proper timezone handling for task creation ---
-      // Business Rule: Use same timezone conversion approach as event and project handling
       // This ensures tasks created "today" appear on "today" in the calendar for all timezones
       
-      // --- Convert to local timezone for date extraction (same as event/project handling) ---
       // This ensures the task appears on the correct calendar day
       const localStartDate = new Date(startDateTime);
       const localEndDate = endDateTime ? new Date(endDateTime) : null;
@@ -440,7 +419,6 @@ function CreateTaskScreen({ navigation, route }) {
       console.log('Task Payload Being Sent:', taskPayload);
       console.log('=== End CreateTaskScreen Task Creation Debug ===');
 
-      // Use Redux action to create task (MCP Context 7)
       const result = await dispatch(createNewTask(taskPayload));
       
       if (createNewTask.fulfilled.match(result)) {
@@ -486,11 +464,14 @@ function CreateTaskScreen({ navigation, route }) {
     );
   };
 
-
-
   return (
     <View className="flex-1 bg-white">
-      {/* Black Navbar - Matching UpdateTaskModal */}
+      <View className="flex-row items-center px-4 pt-12 pb-3 border-b border-[#f0f0f0] bg-white">
+        <TouchableOpacity className="p-2 mr-2" onPress={handleCancel}>
+          <Ionicons name="chevron-back" size={24} color="#333" />
+        </TouchableOpacity>
+        <Text className="text-[20px] font-bold text-[#333]">Create Task</Text>
+      </View>
 
       <View className="flex-1 p-5 items-center">
         <FlatList
@@ -628,8 +609,6 @@ function CreateTaskScreen({ navigation, route }) {
                     />
                   </View>
                 </View>
-
-
 
                 {/* Start Date & Time */}
                 <View className="mb-5">

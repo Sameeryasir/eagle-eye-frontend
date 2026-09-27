@@ -1,5 +1,3 @@
-// --- Clear All Redux Stores Utility (MCP Context 7) ---
-// Business Rule: Clear all Redux state on logout to prevent data leakage between users
 // This utility can be called from anywhere (including AuthContext) to ensure clean logout
 
 import { store } from '../index';
@@ -17,18 +15,15 @@ export const clearAllReduxStores = async () => {
   try {
     console.log('🧹 Clearing all Redux stores and caches...');
     
-    // --- Clear Projects Redux State and Cache (MCP Context 7) ---
     // Clear all project data, errors, loading states, and caches
     store.dispatch(resetProjectsState());
     await clearProjectsCache();
     console.log('✅ Projects Redux state and cache cleared');
     
-    // --- Clear Tasks Redux State (MCP Context 7) ---
     // Clear all task data, errors, and loading states
     store.dispatch(resetTasksState());
     console.log('✅ Tasks Redux state cleared');
     
-    // --- Clear Logs Redux State (MCP Context 7) ---
     // Reset entire logs state to initial state (clears logs, errors, loading, cache, etc.)
     store.dispatch(resetLogsState());
     console.log('✅ Logs Redux state cleared');
@@ -44,6 +39,5 @@ export const clearAllReduxStores = async () => {
   }
 };
 
-// --- Export for use in components and contexts ---
 export default clearAllReduxStores;
 

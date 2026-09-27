@@ -199,7 +199,6 @@ const FilterModal = ({
       onRequestClose={onClose}
     >
       <View style={{ flex: 1, backgroundColor: "white" }}>
-        {}
         <View
           style={{
             backgroundColor: "#000",
@@ -231,7 +230,6 @@ const FilterModal = ({
           </TouchableOpacity>
         </View>
 
-        {}
         <ScrollView
           style={{ flex: 1, padding: Math.min(20, screenWidth * 0.05) }}
           keyboardShouldPersistTaps="handled"
@@ -242,7 +240,6 @@ const FilterModal = ({
             paddingBottom: 50,
           }}
         >
-          {}
           <View
             style={{
               marginBottom: Math.min(24, screenHeight * 0.03),
@@ -348,7 +345,6 @@ const FilterModal = ({
                         : "Assigned to Others"}
                     </Text>
 
-                    {}
                     <Ionicons
                       name={showEmployeePopup ? "chevron-up" : "chevron-down"}
                       size={Math.min(16, screenWidth * 0.04)}
@@ -440,7 +436,6 @@ const FilterModal = ({
             ))}
           </View>
 
-          {}
           <View
             style={{
               marginBottom: Math.min(24, screenHeight * 0.03),
@@ -530,7 +525,6 @@ const FilterModal = ({
             ))}
           </View>
 
-          {}
           <View style={{ marginBottom: Math.min(24, screenHeight * 0.03) }}>
             <Text
               style={{
@@ -621,7 +615,6 @@ const FilterModal = ({
           </View>
         </ScrollView>
 
-        {}
         {showEmployeePopup && (
           <View
             style={{
@@ -656,7 +649,6 @@ const FilterModal = ({
                 marginHorizontal: Math.min(20, screenWidth * 0.05),
               }}
             >
-              {}
               <View
                 style={{
                   paddingHorizontal: Math.min(16, screenWidth * 0.04),
@@ -687,7 +679,6 @@ const FilterModal = ({
                 </TouchableOpacity>
               </View>
 
-              {}
               <View
                 style={{
                   paddingHorizontal: Math.min(16, screenWidth * 0.04),
@@ -883,7 +874,6 @@ const FilterModal = ({
           </View>
         )}
 
-        {}
         <View
           style={{
             padding: Math.min(20, screenWidth * 0.05),
@@ -894,7 +884,6 @@ const FilterModal = ({
             gap: Math.min(12, screenWidth * 0.03),
           }}
         >
-          {}
           <TouchableOpacity
             style={{
               backgroundColor: "#F3F4F6",
@@ -919,7 +908,6 @@ const FilterModal = ({
             </Text>
           </TouchableOpacity>
 
-          {}
           <TouchableOpacity
             style={{
               backgroundColor: isApplyingFilters ? "#666" : "#000",

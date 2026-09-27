@@ -139,28 +139,11 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
         console.error("Error clearing Redux stores:", error);
       });
 
-      AsyncStorage.multiRemove([
-        "userFirstName",
-        "userLastName",
-        "userRole",
-        "authToken",
-        "refreshToken",
-        "userId",
-      ]).catch((error) => {
-        console.error("Error clearing AsyncStorage:", error);
-      });
-
-      logoutUser()
-        .then((result) => {
-          console.log("🖥️ Server logout result:", result.message);
-        })
+      logout()
+        .then(() => logoutUser())
         .catch((error) => {
-          console.error("Error calling server logout:", error);
+          console.error("Logout error:", error);
         });
-
-      logout().catch((error) => {
-        console.error("AuthContext logout error:", error);
-      });
 
       console.log(
         "✅ Logout initiated - navigation complete, cleanup in progress"

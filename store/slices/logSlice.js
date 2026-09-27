@@ -1,13 +1,8 @@
-// --- Log Redux Slice (MCP Context 7) ---
 // Centralized state management for logs using Redux Toolkit
-// This follows MCP Context 7 best practices for clean, maintainable state management
 
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { getLogs } from '../../services/log/getLogs';
 import { getLogsForOwnerRecent } from '../../services/log/getLogsForOwnerRecent';
-
-// --- Async Thunks for Log Operations (MCP Context 7) ---
-// Business Rule: All log operations go through Redux for consistent state management
 
 // Fetch logs for a specific project
 export const fetchLogsByProjectId = createAsyncThunk(
@@ -101,21 +96,16 @@ export const fetchRecentLogsForOwner = createAsyncThunk(
   }
 );
 
-// --- Initial State (MCP Context 7) ---
-// Business Rule: Clear initial state for predictable behavior
 const initialState = {
   logs: [],
   loading: false,
   error: null,
   currentProjectId: null,
   
-  // --- Project-based Caching (MCP Context 7) ---
   // Cache logs by project ID for better performance and offline support
   logsByProject: {}, // { projectId: { logs: [], timestamp: number, isFromCache: boolean } }
 };
 
-// --- Log Slice (MCP Context 7) ---
-// Business Rule: All log state changes go through Redux reducers
 const logSlice = createSlice({
   name: 'logs',
   initialState,
@@ -137,13 +127,10 @@ const logSlice = createSlice({
       state.currentProjectId = action.payload;
     },
     
-    // --- Reset Actions (MCP Context 7) ---
-    // Business Rule: Reset entire logs state to initial state on logout
     resetLogsState: () => initialState,
   },
   extraReducers: (builder) => {
     builder
-      // --- Fetch Logs by Project ID ---
       .addCase(fetchLogsByProjectId.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -159,7 +146,6 @@ const logSlice = createSlice({
         state.logs = [];
       })
       
-      // --- Fetch Recent Logs for Owner ---
       .addCase(fetchRecentLogsForOwner.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -177,18 +163,12 @@ const logSlice = createSlice({
   },
 });
 
-// --- Export Actions (MCP Context 7) ---
-// Business Rule: Export all actions for use in components
 export const { clearLogs, clearError, setCurrentProjectId, resetLogsState } = logSlice.actions;
 
-// --- Export Selectors (MCP Context 7) ---
-// Business Rule: Provide selectors for easy state access
 export const selectLogState = (state) => state.logs;
 export const selectLogs = (state) => state.logs.logs;
 export const selectLogLoading = (state) => state.logs.loading;
 export const selectLogError = (state) => state.logs.error;
 export const selectCurrentProjectId = (state) => state.logs.currentProjectId;
 
-// --- Export Reducer (MCP Context 7) ---
-// Business Rule: Export reducer for store configuration
 export default logSlice.reducer;

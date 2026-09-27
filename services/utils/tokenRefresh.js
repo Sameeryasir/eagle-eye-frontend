@@ -1,8 +1,3 @@
-/**
- * Change Summary:
- * - What: Refresh uses /auth/token/refresh; fix null-check bug
- * - Why: Match renamed backend route; was checking wrong variable
- */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_URL } from "../../config/api";
 import { ApiRoutes } from "../api/routes";

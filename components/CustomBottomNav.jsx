@@ -1,11 +1,5 @@
 import React from "react";
-import {
-  View,
-  TouchableOpacity,
-  Dimensions,
-  Animated,
-  Platform,
-} from "react-native";
+import { View, TouchableOpacity, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { getUserRole } from "../services/utils/userRole";
@@ -15,13 +9,42 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import pusher from "../pusherClient";
 import appEmitter from "../utils/appEmitter";
 
-const { width, height } = Dimensions.get("window");
+function useBottomNavLayout() {
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
-const isSmallScreen = width < 375;
-const isVerySmallScreen = width < 360;
-const iconSize = isVerySmallScreen ? 20 : isSmallScreen ? 22 : 24;
-const navHeight = isVerySmallScreen ? 60 : isSmallScreen ? 65 : 70;
-const fabSize = isVerySmallScreen ? 55 : isSmallScreen ? 60 : 65;
+  const scale = Math.min(Math.max(width / 390, 0.82), 1.12);
+  const barWidth = Math.min(width * 0.92, 420);
+  const horizontalPadding = Math.round(Math.min(Math.max(width * 0.035, 10), 18));
+  const navHeight = Math.round(Math.min(Math.max(58 * scale, 54), 72));
+  const iconSize = Math.round(Math.min(Math.max(22 * scale, 18), 26));
+  const fabSize = Math.round(Math.min(Math.max(58 * scale, 50), 68));
+  const fabIconSize = Math.round(fabSize * 0.46);
+  const indicatorWidth = Math.round(Math.min(Math.max(18 * scale, 14), 24));
+  const badgeSize = Math.round(Math.min(Math.max(8 * scale, 7), 10));
+  const bottomGap = Math.max(insets.bottom > 0 ? 6 : 12, 8);
+  const fabBottom = bottomGap + navHeight * 0.55;
+  const tabCountWithFab = 5;
+  const tabCountNoFab = 4;
+
+  return {
+    width,
+    insets,
+    barWidth,
+    horizontalPadding,
+    navHeight,
+    iconSize,
+    fabSize,
+    fabIconSize,
+    indicatorWidth,
+    badgeSize,
+    bottomGap,
+    fabBottom,
+    tabWidth: (hideFab) =>
+      (barWidth - horizontalPadding * 2) /
+      (hideFab ? tabCountNoFab : tabCountWithFab),
+  };
+}
 
 const mapRouteNameToTab = (routeName) => {
   switch (routeName) {
@@ -40,7 +63,24 @@ const mapRouteNameToTab = (routeName) => {
   }
 };
 
-export default function CustomBottomNav({
+const SHOW_BOTTOM_NAV_ON = new Set([
+  "HomeScreen",
+  "CalenderScreen",
+  "ChatScreen",
+  "NotificationScreen",
+]);
+
+export default function CustomBottomNav(props) {
+  const route = useRoute();
+
+  if (!SHOW_BOTTOM_NAV_ON.has(route.name) || props.keyboardVisible) {
+    return null;
+  }
+
+  return <CustomBottomNavBar {...props} />;
+}
+
+function CustomBottomNavBar({
   keyboardVisible = false,
   task = false,
   projectId = null,
@@ -61,7 +101,7 @@ export default function CustomBottomNav({
   });
   const [userRole, setUserRole] = React.useState(propUserRole ?? null);
   const [hasNewNotification, setHasNewNotification] = React.useState(false);
-  const insets = useSafeAreaInsets();
+  const layout = useBottomNavLayout();
   const { userInfo } = useAuth();
 
   React.useEffect(() => {
@@ -455,9 +495,15 @@ export default function CustomBottomNav({
     navigation.navigate("CalenderScreen");
   };
 
-  if (keyboardVisible) {
-    return null;
-  }
+  const tabWidth = layout.tabWidth(shouldHideFAB);
+  const activeIndicatorStyle = {
+    position: "absolute",
+    bottom: -Math.round(layout.navHeight * 0.08),
+    width: layout.indicatorWidth,
+    height: 3,
+    backgroundColor: "#ffffff",
+    borderRadius: 2,
+  };
 
   return (
     <View
@@ -469,178 +515,125 @@ export default function CustomBottomNav({
         alignItems: "center",
         zIndex: 1000,
         backgroundColor: "transparent",
-
-        marginBottom: 0,
-        paddingBottom: insets.bottom,
-        transform: [{ translateY: 20 }],
+        paddingBottom: layout.insets.bottom,
       }}
+      pointerEvents="box-none"
     >
-      {}
       <View
         style={{
           flexDirection: "row",
           alignItems: "center",
           justifyContent: shouldHideFAB ? "space-around" : "space-between",
-          width: "90%",
-          height: navHeight,
+          width: layout.barWidth,
+          maxWidth: "100%",
+          height: layout.navHeight,
           backgroundColor: transparentBackground ? "transparent" : "black",
-          borderRadius: 35,
-          paddingHorizontal: 15,
-          paddingBottom: 5,
-          marginBottom: 20,
+          borderRadius: layout.navHeight / 2,
+          paddingHorizontal: layout.horizontalPadding,
+          marginBottom: layout.bottomGap,
           shadowColor: transparentBackground ? "transparent" : "#000",
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: transparentBackground ? 0 : 0.15,
           shadowRadius: 4,
           elevation: transparentBackground ? 0 : 6,
-
           position: "relative",
           overflow: "visible",
         }}
       >
         <TouchableOpacity
           className="items-center justify-center relative"
-          style={{
-            width: shouldHideFAB
-              ? (width * 0.9 - 30) / 4
-              : (width * 0.9 - 30) / 5,
-          }}
+          style={{ width: tabWidth, minHeight: layout.navHeight }}
           onPress={navigateToHome}
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
         >
-          <Ionicons name="home-outline" size={iconSize} color="#fff" />
-          {activeTab === "home" && (
-            <View
-              style={{
-                position: "absolute",
-                bottom: -6,
-                width: 22,
-                height: 3,
-                backgroundColor: "#ffffff",
-                borderRadius: 2,
-              }}
-            />
-          )}
+          <Ionicons name="home-outline" size={layout.iconSize} color="#fff" />
+          {activeTab === "home" && <View style={activeIndicatorStyle} />}
         </TouchableOpacity>
+
         <TouchableOpacity
           className="items-center justify-center relative"
-          style={{
-            width: shouldHideFAB
-              ? (width * 0.9 - 30) / 4
-              : (width * 0.9 - 30) / 5,
-          }}
+          style={{ width: tabWidth, minHeight: layout.navHeight }}
           onPress={navigateToProfile}
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
         >
-          {}
-          <Ionicons name="calendar-outline" size={iconSize} color="#fff" />
-
-          {activeTab === "profile" && (
-            <View
-              style={{
-                position: "absolute",
-                bottom: -6,
-                width: 22,
-                height: 3,
-                backgroundColor: "#ffffff",
-                borderRadius: 2,
-              }}
-            />
-          )}
+          <Ionicons
+            name="calendar-outline"
+            size={layout.iconSize}
+            color="#fff"
+          />
+          {activeTab === "profile" && <View style={activeIndicatorStyle} />}
         </TouchableOpacity>
 
-        {}
-        {}
-        {!shouldHideFAB && <View style={{ width: 65 }} />}
+        {!shouldHideFAB && <View style={{ width: layout.fabSize }} />}
 
         <TouchableOpacity
           className="items-center justify-center relative"
-          style={{
-            width: shouldHideFAB
-              ? (width * 0.9 - 30) / 4
-              : (width * 0.9 - 30) / 5,
-          }}
+          style={{ width: tabWidth, minHeight: layout.navHeight }}
           onPress={navigateToChats}
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
         >
-          <Ionicons name="chatbubble-outline" size={iconSize} color="#fff" />
-          {activeTab === "chats" && (
-            <View
-              style={{
-                position: "absolute",
-                bottom: -6,
-                width: 22,
-                height: 3,
-                backgroundColor: "#ffffff",
-                borderRadius: 2,
-              }}
-            />
-          )}
+          <Ionicons
+            name="chatbubble-outline"
+            size={layout.iconSize}
+            color="#fff"
+          />
+          {activeTab === "chats" && <View style={activeIndicatorStyle} />}
         </TouchableOpacity>
 
         <TouchableOpacity
           className="items-center justify-center relative"
-          style={{
-            width: shouldHideFAB
-              ? (width * 0.9 - 30) / 4
-              : (width * 0.9 - 30) / 5,
-          }}
+          style={{ width: tabWidth, minHeight: layout.navHeight }}
           onPress={navigateToNotifications}
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
         >
-          <Ionicons name="notifications-outline" size={24} color="#fff" />
-          {}
-          {hasNewNotification && (
-            <View
-              style={{
-                position: "absolute",
-                top: -2,
-                right: -2,
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: "#FF3B30",
-                borderWidth: 1,
-                borderColor: "#fff",
-                marginTop: 2,
-                marginRight: 30,
-              }}
+          <View>
+            <Ionicons
+              name="notifications-outline"
+              size={layout.iconSize}
+              color="#fff"
             />
-          )}
+            {hasNewNotification && (
+              <View
+                style={{
+                  position: "absolute",
+                  top: -2,
+                  right: -2,
+                  width: layout.badgeSize,
+                  height: layout.badgeSize,
+                  borderRadius: layout.badgeSize / 2,
+                  backgroundColor: "#FF3B30",
+                  borderWidth: 1,
+                  borderColor: "#fff",
+                }}
+              />
+            )}
+          </View>
           {activeTab === "notifications" && (
-            <View
-              style={{
-                position: "absolute",
-                bottom: -6,
-                width: 22,
-                height: 3,
-                backgroundColor: "#ffffff",
-                borderRadius: 2,
-              }}
-            />
+            <View style={activeIndicatorStyle} />
           )}
         </TouchableOpacity>
       </View>
 
-      {}
-      {}
-      {}
       {!shouldHideFAB && (
         <View
           style={{
             position: "absolute",
-            bottom: 45 + insets.bottom,
+            bottom: layout.fabBottom + layout.insets.bottom,
             zIndex: 1001,
-
             left: "50%",
-            marginLeft: -32.5,
+            marginLeft: -layout.fabSize / 2,
           }}
+          pointerEvents="box-none"
         >
           <TouchableOpacity
             style={{
-              width: 65,
-              height: 65,
-              borderRadius: 32.5,
+              width: layout.fabSize,
+              height: layout.fabSize,
+              borderRadius: layout.fabSize / 2,
               backgroundColor: "black",
               justifyContent: "center",
               alignItems: "center",
-              borderWidth: 3,
+              borderWidth: Math.max(2, Math.round(layout.fabSize * 0.045)),
               borderColor: "white",
               shadowColor: "#000",
               shadowOffset: { width: 0, height: 4 },
@@ -650,7 +643,7 @@ export default function CustomBottomNav({
             }}
             onPress={handleAddPress}
           >
-            <Ionicons name="add" size={30} color="white" />
+            <Ionicons name="add" size={layout.fabIconSize} color="white" />
           </TouchableOpacity>
         </View>
       )}

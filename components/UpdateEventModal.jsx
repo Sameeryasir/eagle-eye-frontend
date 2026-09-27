@@ -668,7 +668,6 @@ const UpdateEventModal = ({ visible, onClose, event, onEventUpdated }) => {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
         >
-          {}
           <View className="bg-black px-4 py-3 flex-row items-center justify-between">
             <Text className="text-white text-[18px] font-semibold">
               Update Event
@@ -697,7 +696,6 @@ const UpdateEventModal = ({ visible, onClose, event, onEventUpdated }) => {
                   </View>
 
                   <View className="mb-5">
-                    {}
                     <View className="mb-5">
                       <View className="flex-row items-center mb-2">
                         <Ionicons
@@ -722,7 +720,6 @@ const UpdateEventModal = ({ visible, onClose, event, onEventUpdated }) => {
                       />
                     </View>
 
-                    {}
                     <View className="mb-5">
                       <View className="flex-row items-center mb-2">
                         <Ionicons
@@ -750,7 +747,6 @@ const UpdateEventModal = ({ visible, onClose, event, onEventUpdated }) => {
                       />
                     </View>
 
-                    {}
                     <View className="mb-5">
                       <View className="flex-row items-center mb-2">
                         <Ionicons
@@ -793,7 +789,6 @@ const UpdateEventModal = ({ visible, onClose, event, onEventUpdated }) => {
                       </View>
                     </View>
 
-                    {}
                     <View className="mb-5">
                       <View className="flex-row items-center mb-2">
                         <Ionicons
@@ -842,7 +837,6 @@ const UpdateEventModal = ({ visible, onClose, event, onEventUpdated }) => {
             />
           </View>
 
-          {}
           <View className="absolute bottom-0 left-0 right-0 px-5 pt-5 pb-5 bg-transparent items-center">
             <TouchableOpacity
               className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
@@ -861,7 +855,6 @@ const UpdateEventModal = ({ visible, onClose, event, onEventUpdated }) => {
             </TouchableOpacity>
           </View>
 
-          {}
           {showStartDatePicker && (
             <DateTimePicker
               value={startDate}
@@ -882,7 +875,6 @@ const UpdateEventModal = ({ visible, onClose, event, onEventUpdated }) => {
             />
           )}
 
-          {}
           {showStartTimePicker && (
             <DateTimePicker
               value={startTime}
@@ -905,13 +897,11 @@ const UpdateEventModal = ({ visible, onClose, event, onEventUpdated }) => {
             />
           )}
 
-          {}
           <NoChangesDialog
             visible={noChangesDialogVisible}
             onClose={() => setNoChangesDialogVisible(false)}
           />
 
-          {}
           <ErrorDialog
             visible={errorDialog.visible}
             onClose={closeErrorDialog}

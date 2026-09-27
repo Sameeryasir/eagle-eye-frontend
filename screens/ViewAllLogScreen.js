@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import {
   View,
@@ -36,7 +35,6 @@ import {
   MenuTrigger,
 } from "react-native-popup-menu";
 
-// --- Redux Imports (MCP Context 7) ---
 // Import project selectors and actions from Redux store
 import { 
   selectProjects, 
@@ -51,7 +49,6 @@ const searchBarClasses = `flex-row items-center rounded-2xl px-4 py-3 bg-[#F8FAF
 const ViewAllLogScreen = ({ route, navigation }) => {
   const { logs, projectName } = route.params || [];
 
-  // --- Redux Hooks (MCP Context 7) ---
   // Access Redux store for projects data instead of making API calls
   const dispatch = useDispatch();
   const projects = useSelector(selectProjects);
@@ -99,12 +96,10 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   const [userRole, setUserRole] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingLogs, setLoadingLogs] = useState(false);
-  // --- Removed loadingProjects state (MCP Context 7) ---
   // Now using projectsLoading from Redux store instead of local state
   const [loadingProjectLogs, setLoadingProjectLogs] = useState(false);
   const [loadingTimeFilter, setLoadingTimeFilter] = useState(false);
 
-  // --- Update Modal State ---
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
   const [selectedLogForUpdate, setSelectedLogForUpdate] = useState(null);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
@@ -119,7 +114,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     fetchUserRole();
   }, []);
 
-  // --- Load Projects from Redux Store (MCP Context 7) ---
   // Fetch projects from Redux store instead of making direct API calls
   React.useEffect(() => {
     const loadProjectsFromStore = () => {
@@ -136,7 +130,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     loadProjectsFromStore();
   }, [projects.length, projectsLoading, dispatch]);
 
-  // --- Generate Project Options When Projects Load (MCP Context 7) ---
   // Trigger project options generation when projects are loaded from Redux store
   React.useEffect(() => {
     if (projects.length > 0 && !projectsLoading) {
@@ -144,7 +137,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     }
   }, [projects, projectsLoading]);
 
-  // --- Generate Project Options from Redux Store (MCP Context 7) ---
   // Create project filter options from Redux store data instead of API
   const generateProjectOptionsFromStore = () => {
     console.log("ViewAllLogScreen - Generating project options from Redux store");
@@ -519,7 +511,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     }
   };
 
-  // --- Removed generateProjectOptions function (MCP Context 7) ---
   // This function is replaced by generateProjectOptionsFromStore() which uses Redux store
   // No direct API calls needed as projects are managed by Redux store
 
@@ -684,7 +675,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     console.log("Selected log:", log);
   };
 
-  // --- Handle Log Update ---
   const handleUpdateLog = async (updateData) => {
     try {
       if (!selectedLogForUpdate?.id) {
@@ -755,7 +745,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     try {
       console.log("ViewAllLogScreen - Starting refresh for user role:", userRole);
 
-      // --- Refresh Projects from Redux Store (MCP Context 7) ---
       // Use Redux refresh action instead of direct API calls
       console.log("ViewAllLogScreen - Refreshing projects from Redux store...");
       await dispatch(refreshProjects());
@@ -977,7 +966,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
 
       setFilteredLogs(updatedFilteredLogs);
 
-      // --- Show Success Toast Message ---
       Toast.show({
         type: 'success',
         text1: 'Log Deleted Successfully!',
@@ -994,7 +982,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         errorMessage = error.message;
       }
 
-      // --- Show Error Toast Message ---
       Toast.show({
         type: 'error',
         text1: 'Delete Failed',

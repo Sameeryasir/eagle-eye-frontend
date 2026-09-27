@@ -543,7 +543,6 @@ export default function UpdateTaskModal({
       onRequestClose={onClose}
     >
       <View className="flex-1 bg-white">
-        {}
         <View className="bg-black px-4 py-3 flex-row items-center justify-between">
           <Text className="text-black text-[18px] font-semibold">
             Update Task
@@ -574,7 +573,6 @@ export default function UpdateTaskModal({
                   </View>
 
                   <View className="mb-5">
-                    {}
                     <View className="mb-5">
                       <View className="flex-row items-center mb-2">
                         <Ionicons
@@ -599,7 +597,6 @@ export default function UpdateTaskModal({
                       />
                     </View>
 
-                    {}
                     <View className="mb-5">
                       <View className="flex-row items-center mb-2">
                         <Ionicons
@@ -627,7 +624,6 @@ export default function UpdateTaskModal({
                       />
                     </View>
 
-                    {}
                     <View className="mb-5">
                       <View className="flex-row items-center mb-2">
                         <Ionicons
@@ -793,7 +789,6 @@ export default function UpdateTaskModal({
                       />
                     </View>
 
-                    {}
                     <View className="mb-5">
                       <View className="flex-row items-center mb-2">
                         <Ionicons
@@ -885,7 +880,6 @@ export default function UpdateTaskModal({
                       </View>
                     </View>
 
-                    {}
                     <View className="mb-5">
                       <View className="flex-row items-center mb-2">
                         <Ionicons
@@ -932,7 +926,6 @@ export default function UpdateTaskModal({
                       </View>
                     </View>
 
-                    {}
                     <View style={{ marginBottom: 30 }}>
                       <View className="flex-row items-center mb-2">
                         <Ionicons
@@ -990,7 +983,6 @@ export default function UpdateTaskModal({
           </View>
         </TouchableWithoutFeedback>
 
-        {}
         <View className="absolute bottom-0 left-0 right-0 px-5 pt-5 pb-5 bg-transparent items-center">
           <TouchableOpacity
             className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
@@ -1010,7 +1002,6 @@ export default function UpdateTaskModal({
           </TouchableOpacity>
         </View>
 
-        {}
         {showStartDatePicker && (
           <DateTimePicker
             value={startDateTime}
@@ -1045,13 +1036,11 @@ export default function UpdateTaskModal({
           />
         )}
 
-        {}
         <NoChangesDialog
           visible={noChangesDialogVisible}
           onClose={() => setNoChangesDialogVisible(false)}
         />
 
-        {}
         <ErrorDialog
           visible={errorDialog.visible}
           onClose={closeErrorDialog}

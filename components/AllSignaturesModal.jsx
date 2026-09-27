@@ -56,7 +56,6 @@ const AllSignaturesModal = ({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView className="flex-1 bg-white">
-        {}
         <View className="flex-row items-center justify-between p-4 border-b border-gray-200">
           <TouchableOpacity
             onPress={onClose}
@@ -71,7 +70,6 @@ const AllSignaturesModal = ({
           <View className="w-8" />
         </View>
 
-        {}
         <View className="flex-1">
           {isLoading ? (
             <View className="flex-1 items-center justify-center">

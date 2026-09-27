@@ -18,8 +18,6 @@ const FilesScreen = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // --- Fetch My Projects (MCP Context 7) ---
-  // Business Rule: Load user's projects when screen mounts
   const fetchMyProjects = async () => {
     setIsLoading(true);
     setError(null);
@@ -44,12 +42,10 @@ const FilesScreen = ({ navigation }) => {
     }
   };
 
-  // --- Load Projects on Mount (MCP Context 7) ---
   useEffect(() => {
     fetchMyProjects();
   }, []);
 
-  // --- Render Project Item (MCP Context 7) ---
   const renderProjectItem = ({ item }) => {
     return (
       <TouchableOpacity
@@ -146,8 +142,6 @@ const FilesScreen = ({ navigation }) => {
         </View>
       )}
       
-      {/* Custom Bottom Navigation (MCP Context 7) */}
-      {/* Business Rule: Show bottom nav without FAB icon */}
       <CustomBottomNav 
         navigation={navigation} 
         hideFAB={true}

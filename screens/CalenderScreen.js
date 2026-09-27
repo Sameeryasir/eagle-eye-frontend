@@ -17,14 +17,12 @@ import CustomBottomNav from "../components/CustomBottomNav";
 import MyWeekView from "../components/WeekView";
 import CalendarToggle from "../components/CalendarToggle";
 import CreateEventModal from "../components/CreateEventModal";
-// --- API Services ---
 import { getEventsForLogInUser } from "../services/event/getEventsForLogInUser";
 import getAllTasks from "../services/tasks/getAllTasks";
 
 const { height } = Dimensions.get("window");
 
 function CalenderScreen({ navigation }) {
-  // --- Local State Management ---
   const [tasks, setTasks] = useState({});
   const [localEvents, setLocalEvents] = useState({}); // Processed events grouped by date
   const [combinedItems, setCombinedItems] = useState({}); // Combined tasks and events
@@ -36,14 +34,11 @@ function CalenderScreen({ navigation }) {
   const [monthlyViewLoading, setMonthlyViewLoading] = useState(false); // Loading state for monthly view switch
   const [userRole, setUserRole] = useState(null); // User role state to prevent FAB lag
   
-  // --- State for create event modal ---
   const [showEventCreationDialog, setShowEventCreationDialog] = useState(false);
   
-  // --- Animation values for smooth toggle transitions ---
   const weeklyButtonScale = useState(new Animated.Value(viewMode === 'weekly' ? 1 : 0.95))[0];
   const monthlyButtonScale = useState(new Animated.Value(viewMode === 'monthly' ? 1 : 0.95))[0];
 
-  // --- Helper function for date and time formatting ---
   const formatDateTime = (dateString) => {
     if (!dateString) return "N/A";
     const date = new Date(dateString);
@@ -56,14 +51,11 @@ function CalenderScreen({ navigation }) {
     return `${dateStr} ${timeStr}`; // "1/15/2024 2:30 PM"
   };
 
-
-  // --- Process Redux Tasks ---
   const processTasks = (tasksArray) => {
     try {
       console.log('CalenderScreen - Processing tasks from Redux:', tasksArray.length);
       
       if (tasksArray && tasksArray.length > 0) {
-        // --- Group tasks by date ---
         const tasksByDate = {};
         
         tasksArray.forEach(task => {
@@ -72,15 +64,12 @@ function CalenderScreen({ navigation }) {
             return; // Skip tasks without startTime
           }
           
-          // --- FIXED: Convert to local timezone for date extraction ---
-          // Business Rule: Use local date instead of UTC to prevent timezone issues
           // This ensures tasks created "today" appear on "today" in the calendar
           const localDate = new Date(task.startTime);
           const taskDate = localDate.getFullYear() + '-' + 
             String(localDate.getMonth() + 1).padStart(2, '0') + '-' + 
             String(localDate.getDate()).padStart(2, '0');
           
-          // --- Debug: Log timezone conversion for verification ---
           console.log(`Task "${task.title}" - Original: ${task.startTime}, Local Date: ${localDate.toLocaleDateString()}, Task Date: ${taskDate}`);
           
           if (!tasksByDate[taskDate]) {
@@ -90,13 +79,10 @@ function CalenderScreen({ navigation }) {
           tasksByDate[taskDate].push({
             id: task.id,
             title: task.title,
-            // --- Keep original date objects for timetable ---
             startTime: task.startTime ? new Date(task.startTime) : null,
             endTime: task.endTime ? new Date(task.endTime) : null,
-            // --- Add formatted date + time strings for display ---
             startTimeFormatted: task.startTime ? formatDateTime(task.startTime) : 'No time set',
             endTimeFormatted: task.endTime ? formatDateTime(task.endTime) : 'No end time',
-            // --- Add flag to check if endTime is null ---
             hasEndTime: task.endTime !== null && task.endTime !== undefined,
             description: task.description || 'No description',
             priority: task.priority,
@@ -115,10 +101,8 @@ function CalenderScreen({ navigation }) {
     }
   };
 
-  // --- Process Events from Redux ---
   const processEvents = (eventsArray) => {
     try {
-      // --- ENHANCED DEBUGGING: Log all input parameters ---
       console.log('=== CalenderScreen processEvents Debug ===');
       console.log('User role:', userRole);
       console.log('Events array:', eventsArray);
@@ -139,7 +123,6 @@ function CalenderScreen({ navigation }) {
       console.log('CalenderScreen - Processing events from Redux:', eventsArray.length);
       
       if (eventsArray && eventsArray.length > 0) {
-        // --- Group events by date ---
         const eventsByDate = {};
         
         eventsArray.forEach(event => {
@@ -148,13 +131,10 @@ function CalenderScreen({ navigation }) {
             return; // Skip events without startTime
           }
           
-          // --- FIXED: Convert to local timezone for date extraction ---
-          // Business Rule: Use automatic local timezone conversion
           // This ensures events created "today" appear on "today" in the calendar
           const localStartDate = new Date(event.startTime);
           const localEndDate = event.endTime ? new Date(event.endTime) : localStartDate;
           
-          // --- Get date strings for start and end dates using automatic local timezone ---
           const eventStartDate = localStartDate.toLocaleString('en-CA', {
             year: 'numeric',
             month: '2-digit',
@@ -167,37 +147,29 @@ function CalenderScreen({ navigation }) {
             day: '2-digit'
           }).replace(/,/g, ''); // Format: YYYY-MM-DD
           
-          // --- Debug: Log timezone conversion for verification ---
           console.log(`Event "${event.title}" - Original: ${event.startTime}, Local Start: ${localStartDate.toLocaleDateString()}, Local End: ${localEndDate.toLocaleDateString()}`);
           console.log(`Event "${event.title}" - Start Date: ${eventStartDate}, End Date: ${eventEndDate}`);
           
-          // --- Check if this is a multi-day event ---
           const isMultiDayEvent = eventStartDate !== eventEndDate;
           
-          // --- Create event object with multi-day information ---
           const eventObject = {
             id: event.id,
             title: event.title,
             type: 'event', // Mark as event for identification
-            // --- Keep original date objects for timetable ---
             startTime: event.startTime ? new Date(event.startTime) : null,
             endTime: event.endTime ? new Date(event.endTime) : null,
-            // --- Add formatted date + time strings for display ---
             startTimeFormatted: event.startTime ? formatDateTime(event.startTime) : 'No time set',
             endTimeFormatted: event.endTime ? formatDateTime(event.endTime) : 'No end time',
             description: event.description || 'No description',
             priority: event.priority,
             status: event.status,
-            // --- Add project and employee assignment information ---
             assignedTo: event.assignedTo || [],
             projects: event.projects || [],
-            // --- Multi-day event properties ---
             isMultiDayEvent: isMultiDayEvent,
             originalStartDate: eventStartDate,
             originalEndDate: eventEndDate
           };
           
-          // --- Add event to all dates it spans ---
           if (isMultiDayEvent) {
             console.log(`Multi-day event "${event.title}" - Adding to all dates from ${eventStartDate} to ${eventEndDate}`);
             
@@ -243,11 +215,9 @@ function CalenderScreen({ navigation }) {
     }
   };
 
-  // --- Combine tasks and events for calendar display ---
   const combineTasksAndEvents = () => {
     const combined = {};
     
-    // --- Process all unique dates from both tasks and events ---
     const allDates = new Set([
       ...Object.keys(tasks),
       ...Object.keys(localEvents)
@@ -257,11 +227,9 @@ function CalenderScreen({ navigation }) {
       const taskList = tasks[date] || [];
       const eventList = localEvents[date] || [];
       
-      // --- Mark tasks with type for identification ---
       const markedTasks = taskList.map(task => ({ ...task, type: 'task' }));
       const markedEvents = eventList.map(event => ({ ...event, type: 'event' }));
       
-      // --- Combine and sort by start time ---
       const combinedItems = [...markedTasks, ...markedEvents].sort((a, b) => {
         if (!a.startTime || !b.startTime) return 0;
         return new Date(a.startTime) - new Date(b.startTime);
@@ -275,7 +243,6 @@ function CalenderScreen({ navigation }) {
     setCombinedItems(combined);
   };
 
-  // --- Load user role first to prevent FAB lag ---
   useEffect(() => {
     const loadUserRole = async () => {
       try {
@@ -290,7 +257,6 @@ function CalenderScreen({ navigation }) {
     loadUserRole();
   }, []);
 
-  // --- Load data on component mount ---
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
@@ -314,13 +280,10 @@ function CalenderScreen({ navigation }) {
           processTasks(tasksResponse.data);
         }
         
-        // --- FIXED: Correct API response structure access ---
-        // Business Rule: getEventsForLogInUser returns response.data directly, not nested
         if (eventsResponse && eventsResponse.data) {
           console.log('CalenderScreen - Processing events:', eventsResponse.data.length);
           processEvents(eventsResponse.data);
         } else if (eventsResponse && Array.isArray(eventsResponse)) {
-          // --- FALLBACK: Handle case where response is already the data array ---
           console.log('CalenderScreen - Processing events (fallback):', eventsResponse.length);
           processEvents(eventsResponse);
         } else {
@@ -331,7 +294,6 @@ function CalenderScreen({ navigation }) {
         console.error('CalenderScreen - Error loading initial data:', err);
         console.error('CalenderScreen - Error details:', err.message);
         
-        // --- ENHANCED ERROR HANDLING: Show specific error messages ---
         if (err.message.includes('Access denied')) {
           setError(`Access denied: ${err.message}`);
         } else if (err.message.includes('No token found')) {
@@ -344,14 +306,11 @@ function CalenderScreen({ navigation }) {
       }
     };
     
-    // --- FIXED: Only load data when userRole is available ---
-    // Business Rule: Prevent loading data before user role is determined
     if (userRole !== null) {
       loadData();
     }
   }, [userRole]); // Add userRole as dependency
 
-  // --- Process events when user role changes ---
   useEffect(() => {
     // Re-process events when user role is loaded
     if (userRole) {
@@ -359,12 +318,10 @@ function CalenderScreen({ navigation }) {
     }
   }, [userRole]);
 
-  // --- Combine tasks and events when either changes ---
   useEffect(() => {
     combineTasksAndEvents();
   }, [tasks, localEvents]);
 
-  // --- Handler for when event is created ---
   const handleEventCreated = async () => {
     // Refresh both tasks and events when a new event is created
     try {
@@ -378,7 +335,6 @@ function CalenderScreen({ navigation }) {
         processTasks(tasksResponse.data);
       }
       
-      // --- FIXED: Use same corrected API response structure access ---
       if (eventsResponse && eventsResponse.data) {
         processEvents(eventsResponse.data);
       } else if (eventsResponse && Array.isArray(eventsResponse)) {
@@ -398,13 +354,11 @@ function CalenderScreen({ navigation }) {
     }
   };
 
-  // --- Handle day press ---
   const onDayPress = (day) => {
     const combinedList = combinedItems[day.dateString] || [];
     const taskList = tasks[day.dateString] || [];
     const eventList = localEvents[day.dateString] || [];
     
-    // --- Debug: Log the day press data ---
     console.log('=== CalenderScreen onDayPress Debug ===');
     console.log('Selected Date:', day.dateString);
     console.log('Combined Items:', combinedItems);
@@ -414,14 +368,12 @@ function CalenderScreen({ navigation }) {
     console.log('Combined List length:', combinedList.length);
     console.log('=====================================');
     
-    // --- Navigation to CalenderDetailScreen (Toast removed as requested) ---
     const totalItems = combinedList.length;
     const taskCount = taskList.length;
     const eventCount = eventList.length;
     
     // Toast notification removed - no longer showing "Found X task(s) and X event(s)"
     
-    // --- Always navigate to CalenderDetailScreen regardless of item count ---
     // Pass date in YYYY-MM-DD format as expected by backend
     navigation.navigate("CalenderDetailScreen", {
       selectedDate: day.dateString, // This is already in YYYY-MM-DD format from calendar
@@ -431,7 +383,6 @@ function CalenderScreen({ navigation }) {
     });
   };
 
-  // --- Handle refresh ---
   const onRefresh = async () => {
     setRefreshing(true);
     try {
@@ -446,7 +397,6 @@ function CalenderScreen({ navigation }) {
         processTasks(tasksResponse.data);
       }
       
-      // --- FIXED: Use same corrected API response structure access ---
       if (eventsResponse && eventsResponse.data) {
         processEvents(eventsResponse.data);
       } else if (eventsResponse && Array.isArray(eventsResponse)) {
@@ -468,7 +418,6 @@ function CalenderScreen({ navigation }) {
     }
   };
 
-  // --- Handle view mode change with smooth animations ---
   const handleViewModeChange = (newViewMode) => {
     if (newViewMode === viewMode) return; // No change needed
     
@@ -504,8 +453,6 @@ function CalenderScreen({ navigation }) {
     setViewMode(newViewMode);
   };
 
-
-  // --- Show loading screen ---
   if (loading) {
     return (
       <View className="flex-1 bg-white">
@@ -513,13 +460,11 @@ function CalenderScreen({ navigation }) {
           <ActivityIndicator size="large" color="black" />
           <Text className="text-base text-gray-600 mt-4 text-center">Loading your tasks and events...</Text>
         </View>
-        {/* --- Custom Bottom Navigation - Always Visible --- */}
         <CustomBottomNav />
       </View>
     );
   }
 
-  // --- Show error screen ---
   if (error) {
     return (
       <View className="flex-1 bg-white">
@@ -540,7 +485,6 @@ function CalenderScreen({ navigation }) {
                   processTasks(tasksResponse.data);
                 }
                 
-                // --- FIXED: Use same corrected API response structure access ---
                 if (eventsResponse && eventsResponse.data) {
                   processEvents(eventsResponse.data);
                 } else if (eventsResponse && Array.isArray(eventsResponse)) {
@@ -560,21 +504,18 @@ function CalenderScreen({ navigation }) {
             <Text className="text-white text-base font-semibold">Retry</Text>
           </TouchableOpacity>
         </View>
-        {/* --- Bottom Nav handled globally in App.js --- */}
       </View>
     );
   }
 
   return (
     <View className="flex-1 bg-white">
-      {/* --- Reusable Toggle Component --- */}
       <CalendarToggle
         currentView={viewMode}
         onWeeklyPress={() => setViewMode('weekly')}
         onMonthlyPress={() => setViewMode('monthly')}
       />
 
-      {/* --- Conditional View Rendering --- */}
       {viewMode === 'monthly' ? (
         /* --- Monthly Calendar View in ScrollView --- */
         <ScrollView 
@@ -593,12 +534,10 @@ function CalenderScreen({ navigation }) {
             markingType={"custom"}
             onDayPress={onDayPress}
             dayComponent={({ date, state }) => {
-              // --- Get both tasks and events for this date ---
               const taskList = tasks[date.dateString] || [];
               const eventList = localEvents[date.dateString] || [];
               const combinedList = [...taskList, ...eventList];
               
-              // --- Show first item (task or event) ---
               const visibleItem = combinedList.slice(0, 1)[0];
               const hiddenCount = combinedList.length > 1 ? combinedList.length - 1 : 0;
 
@@ -607,7 +546,6 @@ function CalenderScreen({ navigation }) {
                   <View className="items-center py-1 mx-1 min-h-14 h-auto">
                     <Text className="text-lg text-black font-medium mb-1">{date.day}</Text>
                     <View className="w-full items-center gap-1">
-                      {/* --- Show first item (task or event) --- */}
                       {visibleItem && (
                         <View 
                           className={`px-1.5 py-1 rounded-md border-l-2 my-0.5 min-w-15 max-w-11/12 shadow-sm ${
@@ -629,7 +567,6 @@ function CalenderScreen({ navigation }) {
                         </View>
                       )}
                       
-                      {/* --- Show "more" indicator if there are additional items --- */}
                       {hiddenCount > 0 && (
                         <View className="bg-gray-100 px-1 py-0.5 rounded-lg border border-gray-400">
                           <Text className="text-xs text-gray-600 font-semibold text-center">+{hiddenCount} more</Text>
@@ -652,7 +589,6 @@ function CalenderScreen({ navigation }) {
         <MyWeekView />
       )}
       
-      {/* --- Custom Bottom Navigation --- */}
       <CustomBottomNav 
         userRole={userRole} // Pass user role to prevent FAB lag
         handleFabPress={() => {
@@ -673,7 +609,6 @@ function CalenderScreen({ navigation }) {
         }}
       />
 
-      {/* --- Create Event Modal --- */}
       <CreateEventModal
         visible={showEventCreationDialog}
         onClose={() => setShowEventCreationDialog(false)}
@@ -684,7 +619,6 @@ function CalenderScreen({ navigation }) {
   );
 }
 
-// --- Note: Toggle styles moved to reusable CalendarToggle component ---
 const styles = StyleSheet.create({
   // Other styles can be added here if needed
 });

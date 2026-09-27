@@ -4,7 +4,6 @@ import { registerRootComponent } from 'expo';
 
 import App from './App';
 
-// --- Initialize Pusher Client (MCP Context 7) ---
 // Import pusherClient to initialize the connection when app starts
 import './pusherClient';
 

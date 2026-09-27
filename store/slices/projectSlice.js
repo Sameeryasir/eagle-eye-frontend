@@ -1,4 +1,3 @@
-// --- Project Redux Slice (MCP Context 7) ---
 // Centralized state management for all project operations (CRUD)
 // This slice handles loading states, error handling, data management, and caching
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
@@ -9,13 +8,11 @@ import { createProject as createProjectService } from '../../services/projects/c
 import { updateProjectById } from '../../services/projects/updateProjectById';
 import { deleteProjectById } from '../../services/projects/deleteProjectById';
 
-// --- Cache Configuration (MCP Context 7) ---
 // Cache settings for offline-first approach and performance optimization
 // User-specific cache to prevent data leakage between users
 const CACHE_KEY_PREFIX = 'projects_cache_';
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes cache time-to-live
 
-// --- Cache Helper Functions (MCP Context 7) ---
 // Utility functions for managing cached project data with user association
 
 // Get user-specific cache key
@@ -112,7 +109,6 @@ export const clearProjectsCache = async () => {
   }
 };
 
-// --- Async Thunk Actions (MCP Context 7) ---
 // These handle API calls and automatically manage loading/error states
 
 // Fetch all projects for the logged-in user with caching
@@ -233,7 +229,6 @@ export const deleteProject = createAsyncThunk(
   }
 );
 
-// --- Initial State (MCP Context 7) ---
 // Clean, well-structured initial state with clear separation of concerns
 const initialState = {
   // Data
@@ -259,14 +254,12 @@ const initialState = {
   cacheExpiryTime: null,
 };
 
-// --- Project Slice (MCP Context 7) ---
 // Redux slice with reducers for synchronous state updates
 const projectSlice = createSlice({
   name: 'projects',
   initialState,
   
   reducers: {
-    // --- Error Clearing Actions ---
     clearError: (state) => {
       state.error = null;
     },
@@ -287,20 +280,16 @@ const projectSlice = createSlice({
       state.refreshError = null;
     },
     
-    // --- Cache Actions ---
     setCacheStatus: (state, action) => {
       state.isFromCache = action.payload;
     },
     
-    // --- Reset Actions ---
     resetProjectsState: () => initialState,
   },
   
-  // --- Extra Reducers for Async Actions (MCP Context 7) ---
   // Handle all the different states of async operations (pending, fulfilled, rejected)
   extraReducers: (builder) => {
     builder
-      // --- Fetch Projects ---
       .addCase(fetchProjects.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -318,7 +307,6 @@ const projectSlice = createSlice({
         state.error = action.payload;
       })
       
-      // --- Refresh Projects ---
       .addCase(refreshProjects.pending, (state) => {
         state.refreshing = true;
         state.refreshError = null;
@@ -336,7 +324,6 @@ const projectSlice = createSlice({
         state.refreshError = action.payload;
       })
       
-      // --- Create Project ---
       .addCase(createProject.pending, (state) => {
         state.creating = true;
         state.createError = null;
@@ -351,7 +338,6 @@ const projectSlice = createSlice({
         state.createError = action.payload;
       })
       
-      // --- Update Project ---
       .addCase(updateProject.pending, (state) => {
         state.updating = true;
         state.updateError = null;
@@ -369,7 +355,6 @@ const projectSlice = createSlice({
         state.updateError = action.payload;
       })
       
-      // --- Delete Project ---
       .addCase(deleteProject.pending, (state) => {
         state.deleting = true;
         state.deleteError = null;
@@ -390,7 +375,6 @@ const projectSlice = createSlice({
   },
 });
 
-// --- Export Actions and Reducer (MCP Context 7) ---
 // Export all actions for use in components
 export const {
   clearError,
@@ -405,7 +389,6 @@ export const {
 // Export the reducer for store configuration
 export default projectSlice.reducer;
 
-// --- Selector Functions (MCP Context 7) ---
 // These provide easy access to specific parts of the state
 // Usage: const { projects, loading } = useSelector(selectProjectState);
 export const selectProjectState = (state) => state.projects;

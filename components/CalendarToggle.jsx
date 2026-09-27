@@ -42,7 +42,6 @@ export default function CalendarToggle({
   );
 }
 
-
 const styles = StyleSheet.create({
   toggleContainer: {
     flexDirection: 'row',

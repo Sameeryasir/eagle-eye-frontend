@@ -18,7 +18,6 @@ import {
 } from "react-native";
 import Toast from 'react-native-toast-message'; 76
 
-
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -89,12 +88,9 @@ function CreatLogScreen({ navigation, route }) {
   const [selectedTaskForLog, setSelectedTaskForLog] = useState(null);
   const [logNote, setLogNote] = useState("");
   const [isSubmittingLog, setIsSubmittingLog] = useState(false);
-  // --- Image Upload State ---
   const [selectedImages, setSelectedImages] = useState([]);
   const [isUploadingImages, setIsUploadingImages] = useState(false);
-  // --- Service Error State ---
   const [serviceError, setServiceError] = useState(null);
-
 
   useFocusEffect(
     React.useCallback(() => {
@@ -124,7 +120,6 @@ function CreatLogScreen({ navigation, route }) {
       keyboardDidHideListener?.remove();
     };
   }, []);
-
 
   const loadLogData = async () => {
     try {
@@ -250,7 +245,6 @@ function CreatLogScreen({ navigation, route }) {
             projectName: projectInfo?.name || "Project Tasks",
             createdBy: task.assignedTo ? `${task.assignedTo.first_name || ""} ${task.assignedTo.last_name || ""}`.trim() : "Unassigned",
             date: task.startTime ? new Date(task.startTime).toLocaleDateString() : "N/A",
-            // --- Log Status Information ---
             hasLog: task.log !== null,
             logId: task.log?.id || null,
             logNote: task.log?.note || null,
@@ -288,8 +282,6 @@ function CreatLogScreen({ navigation, route }) {
       console.error("CreatLogScreen - Error response:", err.response);
       console.error("CreatLogScreen - Error response data:", err.response?.data);
       
-      // --- Handle 400 Error for No Tasks ---
-      // Business Rule: If error status is 400, show specific message about log creation limits
       if (err.statusCode === 400 || err.response?.status === 400) {
         const errorMessage = err.message || err.response?.data?.message || "You can create one log per project in one day.";
         console.error("CreatLogScreen - Setting 400 error message:", errorMessage);
@@ -306,10 +298,8 @@ function CreatLogScreen({ navigation, route }) {
   };
 
   const handleCheckboxToggle = (taskId) => {
-    // --- Prevent selection of tasks that already have logs ---
     const task = logs.find(log => log.id === taskId);
     if (task && task.hasLog) {
-      // --- Show Error Toast Message ---
       // Display error message using custom toast config when trying to select task with existing log
       Toast.show({
         type: 'error',
@@ -333,13 +323,11 @@ function CreatLogScreen({ navigation, route }) {
     });
   };
 
-  // --- Image Picker Function ---
   const pickImages = async () => {
     try {
       // Request permissions
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        // --- Show Error Toast Message ---
         Toast.show({
           type: 'error',
           text1: 'Permission Required',
@@ -368,7 +356,6 @@ function CreatLogScreen({ navigation, route }) {
         }));
         setSelectedImages(prev => [...prev, ...newImages]);
         
-        // --- Show Success Toast Message ---
         Toast.show({
           type: 'success',
           text1: 'Images Selected',
@@ -380,7 +367,6 @@ function CreatLogScreen({ navigation, route }) {
       }
     } catch (error) {
       console.error('Error picking images:', error);
-      // --- Show Error Toast Message ---
       Toast.show({
         type: 'error',
         text1: 'Image Selection Failed',
@@ -392,11 +378,9 @@ function CreatLogScreen({ navigation, route }) {
     }
   };
 
-  // --- Remove Image Function ---
   const removeImage = (imageId) => {
     setSelectedImages(prev => prev.filter(img => img.id !== imageId));
     
-    // --- Show Info Toast Message ---
     Toast.show({
       type: 'info',
       text1: 'Image Removed',
@@ -414,7 +398,6 @@ function CreatLogScreen({ navigation, route }) {
     setServiceError(null); // Clear any previous service errors
     setCreateLogModalVisible(true);
     
-    // --- Show Info Toast Message ---
     Toast.show({
       type: 'info',
       text1: 'Create Log',
@@ -425,15 +408,9 @@ function CreatLogScreen({ navigation, route }) {
     });
   };
 
-
-
-
-
   const handleSubmitLog = async () => {
-    // --- Validation ---
 
     if (checkedTasks.size === 0) {
-      // --- Show Error Toast Message ---
       // Display error message when no tasks are selected
       Toast.show({
         type: 'error',
@@ -449,7 +426,6 @@ function CreatLogScreen({ navigation, route }) {
     try {
       setIsSubmittingLog(true);
 
-      // --- Step 1: Create Log ---
       // Extract project ID from route params to send to service
       const projectIdForLog = route.params?.projectId || employeeProjectId || managerProjectId || regularProjectId || route.params?.id;
       console.log("🔗 SENDING PROJECT ID TO CREATE LOG SERVICE:", projectIdForLog);
@@ -460,14 +436,12 @@ function CreatLogScreen({ navigation, route }) {
         project_id: projectIdForLog,
       });
 
-      // --- Step 2: Upload Images (if any) ---
       if (selectedImages.length > 0 && response?.log?.id) {
         await uploadImages(response.log.id);
       }
 
       setServiceError(null); // Clear any previous errors
       
-      // --- Show Success Toast Message ---
       Toast.show({
         type: 'success',
         text1: 'Log Created Successfully!',
@@ -496,7 +470,6 @@ function CreatLogScreen({ navigation, route }) {
     }
   };
 
-  // --- Helper Function for Image Upload ---
   const uploadImages = async (logId) => {
     setIsUploadingImages(true);
 
@@ -526,7 +499,6 @@ function CreatLogScreen({ navigation, route }) {
         console.log(`CreatLogScreen - Upload result: ${successful.length} successful, ${failed.length} failed`);
 
         if (failed.length > 0) {
-          // --- Show Warning Toast Message ---
           Toast.show({
             type: 'warning',
             text1: 'Partial Upload Success',
@@ -543,7 +515,6 @@ function CreatLogScreen({ navigation, route }) {
       const errorMessage = error.response?.data?.message || error.message || "Log created but image upload failed.";
       setServiceError(errorMessage);
       
-      // --- Show Error Toast Message ---
       Toast.show({
         type: 'error',
         text1: 'Image Upload Failed',
@@ -583,7 +554,6 @@ function CreatLogScreen({ navigation, route }) {
   const handleUpdate = (log) => {
     // Only allow updating logs if user is not an Employee
     if (userRole === "Employee") {
-      // --- Show Error Toast Message ---
       Toast.show({
         type: 'error',
         text1: 'Access Denied',
@@ -596,7 +566,6 @@ function CreatLogScreen({ navigation, route }) {
     }
 
     // TODO: Implement log update functionality
-    // --- Show Info Toast Message ---
     Toast.show({
       type: 'info',
       text1: 'Coming Soon',
@@ -610,7 +579,6 @@ function CreatLogScreen({ navigation, route }) {
   const handleDelete = (log) => {
     // Only allow deleting logs if user is not an Employee
     if (userRole === "Employee") {
-      // --- Show Error Toast Message ---
       Toast.show({
         type: 'error',
         text1: 'Access Denied',
@@ -650,7 +618,6 @@ function CreatLogScreen({ navigation, route }) {
               setLogs(updatedLogs);
               setFilteredLogs(updatedFilteredLogs);
 
-              // --- Show Success Toast Message ---
               Toast.show({
                 type: 'success',
                 text1: 'Log Deleted Successfully!',
@@ -667,7 +634,6 @@ function CreatLogScreen({ navigation, route }) {
                 errorMessage = error.message;
               }
 
-              // --- Show Error Toast Message ---
               Toast.show({
                 type: 'error',
                 text1: 'Delete Failed',
@@ -743,7 +709,6 @@ function CreatLogScreen({ navigation, route }) {
 
               {/* Checkbox or Log Status at the end */}
               {hasLog ? (
-                // --- Simple "Log Created" text for tasks with logs ---
                 <Text
                   className="ml-3 text-center"
                   style={{
@@ -756,7 +721,6 @@ function CreatLogScreen({ navigation, route }) {
                   Log Created
                 </Text>
               ) : (
-                // --- Active Checkbox for tasks without logs ---
                 <TouchableOpacity
                   onPress={() => handleCheckboxToggle(log.id)}
                   className="ml-3 border-2 rounded-lg items-center justify-center"
@@ -806,8 +770,6 @@ function CreatLogScreen({ navigation, route }) {
     return (
             <View style={{ flex: 1 }}>
 
-
-        {/* --- Tasks List Section --- */}
         {filteredLogs.length > 0 ? (
           <>
             <FlatList
@@ -957,8 +919,6 @@ function CreatLogScreen({ navigation, route }) {
         </View>
       )}
 
-
-
       <CustomBottomNav />
 
       <Sidebar
@@ -990,7 +950,6 @@ function CreatLogScreen({ navigation, route }) {
           </View>
 
           <View className="p-6">
-            {/* --- Note Section (First) --- */}
             <View className="mb-6">
               <Text className="text-[16px] font-semibold text-[#333] mb-2">Note</Text>
               <TextInput
@@ -1005,7 +964,6 @@ function CreatLogScreen({ navigation, route }) {
               />
             </View>
 
-            {/* --- Image Selection Section (Second) --- */}
             <View className="mb-6">
               <Text className="text-[16px] font-semibold text-[#333] mb-2">Images</Text>
 
@@ -1070,7 +1028,6 @@ function CreatLogScreen({ navigation, route }) {
               )}
             </View>
 
-            {/* --- Service Error Display Section --- */}
             {serviceError && (
               <View className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
                 <View className="flex-row items-center">

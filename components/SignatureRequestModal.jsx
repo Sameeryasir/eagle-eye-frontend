@@ -223,14 +223,12 @@ const SignatureRequestModal = ({
 
   return (
     <>
-      {}
       <Modal
         visible={visible}
         animationType="slide"
         onRequestClose={handleClose}
       >
         <SafeAreaView className="flex-1 bg-white">
-          {}
           <View className="flex-row items-center justify-between px-5 py-4 border-b border-[#e1e8ed]">
             <TouchableOpacity
               onPress={handleClose}
@@ -253,7 +251,6 @@ const SignatureRequestModal = ({
           >
             <View className="flex-1 p-5">
               <View className="mb-5">
-                {}
                 <View className="mb-5">
                   <View className="flex-row items-center mb-2">
                     <Ionicons
@@ -276,7 +273,6 @@ const SignatureRequestModal = ({
                   />
                 </View>
 
-                {}
                 <View className="mb-5">
                   <View className="flex-row items-center mb-2">
                     <Ionicons
@@ -302,7 +298,6 @@ const SignatureRequestModal = ({
                   />
                 </View>
 
-                {}
                 <View className="mb-5">
                   <View className="flex-row items-center mb-2">
                     <Ionicons
@@ -331,8 +326,6 @@ const SignatureRequestModal = ({
                     />
                   </TouchableOpacity>
 
-                  {}
-                  {}
                   {showDatePicker && (
                     <View className="mt-3 border border-[#e1e8ed] rounded-lg bg-white p-3">
                       <DateTimePicker
@@ -350,7 +343,6 @@ const SignatureRequestModal = ({
             </View>
           </ScrollView>
 
-          {}
           <View
             className="absolute bottom-0 left-0 right-0 flex-row justify-between gap-4 px-5 pt-5 pb-8 bg-white"
             style={{ zIndex: 1000 }}

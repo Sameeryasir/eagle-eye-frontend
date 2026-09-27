@@ -31,7 +31,6 @@ import { assignTaskToUser } from "../services/tasks/assignTask";
 import { taskAssignement } from "../services/inAppNotification/taskAssignement";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// --- Redux Integration (MCP Context 7) ---
 import { useDispatch, useSelector } from 'react-redux';
 import {
   assignTaskToUserAction,
@@ -43,7 +42,6 @@ function TaskDetailsScreen({ navigation, route }) {
   const { taskId, projectId, task: routeTask } = route.params || {};
   const [sidebarVisible, setSidebarVisible] = useState(false);
 
-  // --- Redux State (MCP Context 7) ---
   const dispatch = useDispatch();
   const assigning = useSelector(selectTaskAssigning);
   const assignError = useSelector(selectTaskAssignError);
@@ -57,7 +55,6 @@ function TaskDetailsScreen({ navigation, route }) {
   const [loading, setLoading] = useState(Boolean(taskId) && !routeTask);
   const [error, setError] = useState(null);
 
-  // --- Assignment Modal State ---
   const [showAssignmentModal, setShowAssignmentModal] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
@@ -84,8 +81,6 @@ function TaskDetailsScreen({ navigation, route }) {
     loadUserRole();
   }, []);
 
-
-
   useEffect(() => {
     const fetchTask = async () => {
       if (!taskId || routeTask) return;
@@ -98,7 +93,6 @@ function TaskDetailsScreen({ navigation, route }) {
         setCurrentTask(data);
       } catch (err) {
         console.error('❌ TaskDetailsScreen - Error fetching task by id:', err);
-        // --- Enhanced error handling with more specific messages ---
         const errorMessage = err?.response?.data?.message || err?.message || 'Failed to load task';
         setError(`Unable to load task: ${errorMessage}`);
       } finally {
@@ -158,8 +152,6 @@ function TaskDetailsScreen({ navigation, route }) {
   };
 
   const onRefresh = async () => {
-    // --- Enhanced Refresh Logic with Better Error Handling ---
-    // Business Rule: Allow refresh for all users to get latest task data
     console.log('🔄 Refresh triggered - currentTask:', currentTask?.id);
     console.log('🔄 TaskId from route:', taskId);
     
@@ -167,7 +159,6 @@ function TaskDetailsScreen({ navigation, route }) {
     
     if (!taskIdToRefresh) {
       console.log('❌ No task ID available for refresh');
-      // --- Show user-friendly error message for missing task ID ---
       Alert.alert(
         "Refresh Failed",
         "Unable to refresh task data. Task ID not found.",
@@ -184,7 +175,6 @@ function TaskDetailsScreen({ navigation, route }) {
       setCurrentTask(updated);
     } catch (err) {
       console.error('❌ TaskDetailsScreen - Refresh failed:', err);
-      // --- Show user-friendly error message with more specific details ---
       const errorMessage = err?.response?.data?.message || err?.message || 'Unknown error occurred';
       Alert.alert(
         "Refresh Failed",
@@ -215,7 +205,6 @@ function TaskDetailsScreen({ navigation, route }) {
     try {
       await deleteTaskById(taskId);
       
-      // --- Show Success Toast Message ---
       Toast.show({
         type: 'success',
         text1: 'Task Deleted Successfully!',
@@ -241,7 +230,6 @@ function TaskDetailsScreen({ navigation, route }) {
     } catch (error) {
       console.error('Error deleting task:', error);
       
-      // --- Show Error Toast Message ---
       Toast.show({
         type: 'error',
         text1: 'Delete Failed',
@@ -258,7 +246,6 @@ function TaskDetailsScreen({ navigation, route }) {
     setTaskToDelete(null);
   };
 
-  // --- Assignment Modal Functions ---
   const handleAssignmentPress = async () => {
     // Only show modal if task is not assigned and user has permission
     if (getAssignedToName(currentTask.assigned_to || currentTask.assignedTo) === "Unassigned" && userRole !== 'Employee') {
@@ -277,7 +264,6 @@ function TaskDetailsScreen({ navigation, route }) {
       setEmployees(data || []);
     } catch (error) {
       console.error('Error fetching employees:', error);
-      // --- Show Error Toast Message ---
       Toast.show({
         type: 'error',
         text1: 'Error',
@@ -291,7 +277,6 @@ function TaskDetailsScreen({ navigation, route }) {
     }
   };
 
-  // --- Search and Filter Functions ---
   const filteredEmployees = employees.filter(employee => {
     if (!searchQuery.trim()) return true;
 
@@ -314,7 +299,6 @@ function TaskDetailsScreen({ navigation, route }) {
   };
 
   const handleAssignTask = async () => {
-    // --- Debug Task ID Issue ---
     console.log('=== TASK ASSIGNMENT DEBUG ===');
     console.log('selectedEmployee:', selectedEmployee);
     console.log('currentTask:', currentTask);
@@ -335,10 +319,8 @@ function TaskDetailsScreen({ navigation, route }) {
       return;
     }
 
-    // --- Check for Task ID ---
     const taskIdToUse = currentTask?.id || taskId;
     
-    // --- Enhanced Task Object Analysis ---
     console.log('🔍 DETAILED TASK ANALYSIS:');
     console.log('- currentTask exists:', !!currentTask);
     console.log('- currentTask.id:', currentTask?.id, typeof currentTask?.id);
@@ -367,8 +349,6 @@ function TaskDetailsScreen({ navigation, route }) {
       console.log('- Employee ID:', selectedEmployee.id);
       console.log('- Employee Name:', `${selectedEmployee.first_name} ${selectedEmployee.last_name}`);
 
-      // --- FIXED: Use Redux action instead of direct service call (MCP Context 7) ---
-      // Business Rule: Use Redux to update global state so all components see the change
       console.log('🚀 Proceeding with Redux task assignment...');
       
       const result = await dispatch(assignTaskToUserAction({
@@ -392,8 +372,6 @@ function TaskDetailsScreen({ navigation, route }) {
         setSelectedEmployee(null);
         setSearchQuery('');
 
-        // --- Send Notification for Task Assignment (MCP Context 7) ---
-        // Business Rule: Send notification when task is assigned to user
         try {
           // Get current user info for notification
           const currentUserId = await AsyncStorage.getItem('userId');
@@ -422,7 +400,6 @@ function TaskDetailsScreen({ navigation, route }) {
           // Don't throw error - task was already assigned successfully
         }
 
-        // --- Show Success Toast Message ---
         Toast.show({
           type: 'success',
           text1: 'Task Assigned Successfully!',
@@ -441,7 +418,6 @@ function TaskDetailsScreen({ navigation, route }) {
       console.error('- Error message:', error.message);
       console.error('- Error response:', error.response?.data);
       
-      // --- Show Error Toast Message ---
       Toast.show({
         type: 'error',
         text1: 'Assignment Failed',
@@ -453,10 +429,6 @@ function TaskDetailsScreen({ navigation, route }) {
     }
   };
 
-
-
-  // --- Only show loading screen if we have no task data at all ---
-  // Business Rule: Show task details immediately if available, even during API calls
   if (loading && !currentTask) {
     return (
       <View className="flex-1 bg-white">
@@ -733,14 +705,11 @@ function TaskDetailsScreen({ navigation, route }) {
 
               </View>
 
-
-
               {/* Timeline Section */}
               <View style={{
                 padding: isLargeScreen ? 24 : 20,
                 marginTop: isLargeScreen ? 20 : 16
               }}>
-
 
                 <View className="space-y-4">
                   <View className="flex-row items-center justify-between mb-4">
@@ -780,13 +749,9 @@ function TaskDetailsScreen({ navigation, route }) {
             </View>
           </View>
 
-
-
           {/* Bottom Spacing */}
           <View style={{ height: bottomSpacing }} />
         </ScrollView>
-
-
 
         {/* Update Task Button - Only show when in update mode */}
         {isUpdateMode && (
@@ -953,8 +918,6 @@ function TaskDetailsScreen({ navigation, route }) {
           </View>
         </Modal>
 
-        {/* --- Simple Employee Assignment Modal (MCP Context 7) --- */}
-        {/* Business Rule: Clean, simple modal for employee assignment */}
         <Modal
           visible={showAssignmentModal}
           transparent={true}

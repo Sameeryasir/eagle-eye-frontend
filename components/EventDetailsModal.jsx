@@ -165,7 +165,6 @@ const EventDetailsModal = ({ visible, onClose, event, onEventUpdated }) => {
         animationType="fade"
         onRequestClose={onClose}
       >
-        {}
         <View className="flex-1 bg-transparent justify-center items-center px-6">
           <View
             className="bg-white rounded-3xl w-full max-w-sm overflow-hidden"
@@ -180,7 +179,6 @@ const EventDetailsModal = ({ visible, onClose, event, onEventUpdated }) => {
               elevation: 10,
             }}
           >
-            {}
             <View
               className="px-6 py-5"
               style={{
@@ -208,11 +206,9 @@ const EventDetailsModal = ({ visible, onClose, event, onEventUpdated }) => {
               </View>
             </View>
 
-            {}
             <View className="p-6 bg-gray-50">
               {event && (
                 <>
-                  {}
                   <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
                     <View className="flex-row items-center mb-3">
                       <View className="w-8 h-8 bg-blue-100 rounded-full items-center justify-center mr-3">
@@ -231,7 +227,6 @@ const EventDetailsModal = ({ visible, onClose, event, onEventUpdated }) => {
                     </Text>
                   </View>
 
-                  {}
                   <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
                     <View className="flex-row items-center mb-3">
                       <View className="w-8 h-8 bg-orange-100 rounded-full items-center justify-center mr-3">
@@ -244,7 +239,6 @@ const EventDetailsModal = ({ visible, onClose, event, onEventUpdated }) => {
 
                     {event.isMultiDayEvent ? (
                       <View className="ml-11">
-                        {}
                         <View className="flex-row items-center mb-2">
                           <Ionicons name="calendar" size={16} color="#6B7280" />
                           <Text className="text-base text-gray-700 leading-6 ml-2 font-medium">
@@ -252,7 +246,6 @@ const EventDetailsModal = ({ visible, onClose, event, onEventUpdated }) => {
                           </Text>
                         </View>
 
-                        {}
                         <View className="flex-row items-center">
                           <Ionicons name="time" size={16} color="#6B7280" />
                           <Text className="text-base text-gray-700 leading-6 ml-2">
@@ -272,7 +265,6 @@ const EventDetailsModal = ({ visible, onClose, event, onEventUpdated }) => {
                       </View>
                     ) : (
                       <View className="ml-11">
-                        {}
                         <View className="flex-row items-center mb-2">
                           <Ionicons name="calendar" size={16} color="#6B7280" />
                           <Text className="text-base text-gray-700 leading-6 ml-2 font-medium">
@@ -285,7 +277,6 @@ const EventDetailsModal = ({ visible, onClose, event, onEventUpdated }) => {
                           </Text>
                         </View>
 
-                        {}
                         <View className="flex-row items-center">
                           <Ionicons name="time" size={16} color="#6B7280" />
                           <Text className="text-base text-gray-700 leading-6 ml-2">
@@ -306,7 +297,6 @@ const EventDetailsModal = ({ visible, onClose, event, onEventUpdated }) => {
                     )}
                   </View>
 
-                  {}
                   {event.projects && event.projects.length > 0 && (
                     <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
                       <View className="flex-row items-center mb-3">
@@ -323,7 +313,6 @@ const EventDetailsModal = ({ visible, onClose, event, onEventUpdated }) => {
                           keyExtractor={(item, index) => `project-${index}`}
                           renderItem={({ item: project, index }) => (
                             <View className="flex-row items-start mb-2">
-                              {}
                               <View className="mr-3 mt-1">
                                 <View className=" items-center justify-center">
                                   <Text className="text-sm font-bold text-black">
@@ -332,7 +321,6 @@ const EventDetailsModal = ({ visible, onClose, event, onEventUpdated }) => {
                                 </View>
                               </View>
 
-                              {}
                               <View
                                 className="bg-gray-50 rounded-xl p-2 border border-gray-200 flex-1"
                                 style={{
@@ -343,7 +331,6 @@ const EventDetailsModal = ({ visible, onClose, event, onEventUpdated }) => {
                                   elevation: 1,
                                 }}
                               >
-                                {}
                                 <View className="flex-row items-center mb-2">
                                   <View className="w-6 h-6 bg-purple-200 rounded-full items-center justify-center mr-2">
                                     <Ionicons
@@ -357,7 +344,6 @@ const EventDetailsModal = ({ visible, onClose, event, onEventUpdated }) => {
                                   </Text>
                                 </View>
 
-                                {}
                                 {project.description && (
                                   <View className="ml-8">
                                     <Text className="text-sm text-gray-600 leading-5">
@@ -369,7 +355,6 @@ const EventDetailsModal = ({ visible, onClose, event, onEventUpdated }) => {
                                   </View>
                                 )}
 
-                                {}
                                 {!project.description && (
                                   <View className="ml-8">
                                     <Text className="text-sm text-gray-400 italic">
@@ -394,7 +379,6 @@ const EventDetailsModal = ({ visible, onClose, event, onEventUpdated }) => {
                     </View>
                   )}
 
-                  {}
                   <View className="flex-row space-x-3 gap-4 mb-6">
                     <TouchableOpacity
                       onPress={handleUpdate}
@@ -438,7 +422,6 @@ const EventDetailsModal = ({ visible, onClose, event, onEventUpdated }) => {
         </View>
       </Modal>
 
-      {}
       <UpdateEventModal
         visible={showUpdateModal}
         onClose={handleUpdateModalClose}
@@ -446,7 +429,6 @@ const EventDetailsModal = ({ visible, onClose, event, onEventUpdated }) => {
         onEventUpdated={handleEventUpdated}
       />
 
-      {}
       <Modal
         visible={deleteDialogVisible}
         transparent={true}
@@ -476,7 +458,6 @@ const EventDetailsModal = ({ visible, onClose, event, onEventUpdated }) => {
               elevation: 8,
             }}
           >
-            {}
             <View
               style={{
                 alignItems: "center",
@@ -509,7 +490,6 @@ const EventDetailsModal = ({ visible, onClose, event, onEventUpdated }) => {
               </Text>
             </View>
 
-            {}
             <Text
               style={{
                 fontSize: 15,
@@ -538,7 +518,6 @@ const EventDetailsModal = ({ visible, onClose, event, onEventUpdated }) => {
               This action cannot be undone.
             </Text>
 
-            {}
             <View
               style={{
                 flexDirection: "row",

@@ -1,18 +1,7 @@
-/**
- * Change Summary:
- * - What: Uses shared apiPost/apiDelete + ApiRoutes.notifications.*
- * - Why: Nest tokens at /notifications/tokens; no update-token (re-save instead)
- * - Dependencies: services/api/client.js
- * MCP Context 7: shared client (no duplicated refresh)
- */
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiPost, apiDelete, ApiRoutes } from '../api/client';
 
-/**
- * Get the stored Expo token ID from AsyncStorage
- * @returns {Promise<string|null>}
- */
 export const getStoredExpoTokenId = async () => {
   try {
     return await AsyncStorage.getItem('expoTokenId');
@@ -22,12 +11,6 @@ export const getStoredExpoTokenId = async () => {
   }
 };
 
-/**
- * Save the Expo push token to the server.
- * AuthContext expects { success, data } where data has id/tokenId.
- * @param {string} expoToken
- * @returns {Promise<{success: boolean, data?: object, error?: string}>}
- */
 export const saveTokenToServer = async (expoToken) => {
   try {
     const payload = {
@@ -36,10 +19,7 @@ export const saveTokenToServer = async (expoToken) => {
       deviceType: 'mobile',
     };
 
-    // apiRequest already returns response.data
     const result = await apiPost(ApiRoutes.notifications.tokens, payload);
-
-    // Nest may wrap in { data } or return the token record directly
     const tokenRecord = result?.data ?? result;
 
     return { success: true, data: tokenRecord };
@@ -52,20 +32,11 @@ export const saveTokenToServer = async (expoToken) => {
   }
 };
 
-/**
- * Nest has no update-token endpoint — re-save via POST /notifications/tokens.
- * Signature preserved for existing callers.
- */
 export const updateTokenOnServer = async (expoToken, userId) => {
   void userId;
   return saveTokenToServer(expoToken);
 };
 
-/**
- * Remove the Expo push token from the server by stored token id.
- * @param {string} expoTokenId
- * @returns {Promise<{success: boolean, data?: object, error?: string}>}
- */
 export const removeTokenFromServer = async (expoTokenId) => {
   try {
     const data = await apiDelete(ApiRoutes.notifications.tokenById(expoTokenId));

@@ -16,7 +16,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 
-// --- Redux Integration (MCP Context 7) ---
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchTasksByProjectId,
@@ -51,15 +50,7 @@ import Sidebar from "../components/Sidebar";
 import CustomBottomNav from "../components/CustomBottomNav";
 import { getUserRole } from "../services/utils/userRole";
 
-// === Change Summary (2025-11-07) ===
-// What: Added a projectId validation guard to render a clear "No project selected" message.
-// Why: Ensures users understand when navigation does not provide a project context, preventing blank states.
-// Dependencies: Relies on existing WidgetScreen state only; no new imports.
-// MCP Context: Implemented following MCP context 7 best practices for clarity and maintainability.
-
-
 function WidgetScreen({ navigation, route }) {
-  // --- Redux State (MCP Context 7) ---
   const dispatch = useDispatch();
   const tasks = useSelector(selectTasks);
   const loading = useSelector(selectTaskLoading);
@@ -67,12 +58,10 @@ function WidgetScreen({ navigation, route }) {
   const deleting = useSelector(selectTaskDeleting);
   const deleteError = useSelector(selectTaskDeleteError);
   
-  // --- Log Redux State (MCP Context 7) ---
   const logs = useSelector(selectLogs);
   const logsLoading = useSelector(selectLogLoading);
   const logsError = useSelector(selectLogError);
 
-  // --- Local State ---
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [project, setProject] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -84,7 +73,6 @@ function WidgetScreen({ navigation, route }) {
   const { projectId, projectName } = route.params || {};
   const isProjectIdMissing = !projectId; // Explains: Track whether navigation failed to pass a project ID so we can show a clear message.
 
-  // Load logs function using Redux (MCP Context 7)
   const loadLogs = async (projectId) => {
     try {
       console.log("WidgetScreen - Starting to load logs with projectId:", projectId);
@@ -117,7 +105,6 @@ function WidgetScreen({ navigation, route }) {
       }
       
       if (isProjectIdMissing) {
-        // --- Project Validation Guard (MCP Context 7) ---
         // This guard prevents unnecessary network calls and surfaces a clear message when projectId is missing.
         setIsInitialLoad(false); // Explains: Immediately stop the loading state so the user message can show.
         setRefreshing(false); // Explains: Ensure pull-to-refresh animations stop if triggered without a project.
@@ -137,10 +124,8 @@ function WidgetScreen({ navigation, route }) {
         dispatch(setCurrentProjectId(projectId));
       }
 
-      // --- Load logs (keep existing logic) ---
       await loadLogs(projectId);
 
-      // --- Load tasks using Redux (MCP Context 7) ---
       if (role === "Employee") {
         if (projectId) {
           // Use fetchTasksByProjectId for specific project
@@ -232,7 +217,6 @@ function WidgetScreen({ navigation, route }) {
   const handleDelete = (task) => {
     // Only allow deleting tasks if user is not an Employee
     if (userRole === "Employee") {
-      // --- Show Access Denied Toast Message ---
       Toast.show({
         type: 'error',
         text1: 'Access Denied',
@@ -261,7 +245,6 @@ function WidgetScreen({ navigation, route }) {
           style: "destructive",
           onPress: async () => {
             try {
-              // Use Redux action to delete task (MCP Context 7)
               const result = await dispatch(deleteExistingTask(taskId));
               
               if (deleteExistingTask.fulfilled.match(result)) {
@@ -351,7 +334,7 @@ function WidgetScreen({ navigation, route }) {
             const navigationParams = {
               projectId: userRole === "Manager" ? managerProjectId : projectId,
               projectName: projectName || project?.name || 'Unknown Project', // Pass project name
-              showUpcomingTasks: true, // --- Flag to indicate upcoming tasks view (MCP Context 7) ---
+              showUpcomingTasks: true,
             };
             
             console.log('🔍 NAVIGATION DEBUG - WidgetScreen to ViewAllTasksScreen:');
@@ -712,7 +695,6 @@ function WidgetScreen({ navigation, route }) {
     }
 
     if (isProjectIdMissing) {
-      // --- Missing Project ID Notice (MCP Context 7) ---
       // Display a simple explanation so users know the project context is unavailable.
       return (
         <View className="flex-1 justify-center items-center p-5 min-h-[400px]">
@@ -761,8 +743,6 @@ function WidgetScreen({ navigation, route }) {
         });
         return shouldShowLoader;
       })() ? (
-        // --- Simple Custom Loader (MCP Context 7) ---
-        // Why: Simple inline loader centered on screen, no external dependencies
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#000000" />
           <Text className="mt-4 text-base text-gray-500">Loading tasks and logs...</Text>
@@ -798,7 +778,6 @@ function WidgetScreen({ navigation, route }) {
       <CustomBottomNav
         currentScreen="chats" // ✅ ADD: Tell bottom nav we're on chats/widget screen
         onAddPress={() => {
-          // --- FAB Navigation Logic Based on User Role and Widget States ---
           console.log("WidgetScreen - FAB pressed, userRole:", userRole, "projectId:", projectId, "tasks.length:", tasks.length, "logs.length:", logs.length);
           
           // For Manager role: If tasks widget is empty, navigate to CreateTaskScreen
@@ -809,8 +788,6 @@ function WidgetScreen({ navigation, route }) {
             return;
           }
           
-          // For Employee role: Always allow navigation to CreateLogScreen (MCP Context 7)
-          // Business Rule: Employees should be able to create logs regardless of existing logs
           if (userRole === "Employee") {
             const navigationParams = { projectId: projectId }; // Use projectId from route params
             console.log("WidgetScreen - Employee FAB pressed, navigating to CreatLog with projectId:", projectId);

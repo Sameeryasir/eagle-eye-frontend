@@ -244,9 +244,6 @@ export const clearAllMessagesFromSQLite = (
   }
 };
 
-// --- Check if Messages Table Exists (MCP Context 7) ---
-// What: Checks if the messages table exists for a conversation
-// Why: Allows checking table existence before querying
 export const messagesTableExists = (
   db: SQLiteDatabase,
   conversationId: string
@@ -264,9 +261,6 @@ export const messagesTableExists = (
   }
 };
 
-// --- Update Message Status (MCP Context 7) ---
-// What: Updates the status field of a message
-// Why: Centralizes status update logic
 export const updateMessageStatus = (
   db: SQLiteDatabase,
   messageId: string | number,
@@ -286,9 +280,6 @@ export const updateMessageStatus = (
   }
 };
 
-// --- Update Signature Fields (MCP Context 7) ---
-// What: Updates signature-related fields in a message
-// Why: Centralizes signature update logic
 export const updateSignatureFields = (
   db: SQLiteDatabase,
   messageId: string | number,
@@ -328,9 +319,6 @@ export const updateSignatureFields = (
   }
 };
 
-// --- Update Signature ID (MCP Context 7) ---
-// What: Updates the signature_id field of a message
-// Why: Used for offline message signature ID assignment
 export const updateSignatureId = (
   db: SQLiteDatabase,
   messageId: string | number,
@@ -350,9 +338,6 @@ export const updateSignatureId = (
   }
 };
 
-// --- Update Signature Fields by Signature ID (MCP Context 7) ---
-// What: Updates signature fields for all messages with a specific signature_id
-// Why: Used when signature is signed and needs to update all related messages
 export const updateSignatureFieldsBySignatureId = (
   db: SQLiteDatabase,
   signatureId: number,
@@ -392,9 +377,6 @@ export const updateSignatureFieldsBySignatureId = (
   }
 };
 
-// --- Get Last Insert Row ID (MCP Context 7) ---
-// What: Gets the ID of the last inserted row
-// Why: Used for offline messages to get AUTOINCREMENT ID
 export const getLastInsertRowId = (db: SQLiteDatabase): number | null => {
   try {
     const result = db.getFirstSync<{ id: number }>(
@@ -407,9 +389,6 @@ export const getLastInsertRowId = (db: SQLiteDatabase): number | null => {
   }
 };
 
-// --- Delete Pending Message (MCP Context 7) ---
-// What: Deletes a message with pending status
-// Why: Used when replacing pending messages with server messages
 export const deletePendingMessage = (
   db: SQLiteDatabase,
   messageId: string | number,
@@ -428,9 +407,6 @@ export const deletePendingMessage = (
   }
 };
 
-// --- Insert Offline Message (MCP Context 7) ---
-// What: Inserts a message without an ID (uses AUTOINCREMENT) and returns the generated ID
-// Why: Used for offline messages that need AUTOINCREMENT IDs
 export const insertOfflineMessage = (
   db: SQLiteDatabase,
   msg: Omit<MessageData, "id">,
@@ -483,9 +459,6 @@ export const insertOfflineMessage = (
   }
 };
 
-// --- Get Pending Signature IDs (MCP Context 7) ---
-// What: Gets all signature IDs that are still pending
-// Why: Used for syncing signed signatures from API
 export const getPendingSignatureIds = (
   db: SQLiteDatabase,
   conversationId: string
@@ -505,9 +478,6 @@ export const getPendingSignatureIds = (
   }
 };
 
-// --- Get Pending Messages (MCP Context 7) ---
-// What: Gets all messages with pending status for a specific sender
-// Why: Used to find and replace pending messages when server confirms them
 export const getPendingMessages = (
   db: SQLiteDatabase,
   conversationId: string,
@@ -532,9 +502,6 @@ export const getPendingMessages = (
   }
 };
 
-// --- Get All Messages Ascending (MCP Context 7) ---
-// What: Gets all messages in ascending order (oldest first)
-// Why: Used for debugging/logging purposes
 export const getAllMessagesAscending = (
   db: SQLiteDatabase,
   conversationId: string
@@ -551,10 +518,6 @@ export const getAllMessagesAscending = (
   }
 };
 
-// --- Initialize Messages Table (MCP Context 7) ---
-// What: Creates the messages table for a conversation if it doesn't exist, and adds any missing columns
-// Why: Centralizes table initialization logic so it can be reused across the app
-// Dependencies: Uses SQL generation functions from schema.ts
 export const initializeMessagesTable = async (
   db: SQLiteDatabase,
   conversationId: string

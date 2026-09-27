@@ -65,7 +65,6 @@ function LogsDetailScreen({ navigation, route }) {
     loadUserRole();
   }, []);
 
-  // --- Load log data when component mounts ---
   useEffect(() => {
     const loadLogData = async () => {
       if (!logId) {
@@ -113,7 +112,6 @@ function LogsDetailScreen({ navigation, route }) {
     }
   };
 
-  // --- Auto-generate title parts for two-line display ---
   const generateLogTitleParts = () => {
     if (!log) return { firstLine: "Daily Log", secondLine: "" };
 
@@ -132,7 +130,6 @@ function LogsDetailScreen({ navigation, route }) {
         day: 'numeric'
       });
 
-      // --- Extract project information from tasks ---
       let projectName = '';
       if (log.tasks && log.tasks.length > 0) {
         // Get unique project names from tasks
@@ -532,9 +529,6 @@ function LogsDetailScreen({ navigation, route }) {
               </View>
             </View>
 
-
-
-
           </View>
         </View>
 
@@ -797,8 +791,6 @@ function LogsDetailScreen({ navigation, route }) {
             </View>
           </View>
         </View>
-
-
 
         {/* Bottom Spacing */}
         <View style={{ height: bottomSpacing }} />
