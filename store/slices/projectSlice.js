@@ -206,7 +206,13 @@ export const updateProject = createAsyncThunk(
       return updatedProject;
     } catch (error) {
       console.error('Error updating project:', error);
-      return rejectWithValue(error.response?.data?.message || 'Failed to update project');
+      const message =
+        error.response?.data?.message ||
+        (error.message === 'Network Error'
+          ? 'Cannot reach the server. Check your API URL and that the backend is running.'
+          : error.message) ||
+        'Failed to update project';
+      return rejectWithValue(message);
     }
   }
 );

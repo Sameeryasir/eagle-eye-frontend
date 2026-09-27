@@ -3,50 +3,34 @@ import {
   View,
   Text,
   TouchableOpacity,
-  Animated,
   Dimensions,
   Modal,
   StyleSheet,
+  Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getUserRole } from "../services/utils/userRole";
-import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
 import { logoutUser } from "../services/auth/Logout";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
 import { clearAllReduxStores } from "../store/utils/clearAllReduxStores";
+import { Brand } from "../constants/brandColors";
 
-const { width } = Dimensions.get("window");
+const { width: WINDOW_WIDTH } = Dimensions.get("window");
+const DRAWER_WIDTH = Math.min(WINDOW_WIDTH * 0.78, 320);
 
-const Sidebar = ({ isVisible, onClose, onNavigate }) => {
-  const slideAnim = React.useRef(new Animated.Value(-width)).current;
-  const [userData, setUserData] = React.useState({
-    name: "",
-    role: "",
-  });
+const Sidebar = ({ isVisible, onClose, onNavigate, onLogoutComplete }) => {
+  const [userData, setUserData] = React.useState({ name: "", role: "" });
   const [userRole, setUserRole] = React.useState(null);
   const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
   const [activeMenuItem, setActiveMenuItem] = React.useState(null);
-  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { logout } = useAuth();
 
   React.useEffect(() => {
     if (isVisible) {
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
       loadUserData();
-    } else {
-      Animated.timing(slideAnim, {
-        toValue: -width,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
     }
   }, [isVisible]);
 
@@ -55,7 +39,6 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
       const role = await getUserRole();
       const userFirstName = await AsyncStorage.getItem("userFirstName");
       const userLastName = await AsyncStorage.getItem("userLastName");
-
       const fullName = `${userFirstName || ""} ${userLastName || ""}`.trim();
 
       setUserRole(role);
@@ -66,10 +49,7 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
     } catch (error) {
       console.error("Error loading user data:", error);
       setUserRole(null);
-      setUserData({
-        name: "User",
-        role: "User",
-      });
+      setUserData({ name: "User", role: "User" });
     }
   };
 
@@ -109,16 +89,8 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
 
   const handleNavigate = (itemId) => {
     setActiveMenuItem(itemId);
-
-    onClose();
-
-    if (itemId === "personnel") {
-      navigation.navigate("PersonalScreen");
-    } else if (itemId === "files") {
-      navigation.navigate("FilesScreen");
-    } else if (itemId === "chats") {
-      navigation.navigate("ChatScreen");
-    }
+    onClose?.();
+    onNavigate?.(itemId);
   };
 
   const handleLogout = () => {
@@ -128,12 +100,8 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
   const confirmLogout = async () => {
     try {
       setShowLogoutDialog(false);
-      onClose();
-
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "SignIn" }],
-      });
+      onClose?.();
+      onLogoutComplete?.();
 
       clearAllReduxStores().catch((error) => {
         console.error("Error clearing Redux stores:", error);
@@ -144,10 +112,6 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
         .catch((error) => {
           console.error("Logout error:", error);
         });
-
-      console.log(
-        "✅ Logout initiated - navigation complete, cleanup in progress"
-      );
     } catch (error) {
       console.error("Error during logout:", error);
       setShowLogoutDialog(false);
@@ -160,102 +124,106 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
 
   return (
     <>
-      {/* Backdrop */}
-      {isVisible && (
-        <TouchableOpacity
-          style={{
-            position: "absolute",
-            top: 0,
-            right: 0,
-            bottom: 0,
-            left: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.4)",
-            zIndex: 9999,
-          }}
-          activeOpacity={1}
-          onPress={onClose}
-        />
-      )}
-
-      {/* Sidebar */}
-      <Animated.View
-        style={[
-          styles.drawerContainer,
-          {
-            width: width * 0.75,
-            transform: [{ translateX: slideAnim }],
-            paddingTop: insets.top,
-            paddingBottom: Math.max(insets.bottom, 16),
-          },
-        ]}
+      <Modal
+        visible={!!isVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => onClose?.()}
       >
-        {/* User Profile Section */}
-        <View style={styles.profileRow}>
-          <View style={styles.avatarWrap}>
-            <Ionicons name="person" size={40} color="black" />
-          </View>
-          <View style={styles.profileTextWrap}>
-            <Text style={styles.profileName}>{userData.name}</Text>
-            <Text style={styles.profileRole}>{userData.role}</Text>
-          </View>
-        </View>
+        <View style={styles.modalRoot}>
+          <View
+            style={[
+              styles.drawerContainer,
+              {
+                width: DRAWER_WIDTH,
+                paddingTop: insets.top,
+                paddingBottom: Math.max(insets.bottom, 16),
+              },
+            ]}
+          >
+            <View style={styles.profileRow}>
+              <View style={styles.avatarWrap}>
+                <Ionicons name="person" size={36} color={Brand.ink} />
+              </View>
+              <View style={styles.profileTextWrap}>
+                <Text style={styles.profileName} numberOfLines={1}>
+                  {userData.name}
+                </Text>
+                <Text style={styles.profileRole}>{userData.role}</Text>
+              </View>
+            </View>
 
-        {/* Navigation Items */}
-        <View style={styles.menuContainer}>
-          {getMenuItems().map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={[styles.menuItem, item.isActive && styles.menuItemActive]}
-              onPress={() => handleNavigate(item.id)}
-            >
-              <Ionicons
-                name={item.icon}
-                size={22}
-                color={item.isActive ? "#1C1C1E" : "#8E8E93"}
-              />
-              <Text
-                style={[
-                  styles.menuLabel,
-                  item.isActive && styles.menuLabelActive,
-                ]}
+            <View style={styles.menuContainer}>
+              {getMenuItems().map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[
+                    styles.menuItem,
+                    item.isActive && styles.menuItemActive,
+                  ]}
+                  onPress={() => handleNavigate(item.id)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={item.icon}
+                    size={22}
+                    color={item.isActive ? Brand.ink : Brand.inkMuted}
+                  />
+                  <Text
+                    style={[
+                      styles.menuLabel,
+                      item.isActive && styles.menuLabelActive,
+                    ]}
+                  >
+                    {item.title}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.logoutContainer}>
+              <TouchableOpacity
+                style={styles.logoutButton}
+                onPress={handleLogout}
+                activeOpacity={0.85}
               >
-                {item.title}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+                <Ionicons name="log-out" size={22} color={Brand.onInk} />
+                <Text style={styles.logoutLabel}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
-        {/* Logout Section */}
-        <View style={styles.logoutContainer}>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Ionicons name="log-out" size={24} color="white" />
-            <Text style={styles.logoutLabel}>Logout</Text>
-          </TouchableOpacity>
+          <Pressable
+            style={styles.backdrop}
+            onPress={() => onClose?.()}
+            accessibilityRole="button"
+            accessibilityLabel="Close menu"
+          />
         </View>
-      </Animated.View>
+      </Modal>
 
-      {/* Custom Logout Dialog */}
       <Modal
         visible={showLogoutDialog}
-        transparent={true}
+        transparent
         animationType="fade"
         onRequestClose={cancelLogout}
       >
         <View style={styles.logoutModalBackdrop}>
-          <View style={[styles.logoutModalCard, { width: width * 0.85 }]}>
-            {/* Dialog Header */}
+          <View
+            style={[styles.logoutModalCard, { width: WINDOW_WIDTH * 0.85 }]}
+          >
             <View style={styles.logoutModalHeader}>
               <View style={styles.logoutModalIconWrap}>
-                <Ionicons name="log-out" size={32} color="#ef4444" />
+                <Ionicons name="log-out" size={32} color={Brand.danger} />
               </View>
               <Text style={styles.logoutModalTitle}>Logout</Text>
               <Text style={styles.logoutModalSubtitle}>
-                Are you sure you want to logout? You'll need to sign in again to
-                access your account.
+                Are you sure you want to logout? You'll need to sign in again
+                to access your account.
               </Text>
             </View>
 
-            {/* Action Buttons */}
             <View style={styles.logoutModalActions}>
               <TouchableOpacity
                 style={styles.logoutModalCancel}
@@ -279,81 +247,88 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
     </>
   );
 };
+
 const styles = StyleSheet.create({
+  modalRoot: {
+    flex: 1,
+    flexDirection: "row",
+    backgroundColor: "transparent",
+  },
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(35, 31, 32, 0.45)",
+  },
   drawerContainer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
     height: "100%",
-    backgroundColor: "#FFFFFF",
-    zIndex: 10000,
-    shadowColor: "#000000",
-    shadowOffset: { width: 4, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 12,
+    backgroundColor: Brand.paper,
+    shadowColor: Brand.ink,
+    shadowOffset: { width: 6, height: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 24,
   },
   profileRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingTop: 89,
-    paddingBottom: 34,
+    paddingTop: 28,
+    paddingBottom: 28,
     paddingHorizontal: 20,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E5E5EA",
-    backgroundColor: "#FFFFFF",
+    borderBottomColor: Brand.line,
+    backgroundColor: Brand.paper,
   },
   avatarWrap: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "#F2F2F7",
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: Brand.paperSoft,
+    borderWidth: 1,
+    borderColor: Brand.line,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 16,
+    marginRight: 14,
   },
   profileTextWrap: {
     flex: 1,
-    marginTop: 4,
   },
   profileName: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "700",
-    color: "#1C1C1E",
-    marginBottom: 6,
-    letterSpacing: 0.5,
+    color: Brand.ink,
+    marginBottom: 4,
+    letterSpacing: 0.2,
   },
   profileRole: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "500",
-    color: "#8E8E93",
-    letterSpacing: 0.3,
+    color: Brand.inkMuted,
+    letterSpacing: 0.2,
   },
   menuContainer: {
     flex: 1,
-    paddingTop: 25,
-    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingHorizontal: 14,
   },
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    marginBottom: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    marginBottom: 6,
     borderRadius: 12,
     backgroundColor: "transparent",
   },
   menuItemActive: {
-    backgroundColor: "#F2F2F7",
-    borderLeftWidth: 4,
-    borderLeftColor: "#000000",
+    backgroundColor: Brand.paperSoft,
+    borderLeftWidth: 3,
+    borderLeftColor: Brand.ink,
   },
   menuLabel: {
-    marginLeft: 16,
+    marginLeft: 14,
     fontSize: 16,
     fontWeight: "600",
-    color: "#1C1C1E",
-    letterSpacing: 0.3,
+    color: Brand.ink,
+    letterSpacing: 0.2,
   },
   menuLabelActive: {
     fontWeight: "700",
@@ -369,37 +344,32 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderRadius: 14,
-    backgroundColor: "#000000",
+    backgroundColor: Brand.ink,
     alignSelf: "center",
-    width: "60%",
-    shadowColor: "#6C757D",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    width: "70%",
   },
   logoutLabel: {
-    marginLeft: 12,
-    fontSize: 16,
+    marginLeft: 10,
+    fontSize: 15,
     fontWeight: "600",
-    color: "#FFFFFF",
-    letterSpacing: 0.3,
+    color: Brand.onInk,
+    letterSpacing: 0.2,
   },
   logoutModalBackdrop: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(35, 31, 32, 0.5)",
   },
   logoutModalCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
+    backgroundColor: Brand.paper,
+    borderRadius: 20,
     marginHorizontal: 32,
     padding: 24,
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
+    shadowColor: Brand.ink,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
     elevation: 8,
   },
   logoutModalHeader: {
@@ -416,14 +386,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   logoutModalTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "700",
-    color: "#111827",
+    color: Brand.ink,
     marginBottom: 8,
   },
   logoutModalSubtitle: {
-    fontSize: 16,
-    color: "#4B5563",
+    fontSize: 15,
+    color: Brand.inkMuted,
     textAlign: "center",
     lineHeight: 22,
   },
@@ -432,34 +402,30 @@ const styles = StyleSheet.create({
   },
   logoutModalCancel: {
     flex: 1,
-    backgroundColor: "#F3F4F6",
-    borderRadius: 16,
-    paddingVertical: 16,
+    backgroundColor: Brand.paperSoft,
+    borderRadius: 14,
+    paddingVertical: 14,
     alignItems: "center",
     marginRight: 6,
   },
   logoutModalCancelLabel: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "600",
-    color: "#374151",
+    color: Brand.inkSoft,
   },
   logoutModalConfirm: {
     flex: 1,
-    backgroundColor: "#EF4444",
-    borderRadius: 16,
-    paddingVertical: 16,
+    backgroundColor: Brand.danger,
+    borderRadius: 14,
+    paddingVertical: 14,
     alignItems: "center",
-    shadowColor: "#EF4444",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
     marginLeft: 6,
   },
   logoutModalConfirmLabel: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: Brand.onInk,
   },
 });
+
 export default Sidebar;

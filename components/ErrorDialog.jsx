@@ -50,13 +50,13 @@ const ErrorDialog = ({
                 width: 48,
                 height: 48,
                 borderRadius: 24,
-                backgroundColor: "#FEF2F2",
+                backgroundColor: "#F3F4F6",
                 justifyContent: "center",
                 alignItems: "center",
                 marginBottom: 12,
               }}
             >
-              <Ionicons name="warning" size={24} color="#EF4444" />
+              <Ionicons name="alert-circle" size={24} color="#111827" />
             </View>
             <Text
               style={{
@@ -85,7 +85,7 @@ const ErrorDialog = ({
 
           <TouchableOpacity
             style={{
-              backgroundColor: "#EF4444",
+              backgroundColor: "black",
               paddingVertical: 12,
               borderRadius: 10,
               alignItems: "center",

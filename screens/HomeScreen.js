@@ -1,32 +1,24 @@
-import React, {
-  useState,
-  useEffect,
-  useRef,
-  useMemo,
-  useCallback,
-} from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   TextInput,
-  StatusBar,
   Keyboard,
-  Alert,
   FlatList,
   useWindowDimensions,
   Platform,
   TouchableWithoutFeedback,
   Modal,
   RefreshControl,
-  ToastAndroid,
-  Dimensions,
   ActivityIndicator,
+  StyleSheet,
+  Animated,
+  Image,
 } from "react-native";
 import Toast from "react-native-toast-message";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
 import {
   Menu,
   MenuOptions,
@@ -34,6 +26,41 @@ import {
   MenuTrigger,
 } from "react-native-popup-menu";
 
+function OverflowMenuRenderer({ style, children, layouts, ...other }) {
+  const { windowLayout, triggerLayout, optionsLayout } = layouts;
+  const gap = 6;
+  const menuW = optionsLayout.width || 148;
+  const menuH = optionsLayout.height || 88;
+  const triggerX = triggerLayout.x - windowLayout.x;
+  const triggerY = triggerLayout.y - windowLayout.y;
+
+  let top = triggerY + triggerLayout.height + gap;
+  if (top + menuH > windowLayout.height - 8) {
+    top = Math.max(8, triggerY - menuH - gap);
+  }
+
+  let left = triggerX + triggerLayout.width - menuW;
+  if (left < 8) left = 8;
+  if (left + menuW > windowLayout.width - 8) {
+    left = windowLayout.width - menuW - 8;
+  }
+
+  return (
+    <View
+      {...other}
+      style={[
+        {
+          position: "absolute",
+          top,
+          left,
+        },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
 import { useSelector, useDispatch } from "react-redux";
 import {
   fetchProjects,
@@ -43,61 +70,83 @@ import {
   selectProjectLoading,
   selectProjectError,
 } from "../store/slices/projectSlice";
-
 import Sidebar from "../components/Sidebar";
-import CustomBottomNav from "../components/CustomBottomNav";
+import HomeBottomNav from "../components/HomeBottomNav";
 import CreateProject from "../components/CreateProject";
 import UpdateProjectModal from "../components/UpdateProjectModal";
 import { getUserRole } from "../services/utils/userRole";
 import { sendInvite } from "../services/auth/SendInvite";
 import { getUserById } from "../services/user/getUserById";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Brand } from "../constants/brandColors";
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
-const isVerySmallScreen = screenWidth < 380 || screenHeight < 650;
-const isSmallScreen = screenWidth < 400 || screenHeight < 700;
-const isMediumScreen = screenWidth < 450;
-const isLargeScreen = screenWidth >= 450;
+const STATUS_STYLES = {
+  planning: { bg: "#E8F1FF", text: "#2563EB", bar: "#3B82F6" },
+  progress: { bg: "#E8F8EF", text: "#1B7A4A", bar: "#22A05A" },
+  hold: { bg: "#FFF1E8", text: "#C05621", bar: "#F08A3C" },
+};
 
-const searchBarClasses = `flex-row items-center rounded-2xl px-4 py-3 bg-[#F8FAFC] border border-[#EAECF0]`;
+function getProjectMeta(project) {
+  if (!project?.startDate) {
+    return { label: "Planning", key: "planning", progress: 20 };
+  }
+  const start = new Date(project.startDate);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  if (Number.isNaN(start.getTime()) || start > now) {
+    return { label: "Planning", key: "planning", progress: 20 };
+  }
+  return { label: "In Progress", key: "progress", progress: 60 };
+}
 
-const SearchBarHeader = React.memo(function SearchBarHeader({
-  searchTerm,
-  onChange,
-}) {
+function ProjectCardSkeleton() {
+  const pulse = React.useRef(new Animated.Value(0.45)).current;
+
+  React.useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0.45,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
+  const Bone = ({ style }) => (
+    <Animated.View
+      style={[{ backgroundColor: Brand.line, borderRadius: 8, opacity: pulse }, style]}
+    />
+  );
+
   return (
-    <View className="py-5 px-5">
-      <View
-        className={searchBarClasses}
-        style={{ width: "100%", maxWidth: 600 }}
-      >
-        <Ionicons
-          name="search"
-          size={18}
-          color="#6B7280"
-          style={{ marginRight: 8 }}
-        />
-        <TextInput
-          className="flex-1 text-[15px] text-[#111827]"
-          placeholder="Search projects"
-          placeholderTextColor="#9CA3AF"
-          value={searchTerm}
-          onChangeText={onChange}
-          returnKeyType="search"
-          blurOnSubmit={false}
-        />
-        {searchTerm.length > 0 && (
-          <TouchableOpacity onPress={() => onChange("")} className="ml-2">
-            <Ionicons name="close-circle" size={18} color="#9CA3AF" />
-          </TouchableOpacity>
-        )}
+    <View style={styles.card}>
+      <View style={styles.cardTopRow}>
+        <Bone style={{ width: 56, height: 56, borderRadius: 12 }} />
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Bone style={{ width: "70%", height: 14, marginBottom: 8 }} />
+          <Bone style={{ width: "50%", height: 11, marginBottom: 8 }} />
+          <Bone style={{ width: "40%", height: 11 }} />
+        </View>
+        <Bone style={{ width: 72, height: 24, borderRadius: 12 }} />
       </View>
+      <Bone style={{ width: "100%", height: 6, borderRadius: 4, marginTop: 14 }} />
     </View>
   );
-});
+}
 
-function HomeScreen({ navigation, route }) {
+function HomeScreen({ navigation }) {
   const dispatch = useDispatch();
+  const insets = useSafeAreaInsets();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const projects = useSelector(selectProjects);
   const loading = useSelector(selectProjectLoading);
   const error = useSelector(selectProjectError);
@@ -112,10 +161,10 @@ function HomeScreen({ navigation, route }) {
   const [updateProjectModalVisible, setUpdateProjectModalVisible] =
     useState(false);
   const [userRole, setUserRole] = useState(null);
+  const [userName, setUserName] = useState("there");
   const [refreshing, setRefreshing] = useState(false);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState(null);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [invitePopupVisible, setInvitePopupVisible] = useState(false);
   const [projectToInvite, setProjectToInvite] = useState(null);
@@ -124,30 +173,21 @@ function HomeScreen({ navigation, route }) {
   const [inviteErrorDialogVisible, setInviteErrorDialogVisible] =
     useState(false);
   const [inviteErrorMessage, setInviteErrorMessage] = useState("");
-  const { width: screenWidth } = useWindowDimensions();
-  const [hideCompanyAfterCreate, setHideCompanyAfterCreate] = useState(false);
   const [currentUserCompanyId, setCurrentUserCompanyId] = useState(null);
 
-  // We merge the Redux loading flag with the local loading state so the loader covers all fetch scenarios.
   const isProjectsLoading = loading || isLoading;
-
-  const numColumns = screenWidth >= 1024 ? 3 : screenWidth >= 768 ? 2 : 1;
-  const horizontalPadding = 40;
-  const interItemSpacing = 16;
-  const cardWidth =
-    (screenWidth - horizontalPadding - (numColumns - 1) * interItemSpacing) /
-    numColumns;
+  const showSkeletons = isProjectsLoading && !refreshing;
+  const canCreate =
+    userRole && userRole !== "Employee" && userRole !== "Manager";
+  const canManage = canCreate;
 
   useEffect(() => {
     const loadProjects = async () => {
       setIsLoading(true);
-      setIsInitialLoad(true);
-
       try {
         await dispatch(fetchProjects());
       } finally {
         setIsLoading(false);
-        setIsInitialLoad(false);
       }
     };
     loadProjects();
@@ -157,88 +197,68 @@ function HomeScreen({ navigation, route }) {
     if (searchTerm.trim() === "") {
       setFilteredProjects(projects);
     } else {
-      const filtered = projects.filter(
-        (project) =>
-          project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          project.description.toLowerCase().includes(searchTerm.toLowerCase())
+      const q = searchTerm.toLowerCase();
+      setFilteredProjects(
+        projects.filter(
+          (project) =>
+            project.name?.toLowerCase().includes(q) ||
+            project.description?.toLowerCase().includes(q)
+        )
       );
-      setFilteredProjects(filtered);
     }
   }, [projects, searchTerm]);
 
   useEffect(() => {
-    const loadUserRole = async () => {
+    const loadUser = async () => {
       const role = await getUserRole();
       setUserRole(role);
+      const first = await AsyncStorage.getItem("userFirstName");
+      const last = await AsyncStorage.getItem("userLastName");
+      const full = `${first || ""} ${last || ""}`.trim();
+      setUserName(full || role || "there");
 
-      if (role === "Admin" || role === "Owner") {
-        navigation.setOptions({
-          gestureEnabled: false,
-        });
-      } else {
-        navigation.setOptions({
-          gestureEnabled: true,
-        });
-      }
-    };
-
-    loadUserRole();
-  }, [navigation]);
-
-  useEffect(() => {
-    const loadCurrentUserCompany = async () => {
       try {
         const userId = await AsyncStorage.getItem("userId");
         if (userId) {
           const userData = await getUserById(userId);
-
-          const companyId =
-            userData?.company?.id || userData?.company_id || null;
-          setCurrentUserCompanyId(companyId);
-          console.log("Current user company ID:", companyId);
+          setCurrentUserCompanyId(
+            userData?.company?.id || userData?.company_id || null
+          );
         }
-      } catch (error) {
-        console.error("Error loading current user company:", error);
+      } catch (err) {
+        console.error("Error loading current user company:", err);
       }
     };
-
-    loadCurrentUserCompany();
+    loadUser();
   }, []);
 
   useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      "keyboardDidShow",
-      () => setKeyboardVisible(true)
+    const show = Keyboard.addListener("keyboardDidShow", () =>
+      setKeyboardVisible(true)
     );
-    const keyboardDidHideListener = Keyboard.addListener(
-      "keyboardDidHide",
-      () => setKeyboardVisible(false)
+    const hide = Keyboard.addListener("keyboardDidHide", () =>
+      setKeyboardVisible(false)
     );
-
     return () => {
-      keyboardDidShowListener?.remove();
-      keyboardDidHideListener?.remove();
+      show?.remove();
+      hide?.remove();
     };
   }, []);
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
-    setIsLoading(true);
-
-    dispatch(refreshProjects()).finally(() => {
-      setRefreshing(false);
-      setIsLoading(false);
-    });
+    dispatch(refreshProjects()).finally(() => setRefreshing(false));
   }, [dispatch]);
 
   const formatDate = (dateString) => {
-    if (!dateString) return "N/A";
+    if (!dateString) return "No start date";
     const date = new Date(dateString);
-    return date.toLocaleDateString();
-  };
-
-  const handleSearch = (text) => {
-    setSearchTerm(text);
+    if (Number.isNaN(date.getTime())) return "No start date";
+    return date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
   };
 
   const handleUpdate = (project) => {
@@ -247,73 +267,47 @@ function HomeScreen({ navigation, route }) {
   };
 
   const handleInvite = (project) => {
-    const projectId = project?.id;
-    const projectName = project?.name;
-
-    if (!projectId) {
-      console.error("No project ID found");
-      return;
-    }
-
+    if (!project?.id) return;
     setProjectToInvite(project);
     setInviteEmail("");
     setInvitePopupVisible(true);
   };
 
   const handleDelete = (project) => {
-    const projectId = project?.id;
-    const projectName = project?.name;
-
-    if (!projectId) {
-      console.error("No project ID found");
-      return;
-    }
-
+    if (!project?.id) return;
     setProjectToDelete(project);
     setDeleteDialogVisible(true);
   };
 
   const confirmDelete = async () => {
     if (!projectToDelete) return;
-
     const projectId = projectToDelete.id;
     const projectName = projectToDelete.name;
-
     setDeleteDialogVisible(false);
     setProjectToDelete(null);
 
     try {
       const resultAction = await dispatch(deleteProject(projectId));
-
       if (deleteProject.fulfilled.match(resultAction)) {
         Toast.show({
           type: "success",
           text1: "Project Deleted Successfully!",
           text2: `"${projectName}" has been permanently deleted`,
           visibilityTime: 3000,
-          autoHide: true,
           topOffset: 80,
         });
       } else {
         throw new Error("Delete failed");
       }
     } catch (error) {
-      console.error("Error deleting project:", error);
-
       Toast.show({
         type: "error",
         text1: "Delete Failed",
         text2: "Failed to delete project. Please try again.",
         visibilityTime: 4000,
-        autoHide: true,
         topOffset: 80,
       });
     }
-  };
-
-  const cancelDelete = () => {
-    setDeleteDialogVisible(false);
-    setProjectToDelete(null);
   };
 
   const handleSendInvite = async () => {
@@ -323,12 +317,10 @@ function HomeScreen({ navigation, route }) {
         text1: "Email Required",
         text2: "Please enter an email address",
         visibilityTime: 3000,
-        autoHide: true,
         topOffset: 80,
       });
       return;
     }
-
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(inviteEmail.trim())) {
       Toast.show({
@@ -336,52 +328,32 @@ function HomeScreen({ navigation, route }) {
         text1: "Invalid Email",
         text2: "Please enter a valid email address",
         visibilityTime: 3000,
-        autoHide: true,
         topOffset: 80,
       });
       return;
     }
-
-    if (!projectToInvite?.id) {
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Project information is missing",
-        visibilityTime: 3000,
-        autoHide: true,
-        topOffset: 80,
-      });
-      return;
-    }
+    if (!projectToInvite?.id) return;
 
     setIsSendingInvite(true);
-
     try {
       await sendInvite(inviteEmail.trim(), projectToInvite.id);
-
-      setInvitePopupVisible(false);
       const sentEmail = inviteEmail;
+      setInvitePopupVisible(false);
       setProjectToInvite(null);
       setInviteEmail("");
-
       Toast.show({
         type: "success",
         text1: "Invite Sent Successfully!",
         text2: `Invitation sent to ${sentEmail}`,
         visibilityTime: 3000,
-        autoHide: true,
         topOffset: 80,
       });
     } catch (error) {
-      console.error("Error sending invite:", error);
-
       const errorMessage =
         error?.message ||
         error?.response?.data?.message ||
         "Failed to send invitation. Please try again.";
-
       setInvitePopupVisible(false);
-
       setInviteErrorMessage(errorMessage);
       setInviteErrorDialogVisible(true);
     } finally {
@@ -389,657 +361,451 @@ function HomeScreen({ navigation, route }) {
     }
   };
 
-  const handleCancelInvitePopup = () => {
-    setInvitePopupVisible(false);
-    setProjectToInvite(null);
-    setInviteEmail("");
-    setIsSendingInvite(false);
-  };
-
   const handleCreateProjectSuccess = () => {
     setCreateProjectModalVisible(false);
-
-    setHideCompanyAfterCreate(true);
-
     Toast.show({
       type: "success",
       text1: "Project Created Successfully!",
       text2: "Your new project has been added to the list",
       visibilityTime: 3000,
-      autoHide: true,
-      topOffset: 80,
-    });
-
-    setTimeout(() => setHideCompanyAfterCreate(false), 2000);
-  };
-
-  const handleCreateProjectCancel = () => {
-    setCreateProjectModalVisible(false);
-  };
-
-  const handleUpdateProjectSuccess = () => {
-    setUpdateProjectModalVisible(false);
-    setSelectedProject(null);
-
-    Toast.show({
-      type: "success",
-      text1: "Project Updated Successfully!",
-      text2: "Your project changes have been saved",
-      visibilityTime: 3000,
-      autoHide: true,
       topOffset: 80,
     });
   };
 
-  const handleUpdateProjectClose = () => {
-    setUpdateProjectModalVisible(false);
-    setSelectedProject(null);
-  };
+  const ProjectCard = ({ project }) => {
+    const meta = getProjectMeta(project);
+    const tone = STATUS_STYLES[meta.key];
+    const subtitle =
+      project.description?.trim() ||
+      project.company?.name ||
+      "No description yet";
+    const showCompany =
+      project.company &&
+      currentUserCompanyId &&
+      project.company.id !== currentUserCompanyId;
 
-  const ProjectCard = ({ project, cardWidth, userRole }) => (
-    <TouchableOpacity
-      key={project.id}
-      className="bg-white rounded-2xl p-0 mb-4 border border-[#f0f0f0] overflow-hidden"
-      style={{ width: cardWidth }}
-      onPress={() => {
-        console.log("🔍 NAVIGATION DEBUG - HomeScreen:");
-        console.log("📱 Project ID:", project.id);
-        console.log("📝 Project Name:", project.name);
-        console.log("🚀 Navigating to WidgetScreen with params:", {
-          projectId: project.id,
-          projectName: project.name,
-        });
-
-        navigation.navigate("WidgetScreen", {
-          projectId: project.id,
-          projectName: project.name,
-        });
-      }}
-    >
-      {/* Navbar-like header */}
-      <View className="bg-black py-3 px-5 flex-row justify-between items-center">
-        <Text
-          className="text-white text-[16px] font-bold flex-1"
-          numberOfLines={1}
-        >
-          {project.name}
-        </Text>
-        {userRole !== "Employee" && userRole !== "Manager" && (
-          <Menu
-            rendererProps={{
-              placement: "bottom-end",
-              anchorStyle: { marginRight: 0 },
-              triggerStyle: { marginRight: 0 },
-            }}
-          >
-            <MenuTrigger>
-              <View style={{ activeOpacity: 1 }}>
-                <Ionicons name="ellipsis-vertical" size={20} color="white" />
-              </View>
-            </MenuTrigger>
-            <MenuOptions
-              customStyles={{
-                optionsContainer: {
-                  backgroundColor: "white",
-                  borderRadius: 8,
-                  padding: 8,
-                  width: 140,
-                  marginRight: -40,
-                  marginTop: 15,
-                  shadowColor: "#000",
-                  shadowOpacity: 0.15,
-                  shadowRadius: 6,
-                  shadowOffset: { width: 0, height: 3 },
-                  elevation: 3,
-                },
-              }}
-            >
-              <MenuOption
-                onSelect={() => handleUpdate(project)}
-                customStyles={{
-                  optionWrapper: {
-                    flexDirection: "row",
-                    alignItems: "center",
-                    paddingVertical: 6,
-                    paddingHorizontal: 12,
-                    borderRadius: 4,
-                  },
-                }}
-              >
-                <Ionicons name="create-outline" size={18} color="#000" />
-                <Text
-                  style={{
-                    marginLeft: 10,
-                    fontSize: 14,
-                    fontWeight: "600",
-                    color: "black",
-                  }}
-                >
-                  Update
-                </Text>
-              </MenuOption>
-              <MenuOption
-                onSelect={() => handleInvite(project)}
-                customStyles={{
-                  optionWrapper: {
-                    flexDirection: "row",
-                    alignItems: "center",
-                    paddingVertical: 6,
-                    paddingHorizontal: 12,
-                    borderRadius: 4,
-                  },
-                }}
-              >
-                <Ionicons name="person-add-outline" size={18} color="#000000" />
-                <Text
-                  style={{
-                    marginLeft: 10,
-                    fontSize: 14,
-                    fontWeight: "600",
-                    color: "#000000",
-                  }}
-                >
-                  Invite
-                </Text>
-              </MenuOption>
-              <MenuOption
-                onSelect={() => handleDelete(project)}
-                customStyles={{
-                  optionWrapper: {
-                    flexDirection: "row",
-                    alignItems: "center",
-                    paddingVertical: 6,
-                    paddingHorizontal: 12,
-                    borderRadius: 4,
-                  },
-                }}
-              >
-                <Ionicons name="trash-outline" size={18} color="#dc3545" />
-                <Text
-                  style={{
-                    marginLeft: 10,
-                    fontSize: 14,
-                    fontWeight: "600",
-                    color: "#dc3545",
-                  }}
-                >
-                  Delete
-                </Text>
-              </MenuOption>
-            </MenuOptions>
-          </Menu>
-        )}
-      </View>
-
-      {/* Rest of the card content */}
-      <View className="p-6 py-8">
-        {project.company &&
-          currentUserCompanyId &&
-          project.company.id !== currentUserCompanyId && (
-            <View className="mb-3">
-              <View className="flex-row items-center self-start">
-                <Ionicons name="business" size={14} color="black" />
-                <Text className="text-[14px] text-black font-semibold ml-1.5">
-                  {project.company.name}
-                </Text>
-              </View>
-            </View>
-          )}
-
-        <View className="flex-row items-start justify-between">
-          <Text
-            className="text-[14px] text-[#666] leading-[22px] flex-1 mr-3"
-            numberOfLines={3}
-            ellipsizeMode="tail"
-          >
-            {project.description}
-          </Text>
-          <Text
-            className="text-[12px] text-[#999] font-medium"
-            style={{ marginTop: "1%" }}
-          >
-            {formatDate(project.startDate)}
-          </Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-
-  const renderContent = () => {
-    if (isLoading) {
-      return null;
-    }
-
-    const isEmpty = filteredProjects.length === 0;
+    const openDetails = () =>
+      navigation.navigate("ProjectDetails", {
+        projectId: project.id,
+        projectName: project.name,
+      });
 
     return (
-      <FlatList
-        data={filteredProjects}
-        key={numColumns}
-        numColumns={numColumns}
-        keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={
-          isEmpty
-            ? { flexGrow: 1, paddingHorizontal: 20, paddingBottom: 100 }
-            : { paddingHorizontal: 20, paddingBottom: 100 }
-        }
-        scrollEnabled={true}
-        bounces={true}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={["#3155A1"]}
-            tintColor="#3155A1"
-          />
-        }
-        ListHeaderComponent={
-          <SearchBarHeader searchTerm={searchTerm} onChange={handleSearch} />
-        }
-        ListHeaderComponentStyle={{ marginHorizontal: -20 }}
-        ListEmptyComponent={() => (
-          <View
-            style={{
-              flex: 1,
-              justifyContent: "center",
-              alignItems: "center",
-              paddingVertical: 40,
-              minHeight: screenHeight * 0.7,
-            }}
+      <View style={styles.card}>
+        <View style={styles.cardTopRow}>
+          <TouchableOpacity
+            style={styles.cardPressArea}
+            activeOpacity={0.9}
+            onPress={openDetails}
           >
-            {error ? (
-              <>
-                <Text className="text-[16px] text-[#dc3545] text-center mb-4 font-semibold">
-                  {error}
-                </Text>
-                <TouchableOpacity
-                  className="bg-black py-3 px-6 rounded-xl"
-                  onPress={() => dispatch(fetchProjects())}
-                >
-                  <Text className="text-white text-[16px] font-semibold">
-                    Retry
-                  </Text>
-                </TouchableOpacity>
-              </>
+            {project.imageUrl ? (
+              <Image
+                source={{ uri: project.imageUrl }}
+                style={styles.thumbImage}
+              />
             ) : (
-              <Text className="text-[16px] text-[#666] text-center font-medium">
-                {searchTerm.trim() !== ""
-                  ? "No projects match your search"
-                  : "No projects found"}
-              </Text>
+              <View style={styles.thumb}>
+                <Ionicons name="business" size={22} color={Brand.ink} />
+              </View>
             )}
+
+            <View style={styles.cardMain}>
+              <View style={styles.titleRow}>
+                <Text style={styles.cardTitle} numberOfLines={1}>
+                  {project.name}
+                </Text>
+                <View style={[styles.statusPill, { backgroundColor: tone.bg }]}>
+                  <Text style={[styles.statusText, { color: tone.text }]}>
+                    {meta.label}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={styles.cardSubtitle} numberOfLines={1}>
+                {subtitle}
+              </Text>
+
+              <View style={styles.metaRow}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={13}
+                  color={Brand.inkFaint}
+                />
+                <Text style={styles.metaText} numberOfLines={1}>
+                  {formatDate(project.startDate)}
+                </Text>
+                {showCompany && (
+                  <>
+                    <Text style={styles.metaDot}>·</Text>
+                    <Text style={styles.metaText} numberOfLines={1}>
+                      {project.company.name}
+                    </Text>
+                  </>
+                )}
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {canManage ? (
+            <Menu renderer={OverflowMenuRenderer}>
+              <MenuTrigger
+                customStyles={{
+                  triggerWrapper: styles.menuBtn,
+                }}
+              >
+                <Ionicons
+                  name="ellipsis-vertical"
+                  size={16}
+                  color={Brand.inkSoft}
+                />
+              </MenuTrigger>
+              <MenuOptions
+                customStyles={{
+                  optionsContainer: styles.menuDropdown,
+                  optionWrapper: styles.menuItem,
+                }}
+              >
+                <MenuOption onSelect={() => handleUpdate(project)}>
+                  <View style={styles.menuItemInner}>
+                    <Ionicons name="create-outline" size={17} color={Brand.ink} />
+                    <Text style={styles.menuItemText}>Edit</Text>
+                  </View>
+                </MenuOption>
+                <MenuOption onSelect={() => handleDelete(project)}>
+                  <View style={styles.menuItemInner}>
+                    <Ionicons
+                      name="trash-outline"
+                      size={17}
+                      color={Brand.danger}
+                    />
+                    <Text style={[styles.menuItemText, { color: Brand.danger }]}>
+                      Delete
+                    </Text>
+                  </View>
+                </MenuOption>
+              </MenuOptions>
+            </Menu>
+          ) : (
+            <TouchableOpacity onPress={openDetails} hitSlop={8}>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={Brand.inkFaint}
+                style={{ marginTop: 4 }}
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <TouchableOpacity activeOpacity={0.9} onPress={openDetails}>
+          <View style={styles.progressRow}>
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${meta.progress}%`, backgroundColor: Brand.ink },
+                ]}
+              />
+            </View>
+            <Text style={styles.progressLabel}>{meta.progress}%</Text>
           </View>
-        )}
-        renderItem={({ item }) => (
-          <ProjectCard
-            project={item}
-            cardWidth={cardWidth}
-            userRole={userRole}
-          />
-        )}
-      />
+        </TouchableOpacity>
+      </View>
     );
   };
 
-  return (
-    <View className="flex-1 bg-white">
-      {/* Content (Header fixed; search bar scrolls inside list) */}
-      {/* Why: Simple inline loader centered on screen, no external dependencies */}
-      {isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#000000" />
-          <Text className="mt-4 text-base text-gray-500">Loading Projects...</Text>
-        </View>
-      ) : (
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View className="flex-1 bg-white">{renderContent()}</View>
-        </TouchableWithoutFeedback>
-      )}
+  const listData = showSkeletons
+    ? Array.from({ length: 5 }, (_, i) => ({ id: `sk-${i}` }))
+    : filteredProjects;
 
-      {/* Sidebar */}
+  const ListHeader = (
+    <View style={styles.headerBlock}>
+      <View style={styles.greetingRow}>
+        <TouchableOpacity
+          style={styles.menuCircle}
+          onPress={() => setSidebarVisible(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="menu" size={20} color={Brand.ink} />
+        </TouchableOpacity>
+
+        <View style={{ flex: 1, marginHorizontal: 12 }}>
+          <Text style={styles.helloText} numberOfLines={1}>
+            Hello, {userName} 👋
+          </Text>
+          <Text style={styles.helloSub} numberOfLines={2}>
+            Manage your projects and team efficiently.
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.profileCircle}
+          onPress={() => navigation.navigate("AccountInfo")}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="person" size={20} color={Brand.inkSoft} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.sectionRow}>
+        <View style={styles.sectionLeft}>
+          <Text style={styles.sectionTitle}>Projects</Text>
+          <View style={styles.countBadge}>
+            <Text style={styles.countText}>
+              {showSkeletons ? "—" : filteredProjects.length}
+            </Text>
+          </View>
+        </View>
+
+        {canCreate && (
+          <TouchableOpacity
+            style={styles.createBtn}
+            onPress={() => setCreateProjectModalVisible(true)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="add" size={18} color={Brand.onInk} />
+            <Text style={styles.createBtnText}>Create Project</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <View style={styles.searchRow}>
+        <View style={styles.searchBox}>
+          <Ionicons
+            name="search"
+            size={18}
+            color={Brand.inkFaint}
+            style={{ marginRight: 8 }}
+          />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search projects..."
+            placeholderTextColor={Brand.inkFaint}
+            value={searchTerm}
+            onChangeText={setSearchTerm}
+            editable={!showSkeletons}
+            returnKeyType="search"
+          />
+          {!!searchTerm && (
+            <TouchableOpacity onPress={() => setSearchTerm("")}>
+              <Ionicons name="close-circle" size={18} color={Brand.inkFaint} />
+            </TouchableOpacity>
+          )}
+        </View>
+        <TouchableOpacity
+          style={styles.filterBtn}
+          onPress={() => setSidebarVisible(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="options-outline" size={20} color={Brand.ink} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={styles.flex}>
+          <FlatList
+            data={listData}
+            keyExtractor={(item) => String(item.id)}
+            contentContainerStyle={{
+              paddingHorizontal: 20,
+              paddingBottom: 24,
+              flexGrow: 1,
+            }}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="always"
+            refreshControl={
+              showSkeletons ? undefined : (
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  colors={[Brand.ink]}
+                  tintColor={Brand.ink}
+                />
+              )
+            }
+            ListHeaderComponent={ListHeader}
+            ListEmptyComponent={() => (
+              <View
+                style={[
+                  styles.emptyWrap,
+                  { minHeight: screenHeight * 0.35 },
+                ]}
+              >
+                {error ? (
+                  <>
+                    <Text style={styles.emptyError}>{error}</Text>
+                    <TouchableOpacity
+                      style={styles.retryBtn}
+                      onPress={() => dispatch(fetchProjects())}
+                    >
+                      <Text style={styles.retryText}>Retry</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons
+                      name="folder-open-outline"
+                      size={36}
+                      color={Brand.inkFaint}
+                    />
+                    <Text style={styles.emptyTitle}>
+                      {searchTerm.trim()
+                        ? "No matching projects"
+                        : "No projects yet"}
+                    </Text>
+                    <Text style={styles.emptySub}>
+                      {searchTerm.trim()
+                        ? "Try a different search."
+                        : "Create a project to get started."}
+                    </Text>
+                  </>
+                )}
+              </View>
+            )}
+            renderItem={({ item }) =>
+              showSkeletons ? (
+                <ProjectCardSkeleton />
+              ) : (
+                <ProjectCard project={item} />
+              )
+            }
+          />
+        </View>
+      </TouchableWithoutFeedback>
+
+      <HomeBottomNav
+        keyboardVisible={keyboardVisible}
+        onAddPress={() => setCreateProjectModalVisible(true)}
+      />
+
       <Sidebar
         isVisible={sidebarVisible}
         onClose={() => setSidebarVisible(false)}
-        onNavigate={() => {}}
-      />
-
-      {/* Bottom Nav */}
-      <CustomBottomNav
-        keyboardVisible={keyboardVisible}
-        project
-        currentScreen="home"
-        onAddPress={() => {
-          if (userRole === "Employee" || userRole === "Manager") {
-            return;
-          }
-          setCreateProjectModalVisible(true);
+        onNavigate={(itemId) => {
+          setSidebarVisible(false);
+          if (itemId === "chats") navigation.navigate("ChatScreen");
+          if (itemId === "files") navigation.navigate("FilesScreen");
+          if (itemId === "personnel") navigation.navigate("PersonalScreen");
+        }}
+        onLogoutComplete={() => {
+          setSidebarVisible(false);
+          navigation.reset({ index: 0, routes: [{ name: "SignIn" }] });
         }}
       />
 
-      {/* Create Project Modal */}
       <Modal
         visible={createProjectModalVisible}
         animationType="slide"
         presentationStyle="fullScreen"
+        statusBarTranslucent
         onRequestClose={() => setCreateProjectModalVisible(false)}
       >
-        <CreateProject
-          navigation={{
-            goBack: () => setCreateProjectModalVisible(false),
-          }}
-          onSuccess={handleCreateProjectSuccess}
-          onCancel={handleCreateProjectCancel}
-        />
+        <View style={{ flex: 1, backgroundColor: Brand.paper }}>
+          <CreateProject
+            navigation={{
+              goBack: () => setCreateProjectModalVisible(false),
+            }}
+            onSuccess={handleCreateProjectSuccess}
+            onCancel={() => setCreateProjectModalVisible(false)}
+          />
+        </View>
       </Modal>
 
-      {/* Update Project Modal */}
       <UpdateProjectModal
         visible={updateProjectModalVisible}
         project={selectedProject}
-        onClose={handleUpdateProjectClose}
-        onSuccess={handleUpdateProjectSuccess}
+        onClose={() => {
+          setUpdateProjectModalVisible(false);
+          setSelectedProject(null);
+        }}
+        onSuccess={() => {
+          setUpdateProjectModalVisible(false);
+          setSelectedProject(null);
+          Toast.show({
+            type: "success",
+            text1: "Project Updated Successfully!",
+            text2: "Your project changes have been saved",
+            visibilityTime: 3000,
+            topOffset: 80,
+          });
+        }}
       />
 
-      {/* Beautiful Delete Confirmation Dialog */}
       <Modal
         visible={deleteDialogVisible}
-        transparent={true}
+        transparent
         animationType="fade"
-        onRequestClose={cancelDelete}
+        onRequestClose={() => setDeleteDialogVisible(false)}
       >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            justifyContent: "center",
-            alignItems: "center",
-            paddingHorizontal: 20,
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: "white",
-              borderRadius: 16,
-              padding: 20,
-              width: "100%",
-              maxWidth: 320,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.2,
-              shadowRadius: 16,
-              elevation: 8,
-            }}
-          >
-            {/* Warning Icon */}
-            <View
-              style={{
-                alignItems: "center",
-                marginBottom: 16,
-              }}
-            >
-              <View
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
-                  backgroundColor: "#FEF2F2",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  marginBottom: 12,
-                }}
-              >
-                <Ionicons name="warning" size={24} color="#EF4444" />
-              </View>
-              <Text
-                style={{
-                  fontSize: 18,
-                  fontWeight: "bold",
-                  color: "#1F2937",
-                  textAlign: "center",
-                  marginBottom: 4,
-                }}
-              >
-                Delete Project
-              </Text>
-            </View>
-
-            {/* Message */}
-            <Text
-              style={{
-                fontSize: 15,
-                color: "#6B7280",
-                textAlign: "center",
-                lineHeight: 22,
-                marginBottom: 16,
-              }}
-            >
-              Are you sure you want to delete{" "}
-              <Text style={{ fontWeight: "600", color: "#1F2937" }}>
-                "{projectToDelete?.name}"
-              </Text>{" "}
-              permanently?
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Delete Project</Text>
+            <Text style={styles.modalBody}>
+              Delete "{projectToDelete?.name}" permanently? This cannot be
+              undone.
             </Text>
-
-            <Text
-              style={{
-                fontSize: 13,
-                color: "#EF4444",
-                textAlign: "center",
-                fontWeight: "500",
-                marginBottom: 20,
-              }}
-            >
-              This action cannot be undone.
-            </Text>
-
-            {/* Action Buttons */}
-            <View
-              style={{
-                flexDirection: "row",
-                gap: 10,
-              }}
-            >
+            <View style={styles.modalActions}>
               <TouchableOpacity
-                style={{
-                  flex: 1,
-                  backgroundColor: "#F3F4F6",
-                  paddingVertical: 12,
-                  borderRadius: 10,
-                  alignItems: "center",
-                }}
-                onPress={cancelDelete}
-                activeOpacity={0.8}
+                style={styles.modalCancel}
+                onPress={() => setDeleteDialogVisible(false)}
               >
-                <Text
-                  style={{
-                    fontSize: 15,
-                    fontWeight: "600",
-                    color: "#374151",
-                  }}
-                >
-                  Cancel
-                </Text>
+                <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
-                style={{
-                  flex: 1,
-                  backgroundColor: "#EF4444",
-                  paddingVertical: 12,
-                  borderRadius: 10,
-                  alignItems: "center",
-                }}
+                style={styles.modalDanger}
                 onPress={confirmDelete}
-                activeOpacity={0.8}
               >
-                <Text
-                  style={{
-                    fontSize: 15,
-                    fontWeight: "600",
-                    color: "white",
-                  }}
-                >
-                  Delete
-                </Text>
+                <Text style={styles.modalDangerText}>Delete</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Invite Popup Menu */}
       <Modal
         visible={invitePopupVisible}
-        transparent={true}
+        transparent
         animationType="fade"
-        onRequestClose={handleCancelInvitePopup}
+        onRequestClose={() => setInvitePopupVisible(false)}
       >
-        <TouchableWithoutFeedback onPress={handleCancelInvitePopup}>
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: "rgba(0, 0, 0, 0.3)",
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
+        <TouchableWithoutFeedback onPress={() => setInvitePopupVisible(false)}>
+          <View style={styles.modalBackdrop}>
             <TouchableWithoutFeedback>
-              <View
-                style={{
-                  backgroundColor: "white",
-                  borderRadius: 12,
-                  padding: 16,
-                  width: 280,
-                  shadowColor: "#000",
-                  shadowOpacity: 0.15,
-                  shadowRadius: 6,
-                  shadowOffset: { width: 0, height: 3 },
-                  elevation: 3,
-                }}
-              >
-                {/* Header */}
-                <View
-                  style={{
-                    alignItems: "center",
-                    marginBottom: 16,
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 20,
-                      backgroundColor: "#F3F4F6",
-                      justifyContent: "center",
-                      alignItems: "center",
-                      marginBottom: 8,
-                    }}
-                  >
-                    <Ionicons name="person-add" size={20} color="#000000" />
-                  </View>
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: "600",
-                      color: "#374151",
-                      textAlign: "center",
-                    }}
-                  >
-                    Invite to {projectToInvite?.name}
-                  </Text>
-                </View>
-
-                {/* Email Input */}
-                <View style={{ marginBottom: 16 }}>
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontWeight: "500",
-                      color: "#374151",
-                      marginBottom: 8,
-                    }}
-                  >
-                    Enter the owner email address
-                  </Text>
-                  <TextInput
-                    style={{
-                      borderWidth: 1,
-                      borderColor: "#D1D5DB",
-                      borderRadius: 8,
-                      paddingHorizontal: 12,
-                      paddingVertical: 10,
-                      fontSize: 14,
-                      backgroundColor: "#F9FAFB",
-                    }}
-                    placeholder="Enter email address"
-                    placeholderTextColor="#9CA3AF"
-                    value={inviteEmail}
-                    onChangeText={setInviteEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    returnKeyType="send"
-                    onSubmitEditing={handleSendInvite}
-                  />
-                </View>
-
-                {/* Action Buttons */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    gap: 8,
-                  }}
-                >
+              <View style={[styles.modalCard, { maxWidth: 300 }]}>
+                <Text style={styles.modalTitle}>
+                  Invite to {projectToInvite?.name}
+                </Text>
+                <TextInput
+                  style={styles.inviteInput}
+                  placeholder="Enter email address"
+                  placeholderTextColor={Brand.inkFaint}
+                  value={inviteEmail}
+                  onChangeText={setInviteEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  onSubmitEditing={handleSendInvite}
+                />
+                <View style={styles.modalActions}>
                   <TouchableOpacity
-                    style={{
-                      flex: 1,
-                      backgroundColor: isSendingInvite ? "#E5E7EB" : "#F3F4F6",
-                      paddingVertical: 10,
-                      borderRadius: 8,
-                      alignItems: "center",
-                    }}
-                    onPress={handleCancelInvitePopup}
-                    activeOpacity={0.8}
+                    style={styles.modalCancel}
+                    onPress={() => setInvitePopupVisible(false)}
                     disabled={isSendingInvite}
                   >
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        fontWeight: "600",
-                        color: isSendingInvite ? "#9CA3AF" : "#374151",
-                      }}
-                    >
-                      Cancel
-                    </Text>
+                    <Text style={styles.modalCancelText}>Cancel</Text>
                   </TouchableOpacity>
-
                   <TouchableOpacity
-                    style={{
-                      flex: 1,
-                      backgroundColor: isSendingInvite ? "#4B5563" : "#000000",
-                      paddingVertical: 10,
-                      borderRadius: 8,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
+                    style={styles.modalPrimary}
                     onPress={handleSendInvite}
-                    activeOpacity={0.8}
                     disabled={isSendingInvite}
                   >
                     {isSendingInvite ? (
-                      <ActivityIndicator size="small" color="white" />
+                      <ActivityIndicator size="small" color={Brand.onInk} />
                     ) : (
-                      <Text
-                        style={{
-                          fontSize: 14,
-                          fontWeight: "600",
-                          color: "white",
-                        }}
-                      >
-                        Send Invite
-                      </Text>
+                      <Text style={styles.modalDangerText}>Send Invite</Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -1049,105 +815,24 @@ function HomeScreen({ navigation, route }) {
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* Invite Error Dialog */}
       <Modal
         visible={inviteErrorDialogVisible}
-        transparent={true}
+        transparent
         animationType="fade"
         onRequestClose={() => setInviteErrorDialogVisible(false)}
       >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            justifyContent: "center",
-            alignItems: "center",
-            paddingHorizontal: 20,
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: "white",
-              borderRadius: 16,
-              padding: 20,
-              width: "100%",
-              maxWidth: 320,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.2,
-              shadowRadius: 16,
-              elevation: 8,
-            }}
-          >
-            {/* Error Icon */}
-            <View
-              style={{
-                alignItems: "center",
-                marginBottom: 16,
-              }}
-            >
-              <View
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
-                  backgroundColor: "#FEF2F2",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  marginBottom: 12,
-                }}
-              >
-                <Ionicons name="close-circle" size={28} color="#EF4444" />
-              </View>
-              <Text
-                style={{
-                  fontSize: 18,
-                  fontWeight: "bold",
-                  color: "#1F2937",
-                  textAlign: "center",
-                  marginBottom: 4,
-                }}
-              >
-                Invite Failed
-              </Text>
-            </View>
-
-            {/* Error Message */}
-            <Text
-              style={{
-                fontSize: 15,
-                color: "#6B7280",
-                textAlign: "center",
-                lineHeight: 22,
-                marginBottom: 20,
-              }}
-            >
-              {inviteErrorMessage}
-            </Text>
-
-            {/* OK Button */}
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Invite Failed</Text>
+            <Text style={styles.modalBody}>{inviteErrorMessage}</Text>
             <TouchableOpacity
-              style={{
-                backgroundColor: "#000000",
-                paddingVertical: 12,
-                borderRadius: 10,
-                alignItems: "center",
-              }}
+              style={styles.modalPrimary}
               onPress={() => {
                 setInviteErrorDialogVisible(false);
                 setInviteErrorMessage("");
               }}
-              activeOpacity={0.8}
             >
-              <Text
-                style={{
-                  fontSize: 15,
-                  fontWeight: "600",
-                  color: "white",
-                }}
-              >
-                OK
-              </Text>
+              <Text style={styles.modalDangerText}>OK</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1155,5 +840,381 @@ function HomeScreen({ navigation, route }) {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: "#F7F8FA",
+  },
+  flex: { flex: 1 },
+  headerBlock: {
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+  greetingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 18,
+  },
+  menuCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Brand.paper,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  profileCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#EEF0F3",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  helloText: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: Brand.ink,
+    letterSpacing: -0.3,
+  },
+  helloSub: {
+    marginTop: 3,
+    fontSize: 13,
+    color: Brand.inkMuted,
+    lineHeight: 18,
+  },
+  sectionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+  sectionLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: Brand.ink,
+    marginRight: 8,
+  },
+  countBadge: {
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
+    paddingHorizontal: 7,
+    backgroundColor: "#E8EEF7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  countText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: Brand.inkSoft,
+  },
+  createBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Brand.ink,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 4,
+  },
+  createBtnText: {
+    color: Brand.onInk,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 8,
+  },
+  searchBox: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Brand.paper,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    minHeight: 46,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: Brand.ink,
+    paddingVertical: Platform.OS === "ios" ? 10 : 8,
+  },
+  filterBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    backgroundColor: Brand.paper,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  card: {
+    backgroundColor: Brand.paper,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#EEF0F3",
+    shadowColor: Brand.ink,
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  cardTopRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  cardPressArea: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    minWidth: 0,
+  },
+  thumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: Brand.paperSoft,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  thumbImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: Brand.line,
+  },
+  cardMain: {
+    flex: 1,
+    marginLeft: 12,
+    marginRight: 8,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    marginBottom: 4,
+  },
+  cardTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "700",
+    color: Brand.ink,
+    letterSpacing: -0.2,
+  },
+  statusPill: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  cardSubtitle: {
+    fontSize: 13,
+    color: Brand.inkMuted,
+    marginBottom: 6,
+  },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  metaText: {
+    marginLeft: 4,
+    fontSize: 12,
+    color: Brand.inkFaint,
+    fontWeight: "500",
+    flexShrink: 1,
+  },
+  metaDot: {
+    marginHorizontal: 6,
+    color: Brand.inkFaint,
+  },
+  menuBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Brand.paperSoft,
+  },
+  menuDropdown: {
+    backgroundColor: Brand.paper,
+    borderRadius: 12,
+    paddingVertical: 4,
+    width: 148,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    shadowColor: "#000",
+    shadowOpacity: 0.14,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 10,
+  },
+  menuItem: {
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+  },
+  menuItemInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+  },
+  menuItemText: {
+    marginLeft: 10,
+    fontSize: 14,
+    fontWeight: "600",
+    color: Brand.ink,
+  },
+  progressRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 14,
+  },
+  progressTrack: {
+    flex: 1,
+    height: 6,
+    borderRadius: 4,
+    backgroundColor: "#EEF0F3",
+    overflow: "hidden",
+    marginRight: 10,
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 4,
+  },
+  progressLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: Brand.inkSoft,
+    minWidth: 34,
+    textAlign: "right",
+  },
+  emptyWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+  },
+  emptyTitle: {
+    marginTop: 12,
+    fontSize: 17,
+    fontWeight: "700",
+    color: Brand.ink,
+  },
+  emptySub: {
+    marginTop: 6,
+    fontSize: 14,
+    color: Brand.inkMuted,
+    textAlign: "center",
+  },
+  emptyError: {
+    fontSize: 15,
+    color: Brand.danger,
+    fontWeight: "600",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  retryBtn: {
+    backgroundColor: Brand.ink,
+    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  retryText: {
+    color: Brand.onInk,
+    fontWeight: "700",
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(35,31,32,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 320,
+    backgroundColor: Brand.paper,
+    borderRadius: 16,
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: Brand.ink,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  modalBody: {
+    fontSize: 14,
+    color: Brand.inkMuted,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  modalCancel: {
+    flex: 1,
+    backgroundColor: Brand.paperSoft,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  modalCancelText: {
+    fontWeight: "600",
+    color: Brand.inkSoft,
+  },
+  modalDanger: {
+    flex: 1,
+    backgroundColor: Brand.ink,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  modalPrimary: {
+    flex: 1,
+    backgroundColor: Brand.ink,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  modalDangerText: {
+    fontWeight: "700",
+    color: Brand.onInk,
+  },
+  inviteInput: {
+    borderWidth: 1,
+    borderColor: Brand.line,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 14,
+    color: Brand.ink,
+  },
+});
 
 export default HomeScreen;

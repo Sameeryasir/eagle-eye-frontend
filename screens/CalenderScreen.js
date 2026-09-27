@@ -13,7 +13,7 @@ import {
 import { Calendar } from "react-native-calendars";
 import Toast from 'react-native-toast-message';
 import { getUserRole } from "../services/utils/userRole";
-import CustomBottomNav from "../components/CustomBottomNav";
+import HomeBottomNav from "../components/HomeBottomNav";
 import MyWeekView from "../components/WeekView";
 import CalendarToggle from "../components/CalendarToggle";
 import CreateEventModal from "../components/CreateEventModal";
@@ -460,7 +460,7 @@ function CalenderScreen({ navigation }) {
           <ActivityIndicator size="large" color="black" />
           <Text className="text-base text-gray-600 mt-4 text-center">Loading your tasks and events...</Text>
         </View>
-        <CustomBottomNav />
+        <HomeBottomNav />
       </View>
     );
   }
@@ -589,9 +589,8 @@ function CalenderScreen({ navigation }) {
         <MyWeekView />
       )}
       
-      <CustomBottomNav 
-        userRole={userRole} // Pass user role to prevent FAB lag
-        handleFabPress={() => {
+      <HomeBottomNav
+        onAddPress={() => {
           // Use already loaded user role to prevent async lag
           if (userRole === "Owner") {
             setShowEventCreationDialog(true);

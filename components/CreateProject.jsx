@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -8,30 +8,49 @@ import {
   Alert,
   ActivityIndicator,
   Keyboard,
-  Dimensions,
+  KeyboardAvoidingView,
   Platform,
   Modal,
   StyleSheet,
+  StatusBar,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import * as ImagePicker from "expo-image-picker";
 import Toast from "react-native-toast-message";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-
 import { useDispatch } from "react-redux";
 import { createProject } from "../store/slices/projectSlice";
+import { uploadImage } from "../services/images/uploadImage";
+import { Brand } from "../constants/brandColors";
+import { useResponsiveLayout } from "../constants/responsiveLayout";
+
+const DESC_MAX = 120;
 
 function CreateProject({ navigation, onSuccess, onCancel }) {
   const dispatch = useDispatch();
-
-  const insets = useSafeAreaInsets();
-
-  const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
-
-  const isVerySmallScreen = screenWidth < 380 || screenHeight < 650;
-  const isSmallScreen = screenWidth < 400 || screenHeight < 700;
-  const isMediumScreen = screenWidth < 450;
-  const isLargeScreen = screenWidth >= 450;
+  const layout = useResponsiveLayout();
+  const {
+    width,
+    insets,
+    contentWidth,
+    horizontalPad,
+    titleSize,
+    subtitleSize,
+    bodySize,
+    labelSize,
+    captionSize,
+    buttonTextSize,
+    inputHeight,
+    buttonPadY,
+    fieldGap,
+    radius,
+    hitSize,
+    isCompactHeight,
+    isSmallPhone,
+    isTablet,
+    rs,
+  } = layout;
 
   const [projectData, setProjectData] = useState({
     name: "",
@@ -40,6 +59,8 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
   const [startDate, setStartDate] = useState(new Date());
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [focusedField, setFocusedField] = useState(null);
+  const [coverImage, setCoverImage] = useState(null);
 
   const handleInputChange = (field, value) => {
     setProjectData((prev) => ({
@@ -49,12 +70,127 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
   };
 
   const handleStartDateChange = (event, selectedDate) => {
-    setShowStartDatePicker(false);
+    if (Platform.OS === "android") {
+      setShowStartDatePicker(false);
+    }
+    if (event?.type === "dismissed") {
+      setShowStartDatePicker(false);
+      return;
+    }
     if (selectedDate) {
       const newDate = new Date(selectedDate);
       newDate.setHours(0, 0, 0, 0);
       setStartDate(newDate);
     }
+  };
+
+  const applyCoverAsset = (asset) => {
+    if (!asset) return;
+    setCoverImage({
+      uri: asset.uri,
+      name: asset.fileName || `project_${Date.now()}.jpg`,
+      type: asset.mimeType || "image/jpeg",
+    });
+  };
+
+  const pickCoverFromLibrary = async () => {
+    try {
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Toast.show({
+          type: "error",
+          text1: "Permission Required",
+          text2: "Allow photo access to add a project image",
+          visibilityTime: 3000,
+          topOffset: 80,
+        });
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets?.[0]) {
+        applyCoverAsset(result.assets[0]);
+      }
+    } catch (error) {
+      console.error("Error picking project image:", error);
+      Toast.show({
+        type: "error",
+        text1: "Image Selection Failed",
+        text2: "Could not open your photo library",
+        visibilityTime: 3000,
+        topOffset: 80,
+      });
+    }
+  };
+
+  const takeCoverPhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") {
+        Toast.show({
+          type: "error",
+          text1: "Permission Required",
+          text2: "Allow camera access to take a project photo",
+          visibilityTime: 3000,
+          topOffset: 80,
+        });
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets?.[0]) {
+        applyCoverAsset(result.assets[0]);
+      }
+    } catch (error) {
+      console.error("Error taking project photo:", error);
+      Toast.show({
+        type: "error",
+        text1: "Camera Failed",
+        text2: "Could not open the camera",
+        visibilityTime: 3000,
+        topOffset: 80,
+      });
+    }
+  };
+
+  const pickCoverImage = () => {
+    Alert.alert("Project image", "Add a cover photo for this project", [
+      { text: "Take Photo", onPress: takeCoverPhoto },
+      { text: "Choose from Library", onPress: pickCoverFromLibrary },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
+  const uploadCoverImage = async () => {
+    if (!coverImage?.uri) return null;
+
+    const uploadResponse = await uploadImage([
+      {
+        uri: coverImage.uri,
+        type: "image/jpeg",
+        name: coverImage.name?.endsWith(".jpg")
+          ? coverImage.name
+          : `project_${Date.now()}.jpg`,
+      },
+    ]);
+    const uploaded = uploadResponse?.images?.find((img) => img?.imageUrl);
+    if (!uploaded?.imageUrl) {
+      throw new Error("Image upload failed");
+    }
+    return uploaded.imageUrl;
   };
 
   const handleCreateProject = async () => {
@@ -74,7 +210,7 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
       Toast.show({
         type: "error",
         text1: "Validation Error",
-        text2: "Project description is required",
+        text2: "A short description is required",
         visibilityTime: 3000,
         autoHide: true,
         topOffset: 80,
@@ -97,18 +233,22 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
       return;
     }
 
-    const startDateISO = startDate.toISOString();
-
     setIsLoading(true);
 
     try {
-      const projectPayload = {
-        name: projectData.name.trim(),
-        description: projectData.description.trim(),
-        startDate: startDateISO,
-      };
+      let imageUrl = null;
+      if (coverImage?.uri) {
+        imageUrl = await uploadCoverImage();
+      }
 
-      await dispatch(createProject(projectPayload)).unwrap();
+      await dispatch(
+        createProject({
+          name: projectData.name.trim(),
+          description: projectData.description.trim(),
+          startDate: startDate.toISOString(),
+          ...(imageUrl ? { imageUrl } : {}),
+        })
+      ).unwrap();
 
       Toast.show({
         type: "success",
@@ -154,327 +294,617 @@ function CreateProject({ navigation, onSuccess, onCancel }) {
     }
   };
 
-  const handleCancel = () => {
-    Alert.alert(
-      "Cancel",
-      "Are you sure you want to cancel? All data will be lost.",
-      [
-        {
-          text: "No",
-          style: "cancel",
-        },
-        {
-          text: "Yes",
-          onPress: () => {
-            if (onCancel) {
-              onCancel();
-            } else {
-              navigation.goBack();
-            }
-          },
-        },
-      ]
-    );
+  const handleClose = () => {
+    if (onCancel) {
+      onCancel();
+    } else {
+      navigation.goBack();
+    }
   };
 
-  const dismissKeyboard = () => {
-    Keyboard.dismiss();
+  const handleCancel = () => {
+    const hasDraft =
+      projectData.name.trim() ||
+      projectData.description.trim() ||
+      !!coverImage;
+
+    if (!hasDraft) {
+      handleClose();
+      return;
+    }
+
+    Alert.alert("Discard project?", "Your entered details will be lost.", [
+      { text: "Keep editing", style: "cancel" },
+      { text: "Discard", style: "destructive", onPress: handleClose },
+    ]);
   };
+
+  const canSubmit =
+    projectData.name.trim().length > 0 &&
+    projectData.description.trim().length > 0 &&
+    !isLoading;
+
+  const formatDisplayDate = (date) =>
+    date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+
+  const sidePad = isTablet
+    ? Math.max(horizontalPad, 40)
+    : isSmallPhone
+      ? 16
+      : Math.min(horizontalPad, 20);
+  const formWidth = isTablet
+    ? contentWidth
+    : Math.max(width - sidePad * 2, 0);
+  const fieldRadius = Math.max(radius - 2, 8);
+  const footerPadBottom = Math.max(insets.bottom, 14);
+  const descHeight = rs(isCompactHeight ? 72 : 80);
+
+  const labelStyle = {
+    fontSize: labelSize + 1,
+    fontWeight: "600",
+    color: Brand.inkSoft,
+    marginBottom: rs(7),
+    letterSpacing: 0.1,
+  };
+
+  const fieldShell = (field) => ({
+    width: "100%",
+    borderWidth: 1,
+    borderColor: focusedField === field ? Brand.ink : Brand.line,
+    backgroundColor:
+      focusedField === field ? Brand.paper : Brand.paperSoft,
+    borderRadius: fieldRadius,
+  });
 
   return (
-    <View
-      style={{
-        flex: 1,
-        height: screenHeight,
-        width: screenWidth,
-        margin: 0,
-        padding: 0,
-      }}
-    >
+    <View style={[styles.root, { width }]}>
+      <StatusBar barStyle="dark-content" backgroundColor={Brand.paper} />
 
-      <View
-        className={`flex-1 ${isVerySmallScreen ? "bg-blue-50" : "bg-white"}`}
-        style={{ flex: 1 }}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       >
         <View
-          className={`bg-black ${isVerySmallScreen ? "px-3 py-2" : "px-4 py-3"} flex-row items-center justify-between`}
+          style={{
+            width: "100%",
+            paddingTop: Math.max(insets.top, 8),
+            paddingHorizontal: sidePad,
+            paddingBottom: rs(4),
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: Brand.line,
+          }}
         >
-          <Text
-            className={`text-black ${isVerySmallScreen ? "text-[20px]" : "text-[24px]"} font-semibold mt-2`}
-          >
-            Create Project
-          </Text>
           <TouchableOpacity
-            onPress={() => {
-              if (onCancel) {
-                onCancel();
-              } else {
-                navigation.goBack();
-              }
+            onPress={handleCancel}
+            style={{
+              minWidth: hitSize,
+              height: hitSize,
+              alignItems: "flex-start",
+              justifyContent: "center",
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={{
+                fontSize: bodySize,
+                fontWeight: "500",
+                color: Brand.inkMuted,
+              }}
+            >
+              Cancel
+            </Text>
+          </TouchableOpacity>
+
+          <Text
+            style={{
+              fontSize: rs(16),
+              fontWeight: "700",
+              color: Brand.ink,
+              letterSpacing: -0.2,
             }}
           >
-            <Ionicons
-              name="close"
-              size={isVerySmallScreen ? 20 : 24}
-              color="white"
-            />
+            New project
+          </Text>
+
+          <TouchableOpacity
+            onPress={handleCreateProject}
+            disabled={!canSubmit}
+            style={{
+              minWidth: hitSize,
+              height: hitSize,
+              alignItems: "flex-end",
+              justifyContent: "center",
+              opacity: canSubmit ? 1 : 0.35,
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            activeOpacity={0.7}
+          >
+            {isLoading ? (
+              <ActivityIndicator size="small" color={Brand.ink} />
+            ) : (
+              <Text
+                style={{
+                  fontSize: bodySize,
+                  fontWeight: "700",
+                  color: Brand.ink,
+                }}
+              >
+                Create
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
 
-        <View
-          className={`flex-1 ${isVerySmallScreen ? "px-2" : "px-5"} items-center`}
-          style={{
-            paddingBottom: isVerySmallScreen ? 0 : 20,
-            minHeight: screenHeight - 120,
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={{
+            width: "100%",
+            paddingHorizontal: sidePad,
+            paddingTop: isCompactHeight ? rs(18) : rs(24),
+            paddingBottom: rs(28) + footerPadBottom,
           }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          onScrollBeginDrag={() => Keyboard.dismiss()}
         >
-          <ScrollView
-            className={`flex-1 w-full ${isVerySmallScreen ? "max-w-sm" : "max-w-md"}`}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{
-              paddingBottom: isVerySmallScreen ? 120 : isSmallScreen ? 100 : 20,
-              paddingTop: 0,
-              flexGrow: 1,
-            }}
-            keyboardShouldPersistTaps="handled"
-            onScrollBeginDrag={dismissKeyboard}
-            style={{ flex: 1 }}
-          >
-            <View
-              className={`${isVerySmallScreen ? "mb-3" : isSmallScreen ? "mb-4" : "mb-8"} items-center`}
-            >
-              <Text
-                className={`${isVerySmallScreen ? "text-[18px]" : isSmallScreen ? "text-[24px]" : "text-[28px]"} font-bold text-[#333]`}
-              >
-                Create New Project
-              </Text>
-              <Text
-                className={`${isVerySmallScreen ? "text-[12px]" : "text-[16px]"} text-[#666] text-center`}
-              >
-                Fill in the details below to create your project
-              </Text>
-            </View>
-
-            <View
-              className={`${isVerySmallScreen ? "mb-2" : isSmallScreen ? "mb-3" : "mb-5"}`}
-            >
-              <View
-                className={`${isVerySmallScreen ? "mb-2" : isSmallScreen ? "mb-3" : "mb-5"}`}
-              >
-                <View className="flex-row items-center mb-2">
-                  <Ionicons
-                    name="folder"
-                    size={isVerySmallScreen ? 18 : 20}
-                    color="black"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text
-                    className={`${isVerySmallScreen ? "text-[14px]" : "text-[16px]"} font-semibold text-[#333]`}
-                  >
-                    Project Name *
-                  </Text>
-                </View>
-                <TextInput
-                  className={`border border-[#e1e8ed] rounded-lg ${isVerySmallScreen ? "p-2" : "p-3"} ${isVerySmallScreen ? "text-[14px]" : "text-[16px]"} bg-[#f8f9fa] text-[#333]`}
-                  placeholder="Enter project name"
-                  value={projectData.name}
-                  onChangeText={(value) => handleInputChange("name", value)}
-                  placeholderTextColor="#999"
-                  returnKeyType="next"
-                />
-              </View>
-
-              <View
-                className={`${isVerySmallScreen ? "mb-2" : isSmallScreen ? "mb-3" : "mb-5"}`}
-              >
-                <View className="flex-row items-center mb-2">
-                  <Ionicons
-                    name="document-text"
-                    size={isVerySmallScreen ? 18 : 20}
-                    color="black"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text
-                    className={`${isVerySmallScreen ? "text-[14px]" : "text-[16px]"} font-semibold text-[#333]`}
-                  >
-                    Description *
-                  </Text>
-                </View>
-                <TextInput
-                  className={`border border-[#e1e8ed] rounded-lg ${isVerySmallScreen ? "p-2" : "p-3"} ${isVerySmallScreen ? "text-[14px]" : "text-[16px]"} bg-[#f8f9fa] text-[#333] ${isVerySmallScreen ? "h-20" : "h-24"}`}
-                  placeholder="Describe your project"
-                  value={projectData.description}
-                  onChangeText={(value) =>
-                    handleInputChange("description", value)
-                  }
-                  multiline
-                  numberOfLines={isVerySmallScreen ? 3 : 4}
-                  placeholderTextColor="#999"
-                  returnKeyType="next"
-                  style={{ textAlignVertical: "top" }}
-                />
-              </View>
-
-              <View className={`${isVerySmallScreen ? "mb-3" : "mb-5"}`}>
-                <View className="flex-row items-center mb-2">
-                  <Ionicons
-                    name="calendar"
-                    size={isVerySmallScreen ? 18 : 20}
-                    color="black"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text
-                    className={`${isVerySmallScreen ? "text-[14px]" : "text-[16px]"} font-semibold text-[#333]`}
-                  >
-                    Start Date *
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  className={`flex-row items-center justify-between border border-[#e1e8ed] rounded-lg ${isVerySmallScreen ? "p-2" : "p-3"} bg-[#f8f9fa]`}
-                  onPress={() => setShowStartDatePicker(true)}
-                >
-                  <Text
-                    className={`${isVerySmallScreen ? "text-[14px]" : "text-[16px]"} text-[#333] font-medium`}
-                  >
-                    {startDate.toLocaleDateString()}
-                  </Text>
-                  <Ionicons
-                    name="calendar-outline"
-                    size={isVerySmallScreen ? 14 : 16}
-                    color="#666"
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </ScrollView>
-        </View>
-
-        <View className="absolute bottom-0 left-0 right-0 bg-white">
           <View
-            className={`${isVerySmallScreen ? "px-2" : "px-5"} pt-4 items-center ${isVerySmallScreen ? "pb-3" : isSmallScreen ? "pb-4" : "pb-6"}`}
+            style={{
+              width: formWidth,
+              maxWidth: "100%",
+              alignSelf: "center",
+            }}
           >
-            <TouchableOpacity
-              className={`w-full ${isVerySmallScreen ? "max-w-[260px]" : "max-w-[280px]"} bg-black rounded-lg ${isVerySmallScreen ? "p-3" : "p-4"} items-center justify-center`}
-              onPress={handleCreateProject}
-              disabled={isLoading}
-              activeOpacity={0.8}
+            <Text
+              style={{
+                fontSize: isSmallPhone
+                  ? rs(22)
+                  : Math.min(titleSize - 2, rs(26)),
+                fontWeight: "700",
+                color: Brand.ink,
+                letterSpacing: -0.35,
+                marginBottom: rs(6),
+              }}
             >
-              {isLoading ? (
-                <View className="flex-row items-center">
-                  <ActivityIndicator color="#ffffff" size="small" />
+              Project details
+            </Text>
+            <Text
+              style={{
+                fontSize: subtitleSize,
+                color: Brand.inkMuted,
+                lineHeight: subtitleSize * 1.4,
+                marginBottom: isCompactHeight ? rs(20) : rs(26),
+              }}
+            >
+              Add a cover photo, name, short note, and start date.
+            </Text>
+
+            <View style={{ marginBottom: fieldGap + 4, width: "100%" }}>
+              <Text style={labelStyle}>Cover image</Text>
+              {coverImage?.uri ? (
+                <View style={styles.coverPreviewWrap}>
+                  <Image
+                    source={{ uri: coverImage.uri }}
+                    style={styles.coverPreview}
+                  />
+                  <View style={styles.coverActions}>
+                    <TouchableOpacity
+                      style={styles.coverActionBtn}
+                      onPress={pickCoverImage}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name="camera-outline"
+                        size={rs(16)}
+                        color={Brand.ink}
+                      />
+                      <Text style={styles.coverActionText}>Change</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.coverActionBtn}
+                      onPress={() => setCoverImage(null)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name="trash-outline"
+                        size={rs(16)}
+                        color={Brand.danger}
+                      />
+                      <Text
+                        style={[
+                          styles.coverActionText,
+                          { color: Brand.danger },
+                        ]}
+                      >
+                        Remove
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               ) : (
-                <Text
-                  className={`text-white ${isVerySmallScreen ? "text-[14px]" : "text-[16px]"} font-semibold`}
+                <TouchableOpacity
+                  onPress={pickCoverImage}
+                  activeOpacity={0.8}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: Brand.line,
+                    borderStyle: "dashed",
+                    backgroundColor: Brand.paperSoft,
+                    borderRadius: fieldRadius,
+                    minHeight: rs(110),
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingVertical: rs(16),
+                  }}
                 >
-                  Create Project
-                </Text>
+                  <View
+                    style={{
+                      width: rs(44),
+                      height: rs(44),
+                      borderRadius: rs(12),
+                      backgroundColor: Brand.paper,
+                      borderWidth: 1,
+                      borderColor: Brand.line,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginBottom: rs(8),
+                    }}
+                  >
+                    <Ionicons
+                      name="image-outline"
+                      size={rs(22)}
+                      color={Brand.ink}
+                    />
+                  </View>
+                  <Text
+                    style={{
+                      fontSize: bodySize - 1,
+                      fontWeight: "600",
+                      color: Brand.ink,
+                    }}
+                  >
+                    Upload project image
+                  </Text>
+                  <Text
+                    style={{
+                      marginTop: 4,
+                      fontSize: captionSize,
+                      color: Brand.inkMuted,
+                    }}
+                  >
+                    Optional · take a photo or choose from library
+                  </Text>
+                </TouchableOpacity>
               )}
-            </TouchableOpacity>
-          </View>
-        </View>
+            </View>
 
-        {Platform.OS === "ios" && (
-          <Modal
-            visible={showStartDatePicker}
-            transparent={true}
-            animationType="fade"
-            onRequestClose={() => setShowStartDatePicker(false)}
-          >
-            <TouchableOpacity
-              style={{
-                flex: 1,
-                backgroundColor: "rgba(0, 0, 0, 0.5)",
-                justifyContent: "center",
-                alignItems: "center",
-                paddingHorizontal: 20,
-              }}
-              activeOpacity={1}
-              onPress={() => setShowStartDatePicker(false)}
-            >
-              <TouchableOpacity
-                activeOpacity={1}
-                onPress={(e) => e.stopPropagation()}
+            <View style={{ marginBottom: fieldGap + 4, width: "100%" }}>
+              <Text style={labelStyle}>
+                Name <Text style={styles.required}>*</Text>
+              </Text>
+              <TextInput
+                style={[
+                  fieldShell("name"),
+                  {
+                    paddingHorizontal: rs(14),
+                    minHeight: inputHeight,
+                    fontSize: bodySize,
+                    color: Brand.ink,
+                    paddingVertical: Platform.OS === "ios" ? rs(13) : rs(10),
+                  },
+                ]}
+                placeholder="e.g. Oak Street remodel"
+                value={projectData.name}
+                onChangeText={(value) => handleInputChange("name", value)}
+                placeholderTextColor={Brand.inkFaint}
+                returnKeyType="next"
+                onFocus={() => setFocusedField("name")}
+                onBlur={() => setFocusedField(null)}
+                maxLength={80}
+              />
+            </View>
+
+            <View style={{ marginBottom: fieldGap + 4, width: "100%" }}>
+              <View
                 style={{
-                  backgroundColor: "white",
-                  borderRadius: 16,
-                  width: "100%",
-                  maxWidth: 350,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.25,
-                  shadowRadius: 10,
-                  elevation: 10,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: rs(7),
                 }}
+              >
+                <Text style={[labelStyle, { marginBottom: 0 }]}>
+                  Short description <Text style={styles.required}>*</Text>
+                </Text>
+                <Text
+                  style={{
+                    fontSize: captionSize,
+                    color: Brand.inkFaint,
+                    fontWeight: "500",
+                  }}
+                >
+                  {projectData.description.length}/{DESC_MAX}
+                </Text>
+              </View>
+              <TextInput
+                style={[
+                  fieldShell("description"),
+                  {
+                    paddingHorizontal: rs(14),
+                    paddingTop: rs(10),
+                    paddingBottom: rs(10),
+                    height: descHeight,
+                    fontSize: bodySize,
+                    color: Brand.ink,
+                    lineHeight: bodySize * 1.35,
+                    textAlignVertical: "top",
+                  },
+                ]}
+                placeholder="One-line summary"
+                value={projectData.description}
+                onChangeText={(value) =>
+                  handleInputChange("description", value)
+                }
+                multiline
+                numberOfLines={2}
+                placeholderTextColor={Brand.inkFaint}
+                onFocus={() => setFocusedField("description")}
+                onBlur={() => setFocusedField(null)}
+                maxLength={DESC_MAX}
+              />
+            </View>
+
+            <View style={{ width: "100%" }}>
+              <Text style={labelStyle}>
+                Start date <Text style={styles.required}>*</Text>
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowStartDatePicker(true)}
+                activeOpacity={0.75}
+                style={[
+                  fieldShell("date"),
+                  {
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingHorizontal: rs(14),
+                    minHeight: inputHeight,
+                  },
+                ]}
               >
                 <View
                   style={{
                     flexDirection: "row",
-                    justifyContent: "space-between",
                     alignItems: "center",
-                    paddingHorizontal: 20,
-                    paddingTop: 20,
-                    paddingBottom: 15,
-                    borderBottomWidth: 1,
-                    borderBottomColor: "#E5E7EB",
+                    flex: 1,
                   }}
+                >
+                  <Ionicons
+                    name="calendar-outline"
+                    size={rs(18)}
+                    color={Brand.inkMuted}
+                    style={{ marginRight: rs(10) }}
+                  />
+                  <Text
+                    style={{
+                      fontSize: bodySize,
+                      fontWeight: "500",
+                      color: Brand.ink,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {formatDisplayDate(startDate)}
+                  </Text>
+                </View>
+                <Ionicons
+                  name="chevron-forward"
+                  size={rs(16)}
+                  color={Brand.inkFaint}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+
+        <View
+          style={{
+            width: "100%",
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: Brand.line,
+            backgroundColor: Brand.paper,
+            paddingHorizontal: sidePad,
+            paddingTop: rs(12),
+            paddingBottom: footerPadBottom,
+          }}
+        >
+          <TouchableOpacity
+            onPress={handleCreateProject}
+            disabled={!canSubmit}
+            activeOpacity={0.85}
+            style={{
+              width: formWidth,
+              maxWidth: "100%",
+              alignSelf: "center",
+              minHeight: rs(isCompactHeight ? 48 : 52),
+              borderRadius: fieldRadius + 2,
+              backgroundColor: Brand.ink,
+              alignItems: "center",
+              justifyContent: "center",
+              paddingVertical: buttonPadY - 2,
+              opacity: canSubmit ? 1 : 0.4,
+            }}
+          >
+            {isLoading ? (
+              <ActivityIndicator color={Brand.onInk} size="small" />
+            ) : (
+              <Text
+                style={{
+                  fontSize: buttonTextSize,
+                  fontWeight: "700",
+                  color: Brand.onInk,
+                  letterSpacing: 0.15,
+                }}
+              >
+                Create project
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+
+      {Platform.OS === "ios" && (
+        <Modal
+          visible={showStartDatePicker}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowStartDatePicker(false)}
+        >
+          <View style={styles.dateModalRoot}>
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              activeOpacity={1}
+              onPress={() => setShowStartDatePicker(false)}
+            />
+            <View
+              style={[
+                styles.dateModalCard,
+                {
+                  width: Math.min(formWidth, 380),
+                  maxWidth: "92%",
+                  borderRadius: rs(14),
+                },
+              ]}
+            >
+              <View style={styles.dateModalHeader}>
+                <Text
+                  style={{
+                    fontSize: rs(16),
+                    fontWeight: "600",
+                    color: Brand.ink,
+                  }}
+                >
+                  Start date
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowStartDatePicker(false)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  activeOpacity={0.75}
                 >
                   <Text
                     style={{
-                      fontSize: 18,
-                      fontWeight: "600",
-                      color: "#111827",
+                      fontSize: rs(16),
+                      fontWeight: "700",
+                      color: Brand.ink,
                     }}
                   >
-                    Select Start Date
+                    Done
                   </Text>
-                  <TouchableOpacity
-                    onPress={() => setShowStartDatePicker(false)}
-                    style={{
-                      backgroundColor: "#000000",
-                      paddingHorizontal: 20,
-                      paddingVertical: 8,
-                      borderRadius: 8,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: "white",
-                        fontSize: 16,
-                        fontWeight: "600",
-                      }}
-                    >
-                      Done
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={startDate}
+                mode="date"
+                display="inline"
+                onChange={handleStartDateChange}
+                minimumDate={new Date(new Date().setHours(0, 0, 0, 0))}
+                themeVariant="light"
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
 
-                <View style={{ paddingHorizontal: 10, paddingVertical: 10 }}>
-                  <DateTimePicker
-                    value={startDate}
-                    mode="date"
-                    display="inline"
-                    onChange={handleStartDateChange}
-                    minimumDate={new Date(new Date().setHours(0, 0, 0, 0))}
-                  />
-                </View>
-              </TouchableOpacity>
-            </TouchableOpacity>
-          </Modal>
-        )}
-
-        {Platform.OS === "android" && showStartDatePicker && (
-          <DateTimePicker
-            value={startDate}
-            mode="date"
-            display="default"
-            onChange={handleStartDateChange}
-            minimumDate={new Date(new Date().setHours(0, 0, 0, 0))}
-          />
-        )}
-      </View>
+      {Platform.OS === "android" && showStartDatePicker && (
+        <DateTimePicker
+          value={startDate}
+          mode="date"
+          display="default"
+          onChange={handleStartDateChange}
+          minimumDate={new Date(new Date().setHours(0, 0, 0, 0))}
+        />
+      )}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    width: "100%",
+    backgroundColor: Brand.paper,
+  },
+  flex: {
+    flex: 1,
+    width: "100%",
+  },
+  required: {
+    color: Brand.danger,
+  },
+  coverPreviewWrap: {
+    borderWidth: 1,
+    borderColor: Brand.line,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: Brand.paperSoft,
+  },
+  coverPreview: {
+    width: "100%",
+    height: 160,
+    backgroundColor: Brand.line,
+  },
+  coverActions: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Brand.line,
+    backgroundColor: Brand.paper,
+  },
+  coverActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  coverActionText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Brand.ink,
+  },
+  dateModalRoot: {
+    flex: 1,
+    backgroundColor: "rgba(35, 31, 32, 0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  dateModalCard: {
+    backgroundColor: Brand.paper,
+    width: "100%",
+    overflow: "hidden",
+    paddingBottom: 6,
+    borderWidth: 1,
+    borderColor: Brand.line,
+  },
+  dateModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Brand.line,
+  },
+});
 
 export default CreateProject;

@@ -1,23 +1,25 @@
-// API Configuration
-// This file handles API URL configuration for different environments
+const DEFAULT_API = 'https://acdd-203-99-184-85.ngrok-free.app';
 
-// EXPO_PUBLIC_API_URL comes from eas.json environment variables
-// It's injected at build time by EAS Build
 const getApiUrl = () => {
-  // Priority order:
-  // 1. EXPO_PUBLIC_API_URL (from eas.json - for EAS builds)
-  // 2. process.env.API_URL (for local development)
-  // 3. Default fallback
-  return process.env.EXPO_PUBLIC_API_URL || 
-         process.env.API_URL || 
-         'https://11ce9fde5658.ngrok-free.app';
+  const candidates = [
+    process.env.EXPO_PUBLIC_API_URL,
+    process.env.API_URL,
+  ];
+
+  for (const value of candidates) {
+    if (!value) continue;
+    const cleaned = String(value).trim().replace(/\/$/, '');
+    if (!cleaned) continue;
+    return cleaned;
+  }
+
+  return DEFAULT_API;
 };
 
 export const API_URL = getApiUrl();
 
-// Debug logging - this will show you which URL is being used
 console.log('=== API Configuration Debug ===');
-console.log('- EXPO_PUBLIC_API_URL (from eas.json):', process.env.EXPO_PUBLIC_API_URL);
-console.log('- process.env.API_URL (local):', process.env.API_URL);
+console.log('- EXPO_PUBLIC_API_URL:', process.env.EXPO_PUBLIC_API_URL);
+console.log('- process.env.API_URL:', process.env.API_URL);
 console.log('- Final API_URL being used:', API_URL);
 console.log('===============================');

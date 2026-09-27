@@ -13,6 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { getUserById } from '../services/user/getUserById';
 import { updateUserById } from '../services/user/updateUserById';
+import HomeBottomNav from '../components/HomeBottomNav';
 
 export default function AccountInfoScreen({ navigation }) {
   const [userInfo, setUserInfo] = useState({
@@ -331,9 +332,9 @@ export default function AccountInfoScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Bottom Spacing */}
-        <View style={{ height: 20 }} />
+        <View style={{ height: 100 }} />
       </ScrollView>
+      <HomeBottomNav />
     </SafeAreaView>
   );
 }

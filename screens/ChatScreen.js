@@ -14,7 +14,7 @@ import {
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { getUserConversations } from "../services/chats/getConversation";
 import SelectUserModal from "../components/SelectUserModal";
-import CustomBottomNav from "../components/CustomBottomNav";
+import HomeBottomNav from "../components/HomeBottomNav";
 import Toast from "react-native-toast-message";
 import { useAuth } from "../context/AuthContext";
 import pusher from "../pusherClient";
@@ -876,9 +876,8 @@ const ChatScreen = ({ navigation }) => {
         onUserSelect={handleUserSelectFromModal}
       />
 
-      <CustomBottomNav
+      <HomeBottomNav
         keyboardVisible={isKeyboardVisible}
-        currentScreen="chat"
         onAddPress={handleOpenSelectUserModal}
       />
     </View>

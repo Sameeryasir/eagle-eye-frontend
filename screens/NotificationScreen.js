@@ -7,7 +7,7 @@ import { markAllRead } from "../services/inAppNotification/markAllRead";
 import { deleteNotificationById } from "../services/inAppNotification/deleteNotificationById";
 import { useAuth } from "../context/AuthContext";
 import pusher from "../pusherClient";
-import CustomBottomNav from "../components/CustomBottomNav";
+import HomeBottomNav from "../components/HomeBottomNav";
 import Toast from "react-native-toast-message";
 
 export default function NotificationScreen() {
@@ -330,7 +330,7 @@ export default function NotificationScreen() {
         </ScrollView>
       )}
 
-      <CustomBottomNav hideFAB={true} />
+      <HomeBottomNav />
     </View>
   );
 }

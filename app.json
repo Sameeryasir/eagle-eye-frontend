@@ -16,7 +16,13 @@
         "UIBackgroundModes": [
           "remote-notification",
           "remote-notification"
-        ]
+        ],
+        "NSCameraUsageDescription": "Allow EagleEye to take project cover photos.",
+        "NSPhotoLibraryUsageDescription": "Allow EagleEye to choose project cover photos.",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true,
+          "NSAllowsArbitraryLoads": true
+        }
       },
       "bundleIdentifier": "com.sameer-yasir.eagleEye"
     },
@@ -28,11 +34,15 @@
       "edgeToEdgeEnabled": true,
       "package": "com.sameer_yasir.eagleEye",
       "softwareKeyboardLayoutMode": "pan",
+      "usesCleartextTraffic": true,
       "permissions": [
         "NOTIFICATIONS",
         "VIBRATE",
         "WAKE_LOCK",
-        "RECEIVE_BOOT_COMPLETED"
+        "RECEIVE_BOOT_COMPLETED",
+        "CAMERA",
+        "READ_MEDIA_IMAGES",
+        "READ_EXTERNAL_STORAGE"
       ]
     },
     "web": {
@@ -57,6 +67,13 @@
         }
       ],
       "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow EagleEye to choose project cover photos.",
+          "cameraPermission": "Allow EagleEye to take project cover photos."
+        }
+      ],
       "expo-image",
       "expo-sharing",
       "expo-splash-screen",

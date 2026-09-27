@@ -78,6 +78,7 @@ import appEmitter from "./utils/appEmitter";
 
 import HomeScreen from "./screens/HomeScreen";
 import WidgetScreen from "./screens/WidgetScreen";
+import ProjectDetailsScreen from "./screens/ProjectDetailsScreen";
 import CalenderScreen from "./screens/CalenderScreen";
 import CalenderDetailScreen from "./screens/CalenderDetailScreen";
 import ViewAllTasksScreen from "./screens/ViewAllTasksScreen";
@@ -300,26 +301,34 @@ const AppNavigator = () => {
     setSidebarVisible(false);
   }, []);
 
-  const handleSidebarNavigate = (itemId) => {
-    console.log("Navigate to:", itemId);
-    if (navigationRef.current) {
-      switch (itemId) {
-        case "chats":
-          navigationRef.current.navigate("ChatScreen");
-          break;
-        case "files":
-          break;
-        case "material":
-          break;
-        case "personnel":
-          navigationRef.current.navigate("PersonalScreen");
-          break;
-        default:
-          break;
-      }
-    }
+  const handleSidebarNavigate = useCallback((itemId) => {
     setSidebarVisible(false);
-  };
+    const nav = navigationRef.current;
+    if (!nav) return;
+
+    switch (itemId) {
+      case "chats":
+        nav.navigate("ChatScreen");
+        break;
+      case "files":
+        nav.navigate("FilesScreen");
+        break;
+      case "personnel":
+        nav.navigate("PersonalScreen");
+        break;
+      case "material":
+      default:
+        break;
+    }
+  }, []);
+
+  const handleSidebarLogoutComplete = useCallback(() => {
+    setSidebarVisible(false);
+    navigationRef.current?.reset({
+      index: 0,
+      routes: [{ name: "SignIn" }],
+    });
+  }, []);
 
   const goBack = useCallback(() => {
     navigationRef.current?.goBack();
@@ -339,19 +348,8 @@ const AppNavigator = () => {
         "Register",
         "RegisterCompany",
         "OtpScreen",
-        "CreateProject",
-        "CreateTask",
-        "UpdateTask",
-        "UpdateProject",
-        "CreatLog",
-        "ProjectAssignment",
-        "TaskDetails",
-        "LogsDetail",
-        "CalenderDetailScreen",
-        "AccountInfo",
+        "HomeScreen",
         "SignatureScreen",
-        "ProjectFiles",
-        "WeekView",
       ]);
 
       if (hideHeaderOn.has(route.name)) {
@@ -370,9 +368,36 @@ const AppNavigator = () => {
         onRightPress: undefined,
       };
 
+      const useBackButton = new Set([
+        "ProjectDetails",
+        "CreateProject",
+        "CreateTask",
+        "UpdateTask",
+        "UpdateProject",
+        "CreatLog",
+        "ProjectAssignment",
+        "TaskDetails",
+        "LogsDetail",
+        "CalenderDetailScreen",
+        "AccountInfo",
+        "ProjectFiles",
+        "WeekView",
+        "ViewAllTasksScreen",
+        "ViewAllLogScreen",
+        "WidgetScreen",
+      ]);
+
+      if (useBackButton.has(route.name)) {
+        config.leftIconName = "chevron-back";
+        config.onMenuPress = goBack;
+      }
+
       switch (route.name) {
         case "HomeScreen":
           config.title = "Projects";
+          break;
+        case "ProjectDetails":
+          config.title = route.params?.projectName || "Project Details";
           break;
         case "WidgetScreen":
           config.title = "Dashboard";
@@ -380,17 +405,53 @@ const AppNavigator = () => {
         case "CalenderScreen":
           config.title = "Calendar";
           break;
+        case "CalenderDetailScreen":
+          config.title = "Event Details";
+          break;
+        case "WeekView":
+          config.title = "Week View";
+          break;
         case "ViewAllTasksScreen":
           config.title = "All Tasks";
           break;
         case "ViewAllLogScreen":
           config.title = "All Logs";
           break;
+        case "CreateProject":
+          config.title = "Create Project";
+          break;
+        case "CreateTask":
+          config.title = "Create Task";
+          break;
+        case "UpdateTask":
+          config.title = "Update Task";
+          break;
+        case "UpdateProject":
+          config.title = "Update Project";
+          break;
+        case "TaskDetails":
+          config.title = "Task Details";
+          break;
+        case "LogsDetail":
+          config.title = "Log Details";
+          break;
+        case "CreatLog":
+          config.title = "Create Log";
+          break;
+        case "ProjectAssignment":
+          config.title = "Assign Project";
+          break;
         case "PersonalScreen":
           config.title = "Crew";
           break;
         case "FilesScreen":
           config.title = "Files";
+          break;
+        case "ProjectFiles":
+          config.title = "Project Files";
+          break;
+        case "AccountInfo":
+          config.title = "Account";
           break;
         case "ChatScreen":
           config.title = "Messages";
@@ -442,7 +503,11 @@ const AppNavigator = () => {
                 {headerConfig.visible && (
                   <AppHeader
                     title={headerConfig.title}
-                    onMenuPress={headerConfig.onMenuPress}
+                    onMenuPress={
+                      headerConfig.leftIconName === "menu"
+                        ? handleMenuPress
+                        : headerConfig.onMenuPress
+                    }
                     navigation={navigationRef.current}
                     showMenu={headerConfig.showMenu}
                     leftIconName={headerConfig.leftIconName}
@@ -452,7 +517,10 @@ const AppNavigator = () => {
                   />
                 )}
                 <Stack.Navigator
-                  screenOptions={{ headerShown: false }}
+                  screenOptions={{
+                    headerShown: false,
+                    animation: "none",
+                  }}
                   initialRouteName="SignIn"
                 >
                   <Stack.Screen name="SplashScreen" component={SplashScreen} />
@@ -465,6 +533,10 @@ const AppNavigator = () => {
                   />
                   <Stack.Screen name="OtpScreen" component={Code} />
                   <Stack.Screen name="HomeScreen" component={HomeScreen} />
+                  <Stack.Screen
+                    name="ProjectDetails"
+                    component={ProjectDetailsScreen}
+                  />
                   <Stack.Screen name="WidgetScreen" component={WidgetScreen} />
                   <Stack.Screen
                     name="CalenderScreen"
@@ -544,6 +616,7 @@ const AppNavigator = () => {
                   isVisible={sidebarVisible}
                   onClose={handleSidebarClose}
                   onNavigate={handleSidebarNavigate}
+                  onLogoutComplete={handleSidebarLogoutComplete}
                 />
               </View>
             </NavigationContainer>

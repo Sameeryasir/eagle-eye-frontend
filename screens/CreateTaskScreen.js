@@ -7,15 +7,16 @@ import {
   Alert,
   ActivityIndicator,
   Keyboard,
-  FlatList,
-  TouchableWithoutFeedback,
+  ScrollView,
   Animated,
   Easing,
+  StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import DropDownPicker from "react-native-dropdown-picker";
 import Toast from 'react-native-toast-message';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -25,26 +26,29 @@ import {
   selectTaskCreateError,
   selectEmployeesForAssignment,
 } from '../store/slices/taskSlice';
+import { Brand } from '../constants/brandColors';
 
 function CreateTaskScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const creating = useSelector(selectTaskCreating);
   const createError = useSelector(selectTaskCreateError);
   const employees = useSelector(selectEmployeesForAssignment);
 
-  // Get projectId from route params if available
   const projectId = route?.params?.projectId;
+  const projectName = route?.params?.projectName;
+  const [focusedField, setFocusedField] = useState(null);
   const [taskData, setTaskData] = useState({
     title: '',
     description: '',
     assignedTo: null,
-    priority: null,
+    priority: 'medium',
   });
   const [startDateTime, setStartDateTime] = useState(new Date());
   const [endDateTime, setEndDateTime] = useState(null);
   const [minStartTime] = useState(() => {
     const now = new Date();
-    now.setSeconds(0, 0); // Round down to the minute (remove seconds and milliseconds)
+    now.setSeconds(0, 0);
     return now;
   });
   
@@ -65,11 +69,20 @@ function CreateTaskScreen({ navigation, route }) {
   const buttonPositionAnim = useRef(new Animated.Value(0)).current;
   const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
   const [priorityOptions] = useState([
-    { id: 'low', label: 'Low', color: '#10B981' },
-    { id: 'medium', label: 'Medium', color: '#F59E0B' },
-    { id: 'high', label: 'High', color: '#EF4444' },
-    { id: 'critical', label: 'Critical', color: '#DC2626' }
+    { id: 'low', label: 'Low', color: '#1B7A4A', bg: '#E8F8EF' },
+    { id: 'medium', label: 'Medium', color: '#2563EB', bg: '#E8F1FF' },
+    { id: 'high', label: 'High', color: '#C05621', bg: '#FFF1E8' },
+    { id: 'critical', label: 'Critical', color: '#B91C1C', bg: '#FEE2E2' },
   ]);
+
+  const getEmployeeLabel = (emp) => {
+    if (!emp) return '';
+    const name =
+      `${emp.first_name || emp.firstName || ''} ${
+        emp.last_name || emp.lastName || ''
+      }`.trim();
+    return name || emp.email || `User ${emp.id}`;
+  };
 
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
@@ -78,7 +91,6 @@ function CreateTaskScreen({ navigation, route }) {
         setKeyboardVisible(true);
         setKeyboardHeight(event.endCoordinates.height);
         
-        // Animate button position smoothly
         Animated.parallel([
           Animated.timing(buttonPositionAnim, {
             toValue: event.endCoordinates.height + 10,
@@ -102,7 +114,6 @@ function CreateTaskScreen({ navigation, route }) {
         setKeyboardVisible(false);
         setKeyboardHeight(0);
         
-        // Animate button back to original position
         Animated.parallel([
           Animated.timing(buttonPositionAnim, {
             toValue: 0,
@@ -120,17 +131,14 @@ function CreateTaskScreen({ navigation, route }) {
       }
     );
 
-    // Load employees when screen mounts using Redux
     dispatch(fetchEmployeesForTaskAssignment());
 
-    // Cleanup listeners
     return () => {
       keyboardDidShowListener?.remove();
       keyboardDidHideListener?.remove();
     };
   }, []);
 
-  // Update filtered employees when Redux employees change
   useEffect(() => {
     if (employees && Array.isArray(employees)) {
       setFilteredEmployees(employees);
@@ -139,14 +147,14 @@ function CreateTaskScreen({ navigation, route }) {
 
   const createDraftTask = () => {
     const now = new Date();
-    now.setSeconds(0, 0); // Round down to the minute
+    now.setSeconds(0, 0);
     const newDraftTask = {
-      id: Math.floor(Math.random() * 1000000) + 1, // Integer ID
+      id: Math.floor(Math.random() * 1000000) + 1,
       title: taskData.title || "",
       description: taskData.description || "",
       startTime: startDateTime,
-      minStartTime: minStartTime, // Capture when draft was created for backend validation
-      endTime: endDateTime, // Let user manually select end time
+      minStartTime: minStartTime,
+      endTime: endDateTime,
       assignedToUserId: taskData.assignedTo?.id || null,
       priority: taskData.priority || "low",
       isDraft: true,
@@ -192,17 +200,13 @@ function CreateTaskScreen({ navigation, route }) {
   };
 
   const openDropdown = (dropdownType) => {
-    // Smoothly dismiss keyboard with animation
     Keyboard.dismiss();
     
-    // Set dropdown interaction state to prevent scrolling conflicts
     setIsDropdownInteracting(true);
 
-    // Close all other dropdowns
     setShowAssignedDropdown(false);
     setPriorityOpen(false);
 
-    // Open the selected dropdown
     if (dropdownType === 'priority') {
       setPriorityOpen(true);
     } else if (dropdownType === 'assigned') {
@@ -210,7 +214,6 @@ function CreateTaskScreen({ navigation, route }) {
     }
   };
 
-  // Function to close all dropdowns
   const closeAllDropdowns = () => {
     setShowAssignedDropdown(false);
     setPriorityOpen(false);
@@ -226,7 +229,6 @@ function CreateTaskScreen({ navigation, route }) {
 
   const handleStartDateChange = (event, selectedDate) => {
     setShowStartDatePicker(false);
-    // Only update if user selected a date (not cancelled)
     if (event.type === 'set' && selectedDate) {
       const newDate = new Date(selectedDate);
       newDate.setHours(startDateTime.getHours());
@@ -234,43 +236,30 @@ function CreateTaskScreen({ navigation, route }) {
       newDate.setSeconds(startDateTime.getSeconds());
       setStartDateTime(newDate);
 
-      // Only update end date if it's before the new start date
-      // This prevents automatic end date changes when start date is selected
       if (endDateTime && newDate > endDateTime) {
-        // Keep the end date as is, user will need to manually adjust if needed
-        // The validation in handleCreateTask will catch invalid date ranges
       }
     }
   };
 
   const handleStartTimeChange = (event, selectedDate) => {
     setShowStartTimePicker(false);
-    // Only update if user selected a time (not cancelled)
     if (event.type === 'set' && selectedDate) {
-      // Create a new date object based on the current start date
       const newDate = new Date(startDateTime);
-      // Only update the time components, preserve the date
       newDate.setHours(selectedDate.getHours());
       newDate.setMinutes(selectedDate.getMinutes());
       newDate.setSeconds(0);
       newDate.setMilliseconds(0);
       setStartDateTime(newDate);
 
-      // Only update end date if it's before the new start date
-      // This prevents automatic end date changes when start time is selected
       if (endDateTime && newDate > endDateTime) {
-        // Keep the end date as is, user will need to manually adjust if needed
-        // The validation in handleCreateTask will catch invalid date ranges
       }
     }
   };
 
   const handleEndDateChange = (event, selectedDate) => {
     setShowEndDatePicker(false);
-    // Only update if user selected a date (not cancelled)
     if (event.type === 'set' && selectedDate) {
       const newDate = new Date(selectedDate);
-      // If endDateTime exists, preserve the time, otherwise set default time to 23:59
       if (endDateTime) {
         newDate.setHours(endDateTime.getHours());
         newDate.setMinutes(endDateTime.getMinutes());
@@ -286,12 +275,8 @@ function CreateTaskScreen({ navigation, route }) {
 
   const handleEndTimeChange = (event, selectedDate) => {
     setShowEndTimePicker(false);
-    // Only update if user selected a time (not cancelled)
     if (event.type === 'set' && selectedDate) {
-      // If endDateTime exists, update the time on the existing date
-      // If not, create a new date with current date and selected time
       const newDate = endDateTime ? new Date(endDateTime) : new Date();
-      // Only update the time components, preserve the date
       newDate.setHours(selectedDate.getHours());
       newDate.setMinutes(selectedDate.getMinutes());
       newDate.setSeconds(0);
@@ -301,16 +286,11 @@ function CreateTaskScreen({ navigation, route }) {
   };
 
   const handleCreateTask = async () => {
-    // Validate required fields
     if (!taskData.title.trim()) {
       Alert.alert('Error', 'Task title is required');
       return;
     }
 
-    // Description is now optional - no validation required
-
-    // Ensure start time is not before the minimum start time (when draft was created)
-    // Allow start time to be equal to minStartTime (same minute) with small buffer
     if (minStartTime && startDateTime < minStartTime) {
       Alert.alert(
         "Error",
@@ -319,9 +299,7 @@ function CreateTaskScreen({ navigation, route }) {
       return;
     }
 
-    // Only validate end time if it's provided (optional field)
     if (endDateTime) {
-      // Ensure end time is after start time
       if (endDateTime <= startDateTime) {
         Alert.alert(
           "Error",
@@ -330,13 +308,11 @@ function CreateTaskScreen({ navigation, route }) {
         return;
       }
 
-      // Additional validation for reasonable time ranges
       const timeDifference =
         endDateTime.getTime() - startDateTime.getTime();
-      const minDuration = 15 * 60 * 1000; // 15 minutes in milliseconds
-      const maxDuration = 365 * 24 * 60 * 60 * 1000; // 1 year in milliseconds
+      const minDuration = 15 * 60 * 1000;
+      const maxDuration = 365 * 24 * 60 * 60 * 1000;
 
-      // Ensure end time is at least 15 minutes after start time
       if (timeDifference < minDuration) {
         Alert.alert("Error", "Task duration must be at least 15 minutes");
         return;
@@ -348,20 +324,16 @@ function CreateTaskScreen({ navigation, route }) {
       }
     }
 
-    // Validate that projectId is available
     if (!projectId) {
       Alert.alert('Error', 'Project ID is required to create a task');
       return;
     }
 
     try {
-      // This ensures tasks created "today" appear on "today" in the calendar for all timezones
       
-      // This ensures the task appears on the correct calendar day
       const localStartDate = new Date(startDateTime);
       const localEndDate = endDateTime ? new Date(endDateTime) : null;
       
-      // Extract the local dates in YYYY-MM-DD format (same as event/project conversion)
       const taskStartDate = localStartDate.getFullYear() + '-' + 
         String(localStartDate.getMonth() + 1).padStart(2, '0') + '-' + 
         String(localStartDate.getDate()).padStart(2, '0');
@@ -370,16 +342,13 @@ function CreateTaskScreen({ navigation, route }) {
         String(localEndDate.getMonth() + 1).padStart(2, '0') + '-' + 
         String(localEndDate.getDate()).padStart(2, '0') : null;
 
-      // Use built-in toLocaleString for automatic timezone formatting (same as CreateEventModal)
       const formatWithTimezone = (date) => {
-        // Get timezone offset automatically
         const timezoneOffset = date.getTimezoneOffset();
         const offsetHours = Math.floor(Math.abs(timezoneOffset) / 60);
         const offsetMinutes = Math.abs(timezoneOffset) % 60;
         const offsetSign = timezoneOffset <= 0 ? '+' : '-';
         const timezoneString = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`;
         
-        // Use toLocaleString with ISO format for automatic formatting
         const isoString = date.toLocaleString('sv-SE', {
           year: 'numeric',
           month: '2-digit',
@@ -393,15 +362,14 @@ function CreateTaskScreen({ navigation, route }) {
         return `${isoString}${timezoneString}`;
       };
 
-      // Prepare the data for Redux action
       const taskPayload = {
         title: taskData.title.trim(),
         description: taskData.description.trim(),
         assignedToUserId: taskData.assignedTo?.id || null,
         priority: taskData.priority || null,
-        startTime: formatWithTimezone(startDateTime), // Local timezone format (e.g., 2025-10-21T20:34:00.000+05:00)
-        minStartTime: formatWithTimezone(minStartTime), // Local timezone format for backend validation
-        endTime: endDateTime ? formatWithTimezone(endDateTime) : null, // Local timezone format (e.g., 2025-10-21T21:34:00.000+05:00)
+        startTime: formatWithTimezone(startDateTime),
+        minStartTime: formatWithTimezone(minStartTime),
+        endTime: endDateTime ? formatWithTimezone(endDateTime) : null,
         projectId: projectId,
       };
 
@@ -422,7 +390,6 @@ function CreateTaskScreen({ navigation, route }) {
       const result = await dispatch(createNewTask(taskPayload));
       
       if (createNewTask.fulfilled.match(result)) {
-        // Success - task created and added to Redux state automatically
         Toast.show({
           type: 'success',
           text1: 'Task Created Successfully!',
@@ -432,12 +399,10 @@ function CreateTaskScreen({ navigation, route }) {
           topOffset: 80,
         });
 
-        // Navigate back after a short delay to show the toast
         setTimeout(() => {
           navigation.goBack();
         }, 1500);
       } else {
-        // Error handling
         const errorMessage = result.payload || 'Failed to create task. Please try again.';
         Alert.alert('Error', errorMessage);
       }
@@ -464,242 +429,394 @@ function CreateTaskScreen({ navigation, route }) {
     );
   };
 
+  const formatDate = (value) =>
+    value.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+
+  const formatTime = (value) =>
+    value.toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+
+  const canSubmit = !!taskData.title?.trim() && !creating;
+
+  const renderSectionHeader = (icon, title, hint) => (
+    <View style={styles.sectionHeader}>
+      <View style={styles.sectionIconWrap}>
+        <Ionicons name={icon} size={15} color={Brand.ink} />
+      </View>
+      <View style={styles.sectionHeaderText}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {hint ? <Text style={styles.sectionHint}>{hint}</Text> : null}
+      </View>
+    </View>
+  );
+
   return (
-    <View className="flex-1 bg-white">
-      <View className="flex-row items-center px-4 pt-12 pb-3 border-b border-[#f0f0f0] bg-white">
-        <TouchableOpacity className="p-2 mr-2" onPress={handleCancel}>
-          <Ionicons name="chevron-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text className="text-[20px] font-bold text-[#333]">Create Task</Text>
-      </View>
-
-      <View className="flex-1 p-5 items-center">
-        <FlatList
-          className="flex-1 w-full max-w-md"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingBottom: keyboardVisible ? keyboardHeight + 120 : 20
-          }}
-          keyboardShouldPersistTaps="handled"
-          scrollEnabled={!isDropdownInteracting}
-          data={[{ key: 'form' }]}
-          renderItem={() => (
-            <View>
-              <View className="mb-8 items-center">
-                <Text className="text-[16px] text-[#666] text-center">Fill in the details below to create your task</Text>
-              </View>
-
-              <View className="mb-5">
-                {/* Task Title */}
-                <View className="mb-5">
-                  <View className="flex-row items-center mb-2">
-                    <Ionicons name="document-text" size={16} color="#374151" style={{ marginRight: 6 }} />
-                    <Text className="text-[16px] font-semibold text-[#333]">Task Title *</Text>
-                  </View>
-                  <TextInput
-                    className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333]"
-                    placeholder="Enter task title"
-                    value={taskData.title}
-                    onChangeText={(value) => handleInputChange('title', value)}
-                    placeholderTextColor="#999"
-                    returnKeyType="next"
-                  />
-                </View>
-
-                {/* Task Description */}
-                <View className="mb-5">
-                  <View className="flex-row items-center mb-2">
-                    <Ionicons name="chatbubble-ellipses" size={16} color="#374151" style={{ marginRight: 6 }} />
-                    <Text className="text-[16px] font-semibold text-[#333]">Description (Optional)</Text>
-                  </View>
-                  <TextInput
-                    className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333] h-24"
-                    placeholder="Describe your task (optional)"
-                    value={taskData.description}
-                    onChangeText={(value) => handleInputChange('description', value)}
-                    multiline
-                    numberOfLines={4}
-                    placeholderTextColor="#999"
-                    returnKeyType="next"
-                    style={{ textAlignVertical: 'top' }}
-                  />
-                </View>
-
-                {/* Priority Dropdown */}
-                <View className="mb-5">
-                  <View className="flex-row items-center mb-2">
-                    <Ionicons name="flag" size={16} color="#374151" style={{ marginRight: 6 }} />
-                    <Text className="text-[16px] font-semibold text-[#333]">Priority</Text>
-                  </View>
-                  <View style={{ zIndex: 9999 }}>
-                    <DropDownPicker
-                      open={priorityOpen}
-                      value={taskData.priority || null}
-                      items={priorityOptions.map((priority) => ({
-                        label: priority.label,
-                        value: priority.id,
-                        icon: () => (
-                          <View
-                            className="w-3 h-3 rounded-full ml-1"
-                            style={{ backgroundColor: priority.color }}
-                          />
-                        ),
-                      }))}
-                      setOpen={(open) => {
-                        if (open) {
-                          // Smoothly dismiss keyboard when dropdown opens
-                          Keyboard.dismiss();
-                          setIsDropdownInteracting(true);
-                          setPriorityOpen(true);
-                        } else {
-                          setPriorityOpen(false);
-                          setIsDropdownInteracting(false);
-                        }
-                      }}
-                      setValue={(callback) => {
-                        const newValue = callback(taskData.priority || null);
-                        handleInputChange('priority', newValue);
-                      }}
-                      placeholder="Select Priority"
-                      placeholderStyle={{
-                        color: "#9ca3af",
-                        fontSize: 16,
-                        fontWeight: "400",
-                      }}
-                      style={{
-                        backgroundColor: "#f8f9fa",
-                        borderColor: "#e1e8ed",
-                        borderRadius: 8,
-                        minHeight: 0,
-                        paddingVertical: 12,
-                        paddingHorizontal: 12,
-                      }}
-                      textStyle={{
-                        fontSize: 16,
-                        color: taskData.priority ? "#333" : "#9ca3af",
-                        fontWeight: "400",
-                      }}
-                      dropDownContainerStyle={{
-                        backgroundColor: "white",
-                        borderColor: "#e5e7eb",
-                        borderRadius: 8,
-                        shadowColor: "#000",
-                        shadowOpacity: 0.15,
-                        shadowRadius: 6,
-                        shadowOffset: { width: 0, height: 3 },
-                        elevation: 999999,
-                        maxHeight: 160,
-                        zIndex: 999999,
-                      }}
-                      listItemContainerStyle={{
-                        height: 40,
-                        paddingHorizontal: 12,
-                      }}
-                      listItemLabelStyle={{
-                        fontSize: 14,
-                        fontWeight: "500",
-                        color: "#333",
-                      }}
-                      arrowIconStyle={{
-                        width: 16,
-                        height: 16,
-                        tintColor: "#6b7280",
-                      }}
-                      showArrowIcon={true}
-                    />
-                  </View>
-                </View>
-
-                {/* Start Date & Time */}
-                <View className="mb-5">
-                  <View className="flex-row items-center mb-2">
-                    <Ionicons name="time" size={16} color="#374151" style={{ marginRight: 6 }} />
-                    <Text className="text-[16px] font-semibold text-[#333]">Start Date & Time *</Text>
-                  </View>
-                  <View className="flex-row gap-2">
-                    <TouchableOpacity
-                      className="flex-[2] flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                      onPress={() => setShowStartDatePicker(true)}
-                    >
-                      <Text className="text-[16px] text-[#333] font-medium">
-                        {startDateTime.toLocaleDateString()}
-                      </Text>
-                      <Ionicons name="calendar-outline" size={16} color="#666" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      className={`flex-1 flex-row items-center justify-between border rounded-lg p-3 ${startDateTime ? 'border-[#e1e8ed] bg-[#f8f9fa]' : 'border-[#d1d5db] bg-[#f3f4f6]'
-                        }`}
-                      onPress={() => startDateTime && setShowStartTimePicker(true)}
-                      disabled={!startDateTime}
-                      activeOpacity={startDateTime ? 0.8 : 1}
-                    >
-                      <Text className={`text-[16px] font-medium ${startDateTime ? 'text-[#333]' : 'text-[#9ca3af]'
-                        }`}>
-                        {startDateTime ? startDateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "Select time"}
-                      </Text>
-                      <Ionicons name="time-outline" size={16} color={startDateTime ? "#666" : "#9ca3af"} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* End Date & Time */}
-                <View className="mb-5">
-                  <View className="flex-row items-center mb-2">
-                    <Ionicons name="calendar" size={16} color="#374151" style={{ marginRight: 6 }} />
-                    <Text className="text-[16px] font-semibold text-[#333]">End Date & Time (Optional)</Text>
-                  </View>
-                  <View className="flex-row gap-2">
-                    <TouchableOpacity
-                      className="flex-[2] flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                      onPress={() => setShowEndDatePicker(true)}
-                    >
-                      <Text className="text-[16px] text-[#333] font-medium">
-                        {endDateTime ? endDateTime.toLocaleDateString() : "No end date selected"}
-                      </Text>
-                      <Ionicons name="calendar-outline" size={16} color="#666" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      className="flex-1 flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                      onPress={() => setShowEndTimePicker(true)}
-                    >
-                      <Text className="text-[16px] text-[#333] font-medium">
-                        {endDateTime ? endDateTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true }) : "No time"}
-                      </Text>
-                      <Ionicons name="time-outline" size={16} color="#666" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
+    <View style={styles.root}>
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingBottom: keyboardVisible
+              ? keyboardHeight + 118
+              : 118 + Math.max(insets.bottom, 8),
+          },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        scrollEnabled={!isDropdownInteracting}
+        onScrollBeginDrag={() => Keyboard.dismiss()}
+      >
+        
+        <View style={styles.heroCard}>
+          <View style={styles.heroAccent} />
+          <View style={styles.heroRow}>
+            <View style={styles.heroIcon}>
+              <Ionicons name="add-circle-outline" size={24} color={Brand.ink} />
             </View>
-          )}
-          keyExtractor={(item) => item.key}
-        />
-      </View>
+            <View style={styles.heroText}>
+              <Text style={styles.heroEyebrow}>CREATE</Text>
+              <Text style={styles.heroTitle}>New task</Text>
+              <Text style={styles.heroSub} numberOfLines={2}>
+                {projectName
+                  ? `Assign work for ${projectName}`
+                  : 'Add a title, priority, and schedule'}
+              </Text>
+            </View>
+          </View>
+        </View>
 
-      {/* Fixed Action Button - Smoothly animated position based on keyboard state */}
+        
+        <View style={styles.card}>
+          {renderSectionHeader(
+            'document-text-outline',
+            'Details',
+            'Title is required'
+          )}
+
+          <Text style={styles.label}>
+            Title <Text style={styles.requiredMark}>*</Text>
+          </Text>
+          <TextInput
+            style={[
+              styles.input,
+              focusedField === 'title' && styles.inputFocused,
+            ]}
+            placeholder="What needs to be done?"
+            placeholderTextColor={Brand.inkFaint}
+            value={taskData.title}
+            onChangeText={(value) => handleInputChange('title', value)}
+            onFocus={() => setFocusedField('title')}
+            onBlur={() => setFocusedField(null)}
+            returnKeyType="next"
+          />
+
+          <Text style={styles.label}>Description</Text>
+          <TextInput
+            style={[
+              styles.input,
+              styles.inputMultiline,
+              focusedField === 'description' && styles.inputFocused,
+            ]}
+            placeholder="Notes for the crew (optional)"
+            placeholderTextColor={Brand.inkFaint}
+            value={taskData.description}
+            onChangeText={(value) => handleInputChange('description', value)}
+            onFocus={() => setFocusedField('description')}
+            onBlur={() => setFocusedField(null)}
+            multiline
+            textAlignVertical="top"
+          />
+        </View>
+
+        
+        <View style={styles.card}>
+          {renderSectionHeader(
+            'flag-outline',
+            'Priority',
+            'How urgent is this?'
+          )}
+          <View style={styles.priorityGrid}>
+            {priorityOptions.map((priority) => {
+              const selected = taskData.priority === priority.id;
+              return (
+                <TouchableOpacity
+                  key={priority.id}
+                  style={[
+                    styles.priorityCell,
+                    selected && {
+                      borderColor: priority.color,
+                      backgroundColor: priority.bg,
+                    },
+                  ]}
+                  onPress={() => handleInputChange('priority', priority.id)}
+                  activeOpacity={0.85}
+                >
+                  <View
+                    style={[
+                      styles.priorityDot,
+                      { backgroundColor: priority.color },
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.priorityText,
+                      selected && { color: priority.color, fontWeight: '700' },
+                    ]}
+                  >
+                    {priority.label}
+                  </Text>
+                  {selected ? (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={16}
+                      color={priority.color}
+                      style={{ marginLeft: 'auto' }}
+                    />
+                  ) : null}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        
+        <View
+          style={[
+            styles.card,
+            showAssignedDropdown && { zIndex: 5000, elevation: 8 },
+          ]}
+        >
+          {renderSectionHeader(
+            'people-outline',
+            'Assignment',
+            'Optional — leave unassigned'
+          )}
+          <Text style={styles.label}>Crew member</Text>
+          <View style={styles.dropdownWrap}>
+            <DropDownPicker
+              open={showAssignedDropdown}
+              value={taskData.assignedTo?.id || null}
+              items={(filteredEmployees?.length
+                ? filteredEmployees
+                : employees || []
+              ).map((emp) => ({
+                label: getEmployeeLabel(emp),
+                value: emp.id,
+              }))}
+              setOpen={(open) => {
+                if (open) {
+                  Keyboard.dismiss();
+                  setPriorityOpen(false);
+                  setIsDropdownInteracting(true);
+                } else {
+                  setIsDropdownInteracting(false);
+                }
+                setShowAssignedDropdown(open);
+              }}
+              setValue={(callback) => {
+                const newId = callback(taskData.assignedTo?.id || null);
+                const emp =
+                  (employees || []).find((e) => e.id === newId) || null;
+                handleInputChange('assignedTo', emp);
+              }}
+              searchable
+              searchPlaceholder="Search by name or email..."
+              onChangeSearchText={handleEmployeeSearch}
+              placeholder="Unassigned"
+              placeholderStyle={styles.dropdownPlaceholder}
+              style={styles.dropdown}
+              textStyle={styles.dropdownText}
+              dropDownContainerStyle={styles.dropdownList}
+              searchContainerStyle={styles.dropdownSearch}
+              searchTextInputStyle={styles.dropdownSearchInput}
+              listItemLabelStyle={styles.dropdownText}
+              selectedItemLabelStyle={styles.dropdownSelectedLabel}
+              ArrowDownIconComponent={() => (
+                <Ionicons name="chevron-down" size={16} color={Brand.inkMuted} />
+              )}
+              ArrowUpIconComponent={() => (
+                <Ionicons name="chevron-up" size={16} color={Brand.inkMuted} />
+              )}
+              TickIconComponent={() => (
+                <Ionicons name="checkmark" size={16} color={Brand.ink} />
+              )}
+              listMode="SCROLLVIEW"
+              zIndex={4000}
+              zIndexInverse={1000}
+            />
+          </View>
+
+          {taskData.assignedTo ? (
+            <View style={styles.assigneeChip}>
+              <View style={styles.assigneeAvatar}>
+                <Text style={styles.assigneeInitial}>
+                  {getEmployeeLabel(taskData.assignedTo).charAt(0).toUpperCase()}
+                </Text>
+              </View>
+              <View style={styles.assigneeCopy}>
+                <Text style={styles.assigneeName} numberOfLines={1}>
+                  {getEmployeeLabel(taskData.assignedTo)}
+                </Text>
+                {taskData.assignedTo.email ? (
+                  <Text style={styles.assigneeEmail} numberOfLines={1}>
+                    {taskData.assignedTo.email}
+                  </Text>
+                ) : null}
+              </View>
+              <TouchableOpacity
+                onPress={() => handleInputChange('assignedTo', null)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="Clear assignee"
+              >
+                <Ionicons name="close-circle" size={20} color={Brand.inkFaint} />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+        </View>
+
+        
+        <View style={styles.card}>
+          {renderSectionHeader(
+            'calendar-outline',
+            'Schedule',
+            'End time is optional'
+          )}
+
+          <Text style={styles.label}>Starts</Text>
+          <View style={styles.scheduleGroup}>
+            <TouchableOpacity
+              style={styles.scheduleRow}
+              onPress={() => setShowStartDatePicker(true)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.scheduleIcon}>
+                <Ionicons name="calendar-outline" size={16} color={Brand.ink} />
+              </View>
+              <View style={styles.scheduleCopy}>
+                <Text style={styles.scheduleHint}>Date</Text>
+                <Text style={styles.scheduleValue}>
+                  {formatDate(startDateTime)}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={Brand.inkFaint} />
+            </TouchableOpacity>
+            <View style={styles.scheduleDivider} />
+            <TouchableOpacity
+              style={styles.scheduleRow}
+              onPress={() => setShowStartTimePicker(true)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.scheduleIcon}>
+                <Ionicons name="time-outline" size={16} color={Brand.ink} />
+              </View>
+              <View style={styles.scheduleCopy}>
+                <Text style={styles.scheduleHint}>Time</Text>
+                <Text style={styles.scheduleValue}>
+                  {formatTime(startDateTime)}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={Brand.inkFaint} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.endsHeader}>
+            <Text style={[styles.label, { marginBottom: 0 }]}>Ends</Text>
+            {endDateTime ? (
+              <TouchableOpacity
+                onPress={() => setEndDateTime(null)}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              >
+                <Text style={styles.clearLink}>Clear</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+          <View style={styles.scheduleGroup}>
+            <TouchableOpacity
+              style={styles.scheduleRow}
+              onPress={() => setShowEndDatePicker(true)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.scheduleIcon}>
+                <Ionicons name="calendar-outline" size={16} color={Brand.ink} />
+              </View>
+              <View style={styles.scheduleCopy}>
+                <Text style={styles.scheduleHint}>Date</Text>
+                <Text
+                  style={[
+                    styles.scheduleValue,
+                    !endDateTime && styles.schedulePlaceholder,
+                  ]}
+                >
+                  {endDateTime ? formatDate(endDateTime) : 'Optional'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={Brand.inkFaint} />
+            </TouchableOpacity>
+            <View style={styles.scheduleDivider} />
+            <TouchableOpacity
+              style={styles.scheduleRow}
+              onPress={() => setShowEndTimePicker(true)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.scheduleIcon}>
+                <Ionicons name="time-outline" size={16} color={Brand.ink} />
+              </View>
+              <View style={styles.scheduleCopy}>
+                <Text style={styles.scheduleHint}>Time</Text>
+                <Text
+                  style={[
+                    styles.scheduleValue,
+                    !endDateTime && styles.schedulePlaceholder,
+                  ]}
+                >
+                  {endDateTime ? formatTime(endDateTime) : 'Optional'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={Brand.inkFaint} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+
       <Animated.View
-        className="absolute left-0 right-0 px-5 pt-5 pb-5 bg-transparent items-center"
-        style={{
-          bottom: buttonPositionAnim,
-        }}
+        style={[
+          styles.footerBar,
+          {
+            bottom: buttonPositionAnim,
+            paddingBottom: Math.max(insets.bottom, 16),
+          },
+        ]}
       >
         <TouchableOpacity
-          className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
+          style={[styles.createBtn, !canSubmit && styles.createBtnDisabled]}
           onPress={handleCreateTask}
-          disabled={creating}
-          activeOpacity={0.8}
+          disabled={!canSubmit}
+          activeOpacity={0.85}
         >
           {creating ? (
-            <View className="flex-row items-center ">
-              <ActivityIndicator color="#ffffff" size="small" />
-            </View>
+            <ActivityIndicator color={Brand.onInk} size="small" />
           ) : (
-            <Text className="text-white text-[16px] font-semibold">Create Task</Text>
+            <View style={styles.createBtnInner}>
+              <Ionicons
+                name="checkmark-circle"
+                size={18}
+                color={Brand.onInk}
+                style={{ marginRight: 8 }}
+              />
+              <Text style={styles.createBtnText}>Create Task</Text>
+            </View>
           )}
         </TouchableOpacity>
       </Animated.View>
 
-      {/* Date and Time Pickers */}
       {showStartDatePicker && (
         <DateTimePicker
           value={startDateTime}
@@ -707,7 +824,6 @@ function CreateTaskScreen({ navigation, route }) {
           onChange={handleStartDateChange}
         />
       )}
-
       {showStartTimePicker && (
         <DateTimePicker
           value={startDateTime}
@@ -716,7 +832,6 @@ function CreateTaskScreen({ navigation, route }) {
           is24Hour={false}
         />
       )}
-
       {showEndDatePicker && (
         <DateTimePicker
           value={endDateTime || new Date()}
@@ -725,7 +840,6 @@ function CreateTaskScreen({ navigation, route }) {
           minimumDate={startDateTime}
         />
       )}
-
       {showEndTimePicker && (
         <DateTimePicker
           value={endDateTime || new Date()}
@@ -737,5 +851,349 @@ function CreateTaskScreen({ navigation, route }) {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: '#F7F8FA',
+  },
+  flex: { flex: 1 },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  heroCard: {
+    backgroundColor: Brand.paper,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#EEF0F3',
+    marginBottom: 14,
+    overflow: 'hidden',
+    shadowColor: Brand.ink,
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  heroAccent: {
+    height: 3,
+    backgroundColor: Brand.ink,
+  },
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  heroIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: Brand.paperSoft,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  heroText: { flex: 1 },
+  heroEyebrow: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Brand.inkFaint,
+    letterSpacing: 1.2,
+    marginBottom: 2,
+  },
+  heroTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Brand.ink,
+    letterSpacing: -0.4,
+  },
+  heroSub: {
+    marginTop: 4,
+    fontSize: 13,
+    color: Brand.inkMuted,
+    fontWeight: '500',
+    lineHeight: 18,
+  },
+  card: {
+    backgroundColor: Brand.paper,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#EEF0F3',
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: Brand.ink,
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 1,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: Brand.paperSoft,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  sectionHeaderText: { flex: 1 },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Brand.ink,
+    letterSpacing: -0.2,
+  },
+  sectionHint: {
+    marginTop: 2,
+    fontSize: 12,
+    color: Brand.inkFaint,
+    fontWeight: '500',
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Brand.inkMuted,
+    marginBottom: 8,
+    letterSpacing: 0.1,
+  },
+  requiredMark: {
+    color: Brand.danger,
+    fontWeight: '700',
+  },
+  input: {
+    backgroundColor: Brand.paperSoft,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    fontSize: 15,
+    color: Brand.ink,
+    fontWeight: '500',
+    marginBottom: 14,
+  },
+  inputFocused: {
+    borderColor: Brand.ink,
+    backgroundColor: Brand.paper,
+  },
+  inputMultiline: {
+    minHeight: 96,
+    paddingTop: 13,
+    marginBottom: 0,
+  },
+  priorityGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  priorityCell: {
+    width: '48%',
+    flexGrow: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 13,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: Brand.line,
+    backgroundColor: Brand.paperSoft,
+  },
+  priorityDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+  },
+  priorityText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Brand.inkSoft,
+  },
+  dropdownWrap: {
+    zIndex: 2000,
+  },
+  dropdown: {
+    backgroundColor: Brand.paperSoft,
+    borderColor: Brand.line,
+    borderWidth: 1,
+    borderRadius: 12,
+    minHeight: 50,
+    paddingHorizontal: 12,
+  },
+  dropdownPlaceholder: {
+    color: Brand.inkFaint,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  dropdownText: {
+    fontSize: 14,
+    color: Brand.ink,
+    fontWeight: '500',
+  },
+  dropdownSelectedLabel: {
+    fontWeight: '700',
+    color: Brand.ink,
+  },
+  dropdownList: {
+    backgroundColor: Brand.paper,
+    borderColor: Brand.line,
+    borderWidth: 1,
+    borderRadius: 12,
+    shadowColor: Brand.ink,
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  dropdownSearch: {
+    borderBottomColor: Brand.line,
+    paddingHorizontal: 10,
+  },
+  dropdownSearchInput: {
+    borderColor: Brand.line,
+    borderRadius: 10,
+    backgroundColor: Brand.paperSoft,
+    fontSize: 14,
+    color: Brand.ink,
+  },
+  assigneeChip: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Brand.paperSoft,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  assigneeAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: Brand.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  assigneeInitial: {
+    color: Brand.onInk,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  assigneeCopy: { flex: 1 },
+  assigneeName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Brand.ink,
+  },
+  assigneeEmail: {
+    marginTop: 2,
+    fontSize: 12,
+    color: Brand.inkMuted,
+    fontWeight: '500',
+  },
+  endsHeader: {
+    marginTop: 16,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  clearLink: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Brand.inkMuted,
+  },
+  scheduleGroup: {
+    backgroundColor: Brand.paperSoft,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    overflow: 'hidden',
+  },
+  scheduleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  scheduleIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: Brand.paper,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  scheduleCopy: { flex: 1 },
+  scheduleHint: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Brand.inkFaint,
+    marginBottom: 2,
+  },
+  scheduleValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Brand.ink,
+  },
+  schedulePlaceholder: {
+    color: Brand.inkFaint,
+    fontWeight: '500',
+  },
+  scheduleDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Brand.line,
+    marginLeft: 56,
+  },
+  footerBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    backgroundColor: Brand.paper,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Brand.line,
+    shadowColor: Brand.ink,
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: -3 },
+    elevation: 8,
+  },
+  createBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Brand.ink,
+    borderRadius: 14,
+    paddingVertical: 16,
+  },
+  createBtnInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  createBtnDisabled: {
+    opacity: 0.4,
+  },
+  createBtnText: {
+    color: Brand.onInk,
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+});
 
 export default CreateTaskScreen;

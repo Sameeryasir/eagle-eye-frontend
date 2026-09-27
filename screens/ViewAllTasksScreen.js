@@ -14,13 +14,14 @@ import {
   RefreshControl,
   Dimensions,
   Modal,
+  StyleSheet,
 } from "react-native";
 import Toast from 'react-native-toast-message';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import Sidebar from "../components/Sidebar";
-import CustomBottomNav from "../components/CustomBottomNav";
+import HomeBottomNav from "../components/HomeBottomNav";
 import UpdateTaskModal from "../components/UpdateTaskModal";
 import FilterModal from "../components/FilterModal";
 import ErrorDialog from "../components/ErrorDialog";
@@ -52,8 +53,45 @@ import {
   selectTaskDeleteError,
   selectEmployeesForAssignment,
 } from '../store/slices/taskSlice';
+import { Brand } from "../constants/brandColors";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
+
+function OverflowMenuRenderer({ style, children, layouts, ...other }) {
+  const { windowLayout, triggerLayout, optionsLayout } = layouts;
+  const gap = 6;
+  const menuW = optionsLayout.width || 148;
+  const menuH = optionsLayout.height || 88;
+  const triggerX = triggerLayout.x - windowLayout.x;
+  const triggerY = triggerLayout.y - windowLayout.y;
+
+  let top = triggerY + triggerLayout.height + gap;
+  if (top + menuH > windowLayout.height - 8) {
+    top = Math.max(8, triggerY - menuH - gap);
+  }
+
+  let left = triggerX + triggerLayout.width - menuW;
+  if (left < 8) left = 8;
+  if (left + menuW > windowLayout.width - 8) {
+    left = windowLayout.width - menuW - 8;
+  }
+
+  return (
+    <View
+      {...other}
+      style={[
+        {
+          position: "absolute",
+          top,
+          left,
+        },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
 
 const searchBarClasses = `flex-row items-center rounded-2xl px-4 py-3 bg-[#F8FAFC] border border-[#EAECF0]`;
 
@@ -595,14 +633,12 @@ function ViewAllTasksScreen({ navigation, route }) {
         setInitialLoading(true);
       }
       
-      if (isRefresh || tasks.length === 0) {
-        // Always fetch from API during refresh OR if no tasks in Redux
-        console.log("ViewAllTasksScreen - Fetching fresh data from API", isRefresh ? "(refresh)" : "(initial load)");
-        await dispatch(fetchTasksByProjectId(projectId));
-      } else {
-        // Using existing Redux data for initial load only
-        console.log("ViewAllTasksScreen - Using existing tasks from Redux:", tasks.length);
-      }
+      // Always fetch this project's tasks so we never show another project's list
+      console.log(
+        "ViewAllTasksScreen - Fetching fresh data from API",
+        isRefresh ? "(refresh)" : "(initial load)"
+      );
+      await dispatch(fetchTasksByProjectId(projectId));
 
       // Set project info (keep local state for project details)
       setProject({
@@ -670,13 +706,38 @@ function ViewAllTasksScreen({ navigation, route }) {
 
   const getAssignedToName = (assignedTo) => {
     if (!assignedTo) return "Unassigned";
-    const firstName = assignedTo.first_name || "";
-    const lastName = assignedTo.last_name || "";
+    const firstName = assignedTo.first_name || assignedTo.firstName || "";
+    const lastName = assignedTo.last_name || assignedTo.lastName || "";
     const fullName = `${firstName} ${lastName}`.trim();
     if (!fullName && assignedTo.email) {
       return assignedTo.email;
     }
     return fullName || "Unassigned";
+  };
+
+  const getPriorityMeta = (priority) => {
+    const value = String(priority || "medium").toLowerCase();
+    if (value === "critical") {
+      return { label: "Critical", color: "#B91C1C", bg: "#FEE2E2" };
+    }
+    if (value === "high") {
+      return { label: "High", color: "#C05621", bg: "#FFF1E8" };
+    }
+    if (value === "low") {
+      return { label: "Low", color: "#1B7A4A", bg: "#E8F8EF" };
+    }
+    return { label: "Medium", color: "#2563EB", bg: "#E8F1FF" };
+  };
+
+  const formatCardDate = (dateString) => {
+    if (!dateString) return "No date";
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return "No date";
+    return date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
   };
 
   const handleSearch = (text) => {
@@ -725,7 +786,7 @@ function ViewAllTasksScreen({ navigation, route }) {
     }
   };
 
-  // Combine regular tasks and draft tasks for display
+  // Combine regular tasks and draft tasks for display (API data only)
   const allTasks = [...draftTasks, ...filteredTasks];
 
   const handleUpdate = (task) => {
@@ -1061,7 +1122,6 @@ function ViewAllTasksScreen({ navigation, route }) {
                       setOpen={(open) => {
                         if (open) {
                           setActivePriorityDraftId(task.id);
-                          // Close employee dropdown if open
                           setEmployeeOpen(false);
                           setActiveEmployeeDraftId(null);
                           setIsDropdownInteracting(true);
@@ -1277,143 +1337,138 @@ function ViewAllTasksScreen({ navigation, route }) {
       );
     }
 
-    return (
-      <TouchableOpacity
-        className="bg-[#f8f9fa] rounded-[8px] p-4 mb-4 border border-[#e9ecef] shadow-sm"
-        onPress={() => navigation.navigate("TaskDetails", { task })}
-        activeOpacity={0.7}
-      >
-        <View>
-          <View className="flex-row justify-between items-center mb-3">
-            <View className="flex-row items-center flex-1">
-              <View className="flex-row items-center mr-2 min-w-[70px]">
-                <Ionicons
-                  name="document-text"
-                  size={14}
-                  color="#374151"
-                  style={{ marginRight: 4 }}
-                />
-                <Text className="text-[15px] text-black font-semibold tracking-[0.3px]">
-                  Title:
-                </Text>
-              </View>
-              <Text className="flex-1 text-[15px] text-[#333] leading-6">
-                {task.title}
-              </Text>
-            </View>
-            {userRole !== "Employee" && (
-              <Menu
-                rendererProps={{
-                  placement: "bottom-end",
-                  anchorStyle: { marginRight: 0 },
-                  triggerStyle: { marginRight: 0 },
-                }}
-              >
-                <MenuTrigger>
-                  <View style={{ activeOpacity: 1 }}>
-                    <Ionicons
-                      name="ellipsis-vertical"
-                      size={16}
-                      color="#6b7280"
-                    />
-                  </View>
-                </MenuTrigger>
-                <MenuOptions
-                  customStyles={{
-                    optionsContainer: {
-                      backgroundColor: "white",
-                      borderRadius: 8,
-                      padding: 8,
-                      width: 120,
-                      marginRight: -40,
-                      marginTop: 15,
-                      shadowColor: "#000",
-                      shadowOpacity: 0.15,
-                      shadowRadius: 6,
-                      shadowOffset: { width: 0, height: 3 },
-                      elevation: 3,
-                    },
-                  }}
-                >
-                  <MenuOption
-                    onSelect={() => handleUpdate(task)}
-                    customStyles={{
-                      optionWrapper: {
-                        flexDirection: "row",
-                        alignItems: "center",
-                        paddingVertical: 10,
-                        paddingHorizontal: 16,
-                        borderRadius: 4,
-                      },
-                    }}
-                  >
-                    <Ionicons name="create-outline" size={18} color="#000" />
-                    <Text
-                      style={{
-                        marginLeft: 10,
-                        fontSize: 14,
-                        fontWeight: "600",
-                        color: "black",
-                      }}
-                    >
-                      Update
-                    </Text>
-                  </MenuOption>
-                  <MenuOption
-                    onSelect={() => handleDelete(task)}
-                    customStyles={{
-                      optionWrapper: {
-                        flexDirection: "row",
-                        alignItems: "center",
-                        paddingVertical: 10,
-                        paddingHorizontal: 16,
-                        borderRadius: 4,
-                      },
-                    }}
-                  >
-                    <Ionicons name="trash-outline" size={18} color="#dc3545" />
-                    <Text
-                      style={{
-                        marginLeft: 10,
-                        fontSize: 14,
-                        fontWeight: "600",
-                        color: "#dc3545",
-                      }}
-                    >
-                      Delete
-                    </Text>
-                  </MenuOption>
-                </MenuOptions>
-              </Menu>
-            )}
-          </View>
+    const priority = getPriorityMeta(task.priority);
+    const assigneeName = getAssignedToName(task.assignedTo);
+    const subtitle =
+      (task.description && String(task.description).trim()) ||
+      (userRole !== "Employee" ? `Assigned: ${assigneeName}` : "Tap to view details");
+    const openDetails = () => navigation.navigate("TaskDetails", { task });
 
-          <View>
-            {userRole !== "Employee" && (
-              <View className="mb-3">
-                <View className="flex-row items-start">
-                  <View className="flex-row items-center mr-3 min-w-[85px]">
-                    <Ionicons
-                      name="person"
-                      size={14}
-                      color="#374151"
-                      style={{ marginRight: 4 }}
-                    />
-                    <Text className="text-[15px] text-black font-semibold tracking-[0.3px]">
-                      Assigned:
-                    </Text>
-                  </View>
-                  <Text className="flex-1 text-[15px] text-[#333] leading-6">
-                    {getAssignedToName(task.assignedTo)}
+    return (
+      <View style={taskCardStyles.card}>
+        <View style={taskCardStyles.cardTopRow}>
+          <TouchableOpacity
+            style={taskCardStyles.cardPressArea}
+            activeOpacity={0.9}
+            onPress={openDetails}
+          >
+            <View style={taskCardStyles.thumb}>
+              <Ionicons name="checkbox-outline" size={22} color={Brand.ink} />
+            </View>
+
+            <View style={taskCardStyles.cardMain}>
+              <View style={taskCardStyles.titleRow}>
+                <Text style={taskCardStyles.cardTitle} numberOfLines={1}>
+                  {task.title || "Untitled task"}
+                </Text>
+                <View
+                  style={[
+                    taskCardStyles.statusPill,
+                    { backgroundColor: priority.bg },
+                  ]}
+                >
+                  <Text
+                    style={[taskCardStyles.statusText, { color: priority.color }]}
+                  >
+                    {priority.label}
                   </Text>
                 </View>
               </View>
-            )}
-          </View>
+
+              <Text style={taskCardStyles.cardSubtitle} numberOfLines={1}>
+                {subtitle}
+              </Text>
+
+              <View style={taskCardStyles.metaRow}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={13}
+                  color={Brand.inkFaint}
+                />
+                <Text style={taskCardStyles.metaText} numberOfLines={1}>
+                  {formatCardDate(
+                    task.endTime || task.startTime || task.createdAt
+                  )}
+                </Text>
+                {userRole !== "Employee" && assigneeName !== "Unassigned" && (
+                  <>
+                    <Text style={taskCardStyles.metaDot}>·</Text>
+                    <Ionicons
+                      name="person-outline"
+                      size={13}
+                      color={Brand.inkFaint}
+                    />
+                    <Text style={taskCardStyles.metaText} numberOfLines={1}>
+                      {assigneeName}
+                    </Text>
+                  </>
+                )}
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {userRole !== "Employee" ? (
+            <Menu renderer={OverflowMenuRenderer}>
+              <MenuTrigger
+                customStyles={{
+                  triggerWrapper: taskCardStyles.menuBtn,
+                }}
+              >
+                <Ionicons
+                  name="ellipsis-vertical"
+                  size={16}
+                  color={Brand.inkSoft}
+                />
+              </MenuTrigger>
+              <MenuOptions
+                customStyles={{
+                  optionsContainer: taskCardStyles.menuDropdown,
+                  optionWrapper: taskCardStyles.menuItem,
+                }}
+              >
+                <MenuOption onSelect={() => handleUpdate(task)}>
+                  <View style={taskCardStyles.menuItemInner}>
+                    <Ionicons
+                      name="create-outline"
+                      size={17}
+                      color={Brand.ink}
+                    />
+                    <Text style={taskCardStyles.menuItemText}>Edit</Text>
+                  </View>
+                </MenuOption>
+                <MenuOption onSelect={() => handleDelete(task)}>
+                  <View style={taskCardStyles.menuItemInner}>
+                    <Ionicons
+                      name="trash-outline"
+                      size={17}
+                      color={Brand.danger}
+                    />
+                    <Text
+                      style={[
+                        taskCardStyles.menuItemText,
+                        { color: Brand.danger },
+                      ]}
+                    >
+                      Delete
+                    </Text>
+                  </View>
+                </MenuOption>
+              </MenuOptions>
+            </Menu>
+          ) : (
+            <TouchableOpacity onPress={openDetails} hitSlop={8}>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={Brand.inkFaint}
+                style={{ marginTop: 4 }}
+              />
+            </TouchableOpacity>
+          )}
         </View>
-      </TouchableOpacity>
+      </View>
     );
-  }, [activeEmployeeDraftId, activePriorityDraftId, creatingTaskId, draftTasks, employees, filteredEmployees, priorityOpen, employeeOpen, isDropdownInteracting, userRole, updateDraftTask, removeDraftTask, handleCreateTaskFromDraft, handleEmployeeSearch, navigation]);
+  }, [activeEmployeeDraftId, activePriorityDraftId, creatingTaskId, draftTasks, employees, filteredEmployees, priorityOpen, employeeOpen, isDropdownInteracting, userRole, updateDraftTask, removeDraftTask, handleCreateTaskFromDraft, handleEmployeeSearch, navigation, handleUpdate, handleDelete]);
 
   const renderContent = () => (
     <FlatList
@@ -1460,11 +1515,19 @@ function ViewAllTasksScreen({ navigation, route }) {
               </TouchableOpacity>
             </>
           ) : (
-            <View style={{ marginTop: 60 }}>
-              <Text className="text-[16px] text-[#666] text-center font-medium">
+            <View style={taskCardStyles.emptyState}>
+              <View style={taskCardStyles.emptyIconWrap}>
+                <Ionicons name="checkbox-outline" size={36} color={Brand.inkFaint} />
+              </View>
+              <Text style={taskCardStyles.emptyTitle}>
                 {searchTerm.trim() !== ""
                   ? "No tasks match your search"
-                  : "No tasks found"}
+                  : "No task assigned"}
+              </Text>
+              <Text style={taskCardStyles.emptySubtitle}>
+                {searchTerm.trim() !== ""
+                  ? "Try a different search term"
+                  : "Tasks for this project will show up here"}
               </Text>
             </View>
           )}
@@ -1476,7 +1539,7 @@ function ViewAllTasksScreen({ navigation, route }) {
 
   return (
     <View className="flex-1 bg-white">
-      <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
+      <StatusBar barStyle="dark-content" backgroundColor={Brand.paper} />
 
       {/* Content */}
       {/* Why: Simple inline loader centered on screen, no external dependencies */}
@@ -1506,9 +1569,9 @@ function ViewAllTasksScreen({ navigation, route }) {
         </TouchableWithoutFeedback>
       )}
 
-      {/* Hide CustomBottomNav when UpdateTaskModal is visible */}
-      {/* CustomBottomNav will automatically hide FAB for Employee role */}
-      {!updateTaskModalVisible && <CustomBottomNav onAddPress={handleFabPress} />}
+      {/* Hide HomeBottomNav when UpdateTaskModal is visible */}
+      {/* HomeBottomNav will automatically hide FAB for Employee role */}
+      {!updateTaskModalVisible && <HomeBottomNav onAddPress={handleFabPress} />}
 
       <Sidebar
         isVisible={sidebarVisible}
@@ -1613,11 +1676,9 @@ function ViewAllTasksScreen({ navigation, route }) {
         setSelectedFilters={setSelectedFilters}
         onApplyFilters={handleApplyFilters}
         onClearFilters={handleClearFilters}
-        userRole={userRole}
         projectId={projectId}
       />
 
-      {/* Beautiful Delete Confirmation Dialog */}
       <Modal
         visible={deleteDialogVisible}
         transparent={true}
@@ -1643,7 +1704,6 @@ function ViewAllTasksScreen({ navigation, route }) {
             shadowRadius: 16,
             elevation: 8,
           }}>
-            {/* Warning Icon */}
             <View style={{
               alignItems: 'center',
               marginBottom: 16,
@@ -1652,12 +1712,12 @@ function ViewAllTasksScreen({ navigation, route }) {
                 width: 48,
                 height: 48,
                 borderRadius: 24,
-                backgroundColor: '#FEF2F2',
+                backgroundColor: '#F3F4F6',
                 justifyContent: 'center',
                 alignItems: 'center',
                 marginBottom: 12,
               }}>
-                <Ionicons name="warning" size={24} color="#EF4444" />
+                <Ionicons name="trash-outline" size={24} color="#111827" />
               </View>
               <Text style={{
                 fontSize: 18,
@@ -1670,7 +1730,6 @@ function ViewAllTasksScreen({ navigation, route }) {
               </Text>
             </View>
 
-            {/* Message */}
             <Text style={{
               fontSize: 15,
               color: '#6B7280',
@@ -1687,7 +1746,7 @@ function ViewAllTasksScreen({ navigation, route }) {
             
             <Text style={{
               fontSize: 13,
-              color: '#EF4444',
+              color: '#6B7280',
               textAlign: 'center',
               fontWeight: '500',
               marginBottom: 20,
@@ -1695,7 +1754,6 @@ function ViewAllTasksScreen({ navigation, route }) {
               This action cannot be undone.
             </Text>
 
-            {/* Action Buttons */}
             <View style={{
               flexDirection: 'row',
               gap: 10,
@@ -1723,7 +1781,7 @@ function ViewAllTasksScreen({ navigation, route }) {
               <TouchableOpacity
                 style={{
                   flex: 1,
-                  backgroundColor: '#EF4444',
+                  backgroundColor: 'black',
                   paddingVertical: 12,
                   borderRadius: 10,
                   alignItems: 'center',
@@ -1744,7 +1802,6 @@ function ViewAllTasksScreen({ navigation, route }) {
         </View>
       </Modal>
 
-      {/* Past Time Dialog */}
       <Modal
         visible={pastTimeDialogVisible}
         transparent={true}
@@ -1770,7 +1827,6 @@ function ViewAllTasksScreen({ navigation, route }) {
             shadowRadius: 16,
             elevation: 8,
           }}>
-            {/* Warning Icon */}
             <View style={{
               alignItems: 'center',
               marginBottom: 16,
@@ -1779,12 +1835,12 @@ function ViewAllTasksScreen({ navigation, route }) {
                 width: 48,
                 height: 48,
                 borderRadius: 24,
-                backgroundColor: '#FEF2F2',
+                backgroundColor: '#F3F4F6',
                 justifyContent: 'center',
                 alignItems: 'center',
                 marginBottom: 12,
               }}>
-                <Ionicons name="time" size={24} color="#EF4444" />
+                <Ionicons name="time" size={24} color="#111827" />
               </View>
               <Text style={{
                 fontSize: 18,
@@ -1797,7 +1853,6 @@ function ViewAllTasksScreen({ navigation, route }) {
               </Text>
             </View>
 
-            {/* Message */}
             <Text style={{
               fontSize: 15,
               color: '#6B7280',
@@ -1808,10 +1863,9 @@ function ViewAllTasksScreen({ navigation, route }) {
               Start time must be in the future. Please choose a future time.
             </Text>
 
-            {/* Action Button */}
             <TouchableOpacity
               style={{
-                backgroundColor: '#EF4444',
+                backgroundColor: 'black',
                 paddingVertical: 12,
                 borderRadius: 10,
                 alignItems: 'center',
@@ -1840,5 +1894,154 @@ function ViewAllTasksScreen({ navigation, route }) {
     </View>
   );
 }
+
+const taskCardStyles = StyleSheet.create({
+  card: {
+    backgroundColor: Brand.paper,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#EEF0F3",
+    shadowColor: Brand.ink,
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  cardTopRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  cardPressArea: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    minWidth: 0,
+  },
+  thumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: Brand.paperSoft,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardMain: {
+    flex: 1,
+    marginLeft: 12,
+    marginRight: 8,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    marginBottom: 4,
+  },
+  cardTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "700",
+    color: Brand.ink,
+    letterSpacing: -0.2,
+  },
+  statusPill: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  cardSubtitle: {
+    fontSize: 13,
+    color: Brand.inkMuted,
+    marginBottom: 6,
+  },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  metaText: {
+    marginLeft: 4,
+    fontSize: 12,
+    color: Brand.inkFaint,
+    fontWeight: "500",
+    flexShrink: 1,
+  },
+  metaDot: {
+    marginHorizontal: 6,
+    color: Brand.inkFaint,
+  },
+  menuBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Brand.paperSoft,
+  },
+  menuDropdown: {
+    backgroundColor: Brand.paper,
+    borderRadius: 12,
+    paddingVertical: 4,
+    width: 148,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    shadowColor: "#000",
+    shadowOpacity: 0.14,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 10,
+  },
+  menuItem: {
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+  },
+  menuItemInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+  },
+  menuItemText: {
+    marginLeft: 10,
+    fontSize: 14,
+    fontWeight: "600",
+    color: Brand.ink,
+  },
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+  },
+  emptyIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: Brand.paperSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: Brand.ink,
+    marginBottom: 6,
+    textAlign: "center",
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: Brand.inkMuted,
+    textAlign: "center",
+    lineHeight: 18,
+  },
+});
 
 export default ViewAllTasksScreen;

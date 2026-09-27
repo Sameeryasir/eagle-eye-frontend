@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { createProject } from '../services/projects/createProject';
 import Toast from 'react-native-toast-message';
+import HomeBottomNav from '../components/HomeBottomNav';
 
 function CreateProjectScreen({ navigation }) {
   const [projectData, setProjectData] = useState({
@@ -242,13 +243,6 @@ function CreateProjectScreen({ navigation }) {
 
   return (
     <View className="flex-1 bg-white">
-      <View className="flex-row items-center px-4 pt-12 pb-3 border-b border-[#f0f0f0] bg-white">
-        <TouchableOpacity className="p-2 mr-2" onPress={handleCancel}>
-          <Ionicons name="chevron-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text className="text-[20px] font-bold text-[#333]">Create Project</Text>
-      </View>
-
       <View className="flex-1 p-5">
         <ScrollView
           className="flex-1"
@@ -375,6 +369,8 @@ function CreateProjectScreen({ navigation }) {
           minimumDate={startDate}
         />
       )}
+
+      <HomeBottomNav keyboardVisible={keyboardVisible} />
     </View>
   );
 }

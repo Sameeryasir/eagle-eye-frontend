@@ -13,7 +13,7 @@ import Toast from "react-native-toast-message";
 import getAllTasks from "../services/tasks/getAllTasks";
 import { getEventsForLogInUser } from "../services/event/getEventsForLogInUser";
 import { getUserRole } from "../services/utils/userRole";
-import CustomBottomNav from "./CustomBottomNav";
+import HomeBottomNav from "./HomeBottomNav";
 import TaskDetailsModal from "./TaskDetailsModal";
 import EventDetailsModal from "./EventDetailsModal";
 import CreateEventModal from "./CreateEventModal";
@@ -257,7 +257,7 @@ export default function MyWeekView({ navigation }) {
         </ScrollView>
       </View>
 
-      <CustomBottomNav handleFabPress={handleFabPress} />
+      <HomeBottomNav onAddPress={handleFabPress} />
 
       <TaskDetailsModal
         visible={showTaskDialog}

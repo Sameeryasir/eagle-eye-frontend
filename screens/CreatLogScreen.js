@@ -24,7 +24,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 
 import Sidebar from "../components/Sidebar";
-import CustomBottomNav from "../components/CustomBottomNav";
+import HomeBottomNav from "../components/HomeBottomNav";
 import getTodaysTask from "../services/tasks/getTodayTask";
 import { getProjectById } from "../services/projects/getProject";
 import { getTaskByProjectId } from "../services/tasks/getTaskByProjectId";
@@ -474,22 +474,9 @@ function CreatLogScreen({ navigation, route }) {
     setIsUploadingImages(true);
 
     try {
-      const formData = new FormData();
-
-      // Add all images at once to the 'images' field
-      selectedImages.forEach(image => {
-        formData.append('images', {
-          uri: image.uri,
-          type: 'image/jpeg',
-          name: image.name,
-        });
-      });
-
-      formData.append('logId', logId);
-
       console.log(`CreatLogScreen - Uploading ${selectedImages.length} images at once`);
 
-      const uploadResponse = await uploadImage(formData);
+      const uploadResponse = await uploadImage(selectedImages, { logId });
 
       // Handle response from backend
       if (uploadResponse.images?.length > 0) {
@@ -919,7 +906,7 @@ function CreatLogScreen({ navigation, route }) {
         </View>
       )}
 
-      <CustomBottomNav />
+      <HomeBottomNav />
 
       <Sidebar
         isVisible={sidebarVisible}

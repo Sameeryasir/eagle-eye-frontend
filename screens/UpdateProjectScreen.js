@@ -12,6 +12,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { updateProjectById } from "../services/projects/updateProjectById";
 import Toast from 'react-native-toast-message';
+import HomeBottomNav from "../components/HomeBottomNav";
 
 export default function UpdateProjectScreen({ navigation, route }) {
   const [projectData, setProjectData] = useState({
@@ -312,9 +313,9 @@ export default function UpdateProjectScreen({ navigation, route }) {
         </ScrollView>
       </View>
 
-      {/* Fixed Action Buttons - Always positioned at bottom, hidden when keyboard is visible */}
+      {/* Fixed Action Buttons — sit above footer tab bar */}
       {!keyboardVisible && (
-        <View className="absolute bottom-0 left-0 right-0 flex-row justify-between gap-4 px-5 pt-5 pb-8 bg-white">
+        <View className="absolute bottom-[90px] left-0 right-0 flex-row justify-between gap-4 px-5 pt-5 pb-4 bg-white">
           <TouchableOpacity
             className={`flex-1 bg-[#f8f9fa] border border-[#dee2e6] rounded-lg p-4 items-center ${isLoading ? 'opacity-60' : ''}`}
             onPress={handleCancel}
@@ -335,6 +336,8 @@ export default function UpdateProjectScreen({ navigation, route }) {
           </TouchableOpacity>
         </View>
       )}
+
+      <HomeBottomNav keyboardVisible={keyboardVisible} />
     </View>
   );
 }

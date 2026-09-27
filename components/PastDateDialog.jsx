@@ -13,57 +13,79 @@ const PastDateDialog = ({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View className="flex-1 bg-transparent justify-center items-center px-6">
-        <View 
-          className="bg-white rounded-3xl w-full max-w-sm overflow-hidden"
-          style={{
-            shadowColor: '#000',
-            shadowOffset: {
-              width: 0,
-              height: 10,
-            },
-            shadowOpacity: 0.25,
-            shadowRadius: 20,
-            elevation: 10,
-          }}
-        >
-          <View 
-            className="px-6 py-5"
+      <View style={{
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+      }}>
+        <View style={{
+          backgroundColor: 'white',
+          borderRadius: 16,
+          padding: 20,
+          width: '100%',
+          maxWidth: 320,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.2,
+          shadowRadius: 16,
+          elevation: 8,
+        }}>
+          <View style={{
+            alignItems: 'center',
+            marginBottom: 16,
+          }}>
+            <View style={{
+              width: 48,
+              height: 48,
+              borderRadius: 24,
+              backgroundColor: '#F3F4F6',
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginBottom: 12,
+            }}>
+              <Ionicons name="calendar" size={24} color="#111827" />
+            </View>
+            <Text style={{
+              fontSize: 18,
+              fontWeight: 'bold',
+              color: '#1F2937',
+              textAlign: 'center',
+              marginBottom: 4,
+            }}>
+              Cannot Create Event
+            </Text>
+          </View>
+
+          <Text style={{
+            fontSize: 15,
+            color: '#6B7280',
+            textAlign: 'center',
+            lineHeight: 22,
+            marginBottom: 20,
+          }}>
+            You cannot create the event in the past
+          </Text>
+
+          <TouchableOpacity
             style={{
               backgroundColor: 'black',
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
+              paddingVertical: 12,
+              borderRadius: 10,
+              alignItems: 'center',
             }}
+            onPress={onClose}
+            activeOpacity={0.8}
           >
-            <View className="flex-row items-center justify-center">
-              <View className="flex-row items-center">
-                <View className="w-10 h-10 bg-white rounded-full items-center justify-center mr-3">
-                  <Ionicons name="calendar" size={20} color="black" />
-                </View>
-                <Text className="text-lg font-bold text-white">Cannot Create Event</Text>
-              </View>
-            </View>
-          </View>
-          
-          <View className="p-6 bg-gray-50">
-            <View className="bg-white rounded-2xl p-4 mb-6 shadow-sm">
-              <View className="flex-row items-center justify-center mb-3">
-                <View className="w-12 h-12 bg-red-100 rounded-full items-center justify-center">
-                  <Ionicons name="alert-circle" size={24} color="#EF4444" />
-                </View>
-              </View>
-              <Text className="text-base text-gray-700 text-center leading-6">
-                You cannot create the event in the past
-              </Text>
-            </View>
-            
-            <TouchableOpacity
-              onPress={onClose}
-              className="bg-black py-4 rounded-xl"
-            >
-              <Text className="text-white text-center font-semibold text-lg">OK</Text>
-            </TouchableOpacity>
-          </View>
+            <Text style={{
+              fontSize: 15,
+              fontWeight: '600',
+              color: 'white',
+            }}>
+              OK
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>

@@ -19,7 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Toast from 'react-native-toast-message';
 import Sidebar from "../components/Sidebar";
-import CustomBottomNav from "../components/CustomBottomNav";
+import HomeBottomNav from "../components/HomeBottomNav";
 import UpdateTaskModal from "../components/UpdateTaskModal";
 import { deleteTaskById } from "../services/tasks/deleteTaskById";
 import { getUserRole } from "../services/utils/userRole";
@@ -436,8 +436,8 @@ function TaskDetailsScreen({ navigation, route }) {
         <View className="flex-1 justify-center items-center">
           <Text className="text-[16px] text-[#666]">Loading Task details...</Text>
         </View>
-        {/* Show CustomBottomNav during loading */}
-        <CustomBottomNav navigation={navigation} />
+        {/* Show HomeBottomNav during loading */}
+        <HomeBottomNav />
       </View>
     );
   }
@@ -1111,10 +1111,10 @@ function TaskDetailsScreen({ navigation, route }) {
         </Modal>
 
         {/* Sidebar */}
-        <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} navigation={navigation} />
+        <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
 
         {/* Bottom Navigation */}
-        <CustomBottomNav navigation={navigation} />
+        <HomeBottomNav />
       </View>
   );
 }

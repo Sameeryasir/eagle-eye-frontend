@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { MaterialIcons } from '@expo/vector-icons';
 import { getMyProjects } from '../services/projects/getProjectsByLoginUserId';
-import CustomBottomNav from '../components/CustomBottomNav';
+import HomeBottomNav from '../components/HomeBottomNav';
 
 const FilesScreen = ({ navigation }) => {
   const [projects, setProjects] = useState([]);
@@ -123,7 +123,7 @@ const FilesScreen = ({ navigation }) => {
           className="flex-1"
           contentContainerStyle={{
             paddingTop: 16,
-            paddingBottom: 100, // Add bottom padding to avoid CustomBottomNav overlap
+            paddingBottom: 100, // Add bottom padding to avoid HomeBottomNav overlap
           }}
           showsVerticalScrollIndicator={false}
         />
@@ -142,10 +142,7 @@ const FilesScreen = ({ navigation }) => {
         </View>
       )}
       
-      <CustomBottomNav 
-        navigation={navigation} 
-        hideFAB={true}
-      />
+      <HomeBottomNav />
     </SafeAreaView>
   );
 };

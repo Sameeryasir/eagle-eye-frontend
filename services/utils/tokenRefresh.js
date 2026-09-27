@@ -12,6 +12,9 @@ export default async function refreshToken(refreshTokenValue) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(API_URL.includes("ngrok")
+          ? { "ngrok-skip-browser-warning": "true" }
+          : {}),
       },
       body: JSON.stringify({
         refreshToken: refreshTokenValue,

@@ -1,5 +1,5 @@
 module.exports = function (api) {
-  api.cache(true);
+  api.cache(false);
   return {
     presets: ['babel-preset-expo', 'nativewind/babel'],
     plugins: [
@@ -9,7 +9,7 @@ module.exports = function (api) {
           moduleName: '@env',
           path: '.env',
           allowUndefined: true,
-          safe: true,
+          safe: false,
           verbose: false,
         },
       ],

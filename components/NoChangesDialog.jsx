@@ -40,12 +40,12 @@ const NoChangesDialog = ({
               width: 48,
               height: 48,
               borderRadius: 24,
-              backgroundColor: '#FEF2F2',
+              backgroundColor: '#F3F4F6',
               justifyContent: 'center',
               alignItems: 'center',
               marginBottom: 12,
             }}>
-              <Ionicons name="information-circle" size={24} color="#EF4444" />
+              <Ionicons name="information-circle" size={24} color="#111827" />
             </View>
             <Text style={{
               fontSize: 18,

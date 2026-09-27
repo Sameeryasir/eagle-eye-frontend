@@ -14,7 +14,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import { getFilesByProjectId } from '../services/files/getFilesByProjectId';
-import CustomBottomNav from '../components/CustomBottomNav';
+import HomeBottomNav from '../components/HomeBottomNav';
 
 const ProjectFilesScreen = ({ navigation, route }) => {
   const { projectId, projectName } = route.params || {};
@@ -205,7 +205,7 @@ const ProjectFilesScreen = ({ navigation, route }) => {
           className="flex-1"
           contentContainerStyle={{
             paddingTop: 16,
-            paddingBottom: 100, // Add bottom padding to avoid CustomBottomNav overlap
+            paddingBottom: 100, // Add bottom padding to avoid HomeBottomNav overlap
           }}
           showsVerticalScrollIndicator={false}
         />
@@ -224,10 +224,7 @@ const ProjectFilesScreen = ({ navigation, route }) => {
         </View>
       )}
       
-      <CustomBottomNav 
-        navigation={navigation} 
-        hideFAB={true}
-      />
+      <HomeBottomNav />
     </SafeAreaView>
   );
 };

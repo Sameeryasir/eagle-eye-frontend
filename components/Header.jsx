@@ -1,6 +1,7 @@
 import React from "react";
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Brand } from "../constants/brandColors";
 
 const Header = ({
   title = "Projects",
@@ -10,42 +11,82 @@ const Header = ({
   leftIconName = "menu",
   showMenu = true,
   showRight = true,
-  backgroundColor = "white",
-  textColor = "#333",
-  iconColor = "#333",
+  backgroundColor = Brand.paper,
+  textColor = Brand.ink,
+  iconColor = Brand.ink,
 }) => {
   return (
-    <View
-      className="flex-row items-center justify-between px-5 py-5 pt-2.5 border-b border-[#f0f0f0]"
-      style={{ backgroundColor }}
-    >
+    <View style={[styles.row, { backgroundColor }]}>
       {showMenu ? (
-        <TouchableOpacity className="p-2 rounded-lg" onPress={onMenuPress}>
+        <Pressable
+          onPress={onMenuPress}
+          disabled={!onMenuPress}
+          hitSlop={12}
+          style={({ pressed }) => [
+            styles.iconBtn,
+            pressed && onMenuPress ? styles.iconBtnPressed : null,
+          ]}
+        >
           <Ionicons name={leftIconName} size={24} color={iconColor} />
-        </TouchableOpacity>
+        </Pressable>
       ) : (
-        <View style={{ width: 40 }} />
+        <View style={styles.spacer} />
       )}
 
-      <Text
-        className="text-[28px] font-bold tracking-[0.5px]"
-        style={{
-          color: textColor,
-          fontSize: 20,
-        }}
-      >
+      <Text style={[styles.title, { color: textColor }]} numberOfLines={1}>
         {title}
       </Text>
 
       {showRight ? (
-        <TouchableOpacity className="p-2 rounded-lg" onPress={onRightPress}>
+        <Pressable
+          onPress={onRightPress}
+          disabled={!onRightPress}
+          hitSlop={12}
+          style={({ pressed }) => [
+            styles.iconBtn,
+            pressed && onRightPress ? styles.iconBtnPressed : null,
+          ]}
+        >
           <Ionicons name={rightIcon} size={24} color={iconColor} />
-        </TouchableOpacity>
+        </Pressable>
       ) : (
-        <View style={{ width: 40 }} />
+        <View style={styles.spacer} />
       )}
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Brand.line,
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  iconBtnPressed: {
+    backgroundColor: Brand.paperSoft,
+  },
+  spacer: {
+    width: 40,
+  },
+  title: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 20,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+    marginHorizontal: 8,
+  },
+});
 
 export default Header;

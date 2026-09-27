@@ -204,15 +204,16 @@ const UpdateLogModal = ({ visible, onClose, log, onUpdate, userRole }) => {
       if (selectedImage) {
         console.log(`UpdateLogModal - Regular upload for new image`);
 
-        const formData = new FormData();
-        formData.append("logId", logId);
-        formData.append("image", {
-          uri: selectedImage.uri,
-          type: "image/jpeg",
-          name: `new_image_${Date.now()}.jpg`,
-        });
-
-        const uploadResponse = await uploadImage(formData);
+        const uploadResponse = await uploadImage(
+          [
+            {
+              uri: selectedImage.uri,
+              type: "image/jpeg",
+              name: `new_image_${Date.now()}.jpg`,
+            },
+          ],
+          { logId }
+        );
 
         console.log("UpdateLogModal - Upload response:", uploadResponse);
 

@@ -17,14 +17,22 @@ export async function apiRequest(method, path, options = {}) {
 
   const url = path.startsWith('http') ? path : `${API_URL}${path}`;
   const isFormData =
-    data && typeof FormData !== 'undefined' && data instanceof FormData;
+    !!data &&
+    (typeof FormData !== 'undefined' && data instanceof FormData ||
+      data?.constructor?.name === 'FormData' ||
+      (typeof data.append === 'function' && typeof data.getParts === 'function'));
 
   const buildConfig = (token) => {
     const cfg = {
       method,
       url,
       timeout,
-      headers: { ...headers },
+      headers: {
+        ...headers,
+        ...(API_URL.includes('ngrok')
+          ? { 'ngrok-skip-browser-warning': 'true' }
+          : {}),
+      },
     };
     if (signal) {
       cfg.signal = signal;
@@ -34,6 +42,7 @@ export async function apiRequest(method, path, options = {}) {
     }
     if (isFormData) {
       delete cfg.headers['Content-Type'];
+      cfg.transformRequest = [(payload) => payload];
     } else if (cfg.headers['Content-Type'] === undefined && data !== undefined) {
       cfg.headers['Content-Type'] = 'application/json';
     }
@@ -63,6 +72,14 @@ export async function apiRequest(method, path, options = {}) {
       const newToken = await refreshToken(refreshTokenValue);
       const response = await axios(buildConfig(newToken));
       return response.data;
+    }
+    if (axios.isAxiosError(err) && !err.response) {
+      console.error('Network request failed:', {
+        method,
+        url,
+        message: err.message,
+        apiBase: API_URL,
+      });
     }
     throw err;
   }

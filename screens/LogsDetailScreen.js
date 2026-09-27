@@ -14,7 +14,7 @@ import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Sidebar from "../components/Sidebar";
-import CustomBottomNav from "../components/CustomBottomNav";
+import HomeBottomNav from "../components/HomeBottomNav";
 import UpdateLogModal from "../components/UpdateLogModal";
 import DeleteLogModal from "../components/DeleteLogModal";
 import { getUserRole } from "../services/utils/userRole";
@@ -283,8 +283,8 @@ function LogsDetailScreen({ navigation, route }) {
           <Text className="text-[16px] text-[#666]">Loading log details...</Text>
         </View>
 
-        {/* Show CustomBottomNav during loading */}
-        <CustomBottomNav navigation={navigation} />
+        {/* Show HomeBottomNav during loading */}
+        <HomeBottomNav />
       </View>
     );
   }
@@ -309,8 +309,8 @@ function LogsDetailScreen({ navigation, route }) {
           </TouchableOpacity>
         </View>
 
-        {/* Show CustomBottomNav during error */}
-        <CustomBottomNav navigation={navigation} />
+        {/* Show HomeBottomNav during error */}
+        <HomeBottomNav />
       </View>
     );
   }
@@ -324,8 +324,8 @@ function LogsDetailScreen({ navigation, route }) {
           <Text className="text-[16px] text-[#666]">Log not found</Text>
         </View>
 
-        {/* Show CustomBottomNav when log not found */}
-        <CustomBottomNav navigation={navigation} />
+        {/* Show HomeBottomNav when log not found */}
+        <HomeBottomNav />
       </View>
     );
   }
@@ -797,10 +797,10 @@ function LogsDetailScreen({ navigation, route }) {
       </ScrollView>
 
       {/* Sidebar */}
-      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} navigation={navigation} />
+      <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
 
       {/* Bottom Navigation */}
-      <CustomBottomNav navigation={navigation} />
+      <HomeBottomNav />
 
       {/* Update Log Modal */}
       <UpdateLogModal
@@ -808,7 +808,6 @@ function LogsDetailScreen({ navigation, route }) {
         onClose={handleUpdateModalClose}
         log={log}
         onUpdate={handleUpdateSuccess}
-        userRole={userRole}
       />
 
       {/* Delete Log Modal */}

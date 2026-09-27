@@ -32,6 +32,7 @@ import * as ImagePicker from 'expo-image-picker';
 import NetInfo from '@react-native-community/netinfo';
 import { useAuth } from "../context/AuthContext";
 import { useSQLiteContext } from 'expo-sqlite';
+import HomeBottomNav from "../components/HomeBottomNav";
 import { 
   getMessagesTableName 
 } from "../database/schema";
@@ -4539,6 +4540,7 @@ const UserChatScreen = ({ navigation, route }) => {
         conversationType={signatureConversationType}
       />
 
+      <HomeBottomNav />
     </SafeAreaView>
   );
 };

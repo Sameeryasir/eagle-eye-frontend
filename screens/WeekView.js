@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { SafeAreaView, StyleSheet, View, Text, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import CustomBottomNav from '../components/CustomBottomNav';
+import HomeBottomNav from '../components/HomeBottomNav';
 import CreateEventModal from '../components/CreateEventModal';
 
 const { width } = Dimensions.get('window');
@@ -179,8 +179,8 @@ export default function MyWeekView() {
         </View>
       </ScrollView>
       
-      <CustomBottomNav
-        handleFabPress={handleFabPress}
+      <HomeBottomNav
+        onAddPress={handleFabPress}
         keyboardVisible={false}
       />
 

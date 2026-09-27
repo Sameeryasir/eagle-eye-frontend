@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, ScrollView, Dimensions, Alert } from "react-native";
 import Timetable from "react-native-calendar-timetable";
-import CustomBottomNav from "../components/CustomBottomNav";
+import HomeBottomNav from "../components/HomeBottomNav";
 import { Ionicons } from "@expo/vector-icons";
 import * as Localization from 'expo-localization';
 import { useDispatch } from 'react-redux';
@@ -558,8 +558,8 @@ const CalenderDetailScreen = ({ route, navigation }) => {
       </ScrollView>
       
 
-      <CustomBottomNav 
-        handleFabPress={async () => {
+      <HomeBottomNav 
+        onAddPress={async () => {
           const userRole = await getUserRole();
 
           if (userRole === "Owner") {

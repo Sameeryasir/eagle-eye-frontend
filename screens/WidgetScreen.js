@@ -47,7 +47,7 @@ const isMediumScreen = screenWidth < 450; // Medium devices
 const isLargeScreen = screenWidth >= 450; // Large devices
 
 import Sidebar from "../components/Sidebar";
-import CustomBottomNav from "../components/CustomBottomNav";
+import HomeBottomNav from "../components/HomeBottomNav";
 import { getUserRole } from "../services/utils/userRole";
 
 function WidgetScreen({ navigation, route }) {
@@ -775,8 +775,7 @@ function WidgetScreen({ navigation, route }) {
         onNavigate={() => setSidebarVisible(false)}
       />
 
-      <CustomBottomNav
-        currentScreen="chats" // ✅ ADD: Tell bottom nav we're on chats/widget screen
+      <HomeBottomNav
         onAddPress={() => {
           console.log("WidgetScreen - FAB pressed, userRole:", userRole, "projectId:", projectId, "tasks.length:", tasks.length, "logs.length:", logs.length);
           

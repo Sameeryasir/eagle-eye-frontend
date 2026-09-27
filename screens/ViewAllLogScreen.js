@@ -22,7 +22,7 @@ import Toast from 'react-native-toast-message';
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
-import CustomBottomNav from "../components/CustomBottomNav";
+import HomeBottomNav from "../components/HomeBottomNav";
 import { getUserRole } from "../services/utils/userRole";
 import { deleteLogById } from "../services/log/deleteLogById";
 import { updateLogById } from "../services/log/updateLogById";
@@ -1853,9 +1853,9 @@ const ViewAllLogScreen = ({ route, navigation }) => {
           {filteredLogs.map((log, index) => (
             <View key={`log-${log.id}`} style={{ marginBottom: index < filteredLogs.length - 1 ? 20 : 0 }}>
               {userRole === "Manager" || userRole === "Owner" ? (
-                <ManagerLogCard log={log} projectName={projectName} selectedProjectFilter={selectedProjectFilter} userRole={userRole} />
+                <ManagerLogCard log={log} projectName={projectName} selectedProjectFilter={selectedProjectFilter} />
               ) : (
-                <LogCard log={log} projectName={projectName} selectedProjectFilter={selectedProjectFilter} userRole={userRole} />
+                <LogCard log={log} projectName={projectName} selectedProjectFilter={selectedProjectFilter} />
               )}
             </View>
           ))}
@@ -1867,7 +1867,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   return (
     <View className="flex-1 bg-white">
       {renderContent()}
-      <CustomBottomNav
+      <HomeBottomNav
         keyboardVisible={keyboardVisible}
         onAddPress={() => {
           // For Employee role, navigate to CreatLog with projectId
@@ -1972,7 +1972,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         }}
         log={selectedLogForUpdate}
         onUpdate={handleUpdateLog}
-        userRole={userRole}
       />
 
       {/* Beautiful Delete Confirmation Dialog */}
