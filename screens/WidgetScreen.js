@@ -10,6 +10,7 @@ import {
   Dimensions,
   RefreshControl,
   ActivityIndicator,
+  Modal,
 } from "react-native";
 import Toast from 'react-native-toast-message';
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -40,14 +41,15 @@ import {
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
-// More comprehensive screen size detection for better responsive design
-const isVerySmallScreen = screenWidth < 380 || screenHeight < 650; // Very small devices (more aggressive)
-const isSmallScreen = screenWidth < 400 || screenHeight < 700; // Small devices
-const isMediumScreen = screenWidth < 450; // Medium devices
-const isLargeScreen = screenWidth >= 450; // Large devices
+const isVerySmallScreen = screenWidth < 380 || screenHeight < 650;
+const isSmallScreen = screenWidth < 400 || screenHeight < 700;
+const isMediumScreen = screenWidth < 450;
+const isLargeScreen = screenWidth >= 450;
 
 import Sidebar from "../components/Sidebar";
 import HomeBottomNav from "../components/HomeBottomNav";
+import CreateTask from "../components/CreateTask";
+import { Brand } from "../constants/brandColors";
 import { getUserRole } from "../services/utils/userRole";
 
 function WidgetScreen({ navigation, route }) {
@@ -68,6 +70,7 @@ function WidgetScreen({ navigation, route }) {
   const [userRole, setUserRole] = useState(null);
   const [managerProjectId, setManagerProjectId] = useState(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [createTaskVisible, setCreateTaskVisible] = useState(false);
   const isFirstMount = useRef(true);
 
   const { projectId, projectName } = route.params || {};
@@ -777,40 +780,47 @@ function WidgetScreen({ navigation, route }) {
 
       <HomeBottomNav
         onAddPress={() => {
-          console.log("WidgetScreen - FAB pressed, userRole:", userRole, "projectId:", projectId, "tasks.length:", tasks.length, "logs.length:", logs.length);
-          
-          // For Manager role: If tasks widget is empty, navigate to CreateTaskScreen
           if (userRole === "Manager" && tasks.length === 0) {
-            const navigationParams = { projectId: projectId }; // Use projectId from route params
-            console.log("WidgetScreen - Manager navigating to CreateTask with projectId:", projectId);
-            navigation.navigate("CreateTask", navigationParams);
+            setCreateTaskVisible(true);
             return;
           }
-          
+
           if (userRole === "Employee") {
-            const navigationParams = { projectId: projectId }; // Use projectId from route params
-            console.log("WidgetScreen - Employee FAB pressed, navigating to CreatLog with projectId:", projectId);
-            navigation.navigate("CreatLog", navigationParams);
+            navigation.navigate("CreatLog", { projectId });
             return;
           }
 
-          // For Manager role: If logs widget is empty (and tasks exist), navigate to CreateLogScreen
           if (userRole === "Manager" && logs.length === 0) {
-            const navigationParams = { projectId: projectId }; // Use projectId from route params (not managerProjectId)
-            navigation.navigate("CreatLog", navigationParams);
+            navigation.navigate("CreatLog", { projectId });
             return;
           }
 
-          // For other roles (Admin/Owner), check if there are no tasks and navigate to CreateTaskScreen
           if (userRole !== "Employee" && userRole !== "Manager" && tasks.length === 0) {
-            const navigationParams = { projectId: projectId };
-            navigation.navigate("CreateTask", navigationParams);
+            setCreateTaskVisible(true);
             return;
           }
-
-          // If widgets exist or user doesn't have permission, do nothing
         }}
       />
+
+      <Modal
+        visible={createTaskVisible}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        statusBarTranslucent
+        onRequestClose={() => setCreateTaskVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: Brand.paper }}>
+          <CreateTask
+            projectId={projectId}
+            projectName={projectName || project?.name}
+            onCancel={() => setCreateTaskVisible(false)}
+            onSuccess={() => {
+              setCreateTaskVisible(false);
+              onRefresh?.();
+            }}
+          />
+        </View>
+      </Modal>
     </View>
   );
 }

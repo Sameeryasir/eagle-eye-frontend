@@ -84,7 +84,6 @@ import CalenderDetailScreen from "./screens/CalenderDetailScreen";
 import ViewAllTasksScreen from "./screens/ViewAllTasksScreen";
 import ViewAllLogScreen from "./screens/ViewAllLogScreen";
 import CreateProjectScreen from "./screens/CreateProjectScreen";
-import CreateTaskScreen from "./screens/CreateTaskScreen";
 import UpdateTaskScreen from "./screens/UpdateTaskScreen";
 import UpdateProjectScreen from "./screens/UpdateProjectScreen";
 import TaskDetailsScreen from "./screens/TaskDetailsScreen";
@@ -371,7 +370,6 @@ const AppNavigator = () => {
       const useBackButton = new Set([
         "ProjectDetails",
         "CreateProject",
-        "CreateTask",
         "UpdateTask",
         "UpdateProject",
         "CreatLog",
@@ -419,9 +417,6 @@ const AppNavigator = () => {
           break;
         case "CreateProject":
           config.title = "Create Project";
-          break;
-        case "CreateTask":
-          config.title = "Create Task";
           break;
         case "UpdateTask":
           config.title = "Update Task";
@@ -557,10 +552,6 @@ const AppNavigator = () => {
                   <Stack.Screen
                     name="CreateProject"
                     component={CreateProjectScreen}
-                  />
-                  <Stack.Screen
-                    name="CreateTask"
-                    component={CreateTaskScreen}
                   />
                   <Stack.Screen
                     name="UpdateTask"

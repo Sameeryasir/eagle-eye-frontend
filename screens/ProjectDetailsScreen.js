@@ -9,6 +9,7 @@ import {
   Animated,
   RefreshControl,
   StatusBar,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
@@ -26,6 +27,7 @@ import { getEmployeesAssignedToProject } from "../services/projects/getEmployees
 import { getUserRole } from "../services/utils/userRole";
 import HomeBottomNav from "../components/HomeBottomNav";
 import UpdateProjectModal from "../components/UpdateProjectModal";
+import CreateTask from "../components/CreateTask";
 import { Brand } from "../constants/brandColors";
 
 const TABS = ["Overview", "Tasks", "Team", "Logs"];
@@ -213,6 +215,7 @@ export default function ProjectDetailsScreen({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updateVisible, setUpdateVisible] = useState(false);
+  const [createTaskVisible, setCreateTaskVisible] = useState(false);
 
   const loadAll = useCallback(
     async (isRefresh = false) => {
@@ -274,12 +277,7 @@ export default function ProjectDetailsScreen({ navigation, route }) {
           <View style={styles.rowActions}>
             {canManage && (
               <TouchableOpacity
-                onPress={() =>
-                  navigation.navigate("CreateTask", {
-                    projectId,
-                    projectName: project?.name || projectName,
-                  })
-                }
+                onPress={() => setCreateTaskVisible(true)}
                 activeOpacity={0.8}
               >
                 <Text style={styles.linkAction}>+ Add Task</Text>
@@ -411,14 +409,7 @@ export default function ProjectDetailsScreen({ navigation, route }) {
         title="All Tasks"
         right={
           canManage ? (
-            <TouchableOpacity
-              onPress={() =>
-                navigation.navigate("CreateTask", {
-                  projectId,
-                  projectName: project?.name || projectName,
-                })
-              }
-            >
+            <TouchableOpacity onPress={() => setCreateTaskVisible(true)}>
               <Text style={styles.linkAction}>+ Add Task</Text>
             </TouchableOpacity>
           ) : null
@@ -724,7 +715,13 @@ export default function ProjectDetailsScreen({ navigation, route }) {
         </ScrollView>
       )}
 
-      <HomeBottomNav />
+      <HomeBottomNav
+        onAddPress={() => {
+          if (canManage) {
+            setCreateTaskVisible(true);
+          }
+        }}
+      />
 
       <UpdateProjectModal
         visible={updateVisible}
@@ -735,6 +732,26 @@ export default function ProjectDetailsScreen({ navigation, route }) {
           loadAll(true);
         }}
       />
+
+      <Modal
+        visible={createTaskVisible}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        statusBarTranslucent
+        onRequestClose={() => setCreateTaskVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: Brand.paper }}>
+          <CreateTask
+            projectId={projectId}
+            projectName={project?.name || projectName}
+            onCancel={() => setCreateTaskVisible(false)}
+            onSuccess={() => {
+              setCreateTaskVisible(false);
+              loadAll(true);
+            }}
+          />
+        </View>
+      </Modal>
     </View>
   );
 }
