@@ -1,243 +1,198 @@
 import React from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  TextInput,
-  Image,
-  Alert,
-  ActivityIndicator,
-  StatusBar,
-  Platform,
-  Keyboard,
-  Dimensions,
-  AppState,
-  ToastAndroid,
-} from "react-native";
+import { Keyboard, Text, TouchableOpacity } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import Toast from "react-native-toast-message";
 import { verifyOtp } from "../services/auth/VerifyOtp";
+import { sendOtp } from "../services/auth/SendOtp";
 import { useAuth } from "../context/AuthContext";
-import Logo from "../assets/Logo.svg";
-
-const { height: screenHeight, width: screenWidth } = Dimensions.get("window");
+import { Brand } from "../constants/brandColors";
+import {
+  OnboardingLayout,
+  OnboardingField,
+} from "../components/onboarding/OnboardingLayout";
+import {
+  AuthScreenShell,
+  AuthField,
+  AuthPrimaryButton,
+} from "../components/auth/AuthScreenShell";
+import {
+  clearOnboardingSession,
+  saveOnboardingSession,
+  OnboardingSteps,
+} from "../services/onboarding/onboardingSession";
 
 const Code = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const { login } = useAuth();
   const emailOrPhone = route.params?.emailOrPhone || "";
+  const fromRegister = route.params?.fromRegister === true;
   const [code, setCode] = React.useState("");
   const [loading, setLoading] = React.useState(false);
-  const [appState, setAppState] = React.useState(AppState.currentState);
+  const [resending, setResending] = React.useState(false);
 
   React.useEffect(() => {
-    const handleAppStateChange = (nextAppState) => {
-      if (appState.match(/inactive|background/) && nextAppState === "active") {
-        setAppState(nextAppState);
-        setTimeout(() => {
-          setAppState("active");
-        }, 100);
-      } else {
-        setAppState(nextAppState);
-      }
-    };
-
-    const subscription = AppState.addEventListener(
-      "change",
-      handleAppStateChange
-    );
-    return () => subscription?.remove();
-  }, [appState]);
+    if (fromRegister && emailOrPhone) {
+      saveOnboardingSession({
+        step: OnboardingSteps.OTP,
+        email: emailOrPhone,
+      });
+    }
+  }, [fromRegister, emailOrPhone]);
 
   const handleContinue = async () => {
     Keyboard.dismiss();
     setLoading(true);
     try {
       const data = await verifyOtp(emailOrPhone, code.trim());
-      console.log("Full response data:", data);
-
-      console.log("=== Data passed to login function ===");
-      console.log("Data structure:", JSON.stringify(data, null, 2));
-      console.log("Has access_token:", !!data?.access_token);
-      console.log("Has refresh_token:", !!data?.refresh_token);
-      console.log("Has user:", !!data?.user);
-      console.log("=====================================");
-
       await login(data);
-
-      setLoading(false);
+      await clearOnboardingSession();
       setCode("");
-
-      const userRole = data.user?.role?.name;
-      console.log("User role received:", userRole);
-      let targetScreen = "HomeScreen";
-
-      if (userRole === "Owner") {
-        targetScreen = "HomeScreen";
-      } else if (userRole === "Employee") {
-        targetScreen = "HomeScreen";
-      } else if (userRole === "Manager") {
-        targetScreen = "HomeScreen";
-      }
-
-      console.log("Navigating to screen:", targetScreen);
 
       Toast.show({
         type: "success",
-        text1: "OTP Verified Successfully!",
-        text2: data.message || "Welcome to Eagle Eye!",
+        text1: fromRegister ? "Welcome aboard" : "You're logged in",
+        text2: fromRegister
+          ? "Your company is ready. Add crew from Crew in the menu."
+          : "Welcome back to Eagle Eye",
         visibilityTime: 3000,
-        autoHide: true,
         topOffset: 80,
       });
 
       navigation.reset({
         index: 0,
-        routes: [{ name: targetScreen }],
+        routes: [{ name: "HomeScreen" }],
       });
     } catch (error) {
-      setLoading(false);
-      console.log("Verify OTP Error:", error);
-
       Toast.show({
         type: "error",
-        text1: "OTP Verification Failed",
-        text2: error.message || "Please check your code and try again",
+        text1: "Verification failed",
+        text2: error?.message || "Please check your code and try again",
         visibilityTime: 4000,
-        autoHide: true,
         topOffset: 80,
       });
+    } finally {
+      setLoading(false);
     }
   };
 
-  return (
-    <>
-      <View
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: "#FFFFFF",
-          zIndex: 0,
-        }}
-      />
+  const handleResend = async () => {
+    if (!emailOrPhone || resending) return;
+    setResending(true);
+    try {
+      await sendOtp(emailOrPhone);
+      Toast.show({
+        type: "success",
+        text1: "Code sent",
+        text2: "Check your email for a new code",
+        topOffset: 80,
+      });
+    } catch (error) {
+      Toast.show({
+        type: "error",
+        text1: "Could not resend",
+        text2: error?.message || "Try again shortly",
+        topOffset: 80,
+      });
+    } finally {
+      setResending(false);
+    }
+  };
 
-      <View
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: "#FFFFFF",
-          zIndex: 1,
-        }}
+  if (fromRegister) {
+    return (
+      <OnboardingLayout
+        step={2}
+        totalSteps={2}
+        title="Verify email"
+        subtitle="Enter the code we sent to confirm your account and company."
+        onBack={() => navigation.navigate("SignIn", { skipResume: true })}
+        primaryLabel="Verify & continue"
+        onPrimary={handleContinue}
+        primaryDisabled={!code.trim()}
+        primaryLoading={loading}
+        secondary={
+          <TouchableOpacity
+            onPress={handleResend}
+            style={{ marginTop: 18, alignItems: "center" }}
+            disabled={resending}
+          >
+            <Text style={{ color: Brand.inkMuted, fontSize: 14 }}>
+              {resending ? "Sending…" : "Resend code"}
+            </Text>
+          </TouchableOpacity>
+        }
       >
-        <StatusBar
-          barStyle="dark-content"
-          backgroundColor="#FFFFFF"
-          translucent={false}
+        {!!emailOrPhone && (
+          <Text
+            style={{
+              fontSize: 15,
+              fontWeight: "600",
+              color: Brand.ink,
+              marginBottom: 20,
+              marginTop: -12,
+            }}
+          >
+            {emailOrPhone}
+          </Text>
+        )}
+        <OnboardingField
+          label="Verification code"
+          value={code}
+          onChangeText={setCode}
+          placeholder="6-digit code"
+          keyboardType="number-pad"
+          returnKeyType="done"
+          onSubmitEditing={handleContinue}
+          maxLength={8}
+          autoComplete="one-time-code"
+          textContentType="oneTimeCode"
         />
+      </OnboardingLayout>
+    );
+  }
 
-        <View
+  return (
+    <AuthScreenShell
+      title="Enter code"
+      subtitle="Enter the one-time code sent to your work email."
+      onBack={() => navigation.goBack()}
+    >
+      {!!emailOrPhone && (
+        <Text
           style={{
-            flex: 1,
-            justifyContent: "center",
-            alignItems: "center",
-            paddingHorizontal: 24,
-            paddingTop: Platform.OS === "android" ? -110 : -160,
-            backgroundColor: "#FFFFFF",
+            fontSize: 14,
+            fontWeight: "600",
+            color: Brand.ink,
+            marginTop: -12,
+            marginBottom: 20,
           }}
         >
-          <Logo width={90} height={90} />
+          {emailOrPhone}
+        </Text>
+      )}
 
-          <Text style={styles.title}>Verify OTP</Text>
-          <Text style={styles.description}>
-            Enter the code sent to your email or phone
-          </Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter Code"
-            value={code}
-            onChangeText={setCode}
-            keyboardType="number-pad"
-            autoCapitalize="none"
-            returnKeyType="done"
-            onSubmitEditing={handleContinue}
-            blurOnSubmit={false}
-          />
-          <TouchableOpacity
-            style={[
-              styles.continueButton,
-              !code.trim() && styles.disabledButton,
-            ]}
-            onPress={handleContinue}
-            disabled={loading || !code.trim()}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.continueButtonText}>Verify</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-    </>
+      <AuthField
+        label="Verification code"
+        value={code}
+        onChangeText={setCode}
+        placeholder="6-digit code"
+        keyboardType="number-pad"
+        returnKeyType="done"
+        onSubmitEditing={handleContinue}
+        maxLength={8}
+        autoComplete="one-time-code"
+        textContentType="oneTimeCode"
+      />
+
+      <AuthPrimaryButton
+        label="Verify & continue"
+        onPress={handleContinue}
+        disabled={!code.trim()}
+        loading={loading}
+      />
+    </AuthScreenShell>
   );
 };
-
-const styles = StyleSheet.create({
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 12,
-    color: "#222",
-  },
-  description: {
-    fontSize: 14,
-    color: "#888",
-    textAlign: "center",
-    marginBottom: 8,
-    lineHeight: 20,
-  },
-  email: {
-    fontSize: 16,
-    color: "#3557A6",
-    textAlign: "center",
-    marginBottom: 24,
-    fontWeight: "600",
-  },
-  input: {
-    width: "100%",
-    height: 48,
-    borderColor: "#E5E5E5",
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    marginBottom: 24,
-    backgroundColor: "#F9F9F9",
-  },
-  continueButton: {
-    width: "100%",
-    backgroundColor: "#222",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  continueButtonText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  disabledButton: {
-    backgroundColor: "#ccc",
-  },
-});
 
 export default Code;

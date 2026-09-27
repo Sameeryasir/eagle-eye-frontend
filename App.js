@@ -67,6 +67,8 @@ class ErrorBoundary extends React.Component {
 }
 import SignIn from "./screens/SignInScreen";
 import LogIn from "./screens/LogInScreen";
+import RegisterScreen from "./screens/RegisterScreen";
+import RegisterCompanyScreen from "./screens/RegisterCompanyScreen";
 import Code from "./screens/OtpScreen";
 import Header from "./components/Header";
 import Sidebar from "./components/Sidebar";
@@ -97,6 +99,7 @@ import SignatureScreen from "./screens/SignatureScreen";
 import NotificationScreen from "./screens/NotificationScreen";
 import AccountInfoScreen from "./screens/AccountInfoScreen";
 import ProjectFilesScreen from "./screens/ProjectFilesScreen";
+import { Brand } from "./constants/brandColors";
 
 const Stack = createNativeStackNavigator();
 
@@ -131,8 +134,8 @@ const AppHeader = ({
   const effectiveMenuPress = showMenu && onMenuPress ? onMenuPress : undefined;
 
   return (
-    <SafeAreaView style={{ backgroundColor: "#FFFFFF" }} edges={["top"]}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <SafeAreaView style={{ backgroundColor: Brand.paper }} edges={["top"]}>
+      <StatusBar barStyle="dark-content" backgroundColor={Brand.paper} />
       <View style={{ position: "relative" }}>
         <Header
           title={title}
@@ -142,9 +145,9 @@ const AppHeader = ({
           leftIconName={leftIconName}
           showMenu={showMenu}
           showRight={showRightIcon && rightIconName !== "ellipsis-vertical"}
-          backgroundColor="#FFFFFF"
-          textColor="#333"
-          iconColor="#333"
+          backgroundColor={Brand.paper}
+          textColor={Brand.ink}
+          iconColor={Brand.ink}
         />
         
         {showRightIcon && rightIconName === "ellipsis-vertical" && (
@@ -152,7 +155,7 @@ const AppHeader = ({
             <Menu>
               <MenuTrigger>
                 <View style={{ padding: 8 }}>
-                  <Ionicons name="ellipsis-vertical" size={24} color="#333" />
+                  <Ionicons name="ellipsis-vertical" size={24} color={Brand.ink} />
                 </View>
               </MenuTrigger>
               <MenuOptions
@@ -333,6 +336,8 @@ const AppNavigator = () => {
         "SplashScreen",
         "SignIn",
         "LogIn",
+        "Register",
+        "RegisterCompany",
         "OtpScreen",
         "CreateProject",
         "CreateTask",
@@ -382,7 +387,7 @@ const AppNavigator = () => {
           config.title = "All Logs";
           break;
         case "PersonalScreen":
-          config.title = "Personnel";
+          config.title = "Crew";
           break;
         case "FilesScreen":
           config.title = "Files";
@@ -448,11 +453,16 @@ const AppNavigator = () => {
                 )}
                 <Stack.Navigator
                   screenOptions={{ headerShown: false }}
-                  initialRouteName="SplashScreen"
+                  initialRouteName="SignIn"
                 >
                   <Stack.Screen name="SplashScreen" component={SplashScreen} />
                   <Stack.Screen name="SignIn" component={SignIn} />
                   <Stack.Screen name="LogIn" component={LogIn} />
+                  <Stack.Screen name="Register" component={RegisterScreen} />
+                  <Stack.Screen
+                    name="RegisterCompany"
+                    component={RegisterCompanyScreen}
+                  />
                   <Stack.Screen name="OtpScreen" component={Code} />
                   <Stack.Screen name="HomeScreen" component={HomeScreen} />
                   <Stack.Screen name="WidgetScreen" component={WidgetScreen} />

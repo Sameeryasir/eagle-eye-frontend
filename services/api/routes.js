@@ -1,6 +1,7 @@
 export const ApiRoutes = {
   auth: {
     health: '/auth/health',
+    register: '/auth/register',
     sendOtp: '/auth/otp/send',
     verifyOtp: '/auth/otp/verify',
     refreshToken: '/auth/token/refresh',
@@ -11,6 +12,7 @@ export const ApiRoutes = {
     list: '/users',
     byId: (id) => `/users/${id}`,
     create: '/users',
+    team: '/users/team',
     push: '/users/push-notifications',
     employeesForConversation: '/user/employees-for-conversation',
   },

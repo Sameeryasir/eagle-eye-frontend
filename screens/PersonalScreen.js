@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,91 +6,89 @@ import {
   TouchableOpacity,
   StatusBar,
   RefreshControl,
-  Dimensions,
-  ActivityIndicator,
+  useWindowDimensions,
   TextInput,
-  Alert,
-  ScrollView,
   Modal,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { getEmployeesToAssignTask } from '../services/employees/getEmployeesOfTheCompany';
-import Loader from '../services/utils/loader';
-import CustomBottomNav from '../components/CustomBottomNav';
-import Toast from 'react-native-toast-message';
-
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { getEmployeesToAssignTask } from "../services/employees/getEmployeesOfTheCompany";
+import { createTeamMember } from "../services/users/createTeamMember";
+import Loader from "../services/utils/loader";
+import Toast from "react-native-toast-message";
+import { useAuth } from "../context/AuthContext";
+import { Brand } from "../constants/brandColors";
 
 function PersonalScreen({ navigation }) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const { userInfo } = useAuth();
+  const isOwner = userInfo?.role === "Owner" || userInfo?.role?.name === "Owner";
+
   const [employees, setEmployees] = useState([]);
   const [filteredEmployees, setFilteredEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [addVisible, setAddVisible] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    roleName: "Employee",
+  });
 
   useEffect(() => {
     loadEmployees();
   }, []);
 
   useEffect(() => {
-    if (searchQuery.trim() === '') {
+    if (searchQuery.trim() === "") {
       setFilteredEmployees(employees);
     } else {
-      const filtered = employees.filter(employee => {
-        const firstName = employee.first_name?.toLowerCase() || '';
-        const lastName = employee.last_name?.toLowerCase() || '';
-        const email = employee.email?.toLowerCase() || '';
-        const query = searchQuery.toLowerCase();
-        
-        return firstName.includes(query) || 
-               lastName.includes(query) || 
-               email.includes(query) ||
-               `${firstName} ${lastName}`.includes(query);
-      });
-      setFilteredEmployees(filtered);
+      const query = searchQuery.toLowerCase();
+      setFilteredEmployees(
+        employees.filter((employee) => {
+          const firstName = employee.first_name?.toLowerCase() || "";
+          const lastName = employee.last_name?.toLowerCase() || "";
+          const email = employee.email?.toLowerCase() || "";
+          return (
+            firstName.includes(query) ||
+            lastName.includes(query) ||
+            email.includes(query) ||
+            `${firstName} ${lastName}`.includes(query)
+          );
+        })
+      );
     }
   }, [employees, searchQuery]);
 
   const loadEmployees = async (isRefresh = false) => {
     try {
-      if (isRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
       setError(null);
 
-      console.log('PersonalScreen - Loading employees...');
       const employeesData = await getEmployeesToAssignTask();
-      console.log('PersonalScreen - Employees data:', employeesData);
-      console.log('PersonalScreen - Employees data type:', typeof employeesData);
-      console.log('PersonalScreen - Is array?', Array.isArray(employeesData));
-
       if (Array.isArray(employeesData)) {
-        console.log('PersonalScreen - Setting employees array with length:', employeesData.length);
-        if (employeesData.length > 0) {
-          console.log('PersonalScreen - First employee:', employeesData[0]);
-        }
         setEmployees(employeesData);
-        setFilteredEmployees(employeesData); // Initialize filtered list
+        setFilteredEmployees(employeesData);
       } else {
-        console.error('PersonalScreen - Invalid employees data format:', employeesData);
-        console.error('PersonalScreen - Expected array but got:', typeof employeesData);
         setEmployees([]);
         setFilteredEmployees([]);
       }
     } catch (err) {
-      console.error('PersonalScreen - Error loading employees:', err);
-      setError('Failed to load employees. Please try again.');
+      setError("Failed to load crew. Please try again.");
       setEmployees([]);
       setFilteredEmployees([]);
     } finally {
-      if (isRefresh) {
-        setRefreshing(false);
-      } else {
-        setLoading(false);
-      }
+      if (isRefresh) setRefreshing(false);
+      else setLoading(false);
     }
   };
 
@@ -98,153 +96,193 @@ function PersonalScreen({ navigation }) {
     loadEmployees(true);
   }, []);
 
-  const EmployeeCard = ({ employee }) => {
-    // Safety check: ensure employee object exists
-    if (!employee || typeof employee !== 'object') {
-      console.error('PersonalScreen - Invalid employee object:', employee);
-      return null;
+  const resetForm = () => {
+    setForm({
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      roleName: "Employee",
+    });
+  };
+
+  const handleCreateMember = async () => {
+    if (
+      !form.firstName.trim() ||
+      !form.lastName.trim() ||
+      !form.email.includes("@")
+    ) {
+      Toast.show({
+        type: "error",
+        text1: "Missing details",
+        text2: "First name, last name, and email are required",
+        topOffset: 80,
+      });
+      return;
     }
 
-    // Ensure we have valid string values for display
-    const firstName = typeof employee.first_name === 'string' ? employee.first_name : '';
-    const lastName = typeof employee.last_name === 'string' ? employee.last_name : '';
-    const employeeEmail = typeof employee.email === 'string' ? employee.email : '';
-    
-    const fullName = `${firstName} ${lastName}`.trim();
-    const displayName = fullName || employeeEmail || 'Unknown Employee';
-    const email = employeeEmail || 'No email provided';
-    
-    // Debug logging to see the employee object structure
-    console.log('PersonalScreen - Employee object:', employee);
-    console.log('PersonalScreen - Display name:', displayName);
-    console.log('PersonalScreen - Email:', email);
+    setSaving(true);
+    try {
+      await createTeamMember({
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        email: form.email.trim().toLowerCase(),
+        phone: form.phone.trim() || undefined,
+        roleName: form.roleName,
+      });
+      Toast.show({
+        type: "success",
+        text1: "Team member added",
+        text2: "They can log in with their email OTP",
+        topOffset: 80,
+      });
+      setAddVisible(false);
+      resetForm();
+      loadEmployees(true);
+    } catch (err) {
+      const message =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Could not add team member";
+      Toast.show({
+        type: "error",
+        text1: "Add failed",
+        text2: Array.isArray(message) ? message.join(", ") : String(message),
+        topOffset: 80,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getDisplayName = (employee) => {
+    if (!employee) return "Unknown";
+    const first = employee.first_name || "";
+    const last = employee.last_name || "";
+    const full = `${first} ${last}`.trim();
+    return full || employee.email || "Unknown";
+  };
+
+  const EmployeeCard = ({ employee }) => {
+    if (!employee || typeof employee !== "object") return null;
+    const displayName = getDisplayName(employee);
+    const email = employee.email || "No email";
+    const roleLabel =
+      employee.role?.name || employee.role || employee.roleName || "Crew";
 
     return (
       <TouchableOpacity
-        onPress={() => navigation.navigate('ProjectAssignment', { 
-          employee, 
-          employeeId: employee.id
-        })}
+        activeOpacity={0.85}
         style={{
-          backgroundColor: 'white',
-          borderRadius: Math.min(12, screenWidth * 0.03),
-          padding: Math.min(12, screenWidth * 0.03),
+          backgroundColor: "#fff",
           marginHorizontal: Math.min(20, screenWidth * 0.05),
-          marginBottom: Math.min(8, screenHeight * 0.01),
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.08,
-          shadowRadius: 4,
-          elevation: 1,
-          zIndex: 1,
-          borderWidth: 0,
+          marginBottom: Math.min(12, screenHeight * 0.015),
+          borderRadius: 14,
+          padding: Math.min(16, screenWidth * 0.04),
+          borderWidth: 1,
+          borderColor: "#E8ECF1",
         }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          {/* Person Icon - Smaller */}
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
           <View
             style={{
-              width: Math.min(40, screenWidth * 0.1),
-              height: Math.min(40, screenWidth * 0.1),
-              borderRadius: Math.min(20, screenWidth * 0.05),
-              backgroundColor: '#f8f9fa',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginRight: Math.min(12, screenWidth * 0.03),
-              borderWidth: 1,
-              borderColor: '#e9ecef',
+              width: 46,
+              height: 46,
+              borderRadius: 23,
+              backgroundColor: Brand.ink,
+              justifyContent: "center",
+              alignItems: "center",
+              marginRight: 12,
             }}
           >
-            <Ionicons
-              name="person"
-              size={Math.min(18, screenWidth * 0.045)}
-              color="#6c757d"
-            />
+            <Text style={{ color: Brand.onInk, fontWeight: "700", fontSize: 16 }}>
+              {displayName.charAt(0).toUpperCase()}
+            </Text>
           </View>
-
-          {/* Employee Information - More Compact */}
           <View style={{ flex: 1 }}>
             <Text
               style={{
                 fontSize: Math.min(16, screenWidth * 0.04),
-                fontWeight: '600',
-                color: '#1a1a1a',
-                marginBottom: Math.min(2, screenHeight * 0.0025),
-                letterSpacing: 0.2,
+                fontWeight: "600",
+                color: Brand.ink,
+                marginBottom: 2,
               }}
-              numberOfLines={1}
             >
               {displayName}
             </Text>
             <Text
               style={{
-                fontSize: Math.min(12, screenWidth * 0.03),
-                color: '#6c757d',
-                fontWeight: '400',
-                letterSpacing: 0.1,
-                marginBottom: Math.min(4, screenHeight * 0.005),
+                fontSize: Math.min(13, screenWidth * 0.032),
+                color: "#6B7280",
+                marginBottom: 6,
               }}
-              numberOfLines={1}
             >
               {email}
             </Text>
-            
-            {/* Role Badge - Smaller */}
-            {employee.role && typeof employee.role === 'string' && (
-              <View
+            <View
+              style={{
+                alignSelf: "flex-start",
+                backgroundColor: "#F3F4F6",
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: 6,
+              }}
+            >
+              <Text
                 style={{
-                  backgroundColor: '#e3f2fd',
-                  paddingHorizontal: Math.min(6, screenWidth * 0.015),
-                  paddingVertical: Math.min(2, screenHeight * 0.0025),
-                  borderRadius: Math.min(8, screenWidth * 0.02),
-                  alignSelf: 'flex-start',
+                  fontSize: 11,
+                  color: "#374151",
+                  fontWeight: "600",
                 }}
               >
-                <Text
-                  style={{
-                    fontSize: Math.min(10, screenWidth * 0.025),
-                    color: '#1976d2',
-                    fontWeight: '500',
-                    letterSpacing: 0.1,
-                  }}
-                >
-                  {employee.role}
-                </Text>
-              </View>
-            )}
+                {String(roleLabel)}
+              </Text>
+            </View>
           </View>
         </View>
       </TouchableOpacity>
     );
   };
 
-  const EmployeeSearchBar = () => (
-    <View style={{ marginBottom: Math.min(16, screenHeight * 0.02) }}>
+  const Header = () => (
+    <View
+      style={{
+        backgroundColor: "white",
+        paddingHorizontal: Math.min(20, screenWidth * 0.05),
+        paddingTop: Math.min(12, screenHeight * 0.015),
+        paddingBottom: Math.min(16, screenHeight * 0.02),
+      }}
+    >
+      <Text
+        style={{
+          fontSize: 15,
+          color: "#5A6572",
+          marginBottom: 12,
+          lineHeight: 21,
+        }}
+      >
+        Manage your field crew and managers. New members log in with email OTP.
+      </Text>
       <View
         style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          backgroundColor: '#f8f9fa',
-          borderRadius: Math.min(12, screenWidth * 0.03),
-          paddingHorizontal: Math.min(16, screenWidth * 0.04),
-          paddingVertical: Math.min(12, screenHeight * 0.015),
+          flexDirection: "row",
+          alignItems: "center",
+          backgroundColor: "#f8f9fa",
+          borderRadius: 12,
+          paddingHorizontal: 14,
+          paddingVertical: 10,
           borderWidth: 1,
-          borderColor: '#e9ecef',
+          borderColor: "#e9ecef",
         }}
       >
         <Ionicons
           name="search"
-          size={Math.min(18, screenWidth * 0.045)}
+          size={18}
           color="#6c757d"
-          style={{ marginRight: Math.min(8, screenWidth * 0.02) }}
+          style={{ marginRight: 8 }}
         />
         <TextInput
-          style={{
-            flex: 1,
-            fontSize: Math.min(16, screenWidth * 0.04),
-            color: '#333',
-            paddingVertical: Math.min(4, screenHeight * 0.005),
-          }}
+          style={{ flex: 1, fontSize: 16, color: "#333", paddingVertical: 4 }}
           placeholder="Search by name or email..."
           placeholderTextColor="#999"
           value={searchQuery}
@@ -252,152 +290,309 @@ function PersonalScreen({ navigation }) {
           returnKeyType="search"
         />
         {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons
-              name="close-circle"
-              size={Math.min(18, screenWidth * 0.045)}
-              color="#6c757d"
-            />
+          <TouchableOpacity onPress={() => setSearchQuery("")}>
+            <Ionicons name="close-circle" size={18} color="#6c757d" />
           </TouchableOpacity>
         )}
       </View>
     </View>
   );
 
-  const Header = () => (
-    <View
-      style={{
-        backgroundColor: 'white',
-        paddingHorizontal: Math.min(20, screenWidth * 0.05),
-        paddingVertical: Math.min(20, screenHeight * 0.025),
-      }}
-    >
-      {/* Employee Search Bar */}
-      <EmployeeSearchBar />
-    </View>
-  );
-
   const EmptyState = () => {
-    const isSearchEmpty = searchQuery.trim() !== '' && filteredEmployees.length === 0;
-    const isNoEmployees = employees.length === 0;
-    
+    const isSearchEmpty =
+      searchQuery.trim() !== "" && filteredEmployees.length === 0;
     return (
       <View
         style={{
           flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-          paddingHorizontal: Math.min(40, screenWidth * 0.1),
-          paddingVertical: Math.min(60, screenHeight * 0.075),
+          justifyContent: "center",
+          alignItems: "center",
+          paddingHorizontal: 40,
+          paddingVertical: 60,
         }}
       >
         <Ionicons
           name={isSearchEmpty ? "search-outline" : "people-outline"}
-          size={Math.min(80, screenWidth * 0.2)}
+          size={72}
           color="#ccc"
         />
         <Text
           style={{
-            fontSize: Math.min(18, screenWidth * 0.045),
-            fontWeight: '600',
-            color: '#666',
-            marginTop: Math.min(16, screenHeight * 0.02),
-            marginBottom: Math.min(8, screenHeight * 0.01),
-            textAlign: 'center',
+            fontSize: 18,
+            fontWeight: "600",
+            color: "#666",
+            marginTop: 16,
+            marginBottom: 8,
+            textAlign: "center",
           }}
         >
-          {isSearchEmpty ? 'No Search Results' : 'No Employees Found'}
+          {isSearchEmpty ? "No Search Results" : "No crew yet"}
         </Text>
         <Text
           style={{
-            fontSize: Math.min(14, screenWidth * 0.035),
-            color: '#999',
-            textAlign: 'center',
-            lineHeight: Math.min(20, screenHeight * 0.025),
+            fontSize: 14,
+            color: "#999",
+            textAlign: "center",
+            lineHeight: 20,
           }}
         >
-          {isSearchEmpty 
-            ? `No employees found matching "${searchQuery}". Try a different search term.`
-            : error || 'No employees are currently registered in the system.'
-          }
+          {isSearchEmpty
+            ? `No one matches "${searchQuery}".`
+            : error ||
+              "Add your first employee or manager so they can work on jobs."}
         </Text>
-        
-        {isSearchEmpty ? (
+        {!isSearchEmpty && isOwner && !error && (
           <TouchableOpacity
             style={{
-              backgroundColor: '#007AFF',
-              paddingHorizontal: Math.min(24, screenWidth * 0.06),
-              paddingVertical: Math.min(12, screenHeight * 0.015),
-              borderRadius: Math.min(8, screenWidth * 0.02),
-              marginTop: Math.min(16, screenHeight * 0.02),
+              backgroundColor: Brand.ink,
+              paddingHorizontal: 22,
+              paddingVertical: 12,
+              borderRadius: 10,
+              marginTop: 18,
             }}
-            onPress={() => setSearchQuery('')}
+            onPress={() => setAddVisible(true)}
           >
-            <Text
-              style={{
-                color: 'white',
-                fontSize: Math.min(16, screenWidth * 0.04),
-                fontWeight: '600',
-              }}
-            >
-              Clear Search
+            <Text style={{ color: Brand.onInk, fontSize: 15, fontWeight: "700" }}>
+              Add team member
             </Text>
           </TouchableOpacity>
-        ) : error ? (
+        )}
+        {error && (
           <TouchableOpacity
             style={{
-              backgroundColor: '#007AFF',
-              paddingHorizontal: Math.min(24, screenWidth * 0.06),
-              paddingVertical: Math.min(12, screenHeight * 0.015),
-              borderRadius: Math.min(8, screenWidth * 0.02),
-              marginTop: Math.min(16, screenHeight * 0.02),
+              backgroundColor: Brand.ink,
+              paddingHorizontal: 22,
+              paddingVertical: 12,
+              borderRadius: 10,
+              marginTop: 18,
             }}
             onPress={() => loadEmployees()}
           >
-            <Text
-              style={{
-                color: 'white',
-                fontSize: Math.min(16, screenWidth * 0.04),
-                fontWeight: '600',
-              }}
-            >
+            <Text style={{ color: Brand.onInk, fontSize: 15, fontWeight: "700" }}>
               Retry
             </Text>
           </TouchableOpacity>
-        ) : null}
+        )}
       </View>
     );
   };
 
+  const inputStyle = {
+    borderWidth: 1,
+    borderColor: Brand.line,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === "ios" ? 14 : 12,
+    fontSize: 16,
+    backgroundColor: Brand.paperSoft,
+    color: Brand.ink,
+    marginBottom: 12,
+  };
+
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: 'white' }}>
+      <View style={{ flex: 1, backgroundColor: "white" }}>
         <StatusBar barStyle="dark-content" backgroundColor="white" />
-        <Loader size="large" color="#000000" text="Loading employees..." />
-        <CustomBottomNav />
+        <Loader size="large" color="#000000" text="Loading crew..." />
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: 'white' }}>
-      <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
+    <View style={{ flex: 1, backgroundColor: "white" }}>
+      <StatusBar barStyle="dark-content" backgroundColor="white" />
 
-      {/* Employee List with Header */}
       <FlatList
         data={filteredEmployees}
-        keyExtractor={(item) => String(item.id || item.email || Math.random())}
+        keyExtractor={(item) => String(item.id || item.email)}
         renderItem={({ item }) => <EmployeeCard employee={item} />}
         ListHeaderComponent={<Header />}
         contentContainerStyle={{
-          paddingBottom: Math.min(100, screenHeight * 0.125),
+          paddingBottom: Math.min(120, screenHeight * 0.15),
+          flexGrow: 1,
         }}
         ListEmptyComponent={EmptyState}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       />
 
-      {/* Bottom Navigation */}
-      <CustomBottomNav />
+      {isOwner && (
+        <TouchableOpacity
+          onPress={() => setAddVisible(true)}
+          style={{
+            position: "absolute",
+            right: 20,
+            bottom: 28,
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            backgroundColor: Brand.ink,
+            justifyContent: "center",
+            alignItems: "center",
+            elevation: 6,
+            shadowColor: "#000",
+            shadowOpacity: 0.2,
+            shadowRadius: 6,
+            shadowOffset: { width: 0, height: 3 },
+          }}
+        >
+          <Ionicons name="person-add" size={24} color={Brand.onInk} />
+        </TouchableOpacity>
+      )}
+
+      <Modal
+        visible={addVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setAddVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.45)",
+            justifyContent: "flex-end",
+          }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <View
+            style={{
+              backgroundColor: "#fff",
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              paddingHorizontal: 20,
+              paddingTop: 16,
+              paddingBottom: Platform.OS === "ios" ? 34 : 20,
+              maxHeight: screenHeight * 0.88,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 12,
+              }}
+            >
+              <Text
+                style={{ fontSize: 18, fontWeight: "700", color: Brand.ink }}
+              >
+                Add team member
+              </Text>
+              <TouchableOpacity onPress={() => setAddVisible(false)}>
+                <Ionicons name="close" size={24} color={Brand.ink} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView keyboardShouldPersistTaps="handled">
+              <Text style={{ color: "#5A6572", marginBottom: 14, lineHeight: 20 }}>
+                They join your company and can sign in with a one-time email
+                code.
+              </Text>
+
+              <TextInput
+                style={inputStyle}
+                placeholder="First name *"
+                placeholderTextColor="#9AA3AD"
+                value={form.firstName}
+                onChangeText={(v) => setForm((p) => ({ ...p, firstName: v }))}
+              />
+              <TextInput
+                style={inputStyle}
+                placeholder="Last name *"
+                placeholderTextColor="#9AA3AD"
+                value={form.lastName}
+                onChangeText={(v) => setForm((p) => ({ ...p, lastName: v }))}
+              />
+              <TextInput
+                style={inputStyle}
+                placeholder="Work email *"
+                placeholderTextColor="#9AA3AD"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={form.email}
+                onChangeText={(v) => setForm((p) => ({ ...p, email: v }))}
+              />
+              <TextInput
+                style={inputStyle}
+                placeholder="Phone (optional)"
+                placeholderTextColor="#9AA3AD"
+                keyboardType="phone-pad"
+                value={form.phone}
+                onChangeText={(v) =>
+                  setForm((p) => ({ ...p, phone: v.replace(/[^\d]/g, "") }))
+                }
+              />
+
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontWeight: "600",
+                  color: "#4A5563",
+                  marginBottom: 8,
+                }}
+              >
+                Role
+              </Text>
+              <View style={{ flexDirection: "row", marginBottom: 16, gap: 10 }}>
+                {["Employee", "Manager"].map((role) => {
+                  const selected = form.roleName === role;
+                  return (
+                    <TouchableOpacity
+                      key={role}
+                      onPress={() => setForm((p) => ({ ...p, roleName: role }))}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 12,
+                        borderRadius: 10,
+                        borderWidth: 1.5,
+                        borderColor: selected ? Brand.ink : Brand.line,
+                        backgroundColor: selected ? Brand.ink : Brand.paperSoft,
+                        alignItems: "center",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: selected ? Brand.onInk : Brand.ink,
+                          fontWeight: "600",
+                        }}
+                      >
+                        {role === "Employee" ? "Crew" : "Manager"}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <TouchableOpacity
+                style={{
+                  backgroundColor: saving ? Brand.lineStrong : Brand.ink,
+                  paddingVertical: 15,
+                  borderRadius: 12,
+                  alignItems: "center",
+                }}
+                disabled={saving}
+                onPress={handleCreateMember}
+              >
+                {saving ? (
+                  <ActivityIndicator color={Brand.onInk} />
+                ) : (
+                  <Text
+                    style={{
+                      color: Brand.onInk,
+                      fontSize: 16,
+                      fontWeight: "700",
+                    }}
+                  >
+                    Save team member
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }

@@ -8,6 +8,7 @@ import { useAuth } from "../context/AuthContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import pusher from "../pusherClient";
 import appEmitter from "../utils/appEmitter";
+import { Brand } from "../constants/brandColors";
 
 function useBottomNavLayout() {
   const { width } = useWindowDimensions();
@@ -527,7 +528,7 @@ function CustomBottomNavBar({
           width: layout.barWidth,
           maxWidth: "100%",
           height: layout.navHeight,
-          backgroundColor: transparentBackground ? "transparent" : "black",
+          backgroundColor: transparentBackground ? "transparent" : Brand.ink,
           borderRadius: layout.navHeight / 2,
           paddingHorizontal: layout.horizontalPadding,
           marginBottom: layout.bottomGap,
@@ -630,11 +631,11 @@ function CustomBottomNavBar({
               width: layout.fabSize,
               height: layout.fabSize,
               borderRadius: layout.fabSize / 2,
-              backgroundColor: "black",
+              backgroundColor: Brand.ink,
               justifyContent: "center",
               alignItems: "center",
               borderWidth: Math.max(2, Math.round(layout.fabSize * 0.045)),
-              borderColor: "white",
+              borderColor: Brand.onInk,
               shadowColor: "#000",
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 0.2,

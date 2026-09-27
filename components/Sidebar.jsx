@@ -98,7 +98,7 @@ const Sidebar = ({ isVisible, onClose, onNavigate }) => {
     if (userRole !== "Employee") {
       baseItems.push({
         id: "personnel",
-        title: "Personnel.",
+        title: "Crew",
         icon: "people",
         isActive: activeMenuItem === "personnel",
       });
