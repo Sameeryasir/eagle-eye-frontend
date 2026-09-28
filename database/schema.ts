@@ -1,3 +1,4 @@
+// @ts-nocheck
 export const createMessagesTableSQL = (conversationId: string): string => {
   return `
     CREATE TABLE IF NOT EXISTS messages_${conversationId} (

@@ -21,7 +21,7 @@ const rnFeatureFlags = path.resolve(
 
 const topicSubscriptionStub = path.resolve(
   __dirname,
-  "services/notifications/TopicSubscriptionModule.stub.js"
+  "services/notifications/TopicSubscriptionModule.stub.ts"
 );
 
 const defaultResolveRequest = config.resolver.resolveRequest;

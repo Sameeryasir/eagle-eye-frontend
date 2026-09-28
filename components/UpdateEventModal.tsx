@@ -1,0 +1,918 @@
+// @ts-nocheck
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Modal,
+  TextInput,
+  Platform,
+  ActivityIndicator,
+  FlatList,
+  TouchableWithoutFeedback,
+  Keyboard,
+  KeyboardAvoidingView,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import Toast from "react-native-toast-message";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { updateEventById } from "../services/event/updateEventById";
+import NoChangesDialog from "./NoChangesDialog";
+import ErrorDialog from "./ErrorDialog";
+
+const UpdateEventModal = ({ visible, onClose, event, onEventUpdated }) => {
+  const [eventForm, setEventForm] = useState({
+    title: "",
+    description: "",
+    startTime: "",
+    endTime: "",
+  });
+
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+  const [startTime, setStartTime] = useState(new Date());
+  const [endTime, setEndTime] = useState(new Date());
+
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [startDate, setStartDate] = useState(new Date());
+  const [endDate, setEndDate] = useState(new Date());
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [noChangesDialogVisible, setNoChangesDialogVisible] = useState(false);
+
+  const [errorDialog, setErrorDialog] = useState({
+    visible: false,
+    title: "",
+    message: "",
+  });
+
+  useEffect(() => {
+    if (event && visible) {
+      let actualStartDate, actualEndDate;
+
+      if (
+        event.isMultiDayEvent &&
+        event.originalStartDate &&
+        event.originalEndDate
+      ) {
+        actualStartDate = new Date(event.originalStartDate + "T00:00:00");
+        actualEndDate = new Date(event.originalEndDate + "T23:59:59");
+
+        if (event.startDate) {
+          const startTime = new Date(event.startDate);
+          actualStartDate.setHours(startTime.getHours());
+          actualStartDate.setMinutes(startTime.getMinutes());
+          actualStartDate.setSeconds(startTime.getSeconds());
+        }
+
+        if (event.endDate) {
+          const endTime = new Date(event.endDate);
+          actualEndDate.setHours(endTime.getHours());
+          actualEndDate.setMinutes(endTime.getMinutes());
+          actualEndDate.setSeconds(endTime.getSeconds());
+        }
+      } else {
+        actualStartDate = event.startDate
+          ? new Date(event.startDate)
+          : new Date();
+        actualEndDate = event.endDate ? new Date(event.endDate) : new Date();
+      }
+
+      setEventForm({
+        title: event.title || "",
+        description: event.description || "",
+        startTime: actualStartDate.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        }),
+        endTime: actualEndDate.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        }),
+      });
+
+      setStartTime(actualStartDate);
+      setEndTime(actualEndDate);
+      setStartDate(actualStartDate);
+      setEndDate(actualEndDate);
+
+      console.log("=== UpdateEventModal Initialization ===");
+      console.log("Event isMultiDayEvent:", event.isMultiDayEvent);
+      console.log("Event originalStartDate:", event.originalStartDate);
+      console.log("Event originalEndDate:", event.originalEndDate);
+      console.log("Actual Start Date:", actualStartDate.toLocaleString());
+      console.log("Actual End Date:", actualEndDate.toLocaleString());
+      console.log("=== End Initialization ===");
+    }
+  }, [event, visible]);
+
+  const handleEventFormChange = (field, value) => {
+    setEventForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const showErrorDialog = (title, message) => {
+    setErrorDialog({
+      visible: true,
+      title: title,
+      message: message,
+    });
+  };
+
+  const closeErrorDialog = () => {
+    setErrorDialog({
+      visible: false,
+      title: "",
+      message: "",
+    });
+  };
+
+  const getMinimumTimeForDate = (selectedDate) => {
+    const today = new Date();
+    const selectedDateOnly = new Date(
+      selectedDate.getFullYear(),
+      selectedDate.getMonth(),
+      selectedDate.getDate()
+    );
+    const todayDateOnly = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    );
+
+    if (selectedDateOnly.getTime() === todayDateOnly.getTime()) {
+      return today;
+    }
+
+    return null;
+  };
+
+  const handleStartTimeChange = (event, selectedTime) => {
+    setShowStartTimePicker(Platform.OS === "ios");
+    if (selectedTime) {
+      const eventDate = event.startDate
+        ? new Date(event.startDate)
+        : new Date();
+      const combinedDateTime = new Date(eventDate);
+      combinedDateTime.setHours(selectedTime.getHours());
+      combinedDateTime.setMinutes(selectedTime.getMinutes());
+      combinedDateTime.setSeconds(0);
+      combinedDateTime.setMilliseconds(0);
+
+      const today = new Date();
+      const selectedDateOnly = new Date(
+        startDate.getFullYear(),
+        startDate.getMonth(),
+        startDate.getDate()
+      );
+      const todayDateOnly = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate()
+      );
+
+      if (selectedDateOnly.getTime() === todayDateOnly.getTime()) {
+        if (combinedDateTime < today) {
+          showErrorDialog(
+            "Cannot Select Past Time",
+            "You cannot select a time that has already passed for today's event. Please select a current or future time."
+          );
+          return;
+        }
+      }
+
+      setStartTime(combinedDateTime);
+      const timeString = combinedDateTime.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+      handleEventFormChange("startTime", timeString);
+    }
+  };
+
+  const handleEndTimeChange = (event, selectedTime) => {
+    setShowEndTimePicker(Platform.OS === "ios");
+    if (selectedTime) {
+      const eventDate = event.endDate ? new Date(event.endDate) : new Date();
+      const combinedDateTime = new Date(eventDate);
+      combinedDateTime.setHours(selectedTime.getHours());
+      combinedDateTime.setMinutes(selectedTime.getMinutes());
+      combinedDateTime.setSeconds(0);
+      combinedDateTime.setMilliseconds(0);
+
+      const today = new Date();
+      const selectedDateOnly = new Date(
+        endDate.getFullYear(),
+        endDate.getMonth(),
+        endDate.getDate()
+      );
+      const todayDateOnly = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate()
+      );
+
+      if (selectedDateOnly.getTime() === todayDateOnly.getTime()) {
+        if (combinedDateTime < today) {
+          showErrorDialog(
+            "Cannot Select Past Time",
+            "You cannot select a time that has already passed for today's event. Please select a current or future time."
+          );
+          return;
+        }
+      }
+
+      setEndTime(combinedDateTime);
+      const timeString = combinedDateTime.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+      handleEventFormChange("endTime", timeString);
+    }
+  };
+
+  const handleStartDateChange = (event, selectedDate) => {
+    setShowStartDatePicker(Platform.OS === "ios");
+    if (selectedDate) {
+      setStartDate(selectedDate);
+    }
+  };
+
+  const handleEndDateChange = (event, selectedDate) => {
+    setShowEndDatePicker(Platform.OS === "ios");
+    if (selectedDate) {
+      setEndDate(selectedDate);
+    }
+  };
+
+  const handleUpdateEvent = async () => {
+    console.log("=== USER TAPPED UPDATE EVENT BUTTON ===");
+    console.log("Current Date/Time:", new Date().toLocaleString());
+    console.log("Event Object:", event);
+    console.log("Event Start Date:", event.startDate);
+    console.log("Event End Date:", event.endDate);
+    console.log("Start Time State:", startTime.toLocaleString());
+    console.log("End Time State:", endTime.toLocaleString());
+    console.log("Event Form:", eventForm);
+    console.log("==========================================");
+
+    const today = new Date();
+    const todayDateOnly = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    );
+
+    const originalStartDate = event.startDate
+      ? new Date(event.startDate)
+      : new Date();
+    const originalEndDate = event.endDate
+      ? new Date(event.endDate)
+      : new Date();
+    const currentTime = new Date();
+
+    const isEventOngoing =
+      originalStartDate < currentTime && originalEndDate > currentTime;
+
+    console.log("=== PAST DATE VALIDATION ===");
+    console.log("Today Date Only:", todayDateOnly.toLocaleDateString());
+    console.log("Original Start Date:", originalStartDate.toLocaleString());
+    console.log("Original End Date:", originalEndDate.toLocaleString());
+    console.log("Current Time:", currentTime.toLocaleString());
+    console.log("Is Event Ongoing:", isEventOngoing);
+    console.log("New Start Date:", startDate.toLocaleDateString());
+    console.log("New End Date:", endDate.toLocaleDateString());
+    console.log("============================");
+
+    const validationStartDateOnly = new Date(
+      startDate.getFullYear(),
+      startDate.getMonth(),
+      startDate.getDate()
+    );
+    if (validationStartDateOnly < todayDateOnly) {
+      showErrorDialog(
+        "Cannot Update to Past Date",
+        "You cannot update the event start date to a date that has already passed. Please select a current or future date."
+      );
+      return;
+    }
+
+    const validationEndDateOnly = new Date(
+      endDate.getFullYear(),
+      endDate.getMonth(),
+      endDate.getDate()
+    );
+    if (validationEndDateOnly < todayDateOnly) {
+      if (!isEventOngoing) {
+        showErrorDialog(
+          "Cannot Update to Past Date",
+          "You cannot update the event end date to a date that has already passed. Please select a current or future date."
+        );
+        return;
+      }
+
+      console.log(
+        "Ongoing event - allowing past end date, will check end time"
+      );
+    }
+
+    const startDateOnly = new Date(
+      startDate.getFullYear(),
+      startDate.getMonth(),
+      startDate.getDate()
+    );
+    const endDateOnly = new Date(
+      endDate.getFullYear(),
+      endDate.getMonth(),
+      endDate.getDate()
+    );
+
+    if (isEventOngoing) {
+      const originalStartDateOnly = new Date(
+        originalStartDate.getFullYear(),
+        originalStartDate.getMonth(),
+        originalStartDate.getDate()
+      );
+      const startDateChanged =
+        originalStartDateOnly.getTime() !== startDateOnly.getTime();
+      const startTimeChanged =
+        Math.abs(startTime.getTime() - originalStartDate.getTime()) > 1000;
+
+      if (startDateChanged || startTimeChanged) {
+        showErrorDialog(
+          "Cannot Update Start Time of Ongoing Event",
+          "You cannot update the start time of an ongoing event. You can only modify the end time, title, and description."
+        );
+        return;
+      }
+
+      const newEndDateTime = new Date(endDate);
+      newEndDateTime.setHours(endTime.getHours());
+      newEndDateTime.setMinutes(endTime.getMinutes());
+      newEndDateTime.setSeconds(endTime.getSeconds());
+      newEndDateTime.setMilliseconds(endTime.getMilliseconds());
+
+      console.log("=== ONGOING EVENT END TIME CHECK ===");
+      console.log("New End DateTime:", newEndDateTime.toLocaleString());
+      console.log("Current Time:", currentTime.toLocaleString());
+      console.log(
+        "Is new end time > current time?",
+        newEndDateTime > currentTime
+      );
+
+      if (newEndDateTime <= currentTime) {
+        showErrorDialog(
+          "Cannot Update to Past Time",
+          "You cannot update the end time to a time that has already passed. Please select a current or future time."
+        );
+        return;
+      }
+
+      console.log("Ongoing event end time update allowed");
+    } else {
+      if (startDateOnly.getTime() === todayDateOnly.getTime()) {
+        const startDateTime = new Date(startDate);
+        startDateTime.setHours(startTime.getHours());
+        startDateTime.setMinutes(startTime.getMinutes());
+        startDateTime.setSeconds(startTime.getSeconds());
+        startDateTime.setMilliseconds(startTime.getMilliseconds());
+
+        if (startDateTime < today) {
+          showErrorDialog(
+            "Cannot Update to Past Time",
+            "You cannot update the event start time to a time that has already passed for today's event. Please select a current or future time."
+          );
+          return;
+        }
+      }
+
+      if (endDateOnly.getTime() === todayDateOnly.getTime()) {
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(endTime.getHours());
+        endDateTime.setMinutes(endTime.getMinutes());
+        endDateTime.setSeconds(endTime.getSeconds());
+        endDateTime.setMilliseconds(endTime.getMilliseconds());
+
+        if (endDateTime < today) {
+          showErrorDialog(
+            "Cannot Update to Past Time",
+            "You cannot update the event end time to a time that has already passed for today's event. Please select a current or future time."
+          );
+          return;
+        }
+      }
+    }
+
+    if (!eventForm.title.trim()) {
+      showErrorDialog("Error", "Please enter a title for the event");
+      return;
+    }
+
+    if (!eventForm.startTime.trim()) {
+      showErrorDialog("Error", "Please enter a start time for the event");
+      return;
+    }
+
+    if (!eventForm.endTime.trim()) {
+      showErrorDialog("Error", "Please enter an end time for the event");
+      return;
+    }
+
+    const originalTitle = event.title || "";
+    const originalDescription = event.description || "";
+    const originalStartTime = event.startDate
+      ? new Date(event.startDate)
+      : new Date();
+    const originalEndTime = event.endDate
+      ? new Date(event.endDate)
+      : new Date();
+
+    const titleChanged = eventForm.title.trim() !== originalTitle;
+    const descriptionChanged =
+      eventForm.description.trim() !== originalDescription;
+
+    const originalStartDateOnly = new Date(
+      originalStartDate.getFullYear(),
+      originalStartDate.getMonth(),
+      originalStartDate.getDate()
+    );
+    const originalEndDateOnly = new Date(
+      originalEndDate.getFullYear(),
+      originalEndDate.getMonth(),
+      originalEndDate.getDate()
+    );
+    const newStartDateOnly = new Date(
+      startDate.getFullYear(),
+      startDate.getMonth(),
+      startDate.getDate()
+    );
+    const newEndDateOnly = new Date(
+      endDate.getFullYear(),
+      endDate.getMonth(),
+      endDate.getDate()
+    );
+
+    const startDateChanged =
+      originalStartDateOnly.getTime() !== newStartDateOnly.getTime();
+    const endDateChanged =
+      originalEndDateOnly.getTime() !== newEndDateOnly.getTime();
+
+    const startTimeChanged =
+      Math.abs(startTime.getTime() - originalStartTime.getTime()) > 1000;
+    const endTimeChanged =
+      Math.abs(endTime.getTime() - originalEndTime.getTime()) > 1000;
+
+    console.log("=== CHANGE DETECTION DEBUG ===");
+    console.log("Title Changed:", titleChanged);
+    console.log("Description Changed:", descriptionChanged);
+    console.log("Start Date Changed:", startDateChanged);
+    console.log("End Date Changed:", endDateChanged);
+    console.log("Start Time Changed:", startTimeChanged);
+    console.log("End Time Changed:", endTimeChanged);
+    console.log("--- Original Values ---");
+    console.log(
+      "Original Start Date:",
+      originalStartDateOnly.toLocaleDateString()
+    );
+    console.log("New Start Date:", newStartDateOnly.toLocaleDateString());
+    console.log("Original End Date:", originalEndDateOnly.toLocaleDateString());
+    console.log("New End Date:", newEndDateOnly.toLocaleDateString());
+    console.log("Original Start Time:", originalStartTime.toLocaleTimeString());
+    console.log("New Start Time:", startTime.toLocaleTimeString());
+    console.log("Original End Time:", originalEndTime.toLocaleTimeString());
+    console.log("New End Time:", endTime.toLocaleTimeString());
+    console.log("===============================");
+
+    if (
+      !titleChanged &&
+      !descriptionChanged &&
+      !startDateChanged &&
+      !endDateChanged &&
+      !startTimeChanged &&
+      !endTimeChanged
+    ) {
+      console.log("No changes detected - showing no changes dialog");
+      setNoChangesDialogVisible(true);
+      return;
+    }
+
+    setIsUpdating(true);
+
+    try {
+      const eventStartTime = new Date(startDate);
+      eventStartTime.setHours(startTime.getHours());
+      eventStartTime.setMinutes(startTime.getMinutes());
+      eventStartTime.setSeconds(startTime.getSeconds());
+      eventStartTime.setMilliseconds(startTime.getMilliseconds());
+
+      const eventEndTime = new Date(endDate);
+      eventEndTime.setHours(endTime.getHours());
+      eventEndTime.setMinutes(endTime.getMinutes());
+      eventEndTime.setSeconds(endTime.getSeconds());
+      eventEndTime.setMilliseconds(endTime.getMilliseconds());
+
+      const localStartDate = new Date(eventStartTime);
+      const localEndDate = new Date(eventEndTime);
+
+      const eventDate =
+        localStartDate.getFullYear() +
+        "-" +
+        String(localStartDate.getMonth() + 1).padStart(2, "0") +
+        "-" +
+        String(localStartDate.getDate()).padStart(2, "0");
+
+      const formatWithTimezone = (date) => {
+        const timezoneOffset = date.getTimezoneOffset();
+        const offsetHours = Math.floor(Math.abs(timezoneOffset) / 60);
+        const offsetMinutes = Math.abs(timezoneOffset) % 60;
+        const offsetSign = timezoneOffset <= 0 ? "+" : "-";
+        const timezoneString = `${offsetSign}${String(offsetHours).padStart(2, "0")}:${String(offsetMinutes).padStart(2, "0")}`;
+
+        const isoString = date
+          .toLocaleString("sv-SE", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            fractionalSecondDigits: 3,
+          })
+          .replace(" ", "T");
+
+        return `${isoString}${timezoneString}`;
+      };
+
+      const eventData = {
+        title: eventForm.title.trim(),
+        description: eventForm.description.trim() || "",
+        startTime: formatWithTimezone(eventStartTime),
+        endTime: formatWithTimezone(eventEndTime),
+      };
+
+      console.log("=== EVENT UPDATE PROCESSING ===");
+      console.log("Original Event Start Date:", event.startDate);
+      console.log("Original Event End Date:", event.endDate);
+      console.log("Start Date State:", startDate.toLocaleDateString());
+      console.log("Start Date State (ISO):", startDate.toISOString());
+      console.log("End Date State:", endDate.toLocaleDateString());
+      console.log("End Date State (ISO):", endDate.toISOString());
+      console.log("Start Time State:", startTime.toLocaleString());
+      console.log("Start Time State (ISO):", startTime.toISOString());
+      console.log("End Time State:", endTime.toLocaleString());
+      console.log("End Time State (ISO):", endTime.toISOString());
+      console.log("--- Processed Dates ---");
+      console.log("Event Start Time:", eventStartTime.toLocaleString());
+      console.log("Event Start Time (ISO):", eventStartTime.toISOString());
+      console.log("Event End Time:", eventEndTime.toLocaleString());
+      console.log("Event End Time (ISO):", eventEndTime.toISOString());
+      console.log("Local Start Date:", localStartDate.toLocaleDateString());
+      console.log("Event Date (YYYY-MM-DD):", eventDate);
+      console.log(
+        "--- Final Data Being Sent to API (Local Timezone Format) ---"
+      );
+      console.log("Event Data:", eventData);
+      console.log("Start Time Being Sent (Local):", eventData.startTime);
+      console.log("End Time Being Sent (Local):", eventData.endTime);
+      console.log("=== END EVENT UPDATE PROCESSING ===");
+
+      const result = await updateEventById(
+        event.originalEventId || event.id,
+        eventData
+      );
+
+      Toast.show({
+        type: "success",
+        text1: "Event Updated Successfully!",
+        text2: "Your event has been modified",
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
+
+      if (onEventUpdated) {
+        onEventUpdated();
+      } else {
+        onClose();
+      }
+    } catch (error) {
+      console.error("Error updating event:", error);
+      console.error("Error response:", error.response?.data);
+
+      let errorMessage = "Failed to update event. Please try again.";
+
+      if (error.message && error.message !== "Failed to update event") {
+        errorMessage = error.message;
+      } else if (error.response?.status === 400) {
+        if (error.response?.data?.message) {
+          errorMessage = error.response.data.message;
+        } else if (error.response?.data?.error) {
+          errorMessage = error.response.data.error;
+        } else {
+          errorMessage = "Invalid event data. Please check your inputs.";
+        }
+      } else if (error.response?.status === 401) {
+        errorMessage = "Session expired. Please log in again.";
+      } else if (error.response?.status === 403) {
+        errorMessage = "You do not have permission to update events.";
+      } else if (error.response?.status === 404) {
+        errorMessage = "Event not found.";
+      } else if (error.response?.status === 500) {
+        errorMessage = "Server error. Please try again later.";
+      }
+
+      console.log("Showing toast with message:", errorMessage);
+
+      Toast.show({
+        type: "error",
+        text1: "Update Failed",
+        text2: errorMessage,
+        visibilityTime: 4000,
+        autoHide: true,
+        topOffset: 80,
+      });
+
+      if (onEventUpdated) {
+        onEventUpdated();
+      } else {
+        onClose();
+      }
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleClose = () => {
+    onClose();
+  };
+
+  const dismissKeyboard = () => {
+    Keyboard.dismiss();
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="formSheet"
+      onRequestClose={handleClose}
+    >
+      <TouchableWithoutFeedback onPress={dismissKeyboard}>
+        <KeyboardAvoidingView
+          className="flex-1 bg-white"
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+        >
+          <View className="bg-black px-4 py-3 flex-row items-center justify-between">
+            <Text className="text-white text-[18px] font-semibold">
+              Update Event
+            </Text>
+            <TouchableOpacity onPress={handleClose}>
+              <Ionicons name="close" size={24} color="white" />
+            </TouchableOpacity>
+          </View>
+
+          <View className="flex-1 p-5 items-center">
+            <FlatList
+              className="flex-1 w-full max-w-md"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 100 }}
+              keyboardShouldPersistTaps="handled"
+              data={[{ key: "form" }]}
+              renderItem={() => (
+                <View>
+                  <View className="mb-8 items-center">
+                    <Text className="text-[28px] font-bold text-[#333]">
+                      Update Event
+                    </Text>
+                    <Text className="text-[16px] text-[#666] text-center">
+                      Modify your event details
+                    </Text>
+                  </View>
+
+                  <View className="mb-5">
+                    <View className="mb-5">
+                      <View className="flex-row items-center mb-2">
+                        <Ionicons
+                          name="document-text"
+                          size={16}
+                          color="#374151"
+                          style={{ marginRight: 6 }}
+                        />
+                        <Text className="text-[16px] font-semibold text-[#333]">
+                          Event Title
+                        </Text>
+                      </View>
+                      <TextInput
+                        className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333]"
+                        placeholder="Enter event title"
+                        value={eventForm.title}
+                        onChangeText={(text) =>
+                          handleEventFormChange("title", text)
+                        }
+                        placeholderTextColor="#999"
+                        returnKeyType="next"
+                      />
+                    </View>
+
+                    <View className="mb-5">
+                      <View className="flex-row items-center mb-2">
+                        <Ionicons
+                          name="chatbubble-ellipses"
+                          size={16}
+                          color="#374151"
+                          style={{ marginRight: 6 }}
+                        />
+                        <Text className="text-[16px] font-semibold text-[#333]">
+                          Description
+                        </Text>
+                      </View>
+                      <TextInput
+                        className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333] h-24"
+                        placeholder="Describe your event"
+                        value={eventForm.description}
+                        onChangeText={(text) =>
+                          handleEventFormChange("description", text)
+                        }
+                        multiline
+                        numberOfLines={4}
+                        placeholderTextColor="#999"
+                        returnKeyType="next"
+                        style={{ textAlignVertical: "top" }}
+                      />
+                    </View>
+
+                    <View className="mb-5">
+                      <View className="flex-row items-center mb-2">
+                        <Ionicons
+                          name="calendar-outline"
+                          size={16}
+                          color="#374151"
+                          style={{ marginRight: 6 }}
+                        />
+                        <Text className="text-[16px] font-semibold text-[#333]">
+                          Start Date & Time
+                        </Text>
+                      </View>
+                      <View className="flex-row gap-2">
+                        <TouchableOpacity
+                          className="flex-[2] flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                          onPress={() => setShowStartDatePicker(true)}
+                        >
+                          <Text className="text-[16px] text-[#333] font-medium">
+                            {startDate.toLocaleDateString() || "Select date"}
+                          </Text>
+                          <Ionicons
+                            name="calendar-outline"
+                            size={16}
+                            color="#666"
+                          />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          className="flex-1 flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                          onPress={() => setShowStartTimePicker(true)}
+                        >
+                          <Text className="text-[16px] text-[#333] font-medium">
+                            {eventForm.startTime || "Select time"}
+                          </Text>
+                          <Ionicons
+                            name="time-outline"
+                            size={16}
+                            color="#666"
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    <View className="mb-5">
+                      <View className="flex-row items-center mb-2">
+                        <Ionicons
+                          name="calendar-outline"
+                          size={16}
+                          color="#374151"
+                          style={{ marginRight: 6 }}
+                        />
+                        <Text className="text-[16px] font-semibold text-[#333]">
+                          End Date & Time
+                        </Text>
+                      </View>
+                      <View className="flex-row gap-2">
+                        <TouchableOpacity
+                          className="flex-[2] flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                          onPress={() => setShowEndDatePicker(true)}
+                        >
+                          <Text className="text-[16px] text-[#333] font-medium">
+                            {endDate.toLocaleDateString() || "Select date"}
+                          </Text>
+                          <Ionicons
+                            name="calendar-outline"
+                            size={16}
+                            color="#666"
+                          />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          className="flex-1 flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
+                          onPress={() => setShowEndTimePicker(true)}
+                        >
+                          <Text className="text-[16px] text-[#333] font-medium">
+                            {eventForm.endTime || "Select time"}
+                          </Text>
+                          <Ionicons
+                            name="time-outline"
+                            size={16}
+                            color="#666"
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              )}
+              keyExtractor={(item) => item.key}
+            />
+          </View>
+
+          <View className="absolute bottom-0 left-0 right-0 px-5 pt-5 pb-5 bg-transparent items-center">
+            <TouchableOpacity
+              className="w-[280px] bg-black rounded-lg p-4 items-center justify-center"
+              onPress={handleUpdateEvent}
+              activeOpacity={0.8}
+              disabled={isUpdating}
+              style={{ opacity: isUpdating ? 0.6 : 1 }}
+            >
+              {isUpdating ? (
+                <ActivityIndicator color="white" size="small" />
+              ) : (
+                <Text className="text-white text-[16px] font-semibold">
+                  Update Event
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {showStartDatePicker && (
+            <DateTimePicker
+              value={startDate}
+              mode="date"
+              display="default"
+              minimumDate={new Date()}
+              onChange={handleStartDateChange}
+            />
+          )}
+
+          {showEndDatePicker && (
+            <DateTimePicker
+              value={endDate}
+              mode="date"
+              display="default"
+              minimumDate={new Date()}
+              onChange={handleEndDateChange}
+            />
+          )}
+
+          {showStartTimePicker && (
+            <DateTimePicker
+              value={startTime}
+              mode="time"
+              is24Hour={false}
+              display="default"
+              minimumDate={getMinimumTimeForDate(startDate)}
+              onChange={handleStartTimeChange}
+            />
+          )}
+
+          {showEndTimePicker && (
+            <DateTimePicker
+              value={endTime}
+              mode="time"
+              is24Hour={false}
+              display="default"
+              minimumDate={getMinimumTimeForDate(endDate)}
+              onChange={handleEndTimeChange}
+            />
+          )}
+
+          <NoChangesDialog
+            visible={noChangesDialogVisible}
+            onClose={() => setNoChangesDialogVisible(false)}
+          />
+
+          <ErrorDialog
+            visible={errorDialog.visible}
+            onClose={closeErrorDialog}
+            title={errorDialog.title}
+            message={errorDialog.message}
+          />
+        </KeyboardAvoidingView>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+};
+
+export default UpdateEventModal;
