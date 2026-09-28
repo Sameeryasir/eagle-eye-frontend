@@ -20,14 +20,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { CalendarDays, Flag, Sparkles } from "lucide-react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import DropDownPicker from "react-native-dropdown-picker";
-import Toast from "react-native-toast-message";
-import { useDispatch, useSelector } from "react-redux";
 import {
   createNewTask,
   fetchEmployeesForTaskAssignment,
   selectTaskCreating,
   selectEmployeesForAssignment,
 } from "../store/slices/taskSlice";
+import { useAppDispatch, useAppSelector } from "../hooks";
+import { showErrorToast, showSuccessToast } from "../utils/toast";
 import { Brand } from "../constants/brandColors";
 import { useResponsiveLayout } from "../constants/responsiveLayout";
 
@@ -48,9 +48,9 @@ function CreateTask({
   navigation,
   hideHeader = false,
 }) {
-  const dispatch = useDispatch();
-  const creating = useSelector(selectTaskCreating);
-  const employees = useSelector(selectEmployeesForAssignment);
+  const dispatch = useAppDispatch();
+  const creating = useAppSelector(selectTaskCreating);
+  const employees = useAppSelector(selectEmployeesForAssignment);
   const layout = useResponsiveLayout();
   const {
     width,
@@ -237,24 +237,19 @@ function CreateTask({
 
       const result = await dispatch(createNewTask(taskPayload));
       if (createNewTask.fulfilled.match(result)) {
-        Toast.show({
-          type: "success",
-          text1: "Task Created Successfully!",
-          text2: "Your task has been created and saved",
-          visibilityTime: 3000,
-          autoHide: true,
-          topOffset: 80,
-        });
+        showSuccessToast(
+          "Task Created Successfully!",
+          "Your task has been created and saved"
+        );
         if (onSuccess) onSuccess();
         else handleClose();
       } else {
-        Alert.alert(
-          "Error",
+        showErrorToast(
           result.payload || "Failed to create task. Please try again."
         );
       }
     } catch (error) {
-      Alert.alert("Error", "An unexpected error occurred. Please try again.");
+      showErrorToast(error, "An unexpected error occurred. Please try again.");
     }
   };
 

@@ -1,5 +1,1 @@
-import { apiPost, ApiRoutes } from '../api/client';
-
-export async function markAllRead() {
-  return apiPost(ApiRoutes.userNotifications.readAll, {});
-}
+export { markAllRead } from '../api/endpoints/notifications';

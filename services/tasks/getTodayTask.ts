@@ -1,5 +1,1 @@
-import { apiGet, ApiRoutes } from '../api/client';
-
-export default async function getTodaysTask() {
-  return apiGet(ApiRoutes.tasks.today);
-}
+export { getTodaysTask as default, getTodaysTask } from '../api/endpoints/tasks';

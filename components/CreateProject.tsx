@@ -19,12 +19,12 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
-import Toast from "react-native-toast-message";
-import { useDispatch } from "react-redux";
 import { createProject } from "../store/slices/projectSlice";
 import { uploadImage } from "../services/images/uploadImage";
 import { Brand } from "../constants/brandColors";
 import { useResponsiveLayout } from "../constants/responsiveLayout";
+import { useAppDispatch } from "../hooks";
+import { showErrorMessage, showSuccessToast } from "../utils/toast";
 
 const DESC_MAX = 120;
 
@@ -34,7 +34,7 @@ function CreateProject({
   onCancel,
   hideHeader = false,
 }) {
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
   const layout = useResponsiveLayout();
   const {
     width,
@@ -104,13 +104,7 @@ function CreateProject({
       const { status } =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
-        Toast.show({
-          type: "error",
-          text1: "Permission Required",
-          text2: "Allow photo access to add a project image",
-          visibilityTime: 3000,
-          topOffset: 80,
-        });
+        showErrorMessage("Permission Required", "Allow photo access to add a project image");
         return;
       }
 
@@ -126,13 +120,7 @@ function CreateProject({
       }
     } catch (error) {
       console.error("Error picking project image:", error);
-      Toast.show({
-        type: "error",
-        text1: "Image Selection Failed",
-        text2: "Could not open your photo library",
-        visibilityTime: 3000,
-        topOffset: 80,
-      });
+      showErrorMessage("Image Selection Failed", "Could not open your photo library");
     }
   };
 
@@ -140,13 +128,7 @@ function CreateProject({
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== "granted") {
-        Toast.show({
-          type: "error",
-          text1: "Permission Required",
-          text2: "Allow camera access to take a project photo",
-          visibilityTime: 3000,
-          topOffset: 80,
-        });
+        showErrorMessage("Permission Required", "Allow camera access to take a project photo");
         return;
       }
 
@@ -162,13 +144,7 @@ function CreateProject({
       }
     } catch (error) {
       console.error("Error taking project photo:", error);
-      Toast.show({
-        type: "error",
-        text1: "Camera Failed",
-        text2: "Could not open the camera",
-        visibilityTime: 3000,
-        topOffset: 80,
-      });
+      showErrorMessage("Camera Failed", "Could not open the camera");
     }
   };
 
@@ -201,26 +177,12 @@ function CreateProject({
 
   const handleCreateProject = async () => {
     if (!projectData.name.trim()) {
-      Toast.show({
-        type: "error",
-        text1: "Validation Error",
-        text2: "Project name is required",
-        visibilityTime: 3000,
-        autoHide: true,
-        topOffset: 80,
-      });
+      showErrorMessage("Validation Error", "Project name is required");
       return;
     }
 
     if (!projectData.description.trim()) {
-      Toast.show({
-        type: "error",
-        text1: "Validation Error",
-        text2: "A short description is required",
-        visibilityTime: 3000,
-        autoHide: true,
-        topOffset: 80,
-      });
+      showErrorMessage("Validation Error", "A short description is required");
       return;
     }
 
@@ -228,14 +190,7 @@ function CreateProject({
     now.setHours(0, 0, 0, 0);
 
     if (startDate < now) {
-      Toast.show({
-        type: "error",
-        text1: "Date Error",
-        text2: "Start date cannot be in the past",
-        visibilityTime: 3000,
-        autoHide: true,
-        topOffset: 80,
-      });
+      showErrorMessage("Date Error", "Start date cannot be in the past");
       return;
     }
 
@@ -256,14 +211,7 @@ function CreateProject({
         })
       ).unwrap();
 
-      Toast.show({
-        type: "success",
-        text1: "Project Created Successfully!",
-        text2: "Your new project has been added to the list",
-        visibilityTime: 3000,
-        autoHide: true,
-        topOffset: 80,
-      });
+      showSuccessToast("Project Created Successfully!", "Your new project has been added to the list");
 
       setTimeout(() => {
         if (onSuccess) {
@@ -287,14 +235,7 @@ function CreateProject({
         errorMessage = String(error.message);
       }
 
-      Toast.show({
-        type: "error",
-        text1: "Project Creation Failed",
-        text2: errorMessage,
-        visibilityTime: 4000,
-        autoHide: true,
-        topOffset: 80,
-      });
+      showErrorMessage("Project Creation Failed", errorMessage);
     } finally {
       setIsLoading(false);
     }

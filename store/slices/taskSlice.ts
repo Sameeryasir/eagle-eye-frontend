@@ -1,7 +1,5 @@
 // @ts-nocheck
-// This slice handles loading states, error handling, and data management
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-// Import individual task services from their respective files
 import { createTask } from '../../services/tasks/createTask';
 import { updateTask } from '../../services/tasks/updateTaskById';
 import { deleteTaskById } from '../../services/tasks/deleteTaskById';
@@ -14,22 +12,17 @@ import { getTaskByProjectId } from '../../services/tasks/getTaskByProjectId';
 import { getTasksAssignedToEmployees } from '../../services/tasks/getTasksAssignedToEmployees';
 import { getEmployeesToAssignTasks } from '../../services/tasks/getEmployeeToAssingeTasks';
 import { filterTask } from '../../services/tasks/filterTask';
+import { getErrorMessage } from '../../services/api/errors';
+import { unwrapList } from '../../services/api/normalize';
+
 export const fetchTasks = createAsyncThunk(
   'tasks/fetchTasks',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await getTasksByloginId();
-      // Normalize response format like project slice
-      if (Array.isArray(response)) {
-        return response;
-      } else if (response?.tasks && Array.isArray(response.tasks)) {
-        return response.tasks;
-      } else {
-        return [];
-      }
+      return await getTasksByloginId();
     } catch (error) {
       console.error('Error fetching tasks:', error);
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch tasks');
+      return rejectWithValue(getErrorMessage(error, 'Failed to fetch tasks'));
     }
   }
 );
@@ -38,59 +31,38 @@ export const fetchAllTasks = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await getAllTasks();
-      // Normalize response format like project slice
-      if (response?.data && Array.isArray(response.data)) {
-        return response.data;
-      } else if (Array.isArray(response)) {
-        return response;
-      } else {
-        return [];
-      }
+      return unwrapList(response, ['data', 'tasks', 'items']);
     } catch (error) {
       console.error('Error fetching all tasks:', error);
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch all tasks');
+      return rejectWithValue(getErrorMessage(error, 'Failed to fetch all tasks'));
     }
   }
 );
 
-// Fetch tasks by project ID
 export const fetchTasksByProjectId = createAsyncThunk(
   'tasks/fetchTasksByProjectId',
   async (projectId, { rejectWithValue }) => {
     try {
-      const response = await getTaskByProjectId(projectId);
-      // Normalize response format like project slice
-      if (response?.tasks && Array.isArray(response.tasks)) {
-        return response.tasks;
-      } else if (Array.isArray(response)) {
-        return response;
-      } else {
-        return [];
-      }
+      return await getTaskByProjectId(projectId);
     } catch (error) {
       console.error('Error fetching tasks by project ID:', error);
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch tasks by project');
+      return rejectWithValue(
+        getErrorMessage(error, 'Failed to fetch tasks by project')
+      );
     }
   }
 );
 
-// Fetch today's tasks
 export const fetchTodaysTasks = createAsyncThunk(
   'tasks/fetchTodaysTasks',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await getTodaysTask();
-      // Normalize response format like project slice
-      if (Array.isArray(response)) {
-        return response;
-      } else if (response?.tasks && Array.isArray(response.tasks)) {
-        return response.tasks;
-      } else {
-        return [];
-      }
+      return await getTodaysTask();
     } catch (error) {
-      console.error('Error fetching today\'s tasks:', error);
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch today\'s tasks');
+      console.error("Error fetching today's tasks:", error);
+      return rejectWithValue(
+        getErrorMessage(error, "Failed to fetch today's tasks")
+      );
     }
   }
 );
@@ -116,7 +88,7 @@ export const createNewTask = createAsyncThunk(
       return newTask;
     } catch (error) {
       console.error('Error creating task:', error);
-      return rejectWithValue(error.response?.data?.message || 'Failed to create task');
+      return rejectWithValue(getErrorMessage(error, 'Failed to create task'));
     }
   }
 );
@@ -128,7 +100,7 @@ export const updateExistingTask = createAsyncThunk(
       return updatedTask;
     } catch (error) {
       console.error('Error updating task:', error);
-      return rejectWithValue(error.response?.data?.message || 'Failed to update task');
+      return rejectWithValue(getErrorMessage(error, 'Failed to update task'));
     }
   }
 );
@@ -140,7 +112,7 @@ export const deleteExistingTask = createAsyncThunk(
       return taskId; // Return the ID of the deleted task
     } catch (error) {
       console.error('Error deleting task:', error);
-      return rejectWithValue(error.response?.data?.message || 'Failed to delete task');
+      return rejectWithValue(getErrorMessage(error, 'Failed to delete task'));
     }
   }
 );
@@ -163,7 +135,7 @@ export const assignTaskToUserAction = createAsyncThunk(
       }
     } catch (error) {
       console.error('❌ Error assigning task:', error);
-      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to assign task');
+      return rejectWithValue(getErrorMessage(error, 'Failed to assign task'));
     }
   }
 );
@@ -180,7 +152,7 @@ export const filterTasks = createAsyncThunk(
       return fullyFilteredTasks;
     } catch (error) {
       console.error('Error filtering tasks:', error);
-      return rejectWithValue(error.response?.data?.message || 'Failed to filter tasks');
+      return rejectWithValue(getErrorMessage(error, 'Failed to filter tasks'));
     }
   }
 );
@@ -188,18 +160,10 @@ export const fetchTasksAssignedToEmployees = createAsyncThunk(
   'tasks/fetchTasksAssignedToEmployees',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await getTasksAssignedToEmployees();
-      // Normalize response format like project slice
-      if (Array.isArray(response)) {
-        return response;
-      } else if (response?.tasks && Array.isArray(response.tasks)) {
-        return response.tasks;
-      } else {
-        return [];
-      }
+      return await getTasksAssignedToEmployees();
     } catch (error) {
       console.error('Error fetching tasks assigned to employees:', error);
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch assigned tasks');
+      return rejectWithValue(getErrorMessage(error, 'Failed to fetch assigned tasks'));
     }
   }
 );
@@ -209,18 +173,10 @@ export const fetchEmployeesForTaskAssignment = createAsyncThunk(
   'tasks/fetchEmployeesForTaskAssignment',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await getEmployeesToAssignTasks();
-      // Normalize response format like project slice
-      if (Array.isArray(response)) {
-        return response;
-      } else if (response?.employees && Array.isArray(response.employees)) {
-        return response.employees;
-      } else {
-        return [];
-      }
+      return await getEmployeesToAssignTasks();
     } catch (error) {
       console.error('Error fetching employees for task assignment:', error);
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch employees');
+      return rejectWithValue(getErrorMessage(error, 'Failed to fetch employees'));
     }
   }
 );
@@ -259,6 +215,11 @@ const initialState = {
   lastFetchTime: null,
   currentProjectId: null,
 };
+
+function applyClientSideFilters(tasks, filters = {}) {
+  if (!Array.isArray(tasks)) return [];
+  return tasks;
+}
 const taskSlice = createSlice({
   name: 'tasks',
   initialState,

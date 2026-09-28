@@ -6,6 +6,7 @@ import { createProject as createProjectService } from '../../services/projects/c
 import { updateProjectById } from '../../services/projects/updateProjectById';
 import { deleteProjectById } from '../../services/projects/deleteProjectById';
 import { getSessionUserId } from '../../services/auth/session';
+import { getErrorMessage } from '../../services/api/errors';
 
 const CACHE_KEY_PREFIX = 'projects_cache_';
 const CACHE_TTL = 10 * 60 * 1000;
@@ -124,7 +125,7 @@ export const fetchProjects = createAsyncThunk(
         return cachedProjects;
       }
       
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch projects');
+      return rejectWithValue(getErrorMessage(error, 'Failed to fetch projects'));
     }
   }
 );
@@ -145,7 +146,7 @@ export const refreshProjects = createAsyncThunk(
       return projects;
     } catch (error) {
       console.error('Error refreshing projects:', error);
-      return rejectWithValue(error.response?.data?.message || 'Failed to refresh projects');
+      return rejectWithValue(getErrorMessage(error, 'Failed to refresh projects'));
     }
   }
 );
@@ -161,7 +162,7 @@ export const createProject = createAsyncThunk(
       return newProject;
     } catch (error) {
       console.error('Error creating project:', error);
-      return rejectWithValue(error.response?.data?.message || 'Failed to create project');
+      return rejectWithValue(getErrorMessage(error, 'Failed to create project'));
     }
   }
 );
@@ -180,13 +181,7 @@ export const updateProject = createAsyncThunk(
       return updatedProject;
     } catch (error) {
       console.error('Error updating project:', error);
-      const message =
-        error.response?.data?.message ||
-        (error.message === 'Network Error'
-          ? 'Cannot reach the server. Check your API URL and that the backend is running.'
-          : error.message) ||
-        'Failed to update project';
-      return rejectWithValue(message);
+      return rejectWithValue(getErrorMessage(error, 'Failed to update project'));
     }
   }
 );
@@ -202,7 +197,7 @@ export const deleteProject = createAsyncThunk(
       return projectId;
     } catch (error) {
       console.error('Error deleting project:', error);
-      return rejectWithValue(error.response?.data?.message || 'Failed to delete project');
+      return rejectWithValue(getErrorMessage(error, 'Failed to delete project'));
     }
   }
 );

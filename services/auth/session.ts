@@ -38,8 +38,8 @@ export interface LoginUserPayload {
   refresh_token?: string;
   user?: {
     id?: string | number;
-    first_name?: string;
-    last_name?: string;
+    first_name?: string | null;
+    last_name?: string | null;
     role?: { name?: string } | null;
   } | null;
 }

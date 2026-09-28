@@ -1,19 +1,25 @@
 import { File } from 'expo-file-system';
 import { fetch as expoFetch } from 'expo/fetch';
-import { API_URL, ApiRoutes } from '../api/client';
+import { API_URL, ApiRoutes, ApiError, type Id } from '../api';
 import refreshToken from '../utils/tokenRefresh';
 import { getAccessToken, getRefreshToken } from '../auth/session';
 
-function toFileList(files) {
+type ImageUploadInput = string | { uri?: string; name?: string };
+
+export interface UploadImageOptions {
+  logId?: Id;
+}
+
+function toFileList(files: ImageUploadInput | ImageUploadInput[] | null | undefined): ImageUploadInput[] {
   if (!files) return [];
   if (Array.isArray(files)) return files;
   return [files];
 }
 
-async function appendImagePart(formData, item) {
+async function appendImagePart(formData: FormData, item: ImageUploadInput): Promise<void> {
   const uri = typeof item === 'string' ? item : item?.uri;
   if (!uri) {
-    throw new Error('Missing image uri');
+    throw new ApiError({ message: 'Missing image uri', status: 400 });
   }
 
   const filename =
@@ -31,8 +37,8 @@ async function appendImagePart(formData, item) {
   formData.append('images', blob, filename);
 }
 
-async function postFormData(formData, token) {
-  const response = await expoFetch(`${API_URL}${ApiRoutes.images.create}`, {
+async function postFormData(formData: FormData, token: string | null) {
+  return expoFetch(`${API_URL}${ApiRoutes.images.create}`, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -43,13 +49,15 @@ async function postFormData(formData, token) {
     },
     body: formData,
   });
-  return response;
 }
 
-export async function uploadImage(files: any, options: Record<string, any> = {}) {
+export async function uploadImage(
+  files: ImageUploadInput | ImageUploadInput[],
+  options: UploadImageOptions = {}
+): Promise<unknown> {
   const list = toFileList(files);
   if (!list.length) {
-    throw new Error('No images to upload');
+    throw new ApiError({ message: 'No images to upload', status: 400 });
   }
 
   const formData = new FormData();
@@ -72,7 +80,7 @@ export async function uploadImage(files: any, options: Record<string, any> = {})
     }
   }
 
-  let body = null;
+  let body: any = null;
   try {
     body = await response.json();
   } catch (_) {
@@ -83,11 +91,11 @@ export async function uploadImage(files: any, options: Record<string, any> = {})
     const message =
       body?.message ||
       `Image upload failed (${response.status || 'network'})`;
-    const error: any = new Error(
-      Array.isArray(message) ? message.join(', ') : String(message)
-    );
-    error.response = { status: response.status, data: body };
-    throw error;
+    throw new ApiError({
+      message: Array.isArray(message) ? message.join(', ') : String(message),
+      status: response.status || null,
+      body,
+    });
   }
 
   return body;

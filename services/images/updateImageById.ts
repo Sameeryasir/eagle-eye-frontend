@@ -1,9 +1,14 @@
-import { apiPut, ApiRoutes } from '../api/client';
+import { apiPut, ApiRoutes, type Id } from '../api';
 
-export async function updateImageById(imageId, updateData, newFile = null) {
+export async function updateImageById(
+  imageId: Id,
+  updateData: FormData | Record<string, unknown>,
+  newFile: unknown = null
+): Promise<unknown> {
   void newFile;
 
-  const isFormData = updateData instanceof FormData;
+  const isFormData =
+    typeof FormData !== 'undefined' && updateData instanceof FormData;
   const headers = isFormData
     ? { 'Content-Type': 'multipart/form-data' }
     : { 'Content-Type': 'application/json' };

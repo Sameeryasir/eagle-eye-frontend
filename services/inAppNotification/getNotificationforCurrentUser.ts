@@ -1,5 +1,1 @@
-import { apiGet, ApiRoutes } from '../api/client';
-
-export async function getNotificationforCurrentUser() {
-  return apiGet(ApiRoutes.userNotifications.list);
-}
+export { getNotificationforCurrentUser } from '../api/endpoints/notifications';
