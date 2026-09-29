@@ -39,17 +39,49 @@ export const fetchAllTasks = createAsyncThunk(
   }
 );
 
+const TASKS_BY_PROJECT_FRESH_MS = 45 * 1000;
+const EMPLOYEES_FRESH_MS = 5 * 60 * 1000;
+
+function resolveProjectFetchArg(arg) {
+  if (arg != null && typeof arg === 'object') {
+    return {
+      projectId: arg.projectId,
+      forceRefresh: !!arg.forceRefresh,
+    };
+  }
+  return { projectId: arg, forceRefresh: false };
+}
+
 export const fetchTasksByProjectId = createAsyncThunk(
   'tasks/fetchTasksByProjectId',
-  async (projectId, { rejectWithValue }) => {
+  async (arg, { rejectWithValue }) => {
+    const { projectId } = resolveProjectFetchArg(arg);
     try {
-      return await getTaskByProjectId(projectId);
+      const tasks = await getTaskByProjectId(projectId);
+      return { projectId, tasks };
     } catch (error) {
       console.error('Error fetching tasks by project ID:', error);
       return rejectWithValue(
         getErrorMessage(error, 'Failed to fetch tasks by project')
       );
     }
+  },
+  {
+    condition: (arg, { getState }) => {
+      const { projectId, forceRefresh } = resolveProjectFetchArg(arg);
+      if (forceRefresh || projectId == null) return true;
+      const state = getState().tasks;
+      if (state.loading) return false; 
+      const sameProject =
+        state.currentProjectId != null &&
+        String(state.currentProjectId) === String(projectId);
+      const fresh =
+        state.lastFetchTime &&
+        Date.now() - state.lastFetchTime < TASKS_BY_PROJECT_FRESH_MS;
+      
+      if (sameProject && fresh) return false;
+      return true;
+    },
   }
 );
 
@@ -67,7 +99,6 @@ export const fetchTodaysTasks = createAsyncThunk(
   }
 );
 
-// Fetch a single task by ID
 export const fetchTaskById = createAsyncThunk(
   'tasks/fetchTaskById',
   async (taskId, { rejectWithValue }) => {
@@ -109,7 +140,7 @@ export const deleteExistingTask = createAsyncThunk(
   async (taskId, { rejectWithValue }) => {
     try {
       await deleteTaskById(taskId);
-      return taskId; // Return the ID of the deleted task
+      return taskId; 
     } catch (error) {
       console.error('Error deleting task:', error);
       return rejectWithValue(getErrorMessage(error, 'Failed to delete task'));
@@ -124,13 +155,13 @@ export const assignTaskToUserAction = createAsyncThunk(
       
       console.log('🔧 assignTaskToUserAction - API Response:', result);
       
-      // Validate the response structure
+      
       if (result && typeof result === 'object') {
-        // Return the complete response for Redux state update
+        
         return { taskId, userId, result };
       } else {
         console.warn('⚠️ Unexpected API response format:', result);
-        // Return minimal data if API response is unexpected
+        
         return { taskId, userId, result: { assignedToUserId: userId } };
       }
     } catch (error) {
@@ -143,10 +174,10 @@ export const filterTasks = createAsyncThunk(
   'tasks/filterTasks',
   async ({ filters, projectId }, { rejectWithValue }) => {
     try {
-      // Call backend filtering service
+      
       const backendFilteredTasks = await filterTask(filters, projectId);
       
-      // Apply client-side filters
+      
       const fullyFilteredTasks = applyClientSideFilters(backendFilteredTasks || [], filters);
       
       return fullyFilteredTasks;
@@ -168,32 +199,48 @@ export const fetchTasksAssignedToEmployees = createAsyncThunk(
   }
 );
 
-// Fetch employees available for task assignment
 export const fetchEmployeesForTaskAssignment = createAsyncThunk(
   'tasks/fetchEmployeesForTaskAssignment',
-  async (_, { rejectWithValue }) => {
+  async (arg, { rejectWithValue }) => {
     try {
       return await getEmployeesToAssignTasks();
     } catch (error) {
       console.error('Error fetching employees for task assignment:', error);
       return rejectWithValue(getErrorMessage(error, 'Failed to fetch employees'));
     }
+  },
+  {
+    
+    condition: (arg, { getState }) => {
+      const forceRefresh =
+        arg != null && typeof arg === 'object' ? !!arg.forceRefresh : false;
+      if (forceRefresh) return true;
+      const state = getState().tasks;
+      if (state.fetchingEmployees) return false;
+      const hasData =
+        Array.isArray(state.employeesForAssignment) &&
+        state.employeesForAssignment.length > 0;
+      const fresh =
+        state.employeesLastFetchTime &&
+        Date.now() - state.employeesLastFetchTime < EMPLOYEES_FRESH_MS;
+      if (hasData && fresh) return false;
+      return true;
+    },
   }
 );
 
-// Clean, well-structured initial state with clear separation of concerns
 const initialState = {
-  // Data
+  
   tasks: [],
   currentTask: null,
   filteredTasks: [],
   employeesForAssignment: [],
   
-  // Cache tasks by project ID for better performance and offline support
-  tasksByProject: {}, // { projectId: { tasks: [], timestamp: number, isFromCache: boolean } }
+  
+  tasksByProject: {}, 
   currentProjectId: null,
   
-  // Loading states
+  
   loading: false,
   creating: false,
   updating: false,
@@ -202,7 +249,7 @@ const initialState = {
   filtering: false,
   fetchingEmployees: false,
   
-  // Error handling
+  
   error: null,
   createError: null,
   updateError: null,
@@ -211,9 +258,9 @@ const initialState = {
   filterError: null,
   fetchEmployeesError: null,
   
-  // UI state
+  
   lastFetchTime: null,
-  currentProjectId: null,
+  employeesLastFetchTime: null,
 };
 
 function applyClientSideFilters(tasks, filters = {}) {
@@ -266,9 +313,27 @@ const taskSlice = createSlice({
     clearFilteredTasks: (state) => {
       state.filteredTasks = [];
     },
+
+    // --- Hydrate from Project Details aggregate API (skips a second tasks fetch) ---
+    setTasksForProject: (state, action) => {
+      const { projectId, tasks } = action.payload || {};
+      const list = Array.isArray(tasks) ? tasks : [];
+      state.tasks = list;
+      state.loading = false;
+      state.error = null;
+      state.currentProjectId = projectId ?? state.currentProjectId;
+      state.lastFetchTime = Date.now();
+      if (projectId != null) {
+        state.tasksByProject[String(projectId)] = {
+          tasks: list,
+          timestamp: Date.now(),
+          isFromCache: false,
+        };
+      }
+    },
   },
   
-  // Handle all the different states of async operations (pending, fulfilled, rejected)
+  
   extraReducers: (builder) => {
     builder
       .addCase(fetchTasks.pending, (state) => {
@@ -307,7 +372,17 @@ const taskSlice = createSlice({
       })
       .addCase(fetchTasksByProjectId.fulfilled, (state, action) => {
         state.loading = false;
-        state.tasks = action.payload;
+        
+        const { projectId, tasks } = action.payload || {};
+        state.tasks = Array.isArray(tasks) ? tasks : action.payload;
+        state.currentProjectId = projectId ?? state.currentProjectId;
+        if (projectId != null) {
+          state.tasksByProject[String(projectId)] = {
+            tasks: state.tasks,
+            timestamp: Date.now(),
+            isFromCache: false,
+          };
+        }
         state.error = null;
         state.lastFetchTime = Date.now();
       })
@@ -351,7 +426,16 @@ const taskSlice = createSlice({
       })
       .addCase(createNewTask.fulfilled, (state, action) => {
         state.creating = false;
-        state.tasks.unshift(action.payload); // Add to beginning of array
+        state.tasks.unshift(action.payload); 
+        if (state.currentProjectId != null) {
+          const key = String(state.currentProjectId);
+          const cached = state.tasksByProject[key];
+          if (cached) {
+            cached.tasks = state.tasks;
+            cached.timestamp = Date.now();
+          }
+        }
+        state.lastFetchTime = Date.now();
         state.createError = null;
       })
       .addCase(createNewTask.rejected, (state, action) => {
@@ -369,7 +453,7 @@ const taskSlice = createSlice({
         if (index !== -1) {
           state.tasks[index] = action.payload;
         }
-        // Update current task if it's the same
+        
         if (state.currentTask && state.currentTask.id === action.payload.id) {
           state.currentTask = action.payload;
         }
@@ -388,10 +472,10 @@ const taskSlice = createSlice({
         state.deleting = false;
         const taskId = action.payload;
         
-        // Remove from tasks array
+        
         state.tasks = state.tasks.filter(task => task.id !== taskId);
         
-        // Clear current task if it was deleted
+        
         if (state.currentTask && state.currentTask.id === taskId) {
           state.currentTask = null;
         }
@@ -411,11 +495,11 @@ const taskSlice = createSlice({
         state.assigning = false;
         const { taskId, userId, result } = action.payload;
         
-        // Update the task in the tasks array
+        
         const taskIndex = state.tasks.findIndex(task => task.id === taskId);
         if (taskIndex !== -1) {
           if (result && result.assignedTo) {
-            // API returned updated task with complete assignedTo user object
+            
             state.tasks[taskIndex] = {
               ...state.tasks[taskIndex],
               assignedTo: result.assignedTo,
@@ -423,16 +507,16 @@ const taskSlice = createSlice({
             };
             console.log('✅ Task assignment updated with complete user object:', result.assignedTo);
           } else {
-            // Fallback: Update with userId only if API doesn't return complete user object
+            
             state.tasks[taskIndex] = {
               ...state.tasks[taskIndex],
               assignedToUserId: userId,
-              assignedTo: { id: userId } // Minimal user object
+              assignedTo: { id: userId } 
             };
             console.log('⚠️ Task assignment updated with userId only (fallback):', userId);
           }
           
-          // Update current task if it's the same task being assigned
+          
           if (state.currentTask && state.currentTask.id === taskId) {
             state.currentTask = {
               ...state.currentTask,
@@ -485,6 +569,7 @@ const taskSlice = createSlice({
       .addCase(fetchEmployeesForTaskAssignment.fulfilled, (state, action) => {
         state.fetchingEmployees = false;
         state.employeesForAssignment = action.payload;
+        state.employeesLastFetchTime = Date.now();
         state.fetchEmployeesError = null;
       })
       .addCase(fetchEmployeesForTaskAssignment.rejected, (state, action) => {
@@ -494,7 +579,6 @@ const taskSlice = createSlice({
   },
 });
 
-// Export all actions for use in components
 export const {
   clearError,
   clearCreateError,
@@ -507,13 +591,11 @@ export const {
   setCurrentProjectId,
   clearCurrentTask,
   clearFilteredTasks,
+  setTasksForProject,
 } = taskSlice.actions;
 
-// Export the reducer for store configuration
 export default taskSlice.reducer;
 
-// These provide easy access to specific parts of the state
-// Usage: const { tasks, loading } = useSelector(selectTaskState);
 export const selectTaskState = (state) => state.tasks;
 export const selectTasks = (state) => state.tasks.tasks;
 export const selectCurrentTask = (state) => state.tasks.currentTask;
@@ -536,7 +618,6 @@ export const selectTaskFetchEmployeesError = (state) => state.tasks.fetchEmploye
 export const selectTaskRefreshError = (state) => state.tasks.refreshError;
 export const selectCurrentProjectId = (state) => state.tasks.currentProjectId;
 
-// Cache-related selectors
 export const selectIsFromCache = (state) => state.tasks.isFromCache;
 export const selectCacheExpiryTime = (state) => state.tasks.cacheExpiryTime;
 export const selectIsCacheExpired = (state) => {
@@ -544,5 +625,4 @@ export const selectIsCacheExpired = (state) => {
   return expiryTime ? Date.now() > expiryTime : true;
 };
 
-// Loading state selectors
 export const selectIsRefreshing = (state) => state.tasks.refreshing;

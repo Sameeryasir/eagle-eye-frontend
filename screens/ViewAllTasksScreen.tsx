@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,6 @@ import {
   Keyboard,
   FlatList,
   Platform,
-  TouchableWithoutFeedback,
   ActivityIndicator,
   ScrollView,
   RefreshControl,
@@ -26,15 +25,10 @@ import HomeBottomNav from "../components/HomeBottomNav";
 import UpdateTaskModal from "../components/UpdateTaskModal";
 import FilterModal from "../components/FilterModal";
 import ErrorDialog from "../components/ErrorDialog";
+import TaskListCard from "../components/TaskListCard";
+import PriorityDropdown from "../components/PriorityDropdown";
 import { filterTask } from "../services/tasks/filterTask";
-import { getUserRole } from "../services/utils/userRole";
-import DropDownPicker from "react-native-dropdown-picker";
-import {
-  Menu,
-  MenuOptions,
-  MenuOption,
-  MenuTrigger,
-} from "react-native-popup-menu";
+import { useAuth } from "../context/AuthContext";
 
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -58,48 +52,13 @@ import { Brand } from "../constants/brandColors";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
-function OverflowMenuRenderer({ style, children, layouts, ...other }) {
-  const { windowLayout, triggerLayout, optionsLayout } = layouts;
-  const gap = 6;
-  const menuW = optionsLayout.width || 148;
-  const menuH = optionsLayout.height || 88;
-  const triggerX = triggerLayout.x - windowLayout.x;
-  const triggerY = triggerLayout.y - windowLayout.y;
-
-  let top = triggerY + triggerLayout.height + gap;
-  if (top + menuH > windowLayout.height - 8) {
-    top = Math.max(8, triggerY - menuH - gap);
-  }
-
-  let left = triggerX + triggerLayout.width - menuW;
-  if (left < 8) left = 8;
-  if (left + menuW > windowLayout.width - 8) {
-    left = windowLayout.width - menuW - 8;
-  }
-
-  return (
-    <View
-      {...other}
-      style={[
-        {
-          position: "absolute",
-          top,
-          left,
-        },
-        style,
-      ]}
-    >
-      {children}
-    </View>
-  );
-}
-
 const searchBarClasses = `flex-row items-center rounded-2xl px-4 py-3 bg-[#F8FAFC] border border-[#EAECF0]`;
 
 const SearchBarHeader = React.memo(function SearchBarHeader({
   searchTerm,
   onChange,
   onFilterPress,
+  filtersActive = false,
 }) {
   return (
     <View style={{
@@ -122,7 +81,7 @@ const SearchBarHeader = React.memo(function SearchBarHeader({
           }}
         >
           <Ionicons
-            name="search"
+            name="search-outline"
             size={Math.min(18, screenWidth * 0.045)}
             color="#6B7280"
             style={{ marginRight: Math.min(8, screenWidth * 0.02) }}
@@ -147,23 +106,24 @@ const SearchBarHeader = React.memo(function SearchBarHeader({
           )}
         </View>
 
-        {/* Filter Icon */}
         <TouchableOpacity
           style={{
-            backgroundColor: '#F8FAFC',
+            backgroundColor: filtersActive ? Brand.ink : "#F8FAFC",
             borderRadius: Math.min(12, screenWidth * 0.03),
             padding: Math.min(12, screenWidth * 0.03),
             borderWidth: 1,
-            borderColor: '#EAECF0',
-            alignItems: 'center',
-            justifyContent: 'center',
+            borderColor: filtersActive ? Brand.ink : "#EAECF0",
+            alignItems: "center",
+            justifyContent: "center",
           }}
           onPress={onFilterPress}
+          accessibilityRole="button"
+          accessibilityLabel="Open filters"
         >
           <Ionicons
-            name="filter"
+            name={filtersActive ? "funnel" : "funnel-outline"}
             size={Math.min(20, screenWidth * 0.05)}
-            color="#374151"
+            color={filtersActive ? Brand.onInk : Brand.ink}
           />
         </TouchableOpacity>
       </View>
@@ -195,25 +155,25 @@ function ViewAllTasksScreen({ navigation, route }) {
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [creatingTaskId, setCreatingTaskId] = useState(null);
-  const [pendingTimePicker, setPendingTimePicker] = useState(null); // 'start' or 'end'
+  const [pendingTimePicker, setPendingTimePicker] = useState(null); 
   const [updateTaskModalVisible, setUpdateTaskModalVisible] = useState(false);
   const [datePickerValue, setDatePickerValue] = useState(new Date());
   const [isDateConfirmed, setIsDateConfirmed] = useState(false);
 
   const [filteredEmployees, setFilteredEmployees] = useState([]);
-  const [priorityOpen, setPriorityOpen] = useState(false);
-  const [activePriorityDraftId, setActivePriorityDraftId] = useState(null);
-  const [employeeOpen, setEmployeeOpen] = useState(false);
-  const [activeEmployeeDraftId, setActiveEmployeeDraftId] = useState(null);
-  const [isDropdownInteracting, setIsDropdownInteracting] = useState(false);
+  const [priorityDraftId, setPriorityDraftId] = useState(null);
+  const MAX_DRAFT_CARDS = 5;
+  const draftIdSeq = useRef(0);
+  const createDraftOpened = useRef(false);
 
-  const [priorityOptions] = useState([
+  const priorityOptions = [
     { id: "low", label: "Low", color: "#10B981" },
     { id: "medium", label: "Medium", color: "#F59E0B" },
     { id: "high", label: "High", color: "#EF4444" },
     { id: "critical", label: "Critical", color: "#DC2626" },
-  ]);
-  const [userRole, setUserRole] = useState(null);
+  ];
+  
+  const { userRole } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
@@ -225,15 +185,15 @@ function ViewAllTasksScreen({ navigation, route }) {
     message: ''
   });
 
-  // Filter Modal State
+  
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState({
-    createdAt: null, // No default selection
-    assignedTo: null, // No default selection
-    upcoming: null, // No default selection
-    status: null // No default selection
+    createdAt: null, 
+    assignedTo: null, 
+    upcoming: null, 
+    status: null 
   });
-  const [filtersApplied, setFiltersApplied] = useState(false); // Track if filters are currently applied
+  const [filtersApplied, setFiltersApplied] = useState(false); 
 
   const { projectId, projectName, createDraft, showUpcomingTasks } = route.params || {};
 
@@ -253,38 +213,38 @@ function ViewAllTasksScreen({ navigation, route }) {
     });
   };
 
+  
   useEffect(() => {
-    // Load data on initial mount
-    loadProjectData();
+    loadProjectData(false);
+  }, [projectId]);
 
-    // Only create draft if user is not an Employee and createDraft is true
-    if (createDraft && userRole && userRole !== "Employee") {
+  
+  useEffect(() => {
+    if (
+      createDraft &&
+      userRole &&
+      userRole !== "Employee" &&
+      !createDraftOpened.current
+    ) {
+      createDraftOpened.current = true;
       handleFabPress();
     }
-  }, [projectId, createDraft, userRole]);
-
-  // Removed useFocusEffect to prevent duplicate reloads
+  }, [createDraft, userRole]);
 
   useEffect(() => {
-    // Only update filteredTasks when tasks change AND no filters are applied
-    // When filters are applied, filteredTasks should not be updated from Redux tasks
-    // because Redux tasks are the original unfiltered data
     if (!filtersApplied) {
-      console.log('ViewAllTasksScreen - No filters applied, updating filteredTasks with Redux tasks');
       setFilteredTasks(tasks);
-    } else {
-      console.log('ViewAllTasksScreen - Filters applied, not updating filteredTasks from Redux tasks');
     }
   }, [tasks, filtersApplied]);
 
-  // Load employees when userRole becomes available and user is not an Employee
+  
   useEffect(() => {
     if (userRole && userRole !== "Employee") {
       dispatch(fetchEmployeesForTaskAssignment());
     }
   }, [userRole, dispatch]);
 
-  // Update filtered employees when Redux employees change
+  
   useEffect(() => {
     if (employees && Array.isArray(employees)) {
       setFilteredEmployees(employees);
@@ -308,25 +268,42 @@ function ViewAllTasksScreen({ navigation, route }) {
   }, []);
 
   const handleFabPress = () => {
-    // Only allow creating tasks if user is not an Employee
-    if (userRole === "Employee") {
-      // Employees cannot create tasks, so do nothing (no alert, no response)
+    if (userRole === "Employee") return;
+
+    if (draftTasks.length >= MAX_DRAFT_CARDS) {
+      Toast.show({
+        type: "info",
+        text1: "Draft limit reached",
+        text2: `Finish or discard a draft first (max ${MAX_DRAFT_CARDS}).`,
+        visibilityTime: 2500,
+        autoHide: true,
+        topOffset: 80,
+      });
       return;
     }
 
     const now = new Date();
-    const newDraftTask = {
-      id: Math.floor(Math.random() * 1000000) + 1, // Integer ID
-      title: "",
-      description: "",
-      startTime: now,
-      endTime: null, // Let user manually select end time
-      assignedTo: null,
-      priority: "low",
-      isDraft: true,
-    };
+    now.setSeconds(0, 0);
+    draftIdSeq.current += 1;
+    const draftId = `draft-${Date.now()}-${draftIdSeq.current}`;
 
-    setDraftTasks((prev) => [newDraftTask, ...prev]);
+    setPriorityDraftId(null);
+    setDraftTasks((prev) => {
+      if (prev.length >= MAX_DRAFT_CARDS) return prev;
+      return [
+        {
+          id: draftId,
+          title: "",
+          description: "",
+          startTime: now,
+          endTime: null,
+          assignedTo: null,
+          priority: "low",
+          isDraft: true,
+        },
+        ...prev,
+      ];
+    });
   };
 
   const updateDraftTask = (draftId, field, value) => {
@@ -338,37 +315,38 @@ function ViewAllTasksScreen({ navigation, route }) {
   };
 
   const removeDraftTask = (draftId) => {
+    setPriorityDraftId((openId) => (openId === draftId ? null : openId));
     setDraftTasks((prev) => prev.filter((draft) => draft.id !== draftId));
   };
 
   const [activeDraftId, setActiveDraftId] = useState(null);
 
   const handleStartDateChange = (event, selectedDate) => {
-    // Only proceed if user clicked OK (not cancel)
+    
     if (event.type === 'set' && selectedDate) {
       setShowStartDatePicker(false);
 
       const currentDraft = draftTasks.find((draft) => draft.id === activeDraftId);
       if (currentDraft) {
         const newDate = new Date(selectedDate);
-        // Preserve the current time
+        
         newDate.setHours(currentDraft.startTime.getHours());
         newDate.setMinutes(currentDraft.startTime.getMinutes());
         updateDraftTask(activeDraftId, "startTime", newDate);
 
-        // Open time picker after date selection
+        
         setPendingTimePicker("start");
         setTimeout(() => setShowStartTimePicker(true), 100);
       }
     } else {
-      // User cancelled
+      
       setShowStartDatePicker(false);
       setPendingTimePicker(null);
     }
   };
 
   const handleStartTimeChange = (event, selectedDate) => {
-    // Only proceed if user clicked OK (not cancel)
+    
     if (event.type === 'set' && selectedDate) {
       setShowStartTimePicker(false);
       setPendingTimePicker(null);
@@ -382,7 +360,7 @@ function ViewAllTasksScreen({ navigation, route }) {
           newDate.setHours(selectedDate.getHours());
           newDate.setMinutes(selectedDate.getMinutes());
           
-          // Check if the selected time is in the past
+          
           const now = new Date();
           const isToday = newDate.toDateString() === now.toDateString();
           
@@ -398,41 +376,41 @@ function ViewAllTasksScreen({ navigation, route }) {
         }
       }
     } else {
-      // User cancelled - keep the time picker open
-      // Don't close the picker, let user try again
+      
+      
     }
   };
 
   const handleEndDateChange = (event, selectedDate) => {
-    // Only proceed if user clicked OK (not cancel)
+    
     if (event.type === 'set' && selectedDate) {
       setShowEndDatePicker(false);
 
       const currentDraft = draftTasks.find((draft) => draft.id === activeDraftId);
       if (currentDraft) {
         const newDate = new Date(selectedDate);
-        // Set default time to 12:00 PM if endTime is null
+        
         if (currentDraft.endTime) {
           newDate.setHours(currentDraft.endTime.getHours());
           newDate.setMinutes(currentDraft.endTime.getMinutes());
         } else {
-          newDate.setHours(12, 0, 0, 0); // Default to 12:00 PM
+          newDate.setHours(12, 0, 0, 0); 
         }
         updateDraftTask(activeDraftId, "endTime", newDate);
 
-        // Open time picker after date selection
+        
         setPendingTimePicker("end");
         setTimeout(() => setShowEndTimePicker(true), 100);
       }
     } else {
-      // User cancelled
+      
       setShowEndDatePicker(false);
       setPendingTimePicker(null);
     }
   };
 
   const handleEndTimeChange = (event, selectedDate) => {
-    // Only proceed if user clicked OK (not cancel)
+    
     if (event.type === 'set' && selectedDate) {
       setShowEndTimePicker(false);
       setPendingTimePicker(null);
@@ -446,13 +424,13 @@ function ViewAllTasksScreen({ navigation, route }) {
           if (currentDraft.endTime) {
             newDate = new Date(currentDraft.endTime);
           } else {
-            // If no end time set yet, use start time as base
+            
             newDate = new Date(currentDraft.startTime);
           }
           newDate.setHours(selectedDate.getHours());
           newDate.setMinutes(selectedDate.getMinutes());
           
-          // Check if the selected time is in the past
+          
           const now = new Date();
           const isToday = newDate.toDateString() === now.toDateString();
           
@@ -464,7 +442,7 @@ function ViewAllTasksScreen({ navigation, route }) {
             return;
           }
           
-          // Check if end time is before start time
+          
           if (newDate <= currentDraft.startTime) {
             showErrorDialog(
               'Invalid End Time',
@@ -477,32 +455,34 @@ function ViewAllTasksScreen({ navigation, route }) {
         }
       }
     } else {
-      // User cancelled
+      
       setShowEndTimePicker(false);
       setPendingTimePicker(null);
     }
   };
 
   const handleCreateTaskFromDraft = async (draftTask) => {
-    // Validate required fields
+    if (creatingTaskId != null) return;
+    if (!draftTask?.isDraft || !draftTask.id) return;
+
     if (!draftTask.title.trim()) {
       showErrorDialog("Error", "Task title is required");
       return;
     }
 
-    // This allows users to create tasks quickly without detailed descriptions
+    
 
-    // Validate that projectId is available
+    
     if (!projectId) {
       showErrorDialog("Error", "Project ID is required to create a task");
       return;
     }
 
-    // End time is optional - no validation needed
+    
 
-    // Only validate end time if it's provided (optional field)
+    
     if (draftTask.endTime) {
-      // Ensure end time is after start time
+      
       if (draftTask.endTime <= draftTask.startTime) {
         showErrorDialog(
           "Error",
@@ -511,13 +491,13 @@ function ViewAllTasksScreen({ navigation, route }) {
         return;
       }
 
-      // Additional validation for reasonable time ranges
+      
       const timeDifference =
         draftTask.endTime.getTime() - draftTask.startTime.getTime();
-      const minDuration = 15 * 60 * 1000; // 15 minutes in milliseconds
-      const maxDuration = 365 * 24 * 60 * 60 * 1000; // 1 year in milliseconds
+      const minDuration = 15 * 60 * 1000; 
+      const maxDuration = 365 * 24 * 60 * 60 * 1000; 
 
-      // Ensure end time is at least 15 minutes after start time
+      
       if (timeDifference < minDuration) {
         showErrorDialog("Error", "Task duration must be at least 15 minutes");
         return;
@@ -532,23 +512,23 @@ function ViewAllTasksScreen({ navigation, route }) {
     setCreatingTaskId(draftTask.id);
 
     try {
-      // This ensures tasks created "today" appear on "today" in the calendar for all timezones
       
-      // This ensures the task appears on the correct calendar day
+      
+      
       const localStartDate = new Date(draftTask.startTime);
       const localEndDate = draftTask.endTime ? new Date(draftTask.endTime) : null;
       
-      // Extract the local date in YYYY-MM-DD format (same as event conversion)
+      
       const taskDate = localStartDate.getFullYear() + '-' + 
         String(localStartDate.getMonth() + 1).padStart(2, '0') + '-' + 
         String(localStartDate.getDate()).padStart(2, '0');
       
-      // Prepare the data for API call
+      
       const taskPayload = {
         title: draftTask.title.trim(),
-        description: draftTask.description ? draftTask.description.trim() : "", // Handle empty description gracefully
-        startTime: draftTask.startTime.toISOString(), // ISO 8601 string format
-        endTime: draftTask.endTime ? draftTask.endTime.toISOString() : null, // Make endTime optional
+        description: draftTask.description ? draftTask.description.trim() : "", 
+        startTime: draftTask.startTime.toISOString(), 
+        endTime: draftTask.endTime ? draftTask.endTime.toISOString() : null, 
         projectId: projectId,
         assignedToUserId: draftTask.assignedToUserId || null,
         priority: draftTask.priority || null,
@@ -564,8 +544,8 @@ function ViewAllTasksScreen({ navigation, route }) {
       const result = await dispatch(createNewTask(taskPayload));
       
       if (createNewTask.fulfilled.match(result)) {
-        // Success - task created and added to Redux state automatically
-        // Remove the draft task after successful creation
+        
+        
         removeDraftTask(draftTask.id);
 
         Toast.show({
@@ -577,7 +557,7 @@ function ViewAllTasksScreen({ navigation, route }) {
           topOffset: 80,
         });
       } else {
-        // Error handling
+        
         const errorMessage = result.payload || 'Failed to create task. Please try again.';
         throw new Error(errorMessage);
       }
@@ -586,9 +566,9 @@ function ViewAllTasksScreen({ navigation, route }) {
 
       let errorMessage = "Failed to create task. Please try again.";
 
-      // Handle different types of error responses
+      
       if (error.response?.data?.message) {
-        // If message is an array, join it, otherwise use as string
+        
         if (Array.isArray(error.response.data.message)) {
           errorMessage = error.response.data.message.join(", ");
         } else {
@@ -613,57 +593,42 @@ function ViewAllTasksScreen({ navigation, route }) {
 
   const loadProjectData = async (isRefresh = false) => {
     try {
-      // Get user role first
-      const role = await getUserRole();
-      console.log("ViewAllTasksScreen - User Role:", role);
-      setUserRole(role);
-
-      // Set current project ID in Redux state
-      if (projectId) {
-        dispatch(setCurrentProjectId(projectId));
-      }
-
-      // Validate projectId
       if (!projectId) {
         console.error("ViewAllTasksScreen - No projectId provided");
         return;
       }
 
-      // Initial load: Only show loading spinner when not refreshing
-      if (!isRefresh) {
+      dispatch(setCurrentProjectId(projectId));
+
+      
+      if (!isRefresh && (!tasks || tasks.length === 0)) {
         setInitialLoading(true);
       }
-      
-      // Always fetch this project's tasks so we never show another project's list
-      console.log(
-        "ViewAllTasksScreen - Fetching fresh data from API",
-        isRefresh ? "(refresh)" : "(initial load)"
-      );
-      await dispatch(fetchTasksByProjectId(projectId));
 
-      // Set project info (keep local state for project details)
+      
+      await dispatch(
+        fetchTasksByProjectId(
+          isRefresh ? { projectId, forceRefresh: true } : projectId
+        )
+      );
+
       setProject({
         id: projectId,
-        name: "Project", // You can get this from route params if needed
+        name: projectName || "Project",
       });
 
-      setSearchTerm("");
-      
-      setFiltersApplied(false);
-      setSelectedFilters({
-        createdAt: null, // No default selection
-        assignedTo: null, // No default selection
-        upcoming: null, // No default selection
-        status: null // No default selection
-      });
+      if (isRefresh) {
+        setSearchTerm("");
+        setFiltersApplied(false);
+        setSelectedFilters({
+          createdAt: null,
+          assignedTo: null,
+          upcoming: null,
+          status: null,
+        });
+      }
     } catch (err) {
       console.error("ViewAllTasksScreen - Error loading project data:", err);
-      console.error("ViewAllTasksScreen - Error details:", {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status,
-        projectId: projectId
-      });
     } finally {
       if (!isRefresh) {
         setInitialLoading(false);
@@ -675,19 +640,19 @@ function ViewAllTasksScreen({ navigation, route }) {
     setRefreshing(true);
     
     try {
-      // IMPORTANT: Always calls API to get fresh data from server
+      
       if (filtersApplied) {
         console.log('ViewAllTasksScreen - Refreshing with applied filters (calling API):', selectedFilters);
         await handleApplyFilters(selectedFilters);
       } else {
         console.log('ViewAllTasksScreen - Refreshing with getTaskByProjectId API call (no filters applied)');
-        await loadProjectData(true); // isRefresh = true ensures API call
+        await loadProjectData(true); 
       }
     } catch (error) {
       console.error('ViewAllTasksScreen - Error during refresh:', error);
-      // Fallback to loading all data if filter refresh fails
+      
       console.log('ViewAllTasksScreen - Fallback: Refreshing with getTaskByProjectId API call');
-      await loadProjectData(true); // isRefresh = true ensures API call
+      await loadProjectData(true); 
     }
     
     setRefreshing(false);
@@ -787,11 +752,11 @@ function ViewAllTasksScreen({ navigation, route }) {
     }
   };
 
-  // Combine regular tasks and draft tasks for display (API data only)
+  
   const allTasks = [...draftTasks, ...filteredTasks];
 
   const handleUpdate = (task) => {
-    // Only allow updating tasks if user is not an Employee
+    
     if (userRole === "Employee") {
       showErrorDialog("Access Denied", "Employees cannot update tasks.");
       return;
@@ -802,7 +767,7 @@ function ViewAllTasksScreen({ navigation, route }) {
   };
 
   const handleDelete = (task) => {
-    // Only allow deleting tasks if user is not an Employee
+    
     if (userRole === "Employee") {
       Toast.show({
         type: 'error',
@@ -822,7 +787,7 @@ function ViewAllTasksScreen({ navigation, route }) {
       return;
     }
 
-    // Show beautiful custom dialog instead of Alert
+    
     setTaskToDelete(task);
     setDeleteDialogVisible(true);
   };
@@ -833,7 +798,7 @@ function ViewAllTasksScreen({ navigation, route }) {
     const taskId = taskToDelete.id;
     const taskTitle = taskToDelete.title;
 
-    // Close dialog immediately when delete button is tapped
+    
     setDeleteDialogVisible(false);
     setTaskToDelete(null);
 
@@ -841,8 +806,8 @@ function ViewAllTasksScreen({ navigation, route }) {
       const result = await dispatch(deleteExistingTask(taskId));
       
       if (deleteExistingTask.fulfilled.match(result)) {
-        // Success - task deleted from Redux state automatically
-        // Also remove from filteredTasks if filters are applied
+        
+        
         if (filtersApplied) {
           setFilteredTasks(prevFilteredTasks => 
             prevFilteredTasks.filter(task => task.id !== taskId)
@@ -858,7 +823,7 @@ function ViewAllTasksScreen({ navigation, route }) {
           topOffset: 80,
         });
       } else {
-        // Error handling
+        
         const errorMessage = result.payload || "Failed to delete task. Please try again.";
         Toast.show({
           type: 'error',
@@ -891,7 +856,7 @@ function ViewAllTasksScreen({ navigation, route }) {
     setUpdateTaskModalVisible(false);
     setSelectedTask(null);
     
-    // If filters are applied, update the filteredTasks with the updated task
+    
     if (filtersApplied && updatedTask) {
       setFilteredTasks(prevFilteredTasks => 
         prevFilteredTasks.map(task => 
@@ -899,7 +864,7 @@ function ViewAllTasksScreen({ navigation, route }) {
         )
       );
     }
-    // Redux will handle state updates automatically for the main tasks
+    
   };
 
   const handleUpdateTaskClose = () => {
@@ -911,10 +876,10 @@ function ViewAllTasksScreen({ navigation, route }) {
     console.log('ViewAllTasksScreen - Clearing all filters');
     setFiltersApplied(false);
     setSelectedFilters({
-      createdAt: null, // No default selection
-      assignedTo: null, // No default selection
-      upcoming: null, // No default selection
-      status: null // No default selection
+      createdAt: null, 
+      assignedTo: null, 
+      upcoming: null, 
+      status: null 
     });
     await loadProjectData();
   };
@@ -924,7 +889,7 @@ function ViewAllTasksScreen({ navigation, route }) {
     
     try {
       setInitialLoading(true);
-      dispatch(clearError()); // Use Redux error clearing
+      dispatch(clearError()); 
 
       if (!projectId) {
         console.error('ViewAllTasksScreen - No projectId available for filtering');
@@ -932,13 +897,13 @@ function ViewAllTasksScreen({ navigation, route }) {
         return;
       }
 
-      // Check if FilterModal already provided filtered tasks
+      
       if (preFilteredTasks) {
-        // Use pre-filtered tasks from FilterModal
+        
         console.log('Using pre-filtered tasks from FilterModal');
         setFilteredTasks(preFilteredTasks || []);
       } else {
-        // Call filterTask service directly
+        
         console.log('Calling filterTask service directly');
         const backendFilteredTasks = await filterTask(filters, projectId);
         setFilteredTasks(backendFilteredTasks || []);
@@ -947,7 +912,7 @@ function ViewAllTasksScreen({ navigation, route }) {
       setFiltersApplied(true);
       setSelectedFilters(filters);
 
-      // Clear search term when applying filters
+      
       setSearchTerm("");
       
     } catch (err) {
@@ -958,531 +923,182 @@ function ViewAllTasksScreen({ navigation, route }) {
     }
   };
 
+  const formatDraftDateTime = (value) => {
+    if (!value) return "";
+    const d = value.getDate().toString().padStart(2, "0");
+    const m = (value.getMonth() + 1).toString().padStart(2, "0");
+    const y = value.getFullYear();
+    const time = value.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+    return `${d}/${m}/${y} ${time}`;
+  };
+
   const renderTaskCard = React.useCallback((task) => {
+    
     if (task.isDraft) {
-      const isActiveDropdown = task.id === activeEmployeeDraftId || task.id === activePriorityDraftId;
+      const priorityOpen = priorityDraftId === task.id;
+
       return (
         <View
-          className="bg-[#f8f9fa] rounded-[8px] border border-[#e9ecef] shadow-sm"
-          style={{
-            overflow: "visible",
-            zIndex: isActiveDropdown ? 9999 : 1,
-            position: 'relative',
-            padding: Math.min(16, screenWidth * 0.04),
-            marginBottom: Math.min(16, screenHeight * 0.02),
-            borderRadius: Math.min(8, screenWidth * 0.02),
-          }}
+          style={[
+            draftCardStyles.card,
+            priorityOpen && draftCardStyles.cardOpen,
+          ]}
         >
-          <View style={{
-            overflow: "visible",
-            position: 'relative'
-          }}>
-            <View style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: Math.min(16, screenHeight * 0.02)
-            }}>
-              <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-                <View style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginRight: Math.min(4, screenWidth * 0.01),
-                  minWidth: Math.max(70, screenWidth * 0.17)
-                }}>
-                  <Ionicons
-                    name="document-text"
-                    size={Math.min(14, screenWidth * 0.035)}
-                    color="#374151"
-                    style={{ marginRight: Math.min(4, screenWidth * 0.01) }}
-                  />
-                  <Text style={{
-                    fontSize: Math.min(15, screenWidth * 0.038),
-                    color: "black",
-                    fontWeight: "600",
-                    letterSpacing: 0.3,
-                  }}>
-                    Title:
-                  </Text>
-                </View>
-                <TextInput
-                  style={{
-                    flex: 1,
-                    fontSize: Math.min(15, screenWidth * 0.038),
-                    color: "#333",
-                    lineHeight: Math.min(24, screenHeight * 0.03),
-                    backgroundColor: "transparent",
-                    padding: 0,
-                    margin: 0,
-                  }}
-                  placeholder="Enter task title..."
-                  placeholderTextColor="#9ca3af"
-                  value={task.title}
-                  onChangeText={(text) =>
-                    updateDraftTask(task.id, "title", text)
-                  }
-                />
-              </View>
-              <TouchableOpacity
-                style={{
-                  marginBottom: Math.min(4, screenHeight * 0.005),
-                  borderRadius: Math.min(20, screenWidth * 0.05),
-                  backgroundColor: "#fef2f2",
-                  marginLeft: Math.min(12, screenWidth * 0.03),
-                  padding: Math.min(4, screenWidth * 0.01),
-                }}
-                onPress={() => removeDraftTask(task.id)}
-              >
-                <Ionicons name="trash-outline" size={Math.min(16, screenWidth * 0.04)} color="#dc3545" />
-              </TouchableOpacity>
-            </View>
-
-            <View>
-              <View style={{ marginBottom: Math.min(4, screenHeight * 0.005) }}>
-                <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-                  <View style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginRight: Math.min(12, screenWidth * 0.03),
-                    minWidth: Math.max(85, screenWidth * 0.21)
-                  }}>
-                    <Ionicons
-                      name="chatbubble-ellipses"
-                      size={Math.min(14, screenWidth * 0.035)}
-                      color="#374151"
-                      style={{ marginRight: Math.min(4, screenWidth * 0.01) }}
-                    />
-                    <Text style={{
-                      fontSize: Math.min(15, screenWidth * 0.038),
-                      color: "black",
-                      fontWeight: "600",
-                      letterSpacing: 0.3,
-                    }}>
-                      Description:
-                    </Text>
-                  </View>
-                  <TextInput
-                    style={{
-                      flex: 1,
-                      fontSize: Math.min(15, screenWidth * 0.038),
-                      color: "#333",
-                      lineHeight: Math.min(24, screenHeight * 0.03),
-                      minHeight: Math.min(30, screenHeight * 0.0375),
-                      backgroundColor: "transparent",
-                      textAlignVertical: "top",
-                      padding: 0,
-                      margin: 0,
-                    }}
-                    placeholder="Enter task description..."
-                    placeholderTextColor="#9ca3af"
-                    value={task.description}
-                    onChangeText={(text) =>
-                      updateDraftTask(task.id, "description", text)
-                    }
-                    multiline
-                  />
-                </View>
-              </View>
-              <View style={{ marginBottom: Math.min(12, screenHeight * 0.015) }}>
-                <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-                  <View style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginRight: Math.min(12, screenWidth * 0.03),
-                    minWidth: Math.max(70, screenWidth * 0.17)
-                  }}>
-                    <Ionicons
-                      name="flag"
-                      size={Math.min(14, screenWidth * 0.035)}
-                      color="#374151"
-                      style={{ marginRight: Math.min(4, screenWidth * 0.01) }}
-                    />
-                    <Text style={{
-                      fontSize: Math.min(15, screenWidth * 0.038),
-                      color: "black",
-                      fontWeight: "600",
-                      letterSpacing: 0.3,
-                    }}>
-                      Priority:
-                    </Text>
-                  </View>
-                  <View className="flex-1">
-                    <DropDownPicker
-                      open={priorityOpen && activePriorityDraftId === task.id}
-                      value={task.priority || null}
-                      items={priorityOptions.map((priority) => ({
-                        label: priority.label,
-                        value: priority.id,
-                        icon: () => (
-                          <View
-                            className="w-3 h-3 rounded-full ml-1"
-                            style={{ backgroundColor: priority.color }}
-                          />
-                        ),
-                      }))}
-                      setOpen={(open) => {
-                        if (open) {
-                          setActivePriorityDraftId(task.id);
-                          setEmployeeOpen(false);
-                          setActiveEmployeeDraftId(null);
-                          setIsDropdownInteracting(true);
-                        } else {
-                          setActivePriorityDraftId(null);
-                          setIsDropdownInteracting(false);
-                        }
-                        setPriorityOpen(open);
-                      }}
-                      setValue={(callback) => {
-                        const newValue = callback(task.priority || null);
-                        updateDraftTask(task.id, "priority", newValue);
-                      }}
-                      placeholder="Select Priority"
-                      placeholderStyle={{
-                        color: "#9ca3af",
-                        fontSize: Math.min(15, screenWidth * 0.038),
-                        fontWeight: "400",
-                      }}
-                      style={{
-                        backgroundColor: "transparent",
-                        borderWidth: 0,
-                        minHeight: 0,
-                        paddingVertical: 0,
-                        paddingHorizontal: 0,
-                      }}
-                      textStyle={{
-                        fontSize: Math.min(15, screenWidth * 0.038),
-                        color: task.priority ? "#333" : "#9ca3af",
-                        fontWeight: "400",
-                      }}
-                      dropDownContainerStyle={{
-                        backgroundColor: "#ffffff",
-                        borderColor: "#e2e8f0",
-                        borderWidth: 1.5,
-                        borderRadius: Math.min(12, screenWidth * 0.03),
-                        shadowColor: "#000",
-                        shadowOpacity: 0.12,
-                        shadowRadius: Math.min(12, screenWidth * 0.03),
-                        shadowOffset: { width: 0, height: 6 },
-                        elevation: 999999,
-                        maxHeight: Math.min(160, screenHeight * 0.2),
-                        width: Math.max(140, screenWidth * 0.35),
-                        marginLeft: -Math.min(10, screenWidth * 0.025),
-                        marginTop: Math.min(24, screenHeight * 0.03),
-                        zIndex: 999999,
-                        position: 'absolute',
-                        top: 0,
-                        paddingVertical: Math.min(4, screenHeight * 0.005),
-                      }}
-                      listItemContainerStyle={{
-                        height: Math.min(44, screenHeight * 0.055),
-                        paddingHorizontal: Math.min(14, screenWidth * 0.035),
-                        marginHorizontal: Math.min(4, screenWidth * 0.01),
-                        marginVertical: Math.min(1, screenHeight * 0.001),
-                        borderRadius: Math.min(8, screenWidth * 0.02),
-                        backgroundColor: "transparent",
-                        borderBottomWidth: 1,
-                        borderBottomColor: "#f1f5f9",
-                      }}
-                      listItemLabelStyle={{
-                        fontSize: Math.min(14, screenWidth * 0.035),
-                        fontWeight: "500",
-                        color: "#374151",
-                        lineHeight: Math.min(18, screenHeight * 0.0225),
-                      }}
-                      arrowIconStyle={{
-                        width: Math.min(16, screenWidth * 0.04),
-                        height: Math.min(16, screenWidth * 0.04),
-                        tintColor: "#6b7280",
-                      }}
-                      showArrowIcon={true}
-                      arrowIconContainerStyle={{
-                        marginRight: Math.max(130, screenWidth * 0.325),
-                      }}
-                    />
-                  </View>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                style={{ marginBottom: Math.min(12, screenHeight * 0.015) }}
-                onPress={() => {
-                  Keyboard.dismiss();
-                  setActiveDraftId(task.id);
-                  setDatePickerValue(task.startTime);
-                  setIsDateConfirmed(false);
-                  setShowStartDatePicker(true);
-                }}
-              >
-                <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-                  <View style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginRight: Math.min(12, screenWidth * 0.03),
-                    minWidth: Math.max(85, screenWidth * 0.21)
-                  }}>
-                    <Ionicons
-                      name="time"
-                      size={Math.min(14, screenWidth * 0.035)}
-                      color="#374151"
-                      style={{ marginRight: Math.min(4, screenWidth * 0.01) }}
-                    />
-                    <Text style={{
-                      fontSize: Math.min(15, screenWidth * 0.038),
-                      color: "black",
-                      fontWeight: "600",
-                      letterSpacing: 0.3,
-                    }}>
-                      Start Date:
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{
-                      fontSize: Math.min(15, screenWidth * 0.038),
-                      color: "#333",
-                      lineHeight: Math.min(24, screenHeight * 0.03),
-                    }}>
-                      {task.startTime
-                        ? `${task.startTime.toLocaleDateString()} ${task.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true })}`
-                        : "Not set"}
-                    </Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={{ marginBottom: Math.min(12, screenHeight * 0.015) }}
-                onPress={() => {
-                  Keyboard.dismiss();
-                  setActiveDraftId(task.id);
-                  setDatePickerValue(task.endTime || task.startTime);
-                  setIsDateConfirmed(false);
-                  setShowEndDatePicker(true);
-                }}
-              >
-                <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-                  <View style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginRight: Math.min(12, screenWidth * 0.03),
-                    minWidth: Math.max(85, screenWidth * 0.21)
-                  }}>
-                    <Ionicons
-                      name="calendar"
-                      size={Math.min(14, screenWidth * 0.035)}
-                      color="#374151"
-                      style={{ marginRight: Math.min(4, screenWidth * 0.01) }}
-                    />
-                    <Text style={{
-                      fontSize: Math.min(15, screenWidth * 0.038),
-                      color: "black",
-                      fontWeight: "600",
-                      letterSpacing: 0.3,
-                    }}>
-                      End Date:
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{
-                      fontSize: Math.min(15, screenWidth * 0.038),
-                      lineHeight: Math.min(24, screenHeight * 0.03),
-                      color: task.endTime ? "#333" : "#9ca3af"
-                    }}>
-                      {task.endTime
-                        ? `${task.endTime.toLocaleDateString()} ${task.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true })}`
-                        : "No end date selected"}
-                    </Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            <View style={{ marginTop: Math.min(12, screenHeight * 0.015) }}>
-              <View style={{ alignItems: "center" }}>
-                <TouchableOpacity
-                  style={{
-                    backgroundColor: "black",
-                    paddingVertical: Math.min(8, screenHeight * 0.01),
-                    paddingHorizontal: Math.min(24, screenWidth * 0.06),
-                    borderRadius: Math.min(8, screenWidth * 0.02),
-                    shadowColor: "#000",
-                    shadowOffset: { width: 0, height: 1 },
-                    shadowOpacity: 0.1,
-                    shadowRadius: 2,
-                    elevation: 2,
-                    minWidth: Math.max(120, screenWidth * 0.3),
-                    alignItems: "center",
-                    justifyContent: "center",
-                    opacity: creatingTaskId === task.id ? 0.6 : 1,
-                  }}
-                  onPress={() => handleCreateTaskFromDraft(task)}
-                  disabled={creatingTaskId === task.id}
-                  activeOpacity={creatingTaskId === task.id ? 1 : 0.8}
-                >
-                  {creatingTaskId === task.id ? (
-                    <ActivityIndicator color="white" size="small" />
-                  ) : (
-                    <Text style={{
-                      color: "white",
-                      fontSize: Math.min(15, screenWidth * 0.038),
-                      fontWeight: "600",
-                      letterSpacing: 0.3,
-                    }}>
-                      Create Task
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
+          <View style={draftCardStyles.fieldRow}>
+            <Text style={draftCardStyles.label}>Title</Text>
+            <TextInput
+              style={draftCardStyles.input}
+              placeholder="Enter task title..."
+              placeholderTextColor="#9CA3AF"
+              value={task.title}
+              onChangeText={(text) => updateDraftTask(task.id, "title", text)}
+              onFocus={() => setPriorityDraftId(null)}
+            />
+            <TouchableOpacity
+              style={draftCardStyles.trashBtn}
+              onPress={() => removeDraftTask(task.id)}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
+              <Ionicons name="trash-outline" size={12} color="#EF4444" />
+            </TouchableOpacity>
           </View>
+
+          <View style={draftCardStyles.fieldRow}>
+            <Text style={draftCardStyles.label}>Desc</Text>
+            <TextInput
+              style={draftCardStyles.input}
+              placeholder="Description (optional)"
+              placeholderTextColor="#9CA3AF"
+              value={task.description}
+              onChangeText={(text) =>
+                updateDraftTask(task.id, "description", text.slice(0, 500))
+              }
+              onFocus={() => setPriorityDraftId(null)}
+            />
+          </View>
+
+          <View
+            style={[
+              draftCardStyles.fieldRow,
+              priorityOpen && draftCardStyles.fieldRowOpen,
+            ]}
+          >
+            <Text style={draftCardStyles.label}>Priority</Text>
+            <PriorityDropdown
+              value={task.priority || "low"}
+              options={priorityOptions}
+              open={priorityOpen}
+              onOpenChange={(next) =>
+                setPriorityDraftId(next ? task.id : null)
+              }
+              onChange={(next) => {
+                updateDraftTask(task.id, "priority", next);
+                setPriorityDraftId(null);
+              }}
+              style={draftCardStyles.priorityDropdown}
+            />
+          </View>
+
+          <View style={draftCardStyles.fieldRow}>
+            <Text style={draftCardStyles.label}>Dates</Text>
+            <TouchableOpacity
+              style={[draftCardStyles.input, draftCardStyles.dateHalf]}
+              onPress={() => {
+                Keyboard.dismiss();
+                setPriorityDraftId(null);
+                setActiveDraftId(task.id);
+                setDatePickerValue(task.startTime);
+                setIsDateConfirmed(false);
+                setShowStartDatePicker(true);
+              }}
+            >
+              <Text style={draftCardStyles.inputText} numberOfLines={1}>
+                {formatDraftDateTime(task.startTime)}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[draftCardStyles.input, draftCardStyles.dateHalf]}
+              onPress={() => {
+                Keyboard.dismiss();
+                setPriorityDraftId(null);
+                setActiveDraftId(task.id);
+                setDatePickerValue(task.endTime || task.startTime);
+                setIsDateConfirmed(false);
+                setShowEndDatePicker(true);
+              }}
+            >
+              <Text
+                style={[
+                  draftCardStyles.inputText,
+                  !task.endTime && { color: "#9CA3AF", fontWeight: "400" },
+                ]}
+                numberOfLines={1}
+              >
+                {task.endTime
+                  ? formatDraftDateTime(task.endTime)
+                  : "End date"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              draftCardStyles.createBtn,
+              creatingTaskId === task.id && { opacity: 0.6 },
+            ]}
+            onPress={() => handleCreateTaskFromDraft(task)}
+            disabled={creatingTaskId === task.id}
+            activeOpacity={0.85}
+          >
+            {creatingTaskId === task.id ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <Text style={draftCardStyles.createBtnText}>Create Task</Text>
+            )}
+          </TouchableOpacity>
         </View>
       );
     }
 
-    const priority = getPriorityMeta(task.priority);
-    const assigneeName = getAssignedToName(task.assignedTo);
-    const subtitle =
-      (task.description && String(task.description).trim()) ||
-      (userRole !== "Employee" ? `Assigned: ${assigneeName}` : "Tap to view details");
-    const openDetails = () => navigation.navigate("TaskDetails", { task });
-
+    
     return (
-      <View style={taskCardStyles.card}>
-        <View style={taskCardStyles.cardTopRow}>
-          <TouchableOpacity
-            style={taskCardStyles.cardPressArea}
-            activeOpacity={0.9}
-            onPress={openDetails}
-          >
-            <View style={taskCardStyles.thumb}>
-              <Ionicons name="checkbox-outline" size={22} color={Brand.ink} />
-            </View>
-
-            <View style={taskCardStyles.cardMain}>
-              <View style={taskCardStyles.titleRow}>
-                <Text style={taskCardStyles.cardTitle} numberOfLines={1}>
-                  {task.title || "Untitled task"}
-                </Text>
-                <View
-                  style={[
-                    taskCardStyles.statusPill,
-                    { backgroundColor: priority.bg },
-                  ]}
-                >
-                  <Text
-                    style={[taskCardStyles.statusText, { color: priority.color }]}
-                  >
-                    {priority.label}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={taskCardStyles.cardSubtitle} numberOfLines={1}>
-                {subtitle}
-              </Text>
-
-              <View style={taskCardStyles.metaRow}>
-                <Ionicons
-                  name="calendar-outline"
-                  size={13}
-                  color={Brand.inkFaint}
-                />
-                <Text style={taskCardStyles.metaText} numberOfLines={1}>
-                  {formatCardDate(
-                    task.endTime || task.startTime || task.createdAt
-                  )}
-                </Text>
-                {userRole !== "Employee" && assigneeName !== "Unassigned" && (
-                  <>
-                    <Text style={taskCardStyles.metaDot}>·</Text>
-                    <Ionicons
-                      name="person-outline"
-                      size={13}
-                      color={Brand.inkFaint}
-                    />
-                    <Text style={taskCardStyles.metaText} numberOfLines={1}>
-                      {assigneeName}
-                    </Text>
-                  </>
-                )}
-              </View>
-            </View>
-          </TouchableOpacity>
-
-          {userRole !== "Employee" ? (
-            <Menu renderer={OverflowMenuRenderer}>
-              <MenuTrigger
-                customStyles={{
-                  triggerWrapper: taskCardStyles.menuBtn,
-                }}
-              >
-                <Ionicons
-                  name="ellipsis-vertical"
-                  size={16}
-                  color={Brand.inkSoft}
-                />
-              </MenuTrigger>
-              <MenuOptions
-                customStyles={{
-                  optionsContainer: taskCardStyles.menuDropdown,
-                  optionWrapper: taskCardStyles.menuItem,
-                }}
-              >
-                <MenuOption onSelect={() => handleUpdate(task)}>
-                  <View style={taskCardStyles.menuItemInner}>
-                    <Ionicons
-                      name="create-outline"
-                      size={17}
-                      color={Brand.ink}
-                    />
-                    <Text style={taskCardStyles.menuItemText}>Edit</Text>
-                  </View>
-                </MenuOption>
-                <MenuOption onSelect={() => handleDelete(task)}>
-                  <View style={taskCardStyles.menuItemInner}>
-                    <Ionicons
-                      name="trash-outline"
-                      size={17}
-                      color={Brand.danger}
-                    />
-                    <Text
-                      style={[
-                        taskCardStyles.menuItemText,
-                        { color: Brand.danger },
-                      ]}
-                    >
-                      Delete
-                    </Text>
-                  </View>
-                </MenuOption>
-              </MenuOptions>
-            </Menu>
-          ) : (
-            <TouchableOpacity onPress={openDetails} hitSlop={8}>
-              <Ionicons
-                name="chevron-forward"
-                size={18}
-                color={Brand.inkFaint}
-                style={{ marginTop: 4 }}
-              />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
+      <TaskListCard
+        task={task}
+        projectName={projectName}
+        onPress={() => navigation.navigate("TaskDetails", { task })}
+        showMenu={userRole !== "Employee"}
+        onEdit={() => handleUpdate(task)}
+        onDelete={() => handleDelete(task)}
+      />
     );
-  }, [activeEmployeeDraftId, activePriorityDraftId, creatingTaskId, draftTasks, employees, filteredEmployees, priorityOpen, employeeOpen, isDropdownInteracting, userRole, updateDraftTask, removeDraftTask, handleCreateTaskFromDraft, handleEmployeeSearch, navigation, handleUpdate, handleDelete]);
+  }, [creatingTaskId, priorityDraftId, userRole, updateDraftTask, removeDraftTask, handleCreateTaskFromDraft, navigation, handleUpdate, handleDelete, projectName]);
 
   const renderContent = () => (
     <FlatList
       data={allTasks}
       keyExtractor={(item) => String(item.id)}
-      contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
+      contentContainerStyle={{
+        paddingHorizontal: 20,
+        paddingBottom: 100,
+        flexGrow: 1,
+      }}
+      
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
-      scrollEnabled={true}
-      removeClippedSubviews={true}
+      onScrollBeginDrag={() => {
+        Keyboard.dismiss();
+        setPriorityDraftId(null);
+      }}
+      scrollEnabled
+      
+      removeClippedSubviews={false}
       maxToRenderPerBatch={10}
       windowSize={10}
-      initialNumToRender={5}
+      initialNumToRender={8}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -1496,6 +1112,7 @@ function ViewAllTasksScreen({ navigation, route }) {
           searchTerm={searchTerm}
           onChange={handleSearch}
           onFilterPress={() => setFilterModalVisible(true)}
+          filtersActive={filtersApplied}
         />
       }
       ListHeaderComponentStyle={{ marginHorizontal: -20 }}
@@ -1542,35 +1159,17 @@ function ViewAllTasksScreen({ navigation, route }) {
     <View className="flex-1 bg-white">
       <StatusBar barStyle="dark-content" backgroundColor={Brand.paper} />
 
-      {/* Content */}
+      
       {initialLoading || loading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#000000" />
           <Text className="mt-4 text-base text-gray-500">Loading tasks...</Text>
         </View>
       ) : (
-        <TouchableWithoutFeedback
-          onPress={() => {
-            Keyboard.dismiss();
-            if (priorityOpen) {
-              setPriorityOpen(false);
-              setActivePriorityDraftId(null);
-            }
-            if (employeeOpen) {
-              setEmployeeOpen(false);
-              setActiveEmployeeDraftId(null);
-            }
-          }}
-        >
-          <View className="flex-1 bg-white" style={{ position: "relative" }}>
-            {renderContent()}
-
-          </View>
-        </TouchableWithoutFeedback>
+        <View className="flex-1 bg-white">{renderContent()}</View>
       )}
 
-      {/* Hide HomeBottomNav when UpdateTaskModal is visible */}
-      {/* HomeBottomNav will automatically hide FAB for Employee role */}
+      
       {!updateTaskModalVisible && <HomeBottomNav onAddPress={handleFabPress} />}
 
       <Sidebar
@@ -1579,7 +1178,7 @@ function ViewAllTasksScreen({ navigation, route }) {
         onNavigate={() => setSidebarVisible(false)}
       />
 
-      {/* Date and Time Pickers */}
+      
       {showStartDatePicker && (
         <DateTimePicker
           value={datePickerValue}
@@ -1606,7 +1205,7 @@ function ViewAllTasksScreen({ navigation, route }) {
                   if (currentDraft) {
                     const draftDate = new Date(currentDraft.startTime);
                     const today = new Date();
-                    // Only set minimum date if the draft date is today
+                    
                     if (draftDate.toDateString() === today.toDateString()) {
                       return today;
                     }
@@ -1644,7 +1243,7 @@ function ViewAllTasksScreen({ navigation, route }) {
                   if (currentDraft) {
                     const draftDate = new Date(currentDraft.endTime || currentDraft.startTime);
                     const today = new Date();
-                    // Only set minimum date if the draft date is today
+                    
                     if (draftDate.toDateString() === today.toDateString()) {
                       return today;
                     }
@@ -1656,7 +1255,7 @@ function ViewAllTasksScreen({ navigation, route }) {
         />
       )}
 
-      {/* Update Task Modal - Only show for non-employees */}
+      
       {userRole !== "Employee" && (
         <UpdateTaskModal
           visible={updateTaskModalVisible}
@@ -1668,7 +1267,7 @@ function ViewAllTasksScreen({ navigation, route }) {
         />
       )}
 
-      {/* Filter Modal */}
+      
       <FilterModal
         visible={filterModalVisible}
         onClose={() => setFilterModalVisible(false)}
@@ -2041,6 +1640,87 @@ const taskCardStyles = StyleSheet.create({
     color: Brand.inkMuted,
     textAlign: "center",
     lineHeight: 18,
+  },
+});
+
+const draftCardStyles = StyleSheet.create({
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 8,
+    marginBottom: 8,
+    overflow: "visible",
+    zIndex: 1,
+  },
+  cardOpen: {
+    zIndex: 50,
+    elevation: 50,
+  },
+  fieldRowOpen: {
+    zIndex: 60,
+    elevation: 60,
+  },
+  trashBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fieldRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 5,
+    gap: 6,
+  },
+  label: {
+    width: 58,
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  input: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: Platform.OS === "ios" ? 8 : 6,
+    fontSize: 14,
+    color: "#111827",
+    minHeight: 36,
+  },
+  dateHalf: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  priorityDropdown: {
+    flex: 1,
+  },
+  inputText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#111827",
+  },
+  createBtn: {
+    marginTop: 4,
+    backgroundColor: "#111827",
+    borderRadius: 8,
+    minHeight: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  createBtnText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
   },
 });
 

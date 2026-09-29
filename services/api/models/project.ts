@@ -1,5 +1,7 @@
 import type { Id } from '../types';
 import type { User } from './user';
+import type { Task } from './task';
+import type { LogEntry } from './log';
 
 export interface Project {
   id: number;
@@ -13,6 +15,14 @@ export interface Project {
   company?: { id?: number; name?: string } | null;
   tasks?: unknown[];
   [key: string]: unknown;
+}
+
+/** Combined Project Details API payload (one round-trip for the screen). */
+export interface ProjectDetailsResponse {
+  project: Project;
+  team: User[];
+  tasks: Task[];
+  logs: LogEntry[];
 }
 
 export interface CreateProjectPayload {

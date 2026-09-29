@@ -539,7 +539,7 @@ export default function UpdateTaskModal({
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="fade"
       presentationStyle="formSheet"
       onRequestClose={onClose}
     >

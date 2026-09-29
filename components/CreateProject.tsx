@@ -213,13 +213,11 @@ function CreateProject({
 
       showSuccessToast("Project Created Successfully!", "Your new project has been added to the list");
 
-      setTimeout(() => {
-        if (onSuccess) {
-          onSuccess();
-        } else {
-          navigation.goBack();
-        }
-      }, 1000);
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        navigation.goBack();
+      }
     } catch (error) {
       console.error("Error creating project:", error);
 

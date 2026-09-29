@@ -454,7 +454,7 @@ export default function UpdateProjectModal({
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="fade"
       presentationStyle="fullScreen"
       statusBarTranslucent
       onRequestClose={handleCancel}

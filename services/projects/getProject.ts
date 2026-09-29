@@ -1,1 +1,1 @@
-export { getProject } from '../api/endpoints/projects';
+export { getProject, getProjectById } from '../api/endpoints/projects';

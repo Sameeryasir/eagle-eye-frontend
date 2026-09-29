@@ -54,6 +54,16 @@ const logSlice = createSlice({
     setCurrentProjectId: (state, action) => {
       state.currentProjectId = action.payload;
     },
+    // --- Hydrate from Project Details aggregate API (skips a second logs fetch) ---
+    setLogsForProject: (state, action) => {
+      const { projectId, logs } = action.payload || {};
+      state.logs = Array.isArray(logs) ? logs : [];
+      state.loading = false;
+      state.error = null;
+      if (projectId != null) {
+        state.currentProjectId = projectId;
+      }
+    },
     resetLogsState: () => initialState,
   },
   extraReducers: (builder) => {
@@ -85,8 +95,13 @@ const logSlice = createSlice({
   },
 });
 
-export const { clearLogs, clearError, setCurrentProjectId, resetLogsState } =
-  logSlice.actions;
+export const {
+  clearLogs,
+  clearError,
+  setCurrentProjectId,
+  setLogsForProject,
+  resetLogsState,
+} = logSlice.actions;
 
 export const selectLogState = (state) => state.logs;
 export const selectLogs = (state) => state.logs.logs;

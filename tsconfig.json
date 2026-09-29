@@ -13,15 +13,17 @@
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"],
-      "react-native-view-shot": ["./types/react-native-view-shot.d.ts"]
+      "@/*": [
+        "./*"
+      ],
+      "react-native-view-shot": [
+        "./types/react-native-view-shot.d.ts"
+      ]
     }
   },
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    ".expo/types/**/*.ts",
-    "expo-env.d.ts",
     "nativewind-env.d.ts",
     "types/**/*.d.ts"
   ],

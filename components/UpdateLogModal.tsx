@@ -334,7 +334,7 @@ const UpdateLogModal = ({ visible, onClose, log, onUpdate, userRole }) => {
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="fade"
       presentationStyle="formSheet"
       onRequestClose={onClose}
     >

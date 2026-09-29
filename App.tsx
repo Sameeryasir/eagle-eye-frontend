@@ -233,22 +233,10 @@ const AppHeader = ({
   );
 };
 
-const LoadingScreen = () => (
-  <SafeAreaView
-    style={{
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      backgroundColor: "#ffffff",
-    }}
-  >
-    <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-    <Text style={{ fontSize: 16, color: "#666" }}>Loading...</Text>
-  </SafeAreaView>
-);
+const LoadingScreen = () => <SplashScreen bootGate />;
 
 const AppNavigator = () => {
-  const { isLoading: authLoading } = useAuth();
+  const { isLoading: authLoading, isAuthenticated } = useAuth();
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const navigationRef = useRef(null);
   const [headerConfig, setHeaderConfig] = useState({
@@ -515,9 +503,11 @@ const AppNavigator = () => {
                 <Stack.Navigator
                   screenOptions={{
                     headerShown: false,
-                    animation: "none",
+                    animation: "fade",
+                    animationDuration: 160,
+                    freezeOnBlur: true,
                   }}
-                  initialRouteName="SignIn"
+                  initialRouteName={isAuthenticated ? "HomeScreen" : "SignIn"}
                 >
                   <Stack.Screen name="SplashScreen" component={SplashScreen} />
                   <Stack.Screen name="SignIn" component={SignIn} />

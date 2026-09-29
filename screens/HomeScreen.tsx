@@ -389,6 +389,7 @@ function HomeScreen({ navigation }) {
       navigation.navigate("ProjectDetails", {
         projectId: project.id,
         projectName: project.name,
+        imageUrl: project.imageUrl || project.image_url || null,
       });
 
     return (
@@ -700,31 +701,33 @@ function HomeScreen({ navigation }) {
 
       <Modal
         visible={createProjectModalVisible}
-        animationType="slide"
+        animationType="fade"
         presentationStyle="fullScreen"
         statusBarTranslucent
         onRequestClose={() => setCreateProjectModalVisible(false)}
       >
-        <View style={{ flex: 1, backgroundColor: Brand.paper }}>
-          <SafeAreaView
-            style={{ backgroundColor: Brand.paper }}
-            edges={["top"]}
-          >
-            <StatusBar barStyle="dark-content" backgroundColor={Brand.paper} />
-            <View style={styles.createProjectHeader}>
-              <Folder size={20} color={Brand.ink} strokeWidth={2} />
-              <Text style={styles.createProjectHeaderTitle}>Create Project</Text>
-            </View>
-          </SafeAreaView>
-          <CreateProject
-            hideHeader
-            navigation={{
-              goBack: () => setCreateProjectModalVisible(false),
-            }}
-            onSuccess={handleCreateProjectSuccess}
-            onCancel={() => setCreateProjectModalVisible(false)}
-          />
-        </View>
+        {createProjectModalVisible ? (
+          <View style={{ flex: 1, backgroundColor: Brand.paper }}>
+            <SafeAreaView
+              style={{ backgroundColor: Brand.paper }}
+              edges={["top"]}
+            >
+              <StatusBar barStyle="dark-content" backgroundColor={Brand.paper} />
+              <View style={styles.createProjectHeader}>
+                <Folder size={20} color={Brand.ink} strokeWidth={2} />
+                <Text style={styles.createProjectHeaderTitle}>Create Project</Text>
+              </View>
+            </SafeAreaView>
+            <CreateProject
+              hideHeader
+              navigation={{
+                goBack: () => setCreateProjectModalVisible(false),
+              }}
+              onSuccess={handleCreateProjectSuccess}
+              onCancel={() => setCreateProjectModalVisible(false)}
+            />
+          </View>
+        ) : null}
       </Modal>
 
       <UpdateProjectModal

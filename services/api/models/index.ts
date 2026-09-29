@@ -11,6 +11,7 @@ export type {
 } from './auth';
 export type {
   Project,
+  ProjectDetailsResponse,
   CreateProjectPayload,
   UpdateProjectPayload,
   AssignProjectPayload,

@@ -15,7 +15,6 @@ import {
   StyleSheet,
 } from "react-native";
 import Toast from 'react-native-toast-message';
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 
@@ -48,7 +47,6 @@ const isSmallScreen = screenWidth < 400 || screenHeight < 700;
 const isMediumScreen = screenWidth < 450;
 const isLargeScreen = screenWidth >= 450;
 
-import { ListTodo } from "lucide-react-native";
 import Sidebar from "../components/Sidebar";
 import HomeBottomNav from "../components/HomeBottomNav";
 import CreateTask from "../components/CreateTask";
@@ -792,49 +790,15 @@ function WidgetScreen({ navigation, route }) {
         statusBarTranslucent
         onRequestClose={() => setCreateTaskVisible(false)}
       >
-        <View style={{ flex: 1, backgroundColor: Brand.paper }}>
-          <SafeAreaView
-            style={{ backgroundColor: Brand.paper }}
-            edges={["top"]}
-          >
-            <StatusBar barStyle="dark-content" backgroundColor={Brand.paper} />
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                paddingHorizontal: 16,
-                paddingVertical: 12,
-                borderBottomWidth: StyleSheet.hairlineWidth,
-                borderBottomColor: Brand.line,
-                backgroundColor: Brand.paper,
-              }}
-            >
-              <ListTodo size={20} color={Brand.ink} strokeWidth={2} />
-              <Text
-                style={{
-                  fontSize: 17,
-                  fontWeight: "700",
-                  color: Brand.ink,
-                  letterSpacing: -0.2,
-                }}
-              >
-                Create Task
-              </Text>
-            </View>
-          </SafeAreaView>
-          <CreateTask
-            hideHeader
-            projectId={projectId}
-            projectName={projectName || project?.name}
-            onCancel={() => setCreateTaskVisible(false)}
-            onSuccess={() => {
-              setCreateTaskVisible(false);
-              onRefresh?.();
-            }}
-          />
-        </View>
+        <CreateTask
+          projectId={projectId}
+          projectName={projectName || project?.name}
+          onCancel={() => setCreateTaskVisible(false)}
+          onSuccess={() => {
+            
+            setCreateTaskVisible(false);
+          }}
+        />
       </Modal>
     </View>
   );

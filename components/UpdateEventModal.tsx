@@ -659,7 +659,7 @@ const UpdateEventModal = ({ visible, onClose, event, onEventUpdated }) => {
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="fade"
       presentationStyle="formSheet"
       onRequestClose={handleClose}
     >

@@ -1,14 +1,17 @@
 import { apiGet, apiPost, apiPut, apiDelete } from '../client';
 import { ApiRoutes } from '../routes';
 import { ApiError } from '../errors';
-import { requireId, unwrapList } from '../normalize';
+import { requireId, unwrapData, unwrapList } from '../normalize';
 import type {
   CreateProjectPayload,
   Id,
   Project,
+  ProjectDetailsResponse,
   UpdateProjectPayload,
   User,
 } from '../models';
+import type { Task } from '../models/task';
+import type { LogEntry } from '../models/log';
 
 export const projectsApi = {
   list: async (): Promise<Project[]> => {
@@ -16,8 +19,26 @@ export const projectsApi = {
     return unwrapList<Project>(response, ['projects', 'data', 'items']);
   },
 
-  getById: (projectId: Id): Promise<Project> =>
-    apiGet<Project>(ApiRoutes.projects.byId(requireId(projectId, 'Project ID'))),
+  getById: async (projectId: Id): Promise<Project> => {
+    const response = await apiGet<unknown>(
+      ApiRoutes.projects.byId(requireId(projectId, 'Project ID'))
+    );
+    return unwrapData<Project>(response);
+  },
+
+  // --- Project Details: single call used by ProjectDetailsScreen ---
+  getDetails: async (projectId: Id): Promise<ProjectDetailsResponse> => {
+    const response = await apiGet<unknown>(
+      ApiRoutes.projects.details(requireId(projectId, 'Project ID'))
+    );
+    const data = unwrapData<ProjectDetailsResponse>(response);
+    return {
+      project: (data?.project ?? data) as Project,
+      team: unwrapList<User>(data, ['team', 'employees', 'users']),
+      tasks: unwrapList<Task>(data, ['tasks', 'data', 'items']),
+      logs: unwrapList<LogEntry>(data, ['logs', 'data', 'items']),
+    };
+  },
 
   create: (data: CreateProjectPayload): Promise<Project> =>
     apiPost<Project, CreateProjectPayload>(ApiRoutes.projects.create, data),
@@ -61,6 +82,14 @@ export async function getMyProjects(): Promise<Project[]> {
 
 export async function getProject(projectId: Id): Promise<Project> {
   return projectsApi.getById(projectId);
+}
+
+export const getProjectById = getProject;
+
+export async function getProjectDetails(
+  projectId: Id
+): Promise<ProjectDetailsResponse> {
+  return projectsApi.getDetails(projectId);
 }
 
 export async function updateProjectById(

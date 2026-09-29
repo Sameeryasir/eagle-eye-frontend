@@ -761,7 +761,7 @@ const CreateEventModal = ({
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="fade"
       presentationStyle="formSheet"
       onRequestClose={handleClose}
     >

@@ -12,28 +12,38 @@ import {
   StatusBar,
   Modal,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { ListTodo } from "lucide-react-native";
 import { useDispatch, useSelector } from "react-redux";
 import {
-  fetchTasksByProjectId,
   selectTasks,
   selectTaskLoading,
+  setTasksForProject,
 } from "../store/slices/taskSlice";
-import {
-  fetchLogsByProjectId,
-  selectLogs,
-} from "../store/slices/logSlice";
-import { getProjectById } from "../services/projects/getProject";
-import { getEmployeesAssignedToProject } from "../services/projects/getEmployeesAssignedToProject";
+import { selectLogs, setLogsForProject } from "../store/slices/logSlice";
+import { getProjectDetails } from "../services/projects/getProjectDetails";
+import { mapLogsToUi } from "../services/api/mappers/logs";
 import HomeBottomNav from "../components/HomeBottomNav";
 import UpdateProjectModal from "../components/UpdateProjectModal";
 import CreateTask from "../components/CreateTask";
+import TaskListCard from "../components/TaskListCard";
 import { Brand } from "../constants/brandColors";
 import { useAuth } from "../context/AuthContext";
 
 const TABS = ["Overview", "Tasks", "Team", "Logs"];
+
+function resolveProjectImageUrl(project) {
+  if (!project) return null;
+  const candidate =
+    project.imageUrl ||
+    project.image_url ||
+    project.coverImage ||
+    project.image?.uri ||
+    project.image?.url ||
+    null;
+  if (typeof candidate !== "string") return null;
+  const trimmed = candidate.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
 
 function formatDate(value) {
   if (!value) return "—";
@@ -68,17 +78,6 @@ function getProjectMeta(project, tasks = []) {
     return { label: "Completed", tone: "done", progress: 100 };
   }
   return { label: "In Progress", tone: "progress", progress };
-}
-
-function taskStatusMeta(task) {
-  const status = String(task.status || task.taskStatus || "").toLowerCase();
-  if (status === "done" || status === "completed" || task.isCompleted) {
-    return { label: "Done", color: "#1B7A4A", bg: "#E8F8EF", icon: "checkmark-circle" };
-  }
-  if (status === "in progress" || status === "in_progress" || status === "active") {
-    return { label: "In Progress", color: "#2563EB", bg: "#E8F1FF", icon: "ellipse-outline" };
-  }
-  return { label: "Pending", color: "#C05621", bg: "#FFF1E8", icon: "ellipse-outline" };
 }
 
 function SectionHeader({ icon, title, right }) {
@@ -211,15 +210,24 @@ export default function ProjectDetailsScreen({ navigation, route }) {
   const tasksLoading = useSelector(selectTaskLoading);
   const logs = useSelector(selectLogs);
 
-  const { projectId, projectName } = route.params || {};
+  const { projectId, projectName, imageUrl: routeImageUrl } = route.params || {};
   const [activeTab, setActiveTab] = useState("Overview");
-  const [project, setProject] = useState(null);
+  const [project, setProject] = useState(() =>
+    projectId
+      ? {
+          id: projectId,
+          name: projectName,
+          imageUrl: routeImageUrl || null,
+        }
+      : null
+  );
   const [team, setTeam] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updateVisible, setUpdateVisible] = useState(false);
   const [createTaskVisible, setCreateTaskVisible] = useState(false);
 
+  // --- Single aggregate API: project + team + tasks + logs in one round-trip ---
   const loadAll = useCallback(
     async (isRefresh = false) => {
       if (!projectId) {
@@ -230,24 +238,61 @@ export default function ProjectDetailsScreen({ navigation, route }) {
       else setLoading(true);
 
       try {
-        const [projectData, teamData] = await Promise.all([
-          getProjectById(projectId).catch(() => null),
-          getEmployeesAssignedToProject(projectId).catch(() => []),
-        ]);
+        const details = await getProjectDetails(projectId);
+        const projectData = details?.project || null;
+        const teamData = Array.isArray(details?.team) ? details.team : [];
+        const taskList = Array.isArray(details?.tasks) ? details.tasks : [];
+        const logList = Array.isArray(details?.logs) ? details.logs : [];
 
-        setProject(projectData || { id: projectId, name: projectName });
-        setTeam(Array.isArray(teamData) ? teamData : teamData?.employees || []);
+        const fallback = {
+          id: projectId,
+          name: projectName,
+          imageUrl: routeImageUrl || null,
+        };
+        const nextProject = projectData
+          ? {
+              ...fallback,
+              ...projectData,
+              imageUrl:
+                resolveProjectImageUrl(projectData) ||
+                routeImageUrl ||
+                null,
+            }
+          : fallback;
 
-        await Promise.all([
-          dispatch(fetchTasksByProjectId(projectId)),
-          dispatch(fetchLogsByProjectId(projectId)),
-        ]);
+        setProject(nextProject);
+        // Normalize name fields so Team tab can render first_name / last_name
+        setTeam(
+          teamData.map((member) => ({
+            ...member,
+            firstName: member.firstName || member.first_name || "",
+            lastName: member.lastName || member.last_name || "",
+          }))
+        );
+
+        dispatch(setTasksForProject({ projectId, tasks: taskList }));
+        dispatch(
+          setLogsForProject({
+            projectId,
+            logs: mapLogsToUi(logList),
+          })
+        );
+      } catch {
+        // Keep any route fallback project so the screen still shows a header
+        setProject((prev) =>
+          prev || {
+            id: projectId,
+            name: projectName,
+            imageUrl: routeImageUrl || null,
+          }
+        );
+        setTeam([]);
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [dispatch, projectId, projectName]
+    [dispatch, projectId, projectName, routeImageUrl]
   );
 
   useEffect(() => {
@@ -257,6 +302,10 @@ export default function ProjectDetailsScreen({ navigation, route }) {
   const meta = useMemo(
     () => getProjectMeta(project, tasks),
     [project, tasks]
+  );
+  const projectImageUrl = useMemo(
+    () => resolveProjectImageUrl(project),
+    [project]
   );
 
   const displayTasks = tasks || [];
@@ -283,62 +332,33 @@ export default function ProjectDetailsScreen({ navigation, route }) {
                 <Text style={styles.linkAction}>+ Add Task</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity
-              onPress={() =>
-                navigation.navigate("ViewAllTasksScreen", {
-                  projectId,
-                  projectName: project?.name || projectName,
-                })
-              }
-              activeOpacity={0.8}
-            >
-              <Text style={styles.viewAll}>View All ›</Text>
-            </TouchableOpacity>
+            {displayTasks.length > 0 && (
+              <TouchableOpacity
+                onPress={() =>
+                  navigation.navigate("ViewAllTasksScreen", {
+                    projectId,
+                    projectName: project?.name || projectName,
+                  })
+                }
+                activeOpacity={0.8}
+              >
+                <Text style={styles.viewAll}>View All ›</Text>
+              </TouchableOpacity>
+            )}
           </View>
         }
       />
       {recentTasks.length > 0 ? (
-        recentTasks.map((task) => {
-          const status = taskStatusMeta(task);
-          const assignee =
-            task.assignedTo
-              ? `${task.assignedTo.firstName || task.assignedTo.first_name || ""} ${
-                  task.assignedTo.lastName || task.assignedTo.last_name || ""
-                }`.trim()
-              : task.assigneeName || "Unassigned";
-          return (
-            <TouchableOpacity
-              key={task.id}
-              style={styles.taskCard}
-              activeOpacity={0.85}
-              onPress={() =>
-                navigation.navigate("TaskDetails", { taskId: task.id })
-              }
-            >
-              <Ionicons name={status.icon} size={20} color={status.color} />
-              <View style={{ flex: 1, marginHorizontal: 10 }}>
-                <Text style={styles.taskTitle} numberOfLines={1}>
-                  {task.title || task.name || "Untitled task"}
-                </Text>
-                <Text style={styles.taskMeta} numberOfLines={1}>
-                  {assignee} ·{" "}
-                  {formatDate(
-                    task.endTime ||
-                      task.dueDate ||
-                      task.startTime ||
-                      task.startDate ||
-                      task.createdAt
-                  )}
-                </Text>
-              </View>
-              <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
-                <Text style={[styles.statusPillText, { color: status.color }]}>
-                  {status.label}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })
+        recentTasks.map((task) => (
+          <TaskListCard
+            key={task.id}
+            task={task}
+            projectName={project?.name || projectName}
+            onPress={() =>
+              navigation.navigate("TaskDetails", { taskId: task.id })
+            }
+          />
+        ))
       ) : (
         !tasksLoading && (
           <EmptyWidgetState
@@ -416,35 +436,16 @@ export default function ProjectDetailsScreen({ navigation, route }) {
         }
       />
       {displayTasks.length > 0 ? (
-        displayTasks.map((task) => {
-          const status = taskStatusMeta(task);
-          return (
-            <TouchableOpacity
-              key={task.id}
-              style={styles.taskCard}
-              onPress={() =>
-                navigation.navigate("TaskDetails", { taskId: task.id })
-              }
-            >
-              <Ionicons name={status.icon} size={20} color={status.color} />
-              <View style={{ flex: 1, marginHorizontal: 10 }}>
-                <Text style={styles.taskTitle} numberOfLines={1}>
-                  {task.title || task.name || "Untitled task"}
-                </Text>
-                <Text style={styles.taskMeta}>
-                  {formatDate(
-                    task.endTime || task.dueDate || task.startTime || task.createdAt
-                  )}
-                </Text>
-              </View>
-              <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
-                <Text style={[styles.statusPillText, { color: status.color }]}>
-                  {status.label}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })
+        displayTasks.map((task) => (
+          <TaskListCard
+            key={task.id}
+            task={task}
+            projectName={project?.name || projectName}
+            onPress={() =>
+              navigation.navigate("TaskDetails", { taskId: task.id })
+            }
+          />
+        ))
       ) : (
         <EmptyWidgetState icon="checkbox-outline" title="No task assigned" />
       )}
@@ -595,9 +596,9 @@ export default function ProjectDetailsScreen({ navigation, route }) {
           }
         >
           <View style={styles.heroCard}>
-            {project?.imageUrl ? (
+            {projectImageUrl ? (
               <Image
-                source={{ uri: project.imageUrl }}
+                source={{ uri: projectImageUrl }}
                 style={styles.heroImage}
               />
             ) : (
@@ -740,28 +741,17 @@ export default function ProjectDetailsScreen({ navigation, route }) {
         statusBarTranslucent
         onRequestClose={() => setCreateTaskVisible(false)}
       >
-        <View style={{ flex: 1, backgroundColor: Brand.paper }}>
-          <SafeAreaView
-            style={{ backgroundColor: Brand.paper }}
-            edges={["top"]}
-          >
-            <StatusBar barStyle="dark-content" backgroundColor={Brand.paper} />
-            <View style={styles.createTaskHeader}>
-              <ListTodo size={20} color={Brand.ink} strokeWidth={2} />
-              <Text style={styles.createTaskHeaderTitle}>Create Task</Text>
-            </View>
-          </SafeAreaView>
+        {createTaskVisible ? (
           <CreateTask
-            hideHeader
             projectId={projectId}
             projectName={project?.name || projectName}
             onCancel={() => setCreateTaskVisible(false)}
             onSuccess={() => {
+              
               setCreateTaskVisible(false);
-              loadAll(true);
             }}
           />
-        </View>
+        ) : null}
       </Modal>
     </View>
   );
@@ -770,23 +760,6 @@ export default function ProjectDetailsScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Brand.paper },
   flex: { flex: 1 },
-  createTaskHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Brand.line,
-    backgroundColor: Brand.paper,
-  },
-  createTaskHeaderTitle: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: Brand.ink,
-    letterSpacing: -0.25,
-  },
   center: { alignItems: "center", justifyContent: "center" },
   topBar: {
     flexDirection: "row",
@@ -1113,26 +1086,6 @@ const styles = StyleSheet.create({
     color: Brand.inkMuted,
     marginBottom: 10,
     fontWeight: "500",
-  },
-  taskCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Brand.paper,
-    borderWidth: 1,
-    borderColor: "#EEF0F3",
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 10,
-  },
-  taskTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: Brand.ink,
-  },
-  taskMeta: {
-    marginTop: 3,
-    fontSize: 12,
-    color: Brand.inkMuted,
   },
   statusPill: {
     borderRadius: 999,

@@ -4,6 +4,8 @@ export {
   createProject,
   getMyProjects,
   getProject,
+  getProjectById,
+  getProjectDetails,
   updateProjectById,
   deleteProjectById,
   assignProjectToEmployees,
