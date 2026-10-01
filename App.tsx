@@ -447,7 +447,9 @@ const AppNavigator = () => {
           break;
         case "ChatScreen":
           config.title = "Messages";
-          config.showRightIcon = false;
+          // Show the same account person icon used on other main screens
+          config.showRightIcon = true;
+          config.rightIconName = "person";
           break;
         case "UserChatScreen":
           config.title = route.params?.userName || "Chat";

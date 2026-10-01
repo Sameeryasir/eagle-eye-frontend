@@ -366,16 +366,16 @@ function CalenderScreen({ navigation }) {
 
       {viewMode === 'monthly' ? (
         <View style={styles.monthLayout}>
-          <ScrollView
+        <ScrollView 
             style={styles.flex}
             contentContainerStyle={[
               styles.monthScroll,
               { paddingTop: insets.top },
             ]}
-            refreshControl={
-              <RefreshControl
+          refreshControl={
+            <RefreshControl
                 refreshing={isRefetching}
-                onRefresh={onRefresh}
+              onRefresh={onRefresh}
                 colors={[ACCENT]}
                 tintColor={ACCENT}
                 progressBackgroundColor="#FFFFFF"
@@ -411,10 +411,10 @@ function CalenderScreen({ navigation }) {
             </View>
 
             <View style={styles.calendarCard}>
-              <Calendar
+          <Calendar
                 key={visibleMonth}
                 current={visibleMonth}
-                onDayPress={onDayPress}
+            onDayPress={onDayPress}
                 onMonthChange={(month) => {
                   setVisibleMonth(
                     `${month.year}-${String(month.month).padStart(2, '0')}-01`
@@ -452,15 +452,15 @@ function CalenderScreen({ navigation }) {
                   </Text>
                   <Text style={styles.agendaSubtitle}>
                     {selectedDate === todayKey ? 'Today' : 'Schedule'}
-                  </Text>
-                </View>
+                          </Text>
+                        </View>
                 <View style={styles.agendaCountPill}>
                   <Text style={styles.agendaCount}>
                     {selectedItems.length}{' '}
                     {selectedItems.length === 1 ? 'item' : 'items'}
                   </Text>
-                </View>
-              </View>
+                        </View>
+                    </View>
 
               {feedTruncated ? (
                 <Text style={styles.truncatedNotice}>
@@ -492,7 +492,7 @@ function CalenderScreen({ navigation }) {
                 ))
               )}
             </View>
-          </ScrollView>
+        </ScrollView>
         </View>
       ) : (
         <MyWeekView
@@ -509,21 +509,21 @@ function CalenderScreen({ navigation }) {
           }
         />
       )}
-
+      
       <HomeBottomNav
         onAddPress={() => {
           if (userRole === 'Owner') {
             setShowEventCreationDialog(true);
             return;
           }
-          Toast.show({
-            type: 'info',
-            text1: 'Access Restricted',
-            text2: 'Only Owners can create events',
-            visibilityTime: 3000,
-            autoHide: true,
-            topOffset: 80,
-          });
+            Toast.show({
+              type: 'info',
+              text1: 'Access Restricted',
+              text2: 'Only Owners can create events',
+              visibilityTime: 3000,
+              autoHide: true,
+              topOffset: 80,
+            });
         }}
       />
 

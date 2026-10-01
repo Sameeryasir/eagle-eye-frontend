@@ -115,7 +115,7 @@ export const chatsApi = {
     return unwrapList(response, ['data', 'items', 'messages']);
   },
 
-  createSignature: (
+  createSignature: async (
     conversationId: Id,
     signatureData: { title?: string; notes?: string; dueDate?: string } = {}
   ): Promise<unknown> => {
@@ -125,7 +125,11 @@ export const chatsApi = {
     if (signatureData?.title?.trim()) payload.title = signatureData.title.trim();
     if (signatureData?.notes?.trim()) payload.notes = signatureData.notes.trim();
     if (signatureData?.dueDate?.trim()) payload.dueDate = signatureData.dueDate;
-    return apiPost(ApiRoutes.signature.messageWithSignature, payload);
+    const response = await apiPost(
+      ApiRoutes.signature.messageWithSignature,
+      payload
+    );
+    return unwrapData(response);
   },
 
   submitSignature: (

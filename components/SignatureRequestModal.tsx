@@ -4,14 +4,16 @@ import {
   View,
   Text,
   Modal,
-  SafeAreaView,
   TouchableOpacity,
   TextInput,
   ScrollView,
   ActivityIndicator,
   Alert,
   Platform,
+  StyleSheet,
+  KeyboardAvoidingView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import Toast from "react-native-toast-message";
@@ -19,6 +21,7 @@ import NetInfo from "@react-native-community/netinfo";
 import { createSignature } from "../services/chats/createSignature";
 import { createMessageNotification } from "../services/inAppNotification/createMessageNotification";
 import { useAuth } from "../context/AuthContext";
+import { Brand } from "../constants/brandColors";
 
 const SignatureRequestModal = ({
   visible,
@@ -37,6 +40,19 @@ const SignatureRequestModal = ({
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isSendingSignature, setIsSendingSignature] = useState(false);
 
+  const titleTrimmed = signatureTitle.trim();
+  const canSend = titleTrimmed.length > 0 && !isSendingSignature;
+
+  const formatDueDate = (date) => {
+    if (!(date instanceof Date)) return "Select date";
+    return date.toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
   const handleDateChange = (event, selectedDate) => {
     if (selectedDate && selectedDate instanceof Date) {
       setSignatureDueDate(selectedDate);
@@ -53,6 +69,7 @@ const SignatureRequestModal = ({
     setSignatureTitle("");
     setSignatureNotes("");
     setSignatureDueDate(new Date());
+    setShowDatePicker(false);
     setIsSendingSignature(false);
     onClose();
   };
@@ -84,7 +101,6 @@ const SignatureRequestModal = ({
       const netInfo = await NetInfo.fetch();
 
       if (netInfo.isConnected === false) {
-
         if (onOfflineRequest) {
           onOfflineRequest(signatureData);
         }
@@ -106,8 +122,7 @@ const SignatureRequestModal = ({
         const result = await createSignature(conversationId, signatureData);
 
         try {
-          if (!recipientUserId) {
-          } else {
+          if (recipientUserId) {
             const fromUserName =
               `${userInfo?.firstName || ""} ${userInfo?.lastName || ""}`.trim() ||
               "Unknown User";
@@ -171,161 +186,394 @@ const SignatureRequestModal = ({
   };
 
   return (
-    <>
-      <Modal
-        visible={visible}
-        animationType="slide"
-        onRequestClose={handleClose}
-      >
-        <SafeAreaView className="flex-1 bg-white">
-          <View className="flex-row items-center justify-between px-5 py-4 border-b border-[#e1e8ed]">
-            <TouchableOpacity
-              onPress={handleClose}
-              className="p-2"
-              activeOpacity={0.7}
-            >
-              <Ionicons name="arrow-back" size={24} color="#333" />
-            </TouchableOpacity>
-            <Text className="text-[18px] font-bold text-[#333]">
-              Request Signature
-            </Text>
-            <View style={{ width: 40 }} />
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={handleClose}
+    >
+      <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <View style={styles.header}>
+            <View style={styles.headerTop}>
+              <View style={styles.headerCopy}>
+                <Text style={styles.headerTitle}>Request signature</Text>
+                <Text style={styles.headerSubtitle}>
+                  Send a document for the other person to review and sign
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={handleClose}
+                style={styles.closeBtn}
+                activeOpacity={0.8}
+                hitSlop={8}
+              >
+                <Ionicons name="close" size={20} color={Brand.ink} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <ScrollView
-            className="flex-1"
+            style={styles.flex}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 20 }}
+            contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
           >
-            <View className="flex-1 p-5">
-              <View className="mb-5">
-                <View className="mb-5">
-                  <View className="flex-row items-center mb-2">
-                    <Ionicons
-                      name="create"
-                      size={20}
-                      color="black"
-                      style={{ marginRight: 8 }}
-                    />
-                    <Text className="text-[16px] font-semibold text-[#333]">
-                      Title *
-                    </Text>
-                  </View>
-                  <TextInput
-                    className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333]"
-                    placeholder="Enter signature request title..."
-                    placeholderTextColor="#999"
-                    value={signatureTitle}
-                    onChangeText={setSignatureTitle}
-                    returnKeyType="next"
-                  />
-                </View>
-
-                <View className="mb-5">
-                  <View className="flex-row items-center mb-2">
-                    <Ionicons
-                      name="document-text"
-                      size={20}
-                      color="black"
-                      style={{ marginRight: 8 }}
-                    />
-                    <Text className="text-[16px] font-semibold text-[#333]">
-                      Notes
-                    </Text>
-                  </View>
-                  <TextInput
-                    className="border border-[#e1e8ed] rounded-lg p-3 text-[16px] bg-[#f8f9fa] text-[#333] h-24"
-                    placeholder="Add notes or instructions..."
-                    placeholderTextColor="#999"
-                    value={signatureNotes}
-                    onChangeText={setSignatureNotes}
-                    multiline
-                    numberOfLines={4}
-                    returnKeyType="next"
-                    style={{ textAlignVertical: "top" }}
-                  />
-                </View>
-
-                <View className="mb-5">
-                  <View className="flex-row items-center mb-2">
-                    <Ionicons
-                      name="calendar"
-                      size={20}
-                      color="black"
-                      style={{ marginRight: 8 }}
-                    />
-                    <Text className="text-[16px] font-semibold text-[#333]">
-                      Due Date
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    className="flex-row items-center justify-between border border-[#e1e8ed] rounded-lg p-3 bg-[#f8f9fa]"
-                    onPress={() => setShowDatePicker(!showDatePicker)}
-                  >
-                    <Text className="text-[16px] text-[#333] font-medium">
-                      {signatureDueDate
-                        ? signatureDueDate.toLocaleDateString()
-                        : "Select date"}
-                    </Text>
-                    <Ionicons
-                      name={showDatePicker ? "chevron-up" : "calendar-outline"}
-                      size={16}
-                      color="#666"
-                    />
-                  </TouchableOpacity>
-
-                  {showDatePicker && (
-                    <View className="mt-3 border border-[#e1e8ed] rounded-lg bg-white p-3">
-                      <DateTimePicker
-                        value={signatureDueDate || new Date()}
-                        mode="date"
-                        display={Platform.OS === "ios" ? "spinner" : "default"}
-                        onChange={handleDateChange}
-                        minimumDate={new Date()}
-                        style={{ width: "100%" }}
-                      />
-                    </View>
-                  )}
-                </View>
+            <View style={styles.heroCard}>
+              <View style={styles.heroIconWrap}>
+                <Ionicons name="create" size={26} color={Brand.onInk} />
               </View>
+              <View style={styles.heroCopy}>
+                <Text style={styles.heroTitle}>Contract for signature</Text>
+                <Text style={styles.heroText}>
+                  Add a clear title, optional notes, and a due date before sending.
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.fieldBlock}>
+              <View style={styles.fieldLabelRow}>
+                <Ionicons name="text-outline" size={16} color={Brand.inkMuted} />
+                <Text style={styles.fieldLabel}>Document title</Text>
+                <Text style={styles.requiredMark}>Required</Text>
+              </View>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. Subcontractor agreement"
+                placeholderTextColor={Brand.inkFaint}
+                value={signatureTitle}
+                onChangeText={setSignatureTitle}
+                returnKeyType="next"
+                maxLength={120}
+              />
+            </View>
+
+            <View style={styles.fieldBlock}>
+              <View style={styles.fieldLabelRow}>
+                <Ionicons
+                  name="document-text-outline"
+                  size={16}
+                  color={Brand.inkMuted}
+                />
+                <Text style={styles.fieldLabel}>Notes</Text>
+                <Text style={styles.optionalMark}>Optional</Text>
+              </View>
+              <TextInput
+                style={[styles.input, styles.notesInput]}
+                placeholder="Add signing instructions or context…"
+                placeholderTextColor={Brand.inkFaint}
+                value={signatureNotes}
+                onChangeText={setSignatureNotes}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+                maxLength={500}
+              />
+            </View>
+
+            <View style={styles.fieldBlock}>
+              <View style={styles.fieldLabelRow}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={16}
+                  color={Brand.inkMuted}
+                />
+                <Text style={styles.fieldLabel}>Complete by</Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.dateBtn}
+                onPress={() => setShowDatePicker(!showDatePicker)}
+                activeOpacity={0.85}
+              >
+                <View style={styles.dateBtnLeft}>
+                  <View style={styles.dateIconChip}>
+                    <Ionicons name="calendar" size={16} color={Brand.ink} />
+                  </View>
+                  <Text style={styles.dateBtnText}>
+                    {formatDueDate(signatureDueDate)}
+                  </Text>
+                </View>
+                <Ionicons
+                  name={showDatePicker ? "chevron-up" : "chevron-down"}
+                  size={18}
+                  color={Brand.inkMuted}
+                />
+              </TouchableOpacity>
+
+              {showDatePicker && (
+                <View style={styles.datePickerWrap}>
+                  <DateTimePicker
+                    value={signatureDueDate || new Date()}
+                    mode="date"
+                    display={Platform.OS === "ios" ? "spinner" : "default"}
+                    onChange={handleDateChange}
+                    minimumDate={new Date()}
+                    style={{ width: "100%" }}
+                    themeVariant="light"
+                  />
+                </View>
+              )}
             </View>
           </ScrollView>
 
-          <View
-            className="absolute bottom-0 left-0 right-0 flex-row justify-between gap-4 px-5 pt-5 pb-8 bg-white"
-            style={{ zIndex: 1000 }}
-          >
+          <View style={styles.footer}>
             <TouchableOpacity
-              className="flex-1 bg-[#f8f9fa] border border-[#dee2e6] rounded-lg p-4 items-center"
+              style={styles.cancelBtn}
               onPress={handleClose}
-              activeOpacity={0.7}
-            >
-              <Text className="text-[#6c757d] text-[16px] font-semibold">
-                Cancel
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className={`flex-1 bg-black rounded-lg p-4 items-center justify-center ${
-                isSendingSignature ? "opacity-50" : ""
-              }`}
+              activeOpacity={0.85}
               disabled={isSendingSignature}
+            >
+              <Text style={styles.cancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
+              disabled={!canSend}
               onPress={handleSendRequest}
-              activeOpacity={0.7}
+              activeOpacity={0.85}
             >
               {isSendingSignature ? (
-                <ActivityIndicator color="white" size="small" />
+                <ActivityIndicator color={Brand.onInk} size="small" />
               ) : (
-                <Text className="text-white text-[16px] font-semibold">
-                  Send Request
-                </Text>
+                <>
+                  <Ionicons name="send" size={16} color={Brand.onInk} />
+                  <Text style={styles.sendBtnText}>Send request</Text>
+                </>
               )}
             </TouchableOpacity>
           </View>
-        </SafeAreaView>
-      </Modal>
-    </>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </Modal>
   );
 };
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: Brand.paper,
+  },
+  flex: {
+    flex: 1,
+  },
+  header: {
+    backgroundColor: Brand.paper,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Brand.line,
+  },
+  headerTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  headerCopy: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: Brand.ink,
+    letterSpacing: -0.3,
+  },
+  headerSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    color: Brand.inkMuted,
+    lineHeight: 18,
+  },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Brand.paper,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+    backgroundColor: Brand.paper,
+  },
+  heroCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Brand.paper,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    padding: 14,
+    marginBottom: 20,
+  },
+  heroIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: Brand.ink,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroCopy: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  heroTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: Brand.ink,
+  },
+  heroText: {
+    marginTop: 3,
+    fontSize: 12,
+    lineHeight: 17,
+    color: Brand.inkMuted,
+  },
+  fieldBlock: {
+    marginBottom: 18,
+  },
+  fieldLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+    gap: 6,
+  },
+  fieldLabel: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "600",
+    color: Brand.inkSoft,
+  },
+  requiredMark: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: Brand.ink,
+    backgroundColor: Brand.paper,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    overflow: "hidden",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  optionalMark: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: Brand.inkMuted,
+    backgroundColor: Brand.paper,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    overflow: "hidden",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  input: {
+    fontSize: 16,
+    color: Brand.ink,
+    backgroundColor: Brand.paper,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === "ios" ? 13 : 10,
+  },
+  notesInput: {
+    minHeight: 110,
+    paddingTop: 12,
+  },
+  dateBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: Brand.paper,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  dateBtnLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    paddingRight: 8,
+  },
+  dateIconChip: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: Brand.paper,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  dateBtnText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: Brand.ink,
+  },
+  datePickerWrap: {
+    marginTop: 12,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: Brand.paper,
+    borderWidth: 1,
+    borderColor: Brand.line,
+  },
+  footer: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
+    backgroundColor: Brand.paper,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Brand.line,
+  },
+  cancelBtn: {
+    flex: 1,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: Brand.paper,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelBtnText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: Brand.inkSoft,
+  },
+  sendBtn: {
+    flex: 1.35,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: Brand.ink,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  sendBtnDisabled: {
+    opacity: 0.4,
+  },
+  sendBtnText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: Brand.onInk,
+  },
+});
 
 export default SignatureRequestModal;

@@ -1,16 +1,16 @@
 // @ts-nocheck
-// Why it was changed: Prevent duplicate IDs when clocks collide or drift, let users inspect the full offline history on demand, surface the complete cached payload clearly in chronological order, avoid churn on SQLite rows, stop redundant API hydrations while keeping console noise low, speed up hydrations so large chat histories sync without hammering the database, avoid noisy duplicate-skip logs whenever the API returns a page we already saved, and ensure background signature refreshes only update outstanding forms.
-// Dependencies or related files: Depends on the messages_<conversationId> table defined below with AUTOINCREMENT and the Toast utility for user confirmations.
+// What changed: Composer lifts with the keyboard via Keyboard height listeners (WhatsApp-style) while AppHeader stays fixed.
+// Why: KeyboardAvoidingView alone was not reliably lifting the send bar above the keyboard on device.
+// Dependencies: Brand colors, AppHeader in App.tsx (outside this screen), messages_<conversationId> SQLite helpers.
+// MCP context 7: Use Keyboard show/hide events to pad only the chat screen bottom — do not pan the whole app.
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
   View,
   Text,
   FlatList,
-  SafeAreaView,
   ActivityIndicator,
   TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
   Platform,
   Keyboard,
   Image,
@@ -33,10 +33,9 @@ import * as ImagePicker from 'expo-image-picker';
 import NetInfo from '@react-native-community/netinfo';
 import { useAuth } from "../context/AuthContext";
 import { useSQLiteContext } from 'expo-sqlite';
-import HomeBottomNav from "../components/HomeBottomNav";
 import { 
-  getMessagesTableName 
-} from "../database/schema";
+  CHAT_MESSAGES_TABLE,
+} from "../database/schema/messages.schema";
 import {
   messageExistsInSQLite,
   saveMessageToSQLite,
@@ -56,8 +55,9 @@ import {
   getPendingSignatureIds,
   getPendingMessages,
   getAllMessagesAscending,
-  getMessageFromSQLite
-} from "../database/messageStorage";
+  getMessageFromSQLite,
+  loadCachedMessagesPage,
+} from "../database/messages";
 import { getMessagesByConversationId } from "../services/chats/getMessagesByConversationId";
 import { sendMessage } from "../services/chats/sendMessage";
 import { getFilesForConversation } from "../services/chats/getFilesForConversation";
@@ -74,6 +74,8 @@ import SignatureRequestModal from "../components/SignatureRequestModal";
 import AllFilesModal from "../components/AllFilesModal";
 import AllSignaturesModal from "../components/AllSignaturesModal";
 import SignatureDetailModal from "../components/SignatureDetailModal";
+import { useChatKeyboard } from "../hooks/useChatKeyboard";
+import { Brand } from "../constants/brandColors";
 
 const emitVerticalLog = (heading, rows) => {
   Object.entries(rows || {}).forEach(([key, value]) => {
@@ -156,8 +158,9 @@ const UserChatScreen = ({ navigation, route }) => {
   const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
   
   const [currentOffset, setCurrentOffset] = useState(0);
-  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
+  const isLoadingMoreRef = useRef(false);
   const [currentPage, setCurrentPage] = useState(1); // Track current API page
   const [isUsingAPI, setIsUsingAPI] = useState(false); // Track if we're using API or SQLite
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
@@ -182,6 +185,9 @@ const UserChatScreen = ({ navigation, route }) => {
 
   // Used to show typing indicators below the input bar (WhatsApp-style)
   const [typingUsers, setTypingUsers] = useState([]); // Array of user objects who are typing
+
+  // WhatsApp-style composer lift — header stays fixed in App.tsx
+  const keyboardHeight = useChatKeyboard();
 
   const apiAbortControllersRef = useRef(new Set());
   const isScreenActiveRef = useRef(true);
@@ -344,12 +350,12 @@ const UserChatScreen = ({ navigation, route }) => {
         wasCancelled = true;
         break;
       }
-      const apiMessages = apiResponse?.messages || [];
+      const apiMessages = normalizeMessagesResponse(apiResponse);
       
       if (apiMessages && apiMessages.length > 0) {
         allMessages = [...allMessages, ...apiMessages];
         currentPageNum++;
-        hasMorePages = apiResponse?.page < apiResponse?.totalPages;
+        hasMorePages = apiMessages.length >= 20;
       } else {
         hasMorePages = false;
       }
@@ -421,6 +427,18 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
+  const normalizeMessagesResponse = (response) => {
+    if (Array.isArray(response)) return response;
+    if (Array.isArray(response?.messages)) return response.messages;
+    if (Array.isArray(response?.data)) return response.data;
+    return [];
+  };
+
+  const listMessages = useMemo(
+    () => dedupeMessagesById(messages),
+    [messages]
+  );
+
   // Loader only shown for API calls (SQLite is fast)
   const fetchMessages = async () => {
     
@@ -450,45 +468,24 @@ const UserChatScreen = ({ navigation, route }) => {
             let hasMorePages = true;
             
             while (hasMorePages) {
-              const apiResponse = await getMessagesByConversationId(conversationId, currentPageNum, 20);
-              
-              const apiMessages = apiResponse?.messages || [];
-              
+              const apiResponse = await getMessagesByConversationId(
+                conversationId,
+                currentPageNum,
+                20
+              );
+              const apiMessages = normalizeMessagesResponse(apiResponse);
+
               if (apiMessages && apiMessages.length > 0) {
                 allMessages = [...allMessages, ...apiMessages];
-                
-                // Convert current page messages to UI format
-                const currentPageMessages = apiMessages.map(msg => ({
-                  id: msg.id?.toString(),
-                  content: msg.content,
-                  fileUrl: msg.fileUrl,
-                  fileName: msg.fileName,
-                  fileType: msg.fileType,
-                  fileSize: msg.fileSize,
-                  sender: {
-                    id: msg.sender?.id,
-                    first_name: msg.sender?.first_name,
-                    last_name: msg.sender?.last_name
-                  },
-                  createdAt: msg.createdAt,
-                  status: msg.status || 'sent',
-                  // Add signature data if it exists
-                  signature: msg.signature ? {
-                    id: msg.signature.id,
-                    title: msg.signature.title,
-                    notes: msg.signature.notes,
-                    dueDate: msg.signature.dueDate,
-                    status: msg.signature.status,
-                    fileUrl: msg.signature.fileUrl,
-                    fileName: msg.signature.fileName,
-                    fileSize: msg.signature.fileSize,
-                    signedBy: msg.signature.signedBy
-                  } : null
-                }));
+                const currentPageMessages = apiMessages.map((msg) =>
+                  convertMessageToUI(msg)
+                );
 
-                // Show all messages from this page at once for faster loading
-                setMessages(prevMessages => {
-                  const combinedMessages = [...prevMessages, ...currentPageMessages];
+                setMessages((prevMessages) => {
+                  const combinedMessages = [
+                    ...prevMessages,
+                    ...currentPageMessages,
+                  ];
                   return sortMessagesByTime(combinedMessages);
                 });
 
@@ -497,9 +494,7 @@ const UserChatScreen = ({ navigation, route }) => {
                 }
 
                 currentPageNum++;
-                hasMorePages = apiResponse?.page < apiResponse?.totalPages;
-                
-                // No delay between pages for faster loading
+                hasMorePages = apiMessages.length >= 20;
               } else {
                 hasMorePages = false;
               }
@@ -558,64 +553,27 @@ const UserChatScreen = ({ navigation, route }) => {
       }
 
       
-      // Get total message count and latest 20 messages (same logic as test.js)
-      const totalMessageCountRow = db.getFirstSync(`SELECT COUNT(*) as count FROM messages_${conversationId}`);
-      const totalMessageCount = totalMessageCountRow?.count || 0;
-      const dbMessages = db.getAllSync(
-        `SELECT * FROM messages_${conversationId} ORDER BY datetime(created_at) DESC LIMIT ${SQLITE_MESSAGES_PAGE_SIZE}`
-      );
+      // Shared chat_messages table — load newest page via cache service
+      const totalMessageCount = getMessageCountFromSQLite(db, conversationId);
+      const uiMessages = loadCachedMessagesPage(
+        db,
+        conversationId,
+        SQLITE_MESSAGES_PAGE_SIZE,
+        0
+      ).map((msg) => ({
+        ...msg,
+        id: msg.id?.toString() || `db_${msg.createdAt}`,
+      }));
       
-      // Debug: Show what columns are available in the first message
-      if (dbMessages.length > 0) {
-      }
-      
-      
-      if (dbMessages && dbMessages.length > 0) {
-        // Convert database messages to UI format with signature fields
-        const uiMessages = dbMessages.map(msg => ({
-          id: msg.id?.toString() || `db_${msg.created_at}`,
-          content: msg.content,
-          fileUrl: msg.file_uri,
-          fileName: msg.file_name,
-          fileType: msg.file_type,
-          fileSize: msg.file_size,
-          sender: {
-            id: msg.sender_id,
-            first_name: msg.sender_first_name,
-            last_name: msg.sender_last_name
-          },
-          createdAt: msg.created_at,
-          status: msg.status || 'sent',
-          // Add signature data if it exists
-          signature: msg.signature_id ? {
-            id: msg.signature_id,
-            title: msg.signature_title,
-            notes: msg.signature_notes,
-            dueDate: msg.signature_due_date,
-            status: msg.signature_status,
-            fileUrl: msg.signature_file_url,
-            fileName: msg.signature_file_name,
-            fileSize: msg.signature_file_size,
-            signedBy: msg.signed_by_id ? {
-              id: msg.signed_by_id,
-              name: msg.signed_by_name,
-              email: msg.signed_by_email
-            } : null
-          } : null
-        }));
-        
-        // SQL query already sorted messages by created_at DESC, so no need to sort again
-        // Messages are already in correct order (newest first) from SQL query
+      if (uiMessages && uiMessages.length > 0) {
         setMessages(uiMessages);
         
         // Set pagination state - enable pagination if more messages exist
-        setCurrentOffset(SQLITE_MESSAGES_PAGE_SIZE); // Offset = 20 (ready to load next 20)
-        setHasMoreMessages(totalMessageCount > SQLITE_MESSAGES_PAGE_SIZE); // Enable pagination if more than 20 messages exist
+        setCurrentOffset(SQLITE_MESSAGES_PAGE_SIZE);
+        setHasMoreMessages(totalMessageCount > SQLITE_MESSAGES_PAGE_SIZE);
         
-        // Store the last message ID in AsyncStorage
         storeLastMessageId(uiMessages);
         
-        // Kick off background sync to replace any pending contracts with signed data from server
         syncSignedSignaturesFromAPI().catch((error) => {
           console.error('❌ [SIGNED SYNC] Background sync failed:', error);
         });
@@ -638,57 +596,28 @@ const UserChatScreen = ({ navigation, route }) => {
           while (hasMorePages) {
             const apiResponse = await getMessagesByConversationId(conversationId, currentPageNum, 20);
             
-            const apiMessages = apiResponse?.messages || [];
+            const apiMessages = normalizeMessagesResponse(apiResponse);
             
             if (apiMessages && apiMessages.length > 0) {
               allMessages = [...allMessages, ...apiMessages];
               
-              // Convert current page messages to UI format
-              const currentPageMessages = apiMessages.map(msg => ({
-                id: msg.id?.toString(),
-                content: msg.content,
-                fileUrl: msg.fileUrl,
-                fileName: msg.fileName,
-                fileType: msg.fileType,
-                fileSize: msg.fileSize,
-                sender: {
-                  id: msg.sender?.id,
-                  first_name: msg.sender?.first_name,
-                  last_name: msg.sender?.last_name
-                },
-                createdAt: msg.createdAt,
-                status: msg.status || 'sent',
-                // Add signature data if it exists
-                signature: msg.signature ? {
-                  id: msg.signature.id,
-                  title: msg.signature.title,
-                  notes: msg.signature.notes,
-                  dueDate: msg.signature.dueDate,
-                  status: msg.signature.status,
-                  fileUrl: msg.signature.fileUrl,
-                  fileName: msg.signature.fileName,
-                  fileSize: msg.signature.fileSize,
-                  signedBy: msg.signature.signedBy
-                } : null
-              }));
+              const currentPageMessages = apiMessages.map((msg) =>
+                convertMessageToUI(msg)
+              );
 
-              // Show messages one by one quickly like WhatsApp
-              for (let i = 0; i < currentPageMessages.length; i++) {
-                const message = currentPageMessages[i];
-                setMessages(prevMessages => {
-                  if (!isScreenActiveRef.current) {
-                    return prevMessages;
-                  }
-                  const combinedMessages = [...prevMessages, message];
-                  return sortMessagesByTime(combinedMessages);
-                });
-                
-                // Fast delay between each message (50ms for WhatsApp-like speed)
-                await new Promise(resolve => setTimeout(resolve, 50));
-              }
+              setMessages((prevMessages) => {
+                if (!isScreenActiveRef.current) {
+                  return prevMessages;
+                }
+                const combinedMessages = [
+                  ...prevMessages,
+                  ...currentPageMessages,
+                ];
+                return sortMessagesByTime(combinedMessages);
+              });
 
               currentPageNum++;
-              hasMorePages = apiResponse?.page < apiResponse?.totalPages;
+              hasMorePages = apiMessages.length >= 20;
               
               // Small delay between pages
               await new Promise(resolve => setTimeout(resolve, 100));
@@ -753,176 +682,93 @@ const UserChatScreen = ({ navigation, route }) => {
 
   // Handles both SQLite pagination (offset) and API pagination (page)
   const loadMoreMessages = async () => {
-    if (!hasMoreMessages) {
+    if (
+      !hasMoreMessages ||
+      !isInitialLoadComplete ||
+      isLoadingMoreMessages ||
+      isLoadingMoreRef.current ||
+      !conversationId
+    ) {
       return;
     }
 
+    isLoadingMoreRef.current = true;
+    setIsLoadingMoreMessages(true);
+
     try {
       if (isUsingAPI) {
-        // Load next page from API
         const nextPage = currentPage + 1;
-        
-        const apiResponse = await getMessagesByConversationId(conversationId, nextPage, 20);
-        
-        const apiMessages = apiResponse?.messages || [];
+        const apiResponse = await getMessagesByConversationId(
+          conversationId,
+          nextPage,
+          20
+        );
+        const apiMessages = Array.isArray(apiResponse)
+          ? apiResponse
+          : apiResponse?.messages || [];
 
         if (apiMessages && apiMessages.length > 0) {
-          // Convert API messages to UI format
-          const uiMessages = apiMessages.map(msg => ({
-            id: msg.id?.toString(),
-            content: msg.content,
-            fileUrl: msg.fileUrl,
-            fileName: msg.fileName,
-            fileType: msg.fileType,
-            fileSize: msg.fileSize,
-            sender: {
-              id: msg.sender?.id,
-              first_name: msg.sender?.first_name,
-              last_name: msg.sender?.last_name
-            },
-            createdAt: msg.createdAt,
-            status: msg.status || 'sent',
-            // Add signature data if it exists
-            signature: msg.signature ? {
-              id: msg.signature.id,
-              title: msg.signature.title,
-              notes: msg.signature.notes,
-              dueDate: msg.signature.dueDate,
-              status: msg.signature.status,
-              fileUrl: msg.signature.fileUrl,
-              fileName: msg.signature.fileName,
-              fileSize: msg.signature.fileSize,
-              signedBy: msg.signature.signedBy
-            } : null
-          }));
-
-          // Add older messages to existing messages (append to end)
-          setMessages(prevMessages => {
+          const uiMessages = apiMessages.map((msg) => convertMessageToUI(msg));
+          setMessages((prevMessages) => {
             const combinedMessages = [...prevMessages, ...uiMessages];
             return sortMessagesByTime(combinedMessages);
           });
-
-          // Update pagination state
           setCurrentPage(nextPage);
-          setHasMoreMessages(apiResponse?.page < apiResponse?.totalPages); // Check if there are more pages
-
+          setHasMoreMessages(apiMessages.length >= 20);
         } else {
           setHasMoreMessages(false);
         }
       } else {
-        // Load next 20 messages from SQLite
         const totalMessageCount = getMessageCountFromSQLite(db, conversationId);
-        const olderMessages = getAllMessagesFromSQLite(db, conversationId, SQLITE_MESSAGES_PAGE_SIZE, currentOffset);
-
-        if (olderMessages && olderMessages.length > 0) {
-          // Convert database messages to UI format
-          const uiMessages = olderMessages.map(msg => ({
-          id: msg.id?.toString() || `db_${msg.created_at}`,
-          content: msg.content,
-          fileUrl: msg.file_uri,
-          fileName: msg.file_name,
-          fileType: msg.file_type,
-          fileSize: msg.file_size,
-          sender: {
-            id: msg.sender_id,
-            first_name: msg.sender_first_name,
-            last_name: msg.sender_last_name
-          },
-          createdAt: msg.created_at,
-          status: msg.status || 'sent',
-          // Add signature data if it exists
-          signature: msg.signature_id ? {
-            id: msg.signature_id,
-            title: msg.signature_title,
-            notes: msg.signature_notes,
-            dueDate: msg.signature_due_date,
-            status: msg.signature_status,
-            fileUrl: msg.signature_file_url,
-            fileName: msg.signature_file_name,
-            fileSize: msg.signature_file_size,
-            signedBy: msg.signed_by_id ? {
-              id: msg.signed_by_id,
-              name: msg.signed_by_name,
-              email: msg.signed_by_email
-            } : null
-          } : null
+        const uiMessages = loadCachedMessagesPage(
+          db,
+          conversationId,
+          SQLITE_MESSAGES_PAGE_SIZE,
+          currentOffset
+        ).map((msg) => ({
+          ...msg,
+          id: msg.id?.toString() || `db_${msg.createdAt}`,
         }));
 
-          // Add older messages to existing messages (append to end)
-          setMessages(prevMessages => {
+        if (uiMessages && uiMessages.length > 0) {
+          setMessages((prevMessages) => {
             const combinedMessages = [...prevMessages, ...uiMessages];
             return sortMessagesByTime(combinedMessages);
           });
 
-          // Update pagination state
-          const newOffset = currentOffset + olderMessages.length;
+          const newOffset = currentOffset + uiMessages.length;
           setCurrentOffset(newOffset);
           setHasMoreMessages(newOffset < totalMessageCount);
-
         } else {
           setHasMoreMessages(false);
         }
       }
     } catch (error) {
       console.error('❌ Error loading more messages:', error);
+    } finally {
+      isLoadingMoreRef.current = false;
+      setIsLoadingMoreMessages(false);
     }
   };
 
   const fetchMessagesFromSQLite = () => {
     try {
-      
-      // Get all messages from database (both sent and pending)
       const totalMessageCount = getMessageCountFromSQLite(db, conversationId);
-      const dbMessages = getAllMessagesFromSQLite(db, conversationId, SQLITE_MESSAGES_PAGE_SIZE);
-      
-      // Debug: Show what columns are available in the first message
-      if (dbMessages.length > 0) {
-      }
-      
-      
-      if (dbMessages && dbMessages.length > 0) {
-        // Convert database messages to UI format with signature fields
-        const uiMessages = dbMessages.map(msg => ({
-          id: msg.id?.toString() || `db_${msg.created_at}`,
-          content: msg.content,
-          fileUrl: msg.file_uri,
-          fileName: msg.file_name,
-          fileType: msg.file_type,
-          fileSize: msg.file_size,
-          sender: {
-            id: msg.sender_id,
-            first_name: msg.sender_first_name,
-            last_name: msg.sender_last_name
-          },
-          createdAt: msg.created_at,
-          status: msg.status || 'sent',
-          // Add signature data if it exists
-          signature: msg.signature_id ? {
-            id: msg.signature_id,
-            title: msg.signature_title,
-            notes: msg.signature_notes,
-            dueDate: msg.signature_due_date,
-            status: msg.signature_status,
-            fileUrl: msg.signature_file_url,
-            fileName: msg.signature_file_name,
-            fileSize: msg.signature_file_size,
-            signedBy: msg.signed_by_id ? {
-              id: msg.signed_by_id,
-              name: msg.signed_by_name,
-              email: msg.signed_by_email
-            } : null
-          } : null
-        }));
-        
-        // SQL query already sorted messages by created_at DESC, so no need to sort again
-        // Messages are already in correct order (newest first) from SQL query
+      const uiMessages = loadCachedMessagesPage(
+        db,
+        conversationId,
+        SQLITE_MESSAGES_PAGE_SIZE,
+        0
+      ).map((msg) => ({
+        ...msg,
+        id: msg.id?.toString() || `db_${msg.createdAt}`,
+      }));
+
+      if (uiMessages.length > 0) {
         setMessages(uiMessages);
-        setCurrentOffset(totalMessageCount);
-        setHasMoreMessages(false);
-        
-        // Store last message ID when messages are loaded from SQLite
+        setCurrentOffset(uiMessages.length);
+        setHasMoreMessages(uiMessages.length < totalMessageCount);
         storeLastMessageId(uiMessages);
-        
       } else {
         setMessages([]);
         setCurrentOffset(0);
@@ -1630,8 +1476,7 @@ const UserChatScreen = ({ navigation, route }) => {
             
             // Debug: Check if signature columns exist in database
             try {
-              const tableInfo = db.getAllSync(`PRAGMA table_info(messages_${conversationId})`);
-              const signatureColumns = tableInfo.filter(col => col.name.startsWith('signature_'));
+              // schema check skipped — shared chat_messages table is ensured by repository
             } catch (e) {
             }
             
@@ -1668,11 +1513,9 @@ const UserChatScreen = ({ navigation, route }) => {
 
             let existingSignatureMessage = false;
             if (dataToStore.signature_id) {
-              // For signature_id check, we need to query directly as there's no helper for this
-              const tableName = getMessagesTableName(conversationId);
               const sigCheck = db.getFirstSync(
-                `SELECT id FROM ${tableName} WHERE signature_id = ?`,
-                [dataToStore.signature_id]
+                `SELECT id FROM ${CHAT_MESSAGES_TABLE} WHERE conversation_id = ? AND signature_id = ?`,
+                [String(conversationId).replace(/[^0-9]/g, ''), dataToStore.signature_id]
               );
               existingSignatureMessage = Boolean(sigCheck);
             }
@@ -2349,18 +2192,11 @@ const UserChatScreen = ({ navigation, route }) => {
   };
 
   useEffect(() => {
-    if (netInfo.isConnected === true) {
-      
-      // Load messages from SQLite database (fast loading)
-      fetchMessages();
-      
-      // Send pending messages queue (one at a time)
+    if (netInfo.isConnected === true && isInitialLoadComplete) {
       sendPendingMessagesQueue();
-      
-      // Also fetch new messages from API (after last stored message ID)
       fetchNewMessagesAfterLast();
     }
-  }, [netInfo.isConnected, conversationId]);
+  }, [netInfo.isConnected, conversationId, isInitialLoadComplete]);
 
   // Call this function to see all messages in database
   useEffect(() => {
@@ -2783,7 +2619,7 @@ const UserChatScreen = ({ navigation, route }) => {
         });
         
         try {
-          const tableInfo = db.getAllSync(`PRAGMA table_info(messages_${conversationId})`);
+          // shared chat_messages table — no per-conversation pragma needed
         } catch (schemaError) {
           console.error('❌ [OFFLINE] Could not get table info:', schemaError);
         }
@@ -3120,25 +2956,26 @@ const UserChatScreen = ({ navigation, route }) => {
     }
   };
 
-  return (
-    <SafeAreaView className="flex-1 bg-gray-100">
-      {/* 📨 Messages List */}
-      <View className="px-5 pb-2 items-end">
-        <TouchableOpacity
-          onPress={handleClearMessagesPress}
-          activeOpacity={0.7}
-          className="p-2 rounded-full bg-white shadow-sm border border-gray-200"
-        >
-          <Ionicons name="trash-outline" size={20} color="#EF4444" />
-        </TouchableOpacity>
-      </View>
+  // When keyboard is open, drop home-indicator padding so the bar sits flush above keys
+  const composerBottomPad = keyboardHeight > 0 ? 8 : Math.max(insets.bottom, 10);
 
+  return (
+    // --- Chat Shell ---
+    // Bottom padding = keyboard height → composer lifts; AppHeader above Stack stays put.
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: Brand.paperSoft,
+        paddingBottom: keyboardHeight,
+      }}
+    >
+      {/* 📨 Messages List */}
       <FlatList
         ref={flatListRef}
-        data={dedupeMessagesById(messages)}
+        data={listMessages}
         inverted={true}
         onEndReached={loadMoreMessages}
-        onEndReachedThreshold={0.1}
+        onEndReachedThreshold={0.2}
         renderItem={({ item }) => {
             // Convert both to string for comparison to handle data type mismatch
             // FIXED: Now currentUserId is guaranteed to be loaded, preventing left-side flicker
@@ -3195,96 +3032,203 @@ const UserChatScreen = ({ navigation, route }) => {
               } else if (signatureStatus === 'signed') {
               }
               return (
-                <View>
-                <View className={`mb-4 px-5 ${isMyMessage ? 'items-end' : 'items-start'}`}>
-                  <View 
-                    className="bg-white rounded-xl p-4"
+                <View
+                  className={`mb-3 px-4 ${isMyMessage ? 'items-end' : 'items-start'}`}
+                >
+                  <View
                     style={{
-                      width: '70%', // Reduced width from 85% to 70%
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 4 },
-                      shadowOpacity: 0.1,
-                      shadowRadius: 8,
-                      elevation: 5,
+                      width: '78%',
+                      maxWidth: 320,
+                      backgroundColor: Brand.paper,
+                      borderRadius: 18,
                       borderWidth: 1,
-                      borderColor: '#e5e7eb'
+                      borderColor: Brand.line,
+                      overflow: 'hidden',
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.06,
+                      shadowRadius: 10,
+                      elevation: 3,
                     }}
                   >
-                    {/* Contract Header */}
-                    <View className="flex-row items-center mb-4">
-                      <View className="w-12 h-12 rounded-full items-center justify-center mr-4" style={{ backgroundColor: 'black' }}>
-                        <Ionicons name="document-text" size={24} color="white" />
-                      </View>
-                      <View className="flex-1">
-                        <Text className="text-[14px] font-bold text-[#333]">Contract for Signature</Text>
-                      </View>
-                    </View>
+                    {/* Top accent bar */}
+                    <View style={{ height: 4, backgroundColor: Brand.ink }} />
 
-                    {/* Contract Title */}
-                    <View className="mb-4">
-                      <Text className="text-[12px] font-semibold text-[#333] mb-2">Document Title</Text>
-                      <Text className="text-[11px] text-[#333] bg-[#f8f9fa] p-3 rounded-lg">
-                        {item.signature?.title || item.title || 'Contract for Signature'}
-                      </Text>
-                    </View>
-
-                    {/* Contract Notes */}
-                    {(item.signature?.notes || item.notes) && (
-                      <View className="mb-4">
-                        <Text className="text-[12px] font-semibold text-[#333] mb-2">Instructions</Text>
-                        <Text className="text-[11px] text-[#666] bg-[#f8f9fa] p-3 rounded-lg">
-                          {item.signature?.notes || item.notes}
-                        </Text>
+                    <View style={{ padding: 14 }}>
+                      {/* Header */}
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          marginBottom: 14,
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: 42,
+                            height: 42,
+                            borderRadius: 12,
+                            backgroundColor: Brand.ink,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginRight: 12,
+                          }}
+                        >
+                          <Ionicons name="create" size={20} color={Brand.onInk} />
+                        </View>
+                        <View style={{ flex: 1, paddingRight: 8 }}>
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              fontWeight: '600',
+                              color: Brand.inkMuted,
+                              letterSpacing: 0.3,
+                              textTransform: 'uppercase',
+                            }}
+                          >
+                            Signature request
+                          </Text>
+                          <Text
+                            style={{
+                              fontSize: 15,
+                              fontWeight: '700',
+                              color: Brand.ink,
+                              marginTop: 2,
+                            }}
+                            numberOfLines={2}
+                          >
+                            {item.signature?.title || item.title || 'Contract for Signature'}
+                          </Text>
+                        </View>
+                        <View
+                          style={{
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            borderRadius: 8,
+                            backgroundColor:
+                              (item.signature?.status || item.status) === 'signed'
+                                ? '#E8F6EE'
+                                : '#FFF6E5',
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 10,
+                              fontWeight: '700',
+                              color:
+                                (item.signature?.status || item.status) === 'signed'
+                                  ? '#1B7A45'
+                                  : '#B76A0A',
+                            }}
+                          >
+                            {(item.signature?.status || item.status) === 'signed'
+                              ? 'Signed'
+                              : 'Pending'}
+                          </Text>
+                        </View>
                       </View>
-                    )}
 
-                    {/* Due Date */}
-                    {(item.signature?.dueDate || item.dueDate) && (
-                      <View className="mb-4">
-                        <Text className="text-[12px] font-semibold text-[#333] mb-2">Due Date</Text>
-                        <Text className="text-[11px] text-[#666] bg-[#f8f9fa] p-3 rounded-lg">
-                          {(() => {
-                            // Fix timezone issue: Parse date string as local date, not UTC
-                            const dateString = item.signature?.dueDate || item.dueDate;
-                            if (!dateString) return '';
-                            
-                            // If date is in YYYY-MM-DD format, parse as local date
-                            if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                              const [year, month, day] = dateString.split('-').map(Number);
-                              const localDate = new Date(year, month - 1, day); // month is 0-indexed
-                              return localDate.toLocaleDateString();
-                            }
-                            
-                            // Otherwise, use standard Date parsing
-                            return new Date(dateString).toLocaleDateString();
-                          })()}
-                        </Text>
-                      </View>
-                    )}
+                      {/* Notes */}
+                      {(item.signature?.notes || item.notes) ? (
+                        <View style={{ marginBottom: 12 }}>
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              fontWeight: '600',
+                              color: Brand.inkMuted,
+                              marginBottom: 4,
+                            }}
+                          >
+                            Instructions
+                          </Text>
+                          <Text
+                            style={{
+                              fontSize: 13,
+                              lineHeight: 18,
+                              color: Brand.inkSoft,
+                            }}
+                          >
+                            {item.signature?.notes || item.notes}
+                          </Text>
+                        </View>
+                      ) : null}
 
-                    {/* Contract Actions */}
-                    <View className="mt-4">
-                      {/* Sign Contract Button - Only show for receiver when not signed */}
+                      {/* Due date chip */}
+                      {(item.signature?.dueDate || item.dueDate) ? (
+                        <View
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            alignSelf: 'flex-start',
+                            backgroundColor: Brand.paperSoft,
+                            borderWidth: 1,
+                            borderColor: Brand.line,
+                            borderRadius: 10,
+                            paddingHorizontal: 10,
+                            paddingVertical: 7,
+                            marginBottom: 14,
+                          }}
+                        >
+                          <Ionicons
+                            name="calendar-outline"
+                            size={14}
+                            color={Brand.inkMuted}
+                            style={{ marginRight: 6 }}
+                          />
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              fontWeight: '600',
+                              color: Brand.inkSoft,
+                            }}
+                          >
+                            Due{' '}
+                            {(() => {
+                              const dateString = item.signature?.dueDate || item.dueDate;
+                              if (!dateString) return '';
+                              if (
+                                typeof dateString === 'string' &&
+                                dateString.match(/^\d{4}-\d{2}-\d{2}$/)
+                              ) {
+                                const [year, month, day] = dateString.split('-').map(Number);
+                                return new Date(year, month - 1, day).toLocaleDateString(
+                                  undefined,
+                                  { month: 'short', day: 'numeric', year: 'numeric' }
+                                );
+                              }
+                              return new Date(dateString).toLocaleDateString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              });
+                            })()}
+                          </Text>
+                        </View>
+                      ) : null}
+
+                      {/* Sign action — receiver only while pending */}
                       {!isMyMessage && (item.signature?.status || item.status) !== 'signed' ? (
                         <TouchableOpacity
-                          className="w-full bg-black rounded-lg py-3 items-center"
-                          activeOpacity={0.7}
+                          style={{
+                            width: '100%',
+                            backgroundColor: Brand.ink,
+                            borderRadius: 12,
+                            paddingVertical: 12,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            marginBottom: 12,
+                          }}
+                          activeOpacity={0.8}
                           onPress={() => {
-                            // Get signature ID from the message
                             const signatureId = item.signature?.id || item.signatureId || item.id;
-                            
-                            // Subscribe to the signature-specific channel for file uploads
                             const signatureUploadChannelName = `signature-${signatureId}`;
-                            
                             const signatureUploadChannel = pusher.subscribe(signatureUploadChannelName);
-                            
-                            // Listen for signature file upload events
+
                             signatureUploadChannel.bind('signature-file-uploaded', (data) => {
-                              
-                              // Update the message with the uploaded signature file
-                              setMessages(prevMessages => 
-                                prevMessages.map(msg => 
-                                  msg.id === item.id 
+                              setMessages(prevMessages =>
+                                prevMessages.map(msg =>
+                                  msg.id === item.id
                                     ? {
                                         ...msg,
                                         signature: {
@@ -3292,34 +3236,27 @@ const UserChatScreen = ({ navigation, route }) => {
                                           status: data.status,
                                           fileUrl: data.fileUrl,
                                           fileName: data.fileName,
-                                          signedBy: data.signedBy
-                                        }
+                                          signedBy: data.signedBy,
+                                        },
                                       }
                                     : msg
                                 )
                               );
                             });
-                            
-                            // Navigate to signature screen
+
                             navigation.navigate('SignatureScreen', {
                               signatureData: {
                                 title: item.signature?.title || item.title,
                                 notes: item.signature?.notes || item.notes,
                                 dueDate: item.signature?.dueDate || item.dueDate,
-                                contractId: item.id
+                                contractId: item.id,
                               },
                               onSignatureComplete: async (signatureData) => {
                                 try {
-                                  
-                                  // Call submitSignature API with contract ID
-                                  const contractId = item.signature?.id || item.signatureId || item.id; // Use signature ID as contract ID
-                                  
+                                  const contractId = item.signature?.id || item.signatureId || item.id;
                                   const result = await submitSignature(contractId, signatureData);
-                                  
-                                  // Update database with signature data from API response
+
                                   try {
-                                    
-                                    // Extract data from API response
                                     const apiSignatureData = {
                                       signature_status: result.status || 'signed',
                                       signature_file_url: result.fileUrl || null,
@@ -3327,11 +3264,9 @@ const UserChatScreen = ({ navigation, route }) => {
                                       signature_file_size: result.fileSize || null,
                                       signed_by_id: result.signatureFrom?.id || null,
                                       signed_by_name: result.signatureFrom?.name || null,
-                                      signed_by_email: result.signatureFrom?.email || null
+                                      signed_by_email: result.signatureFrom?.email || null,
                                     };
-                                    
-                                    
-                                    // Update by original signature ID (contractId)
+
                                     updateSignatureFieldsBySignatureId(db, contractId, conversationId, {
                                       status: apiSignatureData.signature_status || undefined,
                                       fileUrl: apiSignatureData.signature_file_url || null,
@@ -3341,15 +3276,13 @@ const UserChatScreen = ({ navigation, route }) => {
                                       signedByName: apiSignatureData.signed_by_name || null,
                                       signedByEmail: apiSignatureData.signed_by_email || null,
                                     });
-                                    
                                   } catch (dbError) {
                                     console.error('❌ [SIGNATURE] Error updating database:', dbError);
                                   }
-                                  
-                                  // Update the message status to signed
-                                  setMessages(prevMessages => 
-                                    prevMessages.map(msg => 
-                                      msg.id === item.id 
+
+                                  setMessages(prevMessages =>
+                                    prevMessages.map(msg =>
+                                      msg.id === item.id
                                         ? {
                                             ...msg,
                                             signature: {
@@ -3358,13 +3291,13 @@ const UserChatScreen = ({ navigation, route }) => {
                                               fileUrl: result.fileUrl,
                                               fileName: result.fileName,
                                               fileSize: result.fileSize,
-                                              signedBy: result.signatureFrom
-                                            }
+                                              signedBy: result.signatureFrom,
+                                            },
                                           }
                                         : msg
                                     )
                                   );
-                                  
+
                                   Toast.show({
                                     type: 'success',
                                     text1: 'Success',
@@ -3372,7 +3305,6 @@ const UserChatScreen = ({ navigation, route }) => {
                                     position: 'top',
                                     visibilityTime: 3000,
                                   });
-                                  
                                 } catch (error) {
                                   console.error('❌ Error submitting signature:', error);
                                   Toast.show({
@@ -3383,43 +3315,78 @@ const UserChatScreen = ({ navigation, route }) => {
                                     visibilityTime: 3000,
                                   });
                                 }
-                              }
+                              },
                             });
                           }}
                         >
-                          <Text className="text-white text-sm font-semibold">Sign Contract</Text>
+                          <Ionicons
+                            name="pencil"
+                            size={15}
+                            color={Brand.onInk}
+                            style={{ marginRight: 8 }}
+                          />
+                          <Text
+                            style={{
+                              color: Brand.onInk,
+                              fontSize: 14,
+                              fontWeight: '700',
+                            }}
+                          >
+                            Sign document
+                          </Text>
                         </TouchableOpacity>
                       ) : null}
-                    </View>
 
-                    {/* Signature Display - Show when signed */}
-                    {(item.signature?.status || item.status) === 'signed' && (item.signature?.fileUrl || item.fileUrl) && (
-                      <View className="mt-4 pt-4 border-t border-[#e5e7eb]">
-                        <Text className="text-[12px] font-semibold text-[#333] mb-3">Digital Signature</Text>
-                         <TouchableOpacity 
-                           onPress={() => handleOpenImage(item.signature?.fileUrl || item.fileUrl)}
-                           activeOpacity={0.9}
-                         >
-                           <View className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                             <Image
-                               source={{ uri: item.signature?.fileUrl || item.fileUrl }}
-                               style={{
-                                 width: '100%',
-                                 height: 120,
-                                 resizeMode: 'contain',
-                               }}
-                             />
-                           </View>
-                         </TouchableOpacity>
-                      </View>
-                    )}
+                      {/* Signed preview */}
+                      {(item.signature?.status || item.status) === 'signed' &&
+                      (item.signature?.fileUrl || item.fileUrl) ? (
+                        <View style={{ marginBottom: 12 }}>
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              fontWeight: '600',
+                              color: Brand.inkMuted,
+                              marginBottom: 8,
+                            }}
+                          >
+                            Digital signature
+                          </Text>
+                          <TouchableOpacity
+                            onPress={() => handleOpenImage(item.signature?.fileUrl || item.fileUrl)}
+                            activeOpacity={0.9}
+                            style={{
+                              backgroundColor: Brand.paperSoft,
+                              borderRadius: 12,
+                              borderWidth: 1,
+                              borderColor: Brand.line,
+                              padding: 10,
+                            }}
+                          >
+                            <Image
+                              source={{ uri: item.signature?.fileUrl || item.fileUrl }}
+                              style={{
+                                width: '100%',
+                                height: 110,
+                                resizeMode: 'contain',
+                              }}
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      ) : null}
 
-                    {/* Contract Status */}
-                    <View className="mt-4 pt-3 border-t border-gray-200">
-                      <View className="flex-row items-center justify-between">
-                        {/* Time and Tick Icon - Inside the card */}
-                        <View className="flex-row items-center">
-                          <Text className="text-[10px] text-gray-500">
+                      {/* Footer meta */}
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          borderTopWidth: StyleSheet.hairlineWidth,
+                          borderTopColor: Brand.line,
+                          paddingTop: 10,
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Text style={{ fontSize: 11, color: Brand.inkFaint }}>
                             {(() => {
                               const date = new Date(item.createdAt);
                               const hours = date.getHours();
@@ -3430,46 +3397,42 @@ const UserChatScreen = ({ navigation, route }) => {
                               return `${hour12}:${minutesStr} ${ampm}`;
                             })()}
                           </Text>
-                          
-                          {/* Show tick icon for my messages inside the card */}
-                          {isMyMessage && (
-                            <View className="ml-1">
-                              {item.status === 'pending' ? (
-                                <Ionicons name="time-outline" size={10} color="#F59E0B" />
-                              ) : item.status === 'offline' ? (
-                                <Ionicons name="time-outline" size={10} color="#F59E0B" />
-                              ) : item.status === 'sending' ? (
-                                <Ionicons name="time-outline" size={10} color="#6B7280" />
+                          {isMyMessage ? (
+                            <View style={{ marginLeft: 4 }}>
+                              {item.status === 'pending' ||
+                              item.status === 'offline' ||
+                              item.status === 'sending' ? (
+                                <Ionicons name="time-outline" size={11} color={Brand.inkFaint} />
                               ) : item.status === 'failed' ? (
-                                <Ionicons name="close-circle" size={10} color="#EF4444" />
+                                <Ionicons name="close-circle" size={11} color={Brand.danger} />
                               ) : (
-                                <Ionicons name="checkmark-done" size={10} color="#10B981" />
+                                <Ionicons name="checkmark-done" size={11} color="#1B7A45" />
                               )}
                             </View>
-                          )}
+                          ) : null}
                         </View>
-                        
-                        {/* Status Badge */}
-                        <View 
-                          className="px-3 py-1 rounded-full"
-                          style={{ backgroundColor: (item.signature?.status || item.status) === 'signed' ? '#d1fae5' : '#fef3c7' }}
-                        >
-                          <Text 
-                            className="text-[10px] font-semibold"
-                            style={{ color: (item.signature?.status || item.status) === 'signed' ? '#059669' : '#d97706' }}
-                          >
-                            {(item.signature?.status || item.status) === 'signed' ? 'SIGNED' : 'PENDING'}
-                          </Text>
-                        </View>
+                        {(item.signature?.status || item.status) === 'signed' ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Ionicons name="shield-checkmark" size={12} color="#1B7A45" />
+                            <Text
+                              style={{
+                                marginLeft: 4,
+                                fontSize: 11,
+                                fontWeight: '600',
+                                color: '#1B7A45',
+                              }}
+                            >
+                              Complete
+                            </Text>
+                          </View>
+                        ) : (
+                          <Text style={{ fontSize: 11, color: Brand.inkFaint }}>Awaiting signature</Text>
+                        )}
                       </View>
                     </View>
                   </View>
                 </View>
-                
-                {/* REMOVED: Time display below card - now shown inside the card itself */}
-                </View>
-          
-            );
+              );
             }
             
             // Support both camelCase and snake_case field names from API
@@ -3636,26 +3599,31 @@ const UserChatScreen = ({ navigation, route }) => {
                   {/* Display text content in bubble (only if text exists) */}
                   {item.content && (
                     <View
-                      className={`px-4 py-3 rounded-2xl shadow-sm ${
-                        hasFile ? 'mt-1' : ''
-                      } ${
-                        isMyMessage 
-                          ? 'bg-blue-500 rounded-br-sm shadow-blue-500/30' 
-                          : 'bg-white rounded-bl-sm shadow-gray-500/20'
-                      }`}
-                      style={{ alignSelf: isMyMessage ? 'flex-end' : 'flex-start' }}
+                      className={`px-3.5 py-2.5 ${hasFile ? 'mt-1' : ''}`}
+                      style={{
+                        alignSelf: isMyMessage ? 'flex-end' : 'flex-start',
+                        // Brand-aligned bubbles: ink for mine, soft paper for theirs
+                        backgroundColor: isMyMessage ? Brand.ink : Brand.paper,
+                        borderRadius: 18,
+                        borderBottomRightRadius: isMyMessage ? 6 : 18,
+                        borderBottomLeftRadius: isMyMessage ? 18 : 6,
+                        borderWidth: isMyMessage ? 0 : 1,
+                        borderColor: Brand.line,
+                      }}
                     >
-                      {/* Show sender name ONLY in group chats for received messages (WhatsApp Style - inside bubble) */}
+                      {/* Show sender name ONLY in group chats for received messages */}
                       {showSenderInfo && (
-                        <Text className="text-xs font-semibold text-gray-900 mb-1">
+                        <Text
+                          className="text-xs font-semibold mb-1"
+                          style={{ color: Brand.inkSoft }}
+                        >
                           {senderFullName}
                         </Text>
                       )}
                       
                       <Text
-                        className={`text-base leading-6 ${
-                          isMyMessage ? "text-white" : "text-gray-900"
-                        }`}
+                        className="text-[15px] leading-5"
+                        style={{ color: isMyMessage ? Brand.onInk : Brand.ink }}
                       >
                         {item.content}
                       </Text>
@@ -3708,182 +3676,241 @@ const UserChatScreen = ({ navigation, route }) => {
             const uniqueKey = `${baseKey}_${timestamp}_${index}`;
             return uniqueKey;
           }}
-          className="flex-1"
+          style={{ flex: 1 }}
           contentContainerStyle={{
-            paddingTop: 90 + (insets.bottom || 0), // For inverted list, paddingTop = visual bottom padding (clears input bar + safe area)
-            paddingBottom: 16, // For inverted list, paddingBottom = visual top padding
-            paddingHorizontal: 8,
-            flexGrow: 1
+            // Inverted list: paddingTop = visual bottom gap above the composer
+            paddingTop: 12,
+            paddingBottom: 12,
+            paddingHorizontal: 4,
+            flexGrow: 1,
           }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
           ListHeaderComponent={() => (
             // Loading indicator for pagination (appears at top due to inverted FlatList)
             isLoadingMoreMessages ? (
               <View className="py-4 items-center">
-                <ActivityIndicator size="small" color="#000000" />
-                <Text className="text-xs text-gray-500 mt-2">Loading older messages...</Text>
+                <ActivityIndicator size="small" color={Brand.ink} />
+                <Text className="text-xs mt-2" style={{ color: Brand.inkMuted }}>
+                  Loading older messages...
+                </Text>
               </View>
             ) : null
           )}
       />
 
+      {/* Typing sits above composer so it never overlays messages with absolute positioning */}
       {typingUsers.length > 0 && (
-        <View 
-          className="bg-white border-t border-gray-200 px-4 py-2"
-          style={{ 
-            position: "absolute",
-            bottom: 80 + (insets.bottom || 0), // Position above input bar
-            left: 0,
-            right: 0,
-            zIndex: 10,
+        <View
+          style={{
+            backgroundColor: Brand.paper,
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: Brand.line,
+            paddingHorizontal: 16,
+            paddingVertical: 8,
           }}
         >
-          <View className="flex-row items-center">
-            <View className="flex-row items-center mr-2">
-              {/* Typing Animation Dots */}
-              <View className="flex-row items-center">
-                <View 
-                  className="w-2 h-2 bg-gray-400 rounded-full mr-1"
-                  style={{
-                    opacity: 0.4,
-                    animationDelay: '0ms',
-                  }}
-                />
-                <View 
-                  className="w-2 h-2 bg-gray-400 rounded-full mr-1"
-                  style={{
-                    opacity: 0.7,
-                    animationDelay: '150ms',
-                  }}
-                />
-                <View 
-                  className="w-2 h-2 bg-gray-400 rounded-full"
-                  style={{
-                    opacity: 1,
-                    animationDelay: '300ms',
-                  }}
-                />
-              </View>
-            </View>
-            
-            {/* Typing Users Text */}
-            <Text className="text-sm text-gray-600">
-              {typingUsers.length === 1 
-                ? `${typingUsers[0].name} is typing...`
-                : `${typingUsers.length} people are typing...`
-              }
-            </Text>
-          </View>
+          <Text style={{ fontSize: 13, color: Brand.inkMuted }}>
+            {typingUsers.length === 1
+              ? `${typingUsers[0].name} is typing...`
+              : `${typingUsers.length} people are typing...`}
+          </Text>
         </View>
       )}
 
-      {/* 🧭 Input Bar */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+      {/* --- Composer --- */}
+      {/* Attractive WhatsApp-style send bar; lifts with keyboard via parent paddingBottom */}
+      <View
         style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
+          backgroundColor: Brand.paper,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: Brand.line,
+          paddingHorizontal: 14,
+          paddingTop: 12,
+          paddingBottom: composerBottomPad,
+          // Soft lift so the bar feels anchored above the keyboard
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.06,
+          shadowRadius: 8,
+          elevation: 6,
         }}
       >
-        <View 
-          className="bg-white border-t border-gray-200 px-4 py-3"
-          style={{ paddingBottom: insets.bottom || 0 }}
-        >
-          {/* File Preview (shown when file is selected) */}
-          {selectedFile && (
-            <View className="mb-2 flex-row items-center bg-gray-100 rounded-lg p-3">
+        {selectedFile && (
+          <View
+            style={{
+              marginBottom: 10,
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: Brand.paperSoft,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: Brand.line,
+              paddingVertical: 10,
+              paddingHorizontal: 12,
+            }}
+          >
+            <View
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                backgroundColor: Brand.ink,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
               <MaterialIcons
-                name={selectedFile.mimeType?.startsWith('image/') ? 'image' : 'insert-drive-file'}
-                size={24}
-                color="#000000"
+                name={selectedFile.mimeType?.startsWith("image/") ? "image" : "insert-drive-file"}
+                size={18}
+                color={Brand.onInk}
               />
-              <Text className="flex-1 ml-3 text-sm font-medium text-gray-900" numberOfLines={1}>
+            </View>
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={{ fontSize: 11, fontWeight: "600", color: Brand.inkMuted }}>
+                Attachment
+              </Text>
+              <Text
+                style={{ fontSize: 13, fontWeight: "600", color: Brand.ink, marginTop: 1 }}
+                numberOfLines={1}
+              >
                 {selectedFile.name}
               </Text>
-              <TouchableOpacity onPress={handleRemoveFile} className="p-1">
-                <Ionicons name="close-circle" size={24} color="#EF4444" />
-              </TouchableOpacity>
             </View>
+            <TouchableOpacity onPress={handleRemoveFile} hitSlop={10} activeOpacity={0.7}>
+              <Ionicons name="close-circle" size={22} color={Brand.inkMuted} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <View style={{ flexDirection: "row", alignItems: "flex-end" }}>
+          {/* Attach */}
+          <TouchableOpacity
+            onPress={handleShowAttachmentOptions}
+            disabled={isSendingMessage || isLoadingMessages}
+            activeOpacity={0.75}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: Brand.paperSoft,
+              borderWidth: 1,
+              borderColor: Brand.line,
+              alignItems: "center",
+              justifyContent: "center",
+              marginRight: 8,
+              marginBottom: 1,
+              opacity: isSendingMessage || isLoadingMessages ? 0.5 : 1,
+            }}
+          >
+            <Ionicons name="add" size={24} color={Brand.ink} />
+          </TouchableOpacity>
+
+          {/* Signature — 1:1 chats only */}
+          {!isGroupChat && (
+            <TouchableOpacity
+              onPress={() => setSignatureModalVisible(true)}
+              disabled={isSendingMessage || isLoadingMessages}
+              activeOpacity={0.75}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: Brand.paperSoft,
+                borderWidth: 1,
+                borderColor: Brand.line,
+                alignItems: "center",
+                justifyContent: "center",
+                marginRight: 8,
+                marginBottom: 1,
+                opacity: isSendingMessage || isLoadingMessages ? 0.5 : 1,
+              }}
+            >
+              <Ionicons name="create-outline" size={20} color={Brand.inkSoft} />
+            </TouchableOpacity>
           )}
-          
-          <View className="flex-row items-center bg-gray-100 rounded-full px-4 py-2">
-            <TouchableOpacity
-              onPress={handleShowAttachmentOptions}
-              disabled={isSendingMessage || isLoadingMessages}
-              className="mr-2"
-              activeOpacity={0.7}
-            >
-              <Ionicons name="add-circle" size={28} color="#000000" />
-            </TouchableOpacity>
 
-            {/* Request Signature Button - Only show in individual chats */}
-            {!isGroupChat && (
-              <TouchableOpacity
-                onPress={() => setSignatureModalVisible(true)}
-                disabled={isSendingMessage || isLoadingMessages}
-                className="mr-2"
-                activeOpacity={0.7}
-              >
-                <Ionicons name="create" size={28} color="#3155A1" />
-              </TouchableOpacity>
-            )}
-
-            {/* View Local Messages Shortcut */}
-            <TouchableOpacity
-              onPress={handleReloadFromSQLite}
-              disabled={isSendingMessage || isLoadingMessages}
-              className="mr-2"
-              activeOpacity={0.7}
-            >
-              <Ionicons name="folder-open-outline" size={24} color="#3155A1" />
-            </TouchableOpacity>
-
-            {/* Clear Cached Messages Shortcut */}
-            <TouchableOpacity
-              onPress={handleClearMessagesPress}
-              disabled={isSendingMessage || isLoadingMessages}
-              className="mr-2"
-              activeOpacity={0.7}
-            >
-              <Ionicons name="trash-outline" size={24} color="#EF4444" />
-            </TouchableOpacity>
-
+          {/* Message field */}
+          <View
+            style={{
+              flex: 1,
+              flexDirection: "row",
+              alignItems: "flex-end",
+              backgroundColor: Brand.paperSoft,
+              borderRadius: 24,
+              borderWidth: 1,
+              borderColor: Brand.line,
+              paddingLeft: 16,
+              paddingRight: 10,
+              paddingVertical: Platform.OS === "ios" ? 8 : 4,
+              minHeight: 44,
+              maxHeight: 120,
+            }}
+          >
             <TextInput
               ref={messageInputRef}
-              className="flex-1 text-base text-gray-900 max-h-24"
-              placeholder="Type a message..."
-              placeholderTextColor="#9CA3AF"
+              style={{
+                flex: 1,
+                fontSize: 16,
+                lineHeight: 22,
+                color: Brand.ink,
+                maxHeight: 100,
+                paddingTop: Platform.OS === "ios" ? 4 : 8,
+                paddingBottom: Platform.OS === "ios" ? 4 : 8,
+              }}
+              placeholder="Type a message"
+              placeholderTextColor={Brand.inkFaint}
               value={inputText}
               onChangeText={handleTextChange}
               multiline
               maxLength={1000}
-              returnKeyType="send"
-              onSubmitEditing={handleSendMessage}
+              returnKeyType="default"
               blurOnSubmit={false}
               editable={!isSendingMessage && !isLoadingMessages}
             />
-
-            <TouchableOpacity
-              onPress={handleSendMessage}
-              disabled={(!inputText.trim() && !selectedFile) || isSendingMessage || isLoadingMessages}
-              className={`ml-3 w-9 h-9 rounded-full items-center justify-center ${
-                (inputText.trim() || selectedFile) && !isSendingMessage && !isLoadingMessages ? "bg-black" : "bg-gray-300"
-              }`}
-              activeOpacity={0.7}
-            >
-              {isSendingMessage ? (
-                <ActivityIndicator color="white" size="small" />
-              ) : (
-                <Ionicons name="send" size={18} color="white" />
-              )}
-            </TouchableOpacity>
           </View>
+
+          {/* Send */}
+          {(() => {
+            const canSend =
+              !!(inputText.trim() || selectedFile) && !isSendingMessage && !isLoadingMessages;
+            return (
+              <TouchableOpacity
+                onPress={handleSendMessage}
+                disabled={!canSend}
+                activeOpacity={0.8}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  marginLeft: 8,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: canSend ? Brand.ink : Brand.line,
+                  // Subtle pop when ready to send
+                  shadowColor: Brand.ink,
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: canSend ? 0.22 : 0,
+                  shadowRadius: 4,
+                  elevation: canSend ? 3 : 0,
+                }}
+              >
+                {isSendingMessage ? (
+                  <ActivityIndicator color={Brand.onInk} size="small" />
+                ) : (
+                  <Ionicons
+                    name="send"
+                    size={18}
+                    color={canSend ? Brand.onInk : Brand.inkFaint}
+                    style={{ marginLeft: 2 }}
+                  />
+                )}
+              </TouchableOpacity>
+            );
+          })()}
         </View>
-      </KeyboardAvoidingView>
+      </View>
 
       <Modal
         visible={attachmentMenuVisible}
@@ -4014,19 +4041,30 @@ const UserChatScreen = ({ navigation, route }) => {
         onClose={() => setSignatureModalVisible(false)}
         conversationId={conversationId}
         onSuccess={(result) => {
-          
-          // Note: Database storage is handled by Pusher handler (handleSignatureMessage)
-          // This callback only provides immediate feedback to user
-          // The actual message will appear in chat via Pusher real-time update
-          
+          // API returned the created signature message — show it immediately (no Pusher required)
+          const message = result?.data || result;
+          if (!message?.id) return;
+
+          try {
+            saveMessageToSQLite(db, message, conversationId, 'SIGNATURE-CREATE', false);
+          } catch (storageError) {
+            console.error('Failed to cache signature message locally:', storageError);
+          }
+
+          setMessages((prevMessages) => {
+            const exists = prevMessages.some(
+              (msg) => String(msg.id) === String(message.id)
+            );
+            if (exists) return prevMessages;
+            return [message, ...prevMessages];
+          });
         }}
         onOfflineRequest={handleOfflineSignatureRequest}
         recipientUserId={signatureRecipientUserId}
         conversationType={signatureConversationType}
       />
 
-      <HomeBottomNav />
-    </SafeAreaView>
+    </View>
   );
 };
 
