@@ -1,5 +1,4 @@
 // @ts-nocheck
-
 import React, { useState } from "react";
 import {
   View,
@@ -18,40 +17,22 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   createNewTask,
   selectTaskCreating,
 } from "../store/slices/taskSlice";
+import { Brand } from "../constants/brandColors";
+import { useResponsiveLayout } from "../constants/responsiveLayout";
 import { useAppDispatch, useAppSelector } from "../hooks";
-import { showErrorToast, showSuccessToast } from "../utils/toast";
-
-const UI = {
-  ink: "#111827",
-  muted: "#9CA3AF",
-  label: "#374151",
-  border: "#E5E7EB",
-  fieldBg: "#F3F4F6",
-  paper: "#FFFFFF",
-  placeholder: "#9CA3AF",
-  button: "#111827",
-  trashBg: "#FEE2E2",
-  trash: "#EF4444",
-  low: "#10B981",
-  medium: "#F59E0B",
-  high: "#EF4444",
-  check: "#3B82F6",
-  highlight: "#EFF6FF",
-  borderActive: "#3B82F6",
-};
+import { showErrorToast, showSuccessToastAfterModal } from "../utils/toast";
 
 const PRIORITY_OPTIONS = [
-  { id: "low", label: "Low", color: UI.low },
-  { id: "medium", label: "Medium", color: UI.medium },
-  { id: "high", label: "High", color: UI.high },
+  { id: "low", label: "Low", color: "#1B7A4A" },
+  { id: "medium", label: "Medium", color: "#C05621" },
+  { id: "high", label: "High", color: "#B91C1C" },
 ];
 
-const DESC_MAX = 500;
+const DESC_MAX = 120;
 
 function CreateTask({
   projectId,
@@ -62,7 +43,28 @@ function CreateTask({
 }) {
   const dispatch = useAppDispatch();
   const creating = useAppSelector(selectTaskCreating);
-  const insets = useSafeAreaInsets();
+  const layout = useResponsiveLayout();
+  const {
+    width,
+    insets,
+    contentWidth,
+    horizontalPad,
+    titleSize,
+    subtitleSize,
+    bodySize,
+    labelSize,
+    captionSize,
+    buttonTextSize,
+    inputHeight,
+    buttonPadY,
+    fieldGap,
+    radius,
+    hitSize,
+    isCompactHeight,
+    isSmallPhone,
+    isTablet,
+    rs,
+  } = layout;
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -74,11 +76,27 @@ function CreateTask({
   });
   const [endDateTime, setEndDateTime] = useState(null);
   const [priorityOpen, setPriorityOpen] = useState(false);
-  const [activePicker, setActivePicker] = useState(null); 
+  const [activePicker, setActivePicker] = useState(null);
+  const [focusedField, setFocusedField] = useState(null);
 
   const handleClose = () => {
     if (onCancel) onCancel();
     else if (navigation?.goBack) navigation.goBack();
+  };
+
+  const handleCancel = () => {
+    const hasDraft =
+      title.trim() || description.trim() || endDateTime || priority !== "low";
+
+    if (!hasDraft) {
+      handleClose();
+      return;
+    }
+
+    Alert.alert("Discard task?", "Your entered details will be lost.", [
+      { text: "Keep editing", style: "cancel" },
+      { text: "Discard", style: "destructive", onPress: handleClose },
+    ]);
   };
 
   const formatWithTimezone = (date) => {
@@ -103,28 +121,26 @@ function CreateTask({
 
   const formatDateTimeDisplay = (value) => {
     if (!value) return "";
-    const d = value.getDate().toString().padStart(2, "0");
-    const m = (value.getMonth() + 1).toString().padStart(2, "0");
-    const y = value.getFullYear();
-    const time = value.toLocaleTimeString([], {
+    return value.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
       hour: "numeric",
       minute: "2-digit",
-      hour12: true,
     });
-    return `${d}/${m}/${y} ${time}`;
   };
 
   const handleCreateTask = async () => {
     if (!title.trim()) {
-      Alert.alert("Error", "Task title is required");
+      showErrorToast("Task title is required");
       return;
     }
     if (!projectId) {
-      Alert.alert("Error", "Project ID is required to create a task");
+      showErrorToast("Project ID is required to create a task");
       return;
     }
     if (endDateTime && endDateTime <= startDateTime) {
-      Alert.alert("Error", "End date must be after start date");
+      showErrorToast("End date must be after start date");
       return;
     }
 
@@ -142,12 +158,12 @@ function CreateTask({
 
       const result = await dispatch(createNewTask(taskPayload));
       if (createNewTask.fulfilled.match(result)) {
-        showSuccessToast(
+        if (onSuccess) onSuccess(result.payload);
+        else handleClose();
+        showSuccessToastAfterModal(
           "Task Created Successfully!",
           "Your task has been added to the list"
         );
-        if (onSuccess) onSuccess(result.payload);
-        else handleClose();
       } else {
         showErrorToast(
           result.payload || "Failed to create task. Please try again."
@@ -164,7 +180,6 @@ function CreateTask({
         setActivePicker(null);
         return;
       }
-      
       setActivePicker(null);
     }
     if (event?.type === "dismissed") {
@@ -183,7 +198,6 @@ function CreateTask({
       );
       setStartDateTime(next);
       if (Platform.OS === "android") {
-        
         setTimeout(() => setActivePicker("startTime"), 100);
         return;
       }
@@ -213,12 +227,14 @@ function CreateTask({
   const openStartPicker = () => {
     Keyboard.dismiss();
     setPriorityOpen(false);
+    setFocusedField("start");
     setActivePicker("startDate");
   };
 
   const openEndPicker = () => {
     Keyboard.dismiss();
     setPriorityOpen(false);
+    setFocusedField("end");
     setActivePicker("endDate");
   };
 
@@ -227,7 +243,9 @@ function CreateTask({
   const canSubmit = !!title.trim() && !creating;
 
   const pickerMode =
-    activePicker === "startTime" || activePicker === "endTime" ? "time" : "date";
+    activePicker === "startTime" || activePicker === "endTime"
+      ? "time"
+      : "date";
   const pickerValue =
     activePicker === "endDate" || activePicker === "endTime"
       ? endDateTime || new Date()
@@ -241,46 +259,131 @@ function CreateTask({
           ? "End date"
           : "End time";
 
-  
-  const renderFieldRow = (icon, label, children) => (
-    <View style={styles.fieldRow}>
-      <View style={styles.labelCol}>
-        <Ionicons name={icon} size={18} color={UI.label} />
-        <Text style={styles.rowLabel}>{label}</Text>
-      </View>
-      <View style={styles.inputCol}>{children}</View>
-    </View>
-  );
+  const sidePad = isTablet
+    ? Math.max(horizontalPad, 40)
+    : isSmallPhone
+      ? 16
+      : Math.min(horizontalPad, 20);
+  const formWidth = isTablet
+    ? contentWidth
+    : Math.max(width - sidePad * 2, 0);
+  const fieldRadius = Math.max(radius - 2, 8);
+  const footerPadBottom = Math.max(insets.bottom, 14);
+  const descHeight = rs(isCompactHeight ? 72 : 80);
+
+  const labelStyle = {
+    fontSize: labelSize + 1,
+    fontWeight: "600",
+    color: Brand.inkSoft,
+    marginBottom: rs(7),
+    letterSpacing: 0.1,
+  };
+
+  const fieldShell = (field) => ({
+    width: "100%",
+    borderWidth: 1,
+    borderColor: focusedField === field ? Brand.ink : Brand.line,
+    backgroundColor: "#FFFFFF",
+    borderRadius: fieldRadius,
+  });
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={UI.paper} />
-
+    <View style={[styles.root, { width }]}>
       {!hideHeader && (
-        <View
-          style={[
-            styles.headerWrap,
-            { paddingTop: Math.max(insets.top, 12) },
-          ]}
-        >
-          <Text style={styles.headerTitle}>Create New Task</Text>
-          <TouchableOpacity
-            onPress={handleClose}
-            style={styles.trashBtn}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="trash-outline" size={18} color={UI.trash} />
-          </TouchableOpacity>
-        </View>
+        <StatusBar barStyle="dark-content" backgroundColor={Brand.paper} />
       )}
 
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       >
+        {!hideHeader && (
+          <View
+            style={{
+              width: "100%",
+              paddingTop: Math.max(insets.top, 8),
+              paddingHorizontal: sidePad,
+              paddingBottom: rs(4),
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              borderBottomWidth: StyleSheet.hairlineWidth,
+              borderBottomColor: Brand.line,
+              backgroundColor: Brand.paper,
+            }}
+          >
+            <TouchableOpacity
+              onPress={handleCancel}
+              style={{
+                minWidth: hitSize,
+                height: hitSize,
+                alignItems: "flex-start",
+                justifyContent: "center",
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={{
+                  fontSize: bodySize,
+                  fontWeight: "500",
+                  color: Brand.inkMuted,
+                }}
+              >
+                Cancel
+              </Text>
+            </TouchableOpacity>
+
+            <Text
+              style={{
+                fontSize: rs(16),
+                fontWeight: "700",
+                color: Brand.ink,
+                letterSpacing: -0.2,
+              }}
+            >
+              New task
+            </Text>
+
+            <TouchableOpacity
+              onPress={handleCreateTask}
+              disabled={!canSubmit}
+              style={{
+                minWidth: hitSize,
+                height: hitSize,
+                alignItems: "flex-end",
+                justifyContent: "center",
+                opacity: canSubmit ? 1 : 0.35,
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.7}
+            >
+              {creating ? (
+                <ActivityIndicator size="small" color={Brand.ink} />
+              ) : (
+                <Text
+                  style={{
+                    fontSize: bodySize,
+                    fontWeight: "700",
+                    color: Brand.ink,
+                  }}
+                >
+                  Create
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
         <ScrollView
           style={styles.flex}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={{
+            width: "100%",
+            paddingHorizontal: sidePad,
+            paddingTop: isCompactHeight ? rs(18) : rs(24),
+            paddingBottom: rs(28) + footerPadBottom,
+          }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           onScrollBeginDrag={() => {
@@ -288,103 +391,244 @@ function CreateTask({
             setPriorityOpen(false);
           }}
         >
-          
-          {renderFieldRow(
-            "document-text-outline",
-            "Title",
-            <TextInput
-              style={styles.input}
-              placeholder="Enter task title..."
-              placeholderTextColor={UI.placeholder}
-              value={title}
-              onChangeText={setTitle}
-              onFocus={() => setPriorityOpen(false)}
-              returnKeyType="next"
-            />
-          )}
+          <View
+            style={{
+              width: formWidth,
+              maxWidth: "100%",
+              alignSelf: "center",
+            }}
+          >
+            <Text
+              style={{
+                fontSize: isSmallPhone
+                  ? rs(22)
+                  : Math.min(titleSize - 2, rs(26)),
+                fontWeight: "700",
+                color: Brand.ink,
+                letterSpacing: -0.35,
+                marginBottom: rs(6),
+              }}
+            >
+              Task details
+            </Text>
+            <Text
+              style={{
+                fontSize: subtitleSize,
+                color: Brand.inkMuted,
+                lineHeight: subtitleSize * 1.4,
+                marginBottom: isCompactHeight ? rs(20) : rs(26),
+              }}
+            >
+              Add a title, short note, priority, and schedule.
+            </Text>
 
-          
-          {renderFieldRow(
-            "chatbubble-ellipses-outline",
-            "Description",
-            <View style={styles.textAreaWrap}>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Enter task description (optional)..."
-                placeholderTextColor={UI.placeholder}
-                value={description}
-                onChangeText={(v) => setDescription(v.slice(0, DESC_MAX))}
-                multiline
-                textAlignVertical="top"
-                onFocus={() => setPriorityOpen(false)}
-              />
-              <Text style={styles.charCount}>
-                {description.length}/{DESC_MAX}
+            <View style={{ marginBottom: fieldGap + 4, width: "100%" }}>
+              <Text style={labelStyle}>
+                Title <Text style={styles.required}>*</Text>
               </Text>
+              <TextInput
+                style={[
+                  fieldShell("title"),
+                  {
+                    paddingHorizontal: rs(14),
+                    minHeight: inputHeight,
+                    fontSize: bodySize,
+                    color: Brand.ink,
+                    paddingVertical: Platform.OS === "ios" ? rs(13) : rs(10),
+                  },
+                ]}
+                placeholder="e.g. Install flooring"
+                value={title}
+                onChangeText={setTitle}
+                placeholderTextColor={Brand.inkFaint}
+                returnKeyType="next"
+                onFocus={() => {
+                  setFocusedField("title");
+                  setPriorityOpen(false);
+                }}
+                onBlur={() => setFocusedField(null)}
+                maxLength={80}
+              />
             </View>
-          )}
 
-          
-          <View style={[styles.fieldRow, priorityOpen && styles.fieldRowOpen]}>
-            <View style={styles.labelCol}>
-              <Ionicons name="flag-outline" size={18} color={UI.label} />
-              <Text style={styles.rowLabel}>Priority</Text>
+            <View style={{ marginBottom: fieldGap + 4, width: "100%" }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: rs(7),
+                }}
+              >
+                <Text style={[labelStyle, { marginBottom: 0 }]}>
+                  Short description
+                </Text>
+                <Text
+                  style={{
+                    fontSize: captionSize,
+                    color: Brand.inkFaint,
+                    fontWeight: "500",
+                  }}
+                >
+                  {description.length}/{DESC_MAX}
+                </Text>
+              </View>
+              <TextInput
+                style={[
+                  fieldShell("description"),
+                  {
+                    paddingHorizontal: rs(14),
+                    paddingTop: rs(10),
+                    paddingBottom: rs(10),
+                    height: descHeight,
+                    fontSize: bodySize,
+                    color: Brand.ink,
+                    lineHeight: bodySize * 1.35,
+                    textAlignVertical: "top",
+                  },
+                ]}
+                placeholder="One-line summary (optional)"
+                value={description}
+                onChangeText={(value) =>
+                  setDescription(value.slice(0, DESC_MAX))
+                }
+                multiline
+                numberOfLines={2}
+                placeholderTextColor={Brand.inkFaint}
+                onFocus={() => {
+                  setFocusedField("description");
+                  setPriorityOpen(false);
+                }}
+                onBlur={() => setFocusedField(null)}
+                maxLength={DESC_MAX}
+              />
             </View>
-            <View style={styles.inputCol}>
+
+            <View
+              style={{
+                marginBottom: fieldGap + 4,
+                width: "100%",
+                zIndex: priorityOpen ? 20 : 1,
+              }}
+            >
+              <Text style={labelStyle}>Priority</Text>
               <TouchableOpacity
-                style={[styles.input, styles.selectInput]}
                 onPress={() => {
                   Keyboard.dismiss();
                   setActivePicker(null);
-                  setPriorityOpen((o) => !o);
+                  setFocusedField("priority");
+                  setPriorityOpen((open) => !open);
                 }}
                 activeOpacity={0.75}
+                style={[
+                  fieldShell("priority"),
+                  {
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingHorizontal: rs(14),
+                    minHeight: inputHeight,
+                  },
+                ]}
               >
-                <View style={styles.priorityValue}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    flex: 1,
+                  }}
+                >
                   <View
-                    style={[
-                      styles.priorityDot,
-                      { backgroundColor: selectedPriority.color },
-                    ]}
+                    style={{
+                      width: rs(8),
+                      height: rs(8),
+                      borderRadius: rs(4),
+                      backgroundColor: selectedPriority.color,
+                      marginRight: rs(10),
+                    }}
                   />
-                  <Text style={styles.inputText}>{selectedPriority.label}</Text>
+                  <Text
+                    style={{
+                      fontSize: bodySize,
+                      fontWeight: "500",
+                      color: Brand.ink,
+                    }}
+                  >
+                    {selectedPriority.label}
+                  </Text>
                 </View>
                 <Ionicons
-                  name={priorityOpen ? "chevron-up" : "chevron-down"}
-                  size={18}
-                  color={UI.muted}
+                  name={priorityOpen ? "chevron-up" : "chevron-forward"}
+                  size={rs(16)}
+                  color={Brand.inkFaint}
                 />
               </TouchableOpacity>
+
               {priorityOpen && (
-                <View style={styles.dropdownPanel}>
+                <View
+                  style={{
+                    marginTop: rs(6),
+                    borderWidth: 1,
+                    borderColor: Brand.line,
+                    borderRadius: fieldRadius,
+                    backgroundColor: Brand.paper,
+                    overflow: "hidden",
+                  }}
+                >
                   {PRIORITY_OPTIONS.map((option) => {
                     const selected = priority === option.id;
                     return (
                       <TouchableOpacity
                         key={option.id}
-                        style={[
-                          styles.optionRow,
-                          selected && styles.optionSelected,
-                        ]}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          paddingHorizontal: rs(14),
+                          paddingVertical: rs(12),
+                          backgroundColor: selected
+                            ? Brand.paperSoft
+                            : Brand.paper,
+                          borderBottomWidth: StyleSheet.hairlineWidth,
+                          borderBottomColor: Brand.line,
+                        }}
                         onPress={() => {
                           setPriority(option.id);
                           setPriorityOpen(false);
+                          setFocusedField(null);
                         }}
+                        activeOpacity={0.75}
                       >
-                        <View style={styles.priorityValue}>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                          }}
+                        >
                           <View
-                            style={[
-                              styles.priorityDot,
-                              { backgroundColor: option.color },
-                            ]}
+                            style={{
+                              width: rs(8),
+                              height: rs(8),
+                              borderRadius: rs(4),
+                              backgroundColor: option.color,
+                              marginRight: rs(10),
+                            }}
                           />
-                          <Text style={styles.inputText}>{option.label}</Text>
+                          <Text
+                            style={{
+                              fontSize: bodySize,
+                              fontWeight: "500",
+                              color: Brand.ink,
+                            }}
+                          >
+                            {option.label}
+                          </Text>
                         </View>
                         {selected ? (
                           <Ionicons
                             name="checkmark"
-                            size={18}
-                            color={UI.check}
+                            size={rs(18)}
+                            color={Brand.ink}
                           />
                         ) : null}
                       </TouchableOpacity>
@@ -393,74 +637,155 @@ function CreateTask({
                 </View>
               )}
             </View>
-          </View>
 
-          
-          {renderFieldRow(
-            "calendar-outline",
-            "Start Date",
-            <TouchableOpacity
-              style={[styles.input, styles.selectInput]}
-              onPress={openStartPicker}
-              activeOpacity={0.75}
-            >
-              <Text style={styles.inputText} numberOfLines={1}>
-                {formatDateTimeDisplay(startDateTime)}
+            <View style={{ marginBottom: fieldGap + 4, width: "100%" }}>
+              <Text style={labelStyle}>
+                Start date <Text style={styles.required}>*</Text>
               </Text>
-              <Ionicons name="calendar-outline" size={18} color={UI.muted} />
-            </TouchableOpacity>
-          )}
-
-          
-          {renderFieldRow(
-            "calendar-outline",
-            "End Date",
-            <TouchableOpacity
-              style={[styles.input, styles.selectInput]}
-              onPress={openEndPicker}
-              activeOpacity={0.75}
-            >
-              <Text
+              <TouchableOpacity
+                onPress={openStartPicker}
+                activeOpacity={0.75}
                 style={[
-                  styles.inputText,
-                  !endDateTime && styles.placeholderText,
+                  fieldShell("start"),
+                  {
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingHorizontal: rs(14),
+                    minHeight: inputHeight,
+                  },
                 ]}
-                numberOfLines={1}
               >
-                {endDateTime
-                  ? formatDateTimeDisplay(endDateTime)
-                  : "No end date selected"}
-              </Text>
-              <Ionicons name="calendar-outline" size={18} color={UI.muted} />
-            </TouchableOpacity>
-          )}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    flex: 1,
+                  }}
+                >
+                  <Ionicons
+                    name="calendar-outline"
+                    size={rs(18)}
+                    color={Brand.inkMuted}
+                    style={{ marginRight: rs(10) }}
+                  />
+                  <Text
+                    style={{
+                      fontSize: bodySize,
+                      fontWeight: "500",
+                      color: Brand.ink,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {formatDateTimeDisplay(startDateTime)}
+                  </Text>
+                </View>
+                <Ionicons
+                  name="chevron-forward"
+                  size={rs(16)}
+                  color={Brand.inkFaint}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ width: "100%" }}>
+              <Text style={labelStyle}>End date</Text>
+              <TouchableOpacity
+                onPress={openEndPicker}
+                activeOpacity={0.75}
+                style={[
+                  fieldShell("end"),
+                  {
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingHorizontal: rs(14),
+                    minHeight: inputHeight,
+                  },
+                ]}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    flex: 1,
+                  }}
+                >
+                  <Ionicons
+                    name="calendar-outline"
+                    size={rs(18)}
+                    color={Brand.inkMuted}
+                    style={{ marginRight: rs(10) }}
+                  />
+                  <Text
+                    style={{
+                      fontSize: bodySize,
+                      fontWeight: "500",
+                      color: endDateTime ? Brand.ink : Brand.inkFaint,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {endDateTime
+                      ? formatDateTimeDisplay(endDateTime)
+                      : "Optional"}
+                  </Text>
+                </View>
+                <Ionicons
+                  name="chevron-forward"
+                  size={rs(16)}
+                  color={Brand.inkFaint}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
         </ScrollView>
 
         <View
-          style={[
-            styles.footer,
-            { paddingBottom: Math.max(insets.bottom, 16) },
-          ]}
+          style={{
+            width: "100%",
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: Brand.line,
+            backgroundColor: Brand.paper,
+            paddingHorizontal: sidePad,
+            paddingTop: rs(12),
+            paddingBottom: footerPadBottom,
+          }}
         >
           <TouchableOpacity
             onPress={handleCreateTask}
             disabled={!canSubmit}
-            activeOpacity={0.88}
-            style={[styles.createBtn, !canSubmit && styles.createBtnDisabled]}
+            activeOpacity={0.85}
+            style={{
+              width: formWidth,
+              maxWidth: "100%",
+              alignSelf: "center",
+              minHeight: rs(isCompactHeight ? 48 : 52),
+              borderRadius: fieldRadius + 2,
+              backgroundColor: Brand.ink,
+              alignItems: "center",
+              justifyContent: "center",
+              paddingVertical: buttonPadY - 2,
+              opacity: canSubmit ? 1 : 0.4,
+            }}
           >
             {creating ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <ActivityIndicator color={Brand.onInk} size="small" />
             ) : (
-              <>
-                <Text style={styles.createBtnText}>Create Task</Text>
-                <Ionicons name="add" size={22} color="#FFFFFF" />
-              </>
+              <Text
+                style={{
+                  fontSize: buttonTextSize,
+                  fontWeight: "700",
+                  color: Brand.onInk,
+                  letterSpacing: 0.15,
+                }}
+              >
+                Create task
+              </Text>
             )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
 
-      
       {Platform.OS === "ios" && activePicker && (
         <Modal
           visible
@@ -474,9 +799,26 @@ function CreateTask({
               activeOpacity={1}
               onPress={() => setActivePicker(null)}
             />
-            <View style={styles.dateModalCard}>
+            <View
+              style={[
+                styles.dateModalCard,
+                {
+                  width: Math.min(formWidth, 380),
+                  maxWidth: "92%",
+                  borderRadius: rs(14),
+                },
+              ]}
+            >
               <View style={styles.dateModalHeader}>
-                <Text style={styles.dateModalTitle}>{pickerTitle}</Text>
+                <Text
+                  style={{
+                    fontSize: rs(16),
+                    fontWeight: "600",
+                    color: Brand.ink,
+                  }}
+                >
+                  {pickerTitle}
+                </Text>
                 <TouchableOpacity
                   onPress={() => {
                     if (activePicker === "startDate") {
@@ -485,10 +827,19 @@ function CreateTask({
                       setActivePicker("endTime");
                     } else {
                       setActivePicker(null);
+                      setFocusedField(null);
                     }
                   }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  activeOpacity={0.75}
                 >
-                  <Text style={styles.dateModalDone}>
+                  <Text
+                    style={{
+                      fontSize: rs(16),
+                      fontWeight: "700",
+                      color: Brand.ink,
+                    }}
+                  >
                     {activePicker === "startDate" || activePicker === "endDate"
                       ? "Next"
                       : "Done"}
@@ -504,7 +855,8 @@ function CreateTask({
                   activePicker === "endDate" ? startDateTime : undefined
                 }
                 themeVariant="light"
-                accentColor={UI.check}
+                accentColor={Brand.ink}
+                textColor={Brand.ink}
               />
             </View>
           </View>
@@ -520,6 +872,8 @@ function CreateTask({
           minimumDate={
             activePicker === "endDate" ? startDateTime : undefined
           }
+          accentColor={Brand.ink}
+          textColor={Brand.ink}
         />
       )}
     </View>
@@ -529,200 +883,37 @@ function CreateTask({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: UI.paper,
+    width: "100%",
+    backgroundColor: Brand.paper,
   },
   flex: {
     flex: 1,
+    width: "100%",
   },
-  headerWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    backgroundColor: UI.paper,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: UI.ink,
-  },
-  trashBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: UI.trashBg,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 24,
-    overflow: "visible",
-  },
-  fieldRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 16,
-    gap: 12,
-    zIndex: 1,
-  },
-  fieldRowOpen: {
-    zIndex: 40,
-    elevation: 40,
-  },
-  labelCol: {
-    width: 110,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingTop: 14,
-  },
-  rowLabel: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: UI.label,
-  },
-  inputCol: {
-    flex: 1,
-    minWidth: 0,
-    position: "relative",
-    zIndex: 1,
-  },
-  input: {
-    backgroundColor: UI.fieldBg,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: Platform.OS === "ios" ? 14 : 12,
-    fontSize: 14,
-    color: UI.ink,
-    minHeight: 48,
-  },
-  selectInput: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  inputText: {
-    fontSize: 14,
-    color: UI.ink,
-    fontWeight: "500",
-    flexShrink: 1,
-  },
-  placeholderText: {
-    color: UI.placeholder,
-    fontWeight: "400",
-  },
-  textAreaWrap: {
-    backgroundColor: UI.fieldBg,
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  textArea: {
-    minHeight: 96,
-    backgroundColor: "transparent",
-    paddingBottom: 28,
-  },
-  charCount: {
-    position: "absolute",
-    right: 12,
-    bottom: 8,
-    fontSize: 11,
-    color: UI.muted,
-    fontWeight: "600",
-  },
-  priorityValue: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    flex: 1,
-  },
-  priorityDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  dropdownPanel: {
-    marginTop: 6,
-    borderRadius: 12,
-    backgroundColor: UI.paper,
-    borderWidth: 1,
-    borderColor: UI.border,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
-    zIndex: 50,
-  },
-  optionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  optionSelected: {
-    backgroundColor: UI.highlight,
-  },
-  footer: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    backgroundColor: UI.paper,
-  },
-  createBtn: {
-    backgroundColor: UI.button,
-    borderRadius: 12,
-    minHeight: 54,
-    paddingHorizontal: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  createBtnDisabled: {
-    opacity: 0.35,
-  },
-  createBtnText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#FFFFFF",
+  required: {
+    color: Brand.danger,
   },
   dateModalRoot: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
+    backgroundColor: "rgba(35, 31, 32, 0.4)",
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 20,
   },
   dateModalCard: {
-    backgroundColor: UI.paper,
-    borderRadius: 14,
+    backgroundColor: Brand.paper,
     width: "100%",
-    maxWidth: 380,
     overflow: "hidden",
+    paddingBottom: 6,
   },
   dateModalHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 18,
-    paddingTop: 16,
-    paddingBottom: 12,
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: UI.border,
-  },
-  dateModalTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: UI.ink,
-  },
-  dateModalDone: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: UI.check,
+    borderBottomColor: Brand.line,
   },
 });
 

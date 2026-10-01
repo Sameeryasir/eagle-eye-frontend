@@ -54,7 +54,6 @@ const logSlice = createSlice({
     setCurrentProjectId: (state, action) => {
       state.currentProjectId = action.payload;
     },
-    // --- Hydrate from Project Details aggregate API (skips a second logs fetch) ---
     setLogsForProject: (state, action) => {
       const { projectId, logs } = action.payload || {};
       state.logs = Array.isArray(logs) ? logs : [];

@@ -52,6 +52,8 @@ import HomeBottomNav from "../components/HomeBottomNav";
 import CreateTask from "../components/CreateTask";
 import { Brand } from "../constants/brandColors";
 import { getUserRole } from "../services/utils/userRole";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { CheckSquare } from "lucide-react-native";
 
 function WidgetScreen({ navigation, route }) {
   const dispatch = useDispatch();
@@ -785,23 +787,60 @@ function WidgetScreen({ navigation, route }) {
 
       <Modal
         visible={createTaskVisible}
-        animationType="slide"
+        animationType="fade"
         presentationStyle="fullScreen"
         statusBarTranslucent
         onRequestClose={() => setCreateTaskVisible(false)}
       >
-        <CreateTask
-          projectId={projectId}
-          projectName={projectName || project?.name}
-          onCancel={() => setCreateTaskVisible(false)}
-          onSuccess={() => {
-            
-            setCreateTaskVisible(false);
-          }}
-        />
+        {createTaskVisible ? (
+          <View style={{ flex: 1, backgroundColor: Brand.paper }}>
+            <SafeAreaView
+              style={{ backgroundColor: Brand.paper }}
+              edges={["top"]}
+            >
+              <StatusBar barStyle="dark-content" backgroundColor={Brand.paper} />
+              <View style={styles.createTaskHeader}>
+                <CheckSquare size={20} color={Brand.ink} strokeWidth={2} />
+                <Text style={styles.createTaskHeaderTitle}>Create Task</Text>
+              </View>
+            </SafeAreaView>
+            <CreateTask
+              hideHeader
+              projectId={projectId}
+              projectName={projectName || project?.name}
+              navigation={{
+                goBack: () => setCreateTaskVisible(false),
+              }}
+              onCancel={() => setCreateTaskVisible(false)}
+              onSuccess={() => {
+                setCreateTaskVisible(false);
+              }}
+            />
+          </View>
+        ) : null}
       </Modal>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  createTaskHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Brand.line,
+    backgroundColor: Brand.paper,
+  },
+  createTaskHeaderTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: Brand.ink,
+    letterSpacing: -0.2,
+  },
+});
 
 export default WidgetScreen;

@@ -314,7 +314,6 @@ const taskSlice = createSlice({
       state.filteredTasks = [];
     },
 
-    // --- Hydrate from Project Details aggregate API (skips a second tasks fetch) ---
     setTasksForProject: (state, action) => {
       const { projectId, tasks } = action.payload || {};
       const list = Array.isArray(tasks) ? tasks : [];

@@ -1,5 +1,4 @@
 // @ts-nocheck
-
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -26,6 +25,42 @@ const UI = {
   inProgress: { label: "In Progress", text: "#2563EB", bg: "#DBEAFE" },
   completed: { label: "Completed", text: "#059669", bg: "#D1FAE5" },
 };
+
+function OverflowMenuRenderer({ style, children, layouts, ...other }) {
+  const { windowLayout, triggerLayout, optionsLayout } = layouts;
+  const gap = 6;
+  const menuW = optionsLayout.width || 148;
+  const menuH = optionsLayout.height || 88;
+  const triggerX = triggerLayout.x - windowLayout.x;
+  const triggerY = triggerLayout.y - windowLayout.y;
+
+  let top = triggerY + triggerLayout.height + gap;
+  if (top + menuH > windowLayout.height - 8) {
+    top = Math.max(8, triggerY - menuH - gap);
+  }
+
+  let left = triggerX + triggerLayout.width - menuW;
+  if (left < 8) left = 8;
+  if (left + menuW > windowLayout.width - 8) {
+    left = windowLayout.width - menuW - 8;
+  }
+
+  return (
+    <View
+      {...other}
+      style={[
+        {
+          position: "absolute",
+          top,
+          left,
+        },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
 
 function isTaskCompleted(task) {
   const status = String(task?.status || task?.taskStatus || "").toLowerCase();
@@ -75,7 +110,7 @@ function getPriorityMeta(priority) {
   if (value === "medium") {
     return { label: "Medium", ...UI.medium };
   }
-  
+
   return { label: "Medium", ...UI.medium };
 }
 
@@ -121,35 +156,38 @@ function TaskListCard({
     task?.endTime || task?.dueDate || task?.startTime || task?.createdAt
   );
   const folderLabel = getProjectLabel(task, projectName);
+  const menuEnabled = showMenu && (onEdit || onDelete);
 
   return (
-    <TouchableOpacity
-      style={styles.card}
-      activeOpacity={0.88}
-      onPress={onPress}
-    >
-      
+    <View style={styles.card}>
       <View style={[styles.stripe, { backgroundColor: priority.dot }]} />
 
       <View style={styles.content}>
-        
         <View style={styles.titleRow}>
-          <Text
-            style={[styles.title, completed && styles.titleDone]}
-            numberOfLines={2}
+          <TouchableOpacity
+            style={styles.titlePress}
+            activeOpacity={0.88}
+            onPress={onPress}
           >
-            {task?.title || task?.name || "Untitled task"}
-          </Text>
-
-          <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
-            <Text style={[styles.statusText, { color: status.text }]}>
-              {status.label}
+            <Text
+              style={[styles.title, completed && styles.titleDone]}
+              numberOfLines={2}
+            >
+              {task?.title || task?.name || "Untitled task"}
             </Text>
-          </View>
 
-          {showMenu && (onEdit || onDelete) ? (
-            <Menu>
-              <MenuTrigger customStyles={{ triggerWrapper: styles.menuBtn }}>
+            <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
+              <Text style={[styles.statusText, { color: status.text }]}>
+                {status.label}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          {menuEnabled ? (
+            <Menu renderer={OverflowMenuRenderer}>
+              <MenuTrigger
+                customStyles={{ triggerWrapper: styles.menuBtn }}
+              >
                 <Ionicons
                   name="ellipsis-vertical"
                   size={16}
@@ -179,7 +217,9 @@ function TaskListCard({
                         size={16}
                         color="#DC2626"
                       />
-                      <Text style={[styles.menuItemText, { color: "#DC2626" }]}>
+                      <Text
+                        style={[styles.menuItemText, { color: "#DC2626" }]}
+                      >
                         Delete
                       </Text>
                     </View>
@@ -194,45 +234,46 @@ function TaskListCard({
           )}
         </View>
 
-        {!!description && (
-          <Text style={styles.description} numberOfLines={2}>
-            {description}
-          </Text>
-        )}
-
-        
-        <View style={styles.metaRow}>
-          <View
-            style={[styles.priorityPill, { backgroundColor: priority.bg }]}
-          >
-            <View
-              style={[styles.priorityDot, { backgroundColor: priority.dot }]}
-            />
-            <Text style={[styles.priorityText, { color: priority.text }]}>
-              {priority.label}
+        <TouchableOpacity activeOpacity={0.88} onPress={onPress}>
+          {!!description && (
+            <Text style={styles.description} numberOfLines={2}>
+              {description}
             </Text>
+          )}
+
+          <View style={styles.metaRow}>
+            <View
+              style={[styles.priorityPill, { backgroundColor: priority.bg }]}
+            >
+              <View
+                style={[styles.priorityDot, { backgroundColor: priority.dot }]}
+              />
+              <Text style={[styles.priorityText, { color: priority.text }]}>
+                {priority.label}
+              </Text>
+            </View>
+
+            {!!dueLabel && (
+              <View style={styles.metaItem}>
+                <Ionicons name="calendar-outline" size={14} color={UI.meta} />
+                <Text style={styles.metaText} numberOfLines={1}>
+                  {dueLabel}
+                </Text>
+              </View>
+            )}
+
+            {!!folderLabel && (
+              <View style={styles.metaItem}>
+                <Ionicons name="folder-outline" size={14} color={UI.meta} />
+                <Text style={styles.metaText} numberOfLines={1}>
+                  {folderLabel}
+                </Text>
+              </View>
+            )}
           </View>
-
-          {!!dueLabel && (
-            <View style={styles.metaItem}>
-              <Ionicons name="calendar-outline" size={14} color={UI.meta} />
-              <Text style={styles.metaText} numberOfLines={1}>
-                {dueLabel}
-              </Text>
-            </View>
-          )}
-
-          {!!folderLabel && (
-            <View style={styles.metaItem}>
-              <Ionicons name="folder-outline" size={14} color={UI.meta} />
-              <Text style={styles.metaText} numberOfLines={1}>
-                {folderLabel}
-              </Text>
-            </View>
-          )}
-        </View>
+        </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -245,7 +286,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: UI.border,
     marginBottom: 12,
-    overflow: "hidden",
+    overflow: "visible",
     shadowColor: "#000",
     shadowOpacity: 0.04,
     shadowRadius: 8,
@@ -260,11 +301,20 @@ const styles = StyleSheet.create({
     minWidth: 0,
     paddingHorizontal: 14,
     paddingVertical: 14,
+    overflow: "visible",
   },
   titleRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 8,
+    zIndex: 2,
+  },
+  titlePress: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    minWidth: 0,
   },
   title: {
     flex: 1,

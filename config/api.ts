@@ -1,4 +1,4 @@
-const DEFAULT_API = 'https://d643-203-99-184-85.ngrok-free.app';
+const DEFAULT_API = 'https://1339-203-99-184-85.ngrok-free.app';
 
 const getApiUrl = (): string => {
   const candidates = [

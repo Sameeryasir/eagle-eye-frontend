@@ -27,7 +27,6 @@ export const ApiRoutes = {
     list: '/projects',
     forLogs: '/projects/for-logs',
     byId: (id: Id) => `/projects/${id}`,
-    // One payload for Project Details (project + team + tasks + logs)
     details: (id: Id) => `/projects/${id}/details`,
     assignedTasks: (id: Id) => `/projects/${id}/assigned-tasks`,
     create: '/projects',

@@ -17,7 +17,6 @@ export interface Project {
   [key: string]: unknown;
 }
 
-/** Combined Project Details API payload (one round-trip for the screen). */
 export interface ProjectDetailsResponse {
   project: Project;
   team: User[];

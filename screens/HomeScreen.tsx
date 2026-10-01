@@ -364,13 +364,6 @@ function HomeScreen({ navigation }) {
 
   const handleCreateProjectSuccess = () => {
     setCreateProjectModalVisible(false);
-    Toast.show({
-      type: "success",
-      text1: "Project Created Successfully!",
-      text2: "Your new project has been added to the list",
-      visibilityTime: 3000,
-      topOffset: 80,
-    });
   };
 
   const ProjectCard = ({ project }) => {

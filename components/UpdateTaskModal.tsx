@@ -862,6 +862,8 @@ export default function UpdateTaskModal({
                             zIndex: 1000,
                             borderWidth: 1,
                           }}
+                          listMode="SCROLLVIEW"
+                          scrollViewProps={{ nestedScrollEnabled: true }}
                           listItemContainerStyle={{
                             height: 40,
                             paddingHorizontal: 12,

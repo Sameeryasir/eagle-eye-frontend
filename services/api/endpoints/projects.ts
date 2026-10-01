@@ -26,7 +26,6 @@ export const projectsApi = {
     return unwrapData<Project>(response);
   },
 
-  // --- Project Details: single call used by ProjectDetailsScreen ---
   getDetails: async (projectId: Id): Promise<ProjectDetailsResponse> => {
     const response = await apiGet<unknown>(
       ApiRoutes.projects.details(requireId(projectId, 'Project ID'))

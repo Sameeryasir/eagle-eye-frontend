@@ -1,43 +1,122 @@
-// @ts-nocheck
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   StatusBar,
   ScrollView,
-  Alert,
-  TouchableWithoutFeedback,
-  useWindowDimensions,
-  TextInput,
   ActivityIndicator,
   RefreshControl,
   Modal,
+  StyleSheet,
+  TextInput,
   Keyboard,
-  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import Toast from 'react-native-toast-message';
+import Toast from "react-native-toast-message";
+import {
+  Menu,
+  MenuOptions,
+  MenuOption,
+  MenuTrigger,
+} from "react-native-popup-menu";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useDispatch, useSelector } from "react-redux";
+
 import Sidebar from "../components/Sidebar";
 import HomeBottomNav from "../components/HomeBottomNav";
 import UpdateTaskModal from "../components/UpdateTaskModal";
+import { Brand } from "../constants/brandColors";
 import { deleteTaskById } from "../services/tasks/deleteTaskById";
 import { getUserRole } from "../services/utils/userRole";
-import { Menu, MenuOptions, MenuOption, MenuTrigger } from 'react-native-popup-menu';
 import { getTaskById } from "../services/tasks/getTaskById";
 import { getEmployeesToAssignTask } from "../services/employees/getEmployeesOfTheCompany";
-import { updateTask } from "../services/tasks/updateTaskById";
-import { assignTaskToUser } from "../services/tasks/assignTask";
 import { taskAssignement } from "../services/inAppNotification/taskAssignement";
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-import { useDispatch, useSelector } from 'react-redux';
 import {
   assignTaskToUserAction,
   selectTaskAssigning,
-  selectTaskAssignError,
-} from '../store/slices/taskSlice';
+} from "../store/slices/taskSlice";
+
+const PRIORITY = {
+  low: { label: "Low", color: "#059669", bg: "#ECFDF5" },
+  medium: { label: "Medium", color: "#D97706", bg: "#FFFBEB" },
+  high: { label: "High", color: "#DC2626", bg: "#FEF2F2" },
+  critical: { label: "Critical", color: "#B91C1C", bg: "#FEE2E2" },
+};
+
+function OverflowMenuRenderer({ style, children, layouts, ...other }) {
+  const { windowLayout, triggerLayout, optionsLayout } = layouts;
+  const gap = 6;
+  const menuW = optionsLayout.width || 150;
+  const menuH = optionsLayout.height || 96;
+  const triggerX = triggerLayout.x - windowLayout.x;
+  const triggerY = triggerLayout.y - windowLayout.y;
+
+  let top = triggerY + triggerLayout.height + gap;
+  if (top + menuH > windowLayout.height - 8) {
+    top = Math.max(8, triggerY - menuH - gap);
+  }
+
+  let left = triggerX + triggerLayout.width - menuW;
+  if (left < 8) left = 8;
+  if (left + menuW > windowLayout.width - 8) {
+    left = windowLayout.width - menuW - 8;
+  }
+
+  return (
+    <View {...other} style={[{ position: "absolute", top, left }, style]}>
+      {children}
+    </View>
+  );
+}
+
+function getPriorityMeta(priority) {
+  const key = String(priority || "").toLowerCase();
+  return PRIORITY[key] || null;
+}
+
+function getStatusLabel(task) {
+  const status = String(task?.status || task?.taskStatus || "").toLowerCase();
+  if (status === "done" || status === "completed") return "Completed";
+  if (status === "in_progress" || status === "in-progress") return "In Progress";
+  if (status === "blocked") return "Blocked";
+  return "Open";
+}
+
+function formatDateTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  const day = date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  const time = date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+  return `${day} · ${time}`;
+}
+
+function getAssignedToName(assignedTo) {
+  if (!assignedTo) return "Unassigned";
+  const fullName =
+    `${assignedTo.first_name || assignedTo.firstName || ""} ${
+      assignedTo.last_name || assignedTo.lastName || ""
+    }`.trim();
+  if (fullName) return fullName;
+  return assignedTo.email || "Unassigned";
+}
+
+function initialFromName(name) {
+  return String(name || "U")
+    .trim()
+    .charAt(0)
+    .toUpperCase();
+}
 
 function TaskDetailsScreen({ navigation, route }) {
   const { taskId, projectId, task: routeTask } = route.params || {};
@@ -45,38 +124,28 @@ function TaskDetailsScreen({ navigation, route }) {
 
   const dispatch = useDispatch();
   const assigning = useSelector(selectTaskAssigning);
-  const assignError = useSelector(selectTaskAssignError);
 
-  const [isUpdateMode, setIsUpdateMode] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [userRole, setUserRole] = useState(null);
-  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const [currentTask, setCurrentTask] = useState(routeTask || null);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(Boolean(taskId) && !routeTask);
   const [error, setError] = useState(null);
 
-  const [showAssignmentModal, setShowAssignmentModal] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
+  const [assigneeOpen, setAssigneeOpen] = useState(false);
+  const [employeeSearch, setEmployeeSearch] = useState("");
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
-
-  // Responsive spacing calculations
-  const isLargeScreen = screenHeight > 800;
-  const topSpacing = isLargeScreen ? 16 : 12;
-  const bottomSpacing = isLargeScreen ? 24 : 16;
-  const cardSpacing = isLargeScreen ? 20 : 16;
 
   useEffect(() => {
     const loadUserRole = async () => {
       try {
-        const role = await getUserRole();
-        setUserRole(role);
-      } catch (error) {
-        console.error("Error loading user role:", error);
+        setUserRole(await getUserRole());
+      } catch {
+        setUserRole(null);
       }
     };
     loadUserRole();
@@ -88,14 +157,11 @@ function TaskDetailsScreen({ navigation, route }) {
       try {
         setLoading(true);
         setError(null);
-        console.log('🔄 Fetching task with ID:', taskId);
-        const data = await getTaskById(taskId);
-        console.log('✅ Task loaded successfully:', data?.title);
-        setCurrentTask(data);
+        setCurrentTask(await getTaskById(taskId));
       } catch (err) {
-        console.error('❌ TaskDetailsScreen - Error fetching task by id:', err);
-        const errorMessage = err?.response?.data?.message || err?.message || 'Failed to load task';
-        setError(`Unable to load task: ${errorMessage}`);
+        const message =
+          err?.response?.data?.message || err?.message || "Failed to load task";
+        setError(`Unable to load task: ${message}`);
       } finally {
         setLoading(false);
       }
@@ -103,173 +169,50 @@ function TaskDetailsScreen({ navigation, route }) {
     fetchTask();
   }, [taskId, routeTask]);
 
-  const formatDateTime = (dateString) => {
-    if (!dateString) return "N/A";
-    const date = new Date(dateString);
-    const dateStr = date.toLocaleDateString();
-    const timeStr = date.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
+  const assignedPerson =
+    currentTask?.assigned_to || currentTask?.assignedTo || null;
+  const assignedName = getAssignedToName(assignedPerson);
+  const isUnassigned = assignedName === "Unassigned";
+  const canManageAssignee = userRole !== "Employee";
+  const priorityMeta = getPriorityMeta(currentTask?.priority);
+  const statusLabel = getStatusLabel(currentTask);
+
+  const selectedEmployee = useMemo(
+    () =>
+      employees.find(
+        (e) => Number(e.id) === Number(selectedEmployeeId)
+      ) || null,
+    [employees, selectedEmployeeId]
+  );
+
+  const selectedEmployeeLabel = selectedEmployee
+    ? `${selectedEmployee.first_name || ""} ${
+        selectedEmployee.last_name || ""
+      }`.trim() || selectedEmployee.email
+    : null;
+
+  const filteredEmployees = useMemo(() => {
+    const q = employeeSearch.trim().toLowerCase();
+    if (!q) return employees;
+    return employees.filter((employee) => {
+      const name =
+        `${employee.first_name || ""} ${employee.last_name || ""}`.toLowerCase();
+      const email = String(employee.email || "").toLowerCase();
+      return name.includes(q) || email.includes(q);
     });
-    return `${dateStr} ${timeStr}`;
-  };
-
-  const getAssignedToName = (assignedTo) => {
-    if (!assignedTo) return "Unassigned";
-    const firstName = assignedTo.first_name || "";
-    const lastName = assignedTo.last_name || "";
-    const fullName = `${firstName} ${lastName}`.trim();
-    if (!fullName && assignedTo.email) {
-      return assignedTo.email;
-    }
-    return fullName || "Unassigned";
-  };
-
-  const priorityOptions = [
-    { id: 'low', label: 'Low', color: '#10B981', bgColor: '#D1FAE5' },
-    { id: 'medium', label: 'Medium', color: '#F59E0B', bgColor: '#FEF3C7' },
-    { id: 'high', label: 'High', color: '#EF4444', bgColor: '#FEE2E2' },
-    { id: 'critical', label: 'Critical', color: '#DC2626', bgColor: '#FEE2E2' }
-  ];
-
-  const handleUpdate = () => {
-    setShowUpdateModal(true);
-  };
-
-  const handleUpdateTask = () => {
-    // Navigate to update task screen
-    navigation.navigate('UpdateTask', { task });
-    setIsUpdateMode(false);
-  };
-
-  const handleCancelUpdate = () => {
-    setIsUpdateMode(false);
-  };
-
-  const handleUpdateSuccess = () => {
-    // Close modal only; user will swipe down to refresh manually
-    setShowUpdateModal(false);
-  };
-
-  const onRefresh = async () => {
-    console.log('🔄 Refresh triggered - currentTask:', currentTask?.id);
-    console.log('🔄 TaskId from route:', taskId);
-    
-    const taskIdToRefresh = currentTask?.id || taskId;
-    
-    if (!taskIdToRefresh) {
-      console.log('❌ No task ID available for refresh');
-      Alert.alert(
-        "Refresh Failed",
-        "Unable to refresh task data. Task ID not found.",
-        [{ text: "OK" }]
-      );
-      return;
-    }
-    
-    setRefreshing(true);
-    try {
-      console.log('🔄 Fetching updated task data for ID:', taskIdToRefresh);
-      const updated = await getTaskById(taskIdToRefresh);
-      console.log('✅ Refresh successful - updated task:', updated?.title);
-      setCurrentTask(updated);
-    } catch (err) {
-      console.error('❌ TaskDetailsScreen - Refresh failed:', err);
-      const errorMessage = err?.response?.data?.message || err?.message || 'Unknown error occurred';
-      Alert.alert(
-        "Refresh Failed",
-        `Unable to refresh task data: ${errorMessage}`,
-        [{ text: "OK" }]
-      );
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  const handleDelete = () => {
-    // Show beautiful custom dialog instead of Alert
-    setTaskToDelete(currentTask);
-    setDeleteDialogVisible(true);
-  };
-
-  const confirmDelete = async () => {
-    if (!taskToDelete) return;
-
-    const taskId = taskToDelete.id;
-    const taskTitle = taskToDelete.title;
-
-    // Close dialog immediately when delete button is tapped
-    setDeleteDialogVisible(false);
-    setTaskToDelete(null);
-
-    try {
-      await deleteTaskById(taskId);
-      
-      Toast.show({
-        type: 'success',
-        text1: 'Task Deleted Successfully!',
-        text2: `"${taskTitle}" has been permanently deleted`,
-        visibilityTime: 3000,
-        autoHide: true,
-        topOffset: 80,
-      });
-
-      // Navigate back after a short delay to allow toast to be visible
-      setTimeout(() => {
-        // Get projectId from current task or route param
-        const projId = taskToDelete?.project?.id || taskToDelete?.projectId || projectId;
-
-        if (projId) {
-          // Navigate back to ViewAllTasksScreen with projectId
-          navigation.navigate('ViewAllTasksScreen', { projectId: projId });
-        } else {
-          // Fallback: go back to previous screen
-          navigation.goBack();
-        }
-      }, 1000);
-    } catch (error) {
-      console.error('Error deleting task:', error);
-      
-      Toast.show({
-        type: 'error',
-        text1: 'Delete Failed',
-        text2: 'Failed to delete task. Please try again.',
-        visibilityTime: 4000,
-        autoHide: true,
-        topOffset: 80,
-      });
-    }
-  };
-
-  const cancelDelete = () => {
-    setDeleteDialogVisible(false);
-    setTaskToDelete(null);
-  };
-
-  const handleAssignmentPress = async () => {
-    // Only show modal if task is not assigned and user has permission
-    if (getAssignedToName(currentTask.assigned_to || currentTask.assignedTo) === "Unassigned" && userRole !== 'Employee') {
-      // Fetch employees if not already loaded
-      if (employees.length === 0 && !loadingEmployees) {
-        fetchEmployees();
-      }
-      setShowAssignmentModal(true);
-    }
-  };
+  }, [employees, employeeSearch]);
 
   const fetchEmployees = async () => {
     try {
       setLoadingEmployees(true);
       const data = await getEmployeesToAssignTask();
-      setEmployees(data || []);
-    } catch (error) {
-      console.error('Error fetching employees:', error);
+      setEmployees(Array.isArray(data) ? data : []);
+    } catch {
       Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to load employees. Please try again.',
-        visibilityTime: 4000,
+        type: "error",
+        text1: "Error",
+        text2: "Failed to load employees. Please try again.",
+        visibilityTime: 3000,
         autoHide: true,
         topOffset: 80,
       });
@@ -278,42 +221,104 @@ function TaskDetailsScreen({ navigation, route }) {
     }
   };
 
-  const filteredEmployees = employees.filter(employee => {
-    if (!searchQuery.trim()) return true;
+  useEffect(() => {
+    if (canManageAssignee && employees.length === 0 && !loadingEmployees) {
+      fetchEmployees();
+    }
+  }, [canManageAssignee]);
 
-    const query = searchQuery.toLowerCase();
-    const firstName = employee.first_name?.toLowerCase() || '';
-    const lastName = employee.last_name?.toLowerCase() || '';
-    const email = employee.email?.toLowerCase() || '';
-    const fullName = `${firstName} ${lastName}`.trim();
+  useEffect(() => {
+    const currentId =
+      assignedPerson?.id ||
+      currentTask?.assignedToUserId ||
+      currentTask?.assigned_to_user_id ||
+      null;
+    if (currentId != null && selectedEmployeeId == null) {
+      setSelectedEmployeeId(currentId);
+    }
+  }, [assignedPerson, currentTask, selectedEmployeeId]);
 
-    return firstName.includes(query) ||
-      lastName.includes(query) ||
-      fullName.includes(query) ||
-      email.includes(query);
-  });
+  const handleUpdate = () => {
+    setAssigneeOpen(false);
+    setShowUpdateModal(true);
+  };
 
-  const handleEmployeeSelect = (employee) => {
-    // Select the employee and close modal
-    setSelectedEmployee(employee);
-    setShowAssignmentModal(false);
+  const handleUpdateSuccess = () => {
+    setShowUpdateModal(false);
+  };
+
+  const onRefresh = async () => {
+    const id = currentTask?.id || taskId;
+    if (!id) return;
+    setRefreshing(true);
+    try {
+      setCurrentTask(await getTaskById(id));
+    } catch (err) {
+      Toast.show({
+        type: "error",
+        text1: "Refresh Failed",
+        text2: err?.message || "Unable to refresh task",
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleDelete = () => {
+    setAssigneeOpen(false);
+    setTaskToDelete(currentTask);
+    setDeleteDialogVisible(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!taskToDelete) return;
+    const id = taskToDelete.id;
+    const title = taskToDelete.title;
+    const projId =
+      taskToDelete?.project?.id || taskToDelete?.projectId || projectId;
+
+    setDeleteDialogVisible(false);
+    setTaskToDelete(null);
+
+    try {
+      await deleteTaskById(id);
+      Toast.show({
+        type: "success",
+        text1: "Task Deleted",
+        text2: `"${title}" has been deleted`,
+        visibilityTime: 2500,
+        autoHide: true,
+        topOffset: 80,
+      });
+      setTimeout(() => {
+        if (projId) {
+          navigation.navigate("ViewAllTasksScreen", { projectId: projId });
+        } else {
+          navigation.goBack();
+        }
+      }, 600);
+    } catch {
+      Toast.show({
+        type: "error",
+        text1: "Delete Failed",
+        text2: "Failed to delete task. Please try again.",
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
+    }
   };
 
   const handleAssignTask = async () => {
-    console.log('=== TASK ASSIGNMENT DEBUG ===');
-    console.log('selectedEmployee:', selectedEmployee);
-    console.log('currentTask:', currentTask);
-    console.log('currentTask?.id:', currentTask?.id);
-    console.log('taskId from route:', taskId);
-    console.log('route params:', route.params);
-    console.log('==============================');
-
     if (!selectedEmployee) {
       Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Please select an employee first.',
-        visibilityTime: 4000,
+        type: "error",
+        text1: "Select Employee",
+        text2: "Please select an employee first.",
+        visibilityTime: 2500,
         autoHide: true,
         topOffset: 80,
       });
@@ -321,23 +326,12 @@ function TaskDetailsScreen({ navigation, route }) {
     }
 
     const taskIdToUse = currentTask?.id || taskId;
-    
-    console.log('🔍 DETAILED TASK ANALYSIS:');
-    console.log('- currentTask exists:', !!currentTask);
-    console.log('- currentTask.id:', currentTask?.id, typeof currentTask?.id);
-    console.log('- taskId from route:', taskId, typeof taskId);
-    console.log('- taskIdToUse:', taskIdToUse, typeof taskIdToUse);
-    console.log('- Full currentTask keys:', currentTask ? Object.keys(currentTask) : 'no currentTask');
-    console.log('- Full currentTask object:', JSON.stringify(currentTask, null, 2));
-    
     if (!taskIdToUse) {
-      console.error('❌ TASK ID NOT FOUND');
-      
       Toast.show({
-        type: 'error',
-        text1: 'Task ID Not Found',
-        text2: 'Unable to find task ID. Please try refreshing the screen.',
-        visibilityTime: 4000,
+        type: "error",
+        text1: "Error",
+        text2: "Task ID not found.",
+        visibilityTime: 2500,
         autoHide: true,
         topOffset: 80,
       });
@@ -345,85 +339,64 @@ function TaskDetailsScreen({ navigation, route }) {
     }
 
     try {
-      console.log('🚀 Making assignment API call via Redux:');
-      console.log('- Task ID:', taskIdToUse);
-      console.log('- Employee ID:', selectedEmployee.id);
-      console.log('- Employee Name:', `${selectedEmployee.first_name} ${selectedEmployee.last_name}`);
-
-      console.log('🚀 Proceeding with Redux task assignment...');
-      
-      const result = await dispatch(assignTaskToUserAction({
-        taskId: taskIdToUse,
-        userId: selectedEmployee.id
-      }));
+      const result = await dispatch(
+        assignTaskToUserAction({
+          taskId: taskIdToUse,
+          userId: selectedEmployee.id,
+        })
+      );
 
       if (assignTaskToUserAction.fulfilled.match(result)) {
-        // Success - Redux state is updated automatically
-        console.log('✅ Redux assignment successful:', result.payload);
-
-        // Update local state to reflect the change (fallback for immediate UI update)
-        setCurrentTask({
-          ...currentTask,
+        setCurrentTask((prev) => ({
+          ...prev,
+          assigned_to: selectedEmployee,
           assignedTo: selectedEmployee,
-          assignedToUserId: selectedEmployee.id
-        });
-
-        // Reset states
-        setShowAssignmentModal(false);
-        setSelectedEmployee(null);
-        setSearchQuery('');
+          assignedToUserId: selectedEmployee.id,
+        }));
+        setAssigneeOpen(false);
 
         try {
-          // Get current user info for notification
-          const currentUserId = await AsyncStorage.getItem('userId');
-          const currentUserFirstName = await AsyncStorage.getItem('userFirstName');
-          const currentUserLastName = await AsyncStorage.getItem('userLastName');
-          const currentUserName = `${currentUserFirstName || ''} ${currentUserLastName || ''}`.trim() || 'Unknown User';
-
-          // Send notification to assigned user
-          const apiNotificationData = {
-            title: 'New Task Assigned',
-            message: `You have been assigned a new task: ${currentTask.title || currentTask.name}`,
+          const raw = await AsyncStorage.getItem("user");
+          const user = raw ? JSON.parse(raw) : null;
+          await taskAssignement({
+            title: "New Task Assigned",
+            message: `You have been assigned a new task: ${
+              currentTask.title || currentTask.name
+            }`,
             assignedToUserId: Number(selectedEmployee.id),
-            fromUserName: currentUserName,
-            priority: currentTask.priority || 'low',
-            projectName: currentTask?.project?.name || 'Unknown Project',
-            projectId: Number(currentTask?.project?.id || projectId),
-            taskId: currentTask.id,
-            taskName: currentTask.title || currentTask.name
-          };
-          
-          console.log('🔔 CALLING API FOR TASK ASSIGNMENT NOTIFICATION:', apiNotificationData);
-          await taskAssignement(apiNotificationData);
-          console.log('✅ API NOTIFICATION SENT SUCCESSFULLY');
-        } catch (apiError) {
-          console.error('❌ Error sending API notification:', apiError);
-          // Don't throw error - task was already assigned successfully
+            fromUserId: user?.id ? Number(user.id) : undefined,
+            priority: currentTask.priority || "low",
+            taskId: Number(taskIdToUse),
+          });
+        } catch {
         }
 
         Toast.show({
-          type: 'success',
-          text1: 'Task Assigned Successfully!',
-          text2: `Task assigned to ${selectedEmployee.first_name} ${selectedEmployee.last_name}`,
-          visibilityTime: 3000,
+          type: "success",
+          text1: "Task Assigned",
+          text2: `Assigned to ${selectedEmployee.first_name || ""} ${
+            selectedEmployee.last_name || ""
+          }`.trim(),
+          visibilityTime: 2500,
           autoHide: true,
           topOffset: 80,
         });
       } else {
-        // Error handling
-        const errorMessage = result.payload || 'Failed to assign task. Please try again.';
-        throw new Error(errorMessage);
+        Toast.show({
+          type: "error",
+          text1: "Assign Failed",
+          text2: result.payload || "Failed to assign task.",
+          visibilityTime: 3000,
+          autoHide: true,
+          topOffset: 80,
+        });
       }
-    } catch (error) {
-      console.error('❌ Error assigning task:', error);
-      console.error('- Error message:', error.message);
-      console.error('- Error response:', error.response?.data);
-      
+    } catch (err) {
       Toast.show({
-        type: 'error',
-        text1: 'Assignment Failed',
-        text2: error.message || 'Failed to assign task. Please try again.',
-        visibilityTime: 4000,
+        type: "error",
+        text1: "Assign Failed",
+        text2: err?.message || "Failed to assign task.",
+        visibilityTime: 3000,
         autoHide: true,
         topOffset: 80,
       });
@@ -432,692 +405,864 @@ function TaskDetailsScreen({ navigation, route }) {
 
   if (loading && !currentTask) {
     return (
-      <View className="flex-1 bg-white">
-        <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
-        <View className="flex-1 justify-center items-center">
-          <Text className="text-[16px] text-[#666]">Loading Task details...</Text>
+      <View style={styles.root}>
+        <StatusBar barStyle="dark-content" backgroundColor={Brand.paper} />
+        <View style={styles.center}>
+          <ActivityIndicator color={Brand.ink} />
+          <Text style={styles.mutedCenter}>Loading task…</Text>
         </View>
-        {/* Show HomeBottomNav during loading */}
-        <HomeBottomNav />
+        <HomeBottomNav hideFab />
       </View>
     );
   }
 
   if (error) {
     return (
-      <View className="flex-1 bg-white justify-center items-center">
-        <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
-        <Text className="text-[16px] text-[#dc3545] mb-4">{error}</Text>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={{ backgroundColor: "#007AFF", paddingVertical: 12, paddingHorizontal: 24, borderRadius: 8 }}
-        >
-          <Text className="text-white text-[16px] font-semibold">Go Back</Text>
-        </TouchableOpacity>
+      <View style={styles.root}>
+        <StatusBar barStyle="dark-content" backgroundColor={Brand.paper} />
+        <View style={styles.center}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.primaryBtnText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
   if (!currentTask) {
     return (
-      <View className="flex-1 bg-white justify-center items-center">
-        <Text className="text-[16px] text-[#666]">Task not found</Text>
+      <View style={styles.root}>
+        <StatusBar barStyle="dark-content" backgroundColor={Brand.paper} />
+        <View style={styles.center}>
+          <Text style={styles.mutedCenter}>Task not found</Text>
+        </View>
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-gray-100">
-      <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
-
-      <ScrollView 
-        className="flex-1" 
-        style={{ paddingTop: 20 }}
-        contentContainerStyle={{ paddingBottom: bottomSpacing }}
-        showsVerticalScrollIndicator={true}
-        bounces={true}
-        nestedScrollEnabled={true}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={["#3155A1", "#007AFF"]}
-            tintColor="#3155A1"
-            progressBackgroundColor="#ffffff"
-            size="default"
-            title="Pull to refresh"
-            titleColor="#666666"
-          />
-        }
-      >
-          {/* Task Title Card */}
-          <View style={{ marginHorizontal: 24, marginBottom: cardSpacing }}>
-            <View style={{
-              backgroundColor: 'white',
-              borderRadius: 16,
-              padding: isLargeScreen ? 24 : 20,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: 0.05,
-              shadowRadius: 2,
-              elevation: 2,
-              borderWidth: 1,
-              borderColor: '#f3f4f6'
-            }}>
-              <View className="flex-row items-center mb-4">
-                <View className="w-12 h-12 rounded-xl bg-blue-100 items-center justify-center mr-4">
-                  <Ionicons name="document-text" size={24} color="#3B82F6" />
+    <View style={styles.root}>
+      <StatusBar barStyle="dark-content" backgroundColor={Brand.paper} />
+      <SafeAreaView style={styles.flex} edges={["top"]}>
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
+          scrollEnabled={!assigneeOpen}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={Brand.ink}
+              colors={[Brand.ink]}
+            />
+          }
+        >
+          <View style={styles.hero}>
+            <View
+              style={[
+                styles.priorityStripe,
+                {
+                  backgroundColor: priorityMeta?.color || Brand.ink,
+                },
+              ]}
+            />
+            <View style={styles.heroBody}>
+              <View style={styles.heroTopRow}>
+                <View style={[styles.pillRow, styles.flex]}>
+                  <View style={styles.statusPill}>
+                    <View style={styles.statusDot} />
+                    <Text style={styles.statusPillText}>{statusLabel}</Text>
+                  </View>
+                  {priorityMeta && (
+                    <View
+                      style={[
+                        styles.priorityPill,
+                        { backgroundColor: priorityMeta.bg },
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.priorityDot,
+                          { backgroundColor: priorityMeta.color },
+                        ]}
+                      />
+                      <Text
+                        style={[
+                          styles.priorityPillText,
+                          { color: priorityMeta.color },
+                        ]}
+                      >
+                        {priorityMeta.label}
+                      </Text>
+                    </View>
+                  )}
                 </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-medium text-blue-600 mb-1">TASK TITLE</Text>
-                  <Text className="text-xl font-bold text-gray-900 leading-tight">
-                    {currentTask.title || "Untitled Task"}
-                  </Text>
-                </View>
-                {userRole !== 'Employee' && (
-                  <Menu rendererProps={{
-                    placement: 'bottom-end',
-                    anchorStyle: { marginRight: 0 },
-                    triggerStyle: { marginRight: 0 }
-                  }}>
+                {userRole !== "Employee" && (
+                  <Menu renderer={OverflowMenuRenderer}>
                     <MenuTrigger>
-                      <View style={{ activeOpacity: 1 }}>
-                        <Ionicons name="ellipsis-vertical" size={16} color="#374151" />
+                      <View style={styles.menuBtn}>
+                        <Ionicons
+                          name="ellipsis-vertical"
+                          size={16}
+                          color={Brand.ink}
+                        />
                       </View>
                     </MenuTrigger>
-                    <MenuOptions customStyles={{
-                      optionsContainer: {
-                        backgroundColor: 'white',
-                        borderRadius: 8,
-                        padding: 8,
-                        width: 120,
-                        marginRight: -40,
-                        marginTop: 15,
-                        shadowColor: "#000",
-                        shadowOpacity: 0.15,
-                        shadowRadius: 6,
-                        shadowOffset: { width: 0, height: 3 },
-                        elevation: 3,
-                      }
-                    }}>
-                      <MenuOption onSelect={handleUpdate} customStyles={{
-                        optionWrapper: {
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          paddingVertical: 10,
-                          paddingHorizontal: 16,
-                          borderRadius: 4,
-                        }
-                      }}>
-                        <Ionicons name="create-outline" size={18} color="#000" />
-                        <Text style={{ marginLeft: 10, fontSize: 14, fontWeight: '600', color: 'black' }}>
-                          Update
-                        </Text>
+                    <MenuOptions
+                      customStyles={{ optionsContainer: styles.menuContainer }}
+                    >
+                      <MenuOption onSelect={handleUpdate}>
+                        <View style={styles.menuRow}>
+                          <Ionicons
+                            name="create-outline"
+                            size={17}
+                            color={Brand.ink}
+                          />
+                          <Text style={styles.menuText}>Edit</Text>
+                        </View>
                       </MenuOption>
-                      <MenuOption onSelect={handleDelete} customStyles={{
-                        optionWrapper: {
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          paddingVertical: 10,
-                          paddingHorizontal: 16,
-                          borderRadius: 4,
-                        }
-                      }}>
-                        <Ionicons name="trash-outline" size={18} color="#dc3545" />
-                        <Text style={{ marginLeft: 10, fontSize: 14, fontWeight: '600', color: '#dc3545' }}>
-                          Delete
-                        </Text>
+                      <MenuOption onSelect={handleDelete}>
+                        <View style={styles.menuRow}>
+                          <Ionicons
+                            name="trash-outline"
+                            size={17}
+                            color={Brand.danger}
+                          />
+                          <Text
+                            style={[styles.menuText, { color: Brand.danger }]}
+                          >
+                            Delete
+                          </Text>
+                        </View>
                       </MenuOption>
                     </MenuOptions>
                   </Menu>
                 )}
               </View>
 
-              {currentTask.description && (
-                <View className="pt-4 border-t border-gray-100">
-                  <Text className="text-sm font-medium text-gray-600 mb-2">DESCRIPTION</Text>
-                  <Text className="text-base text-gray-700 leading-relaxed">
-                    {currentTask.description}
-                  </Text>
-                </View>
+              <Text style={styles.heroTitle}>
+                {currentTask.title || "Untitled Task"}
+              </Text>
+
+              {!!currentTask.description && (
+                <Text style={styles.heroDesc}>{currentTask.description}</Text>
               )}
             </View>
           </View>
+          <View style={[styles.section, { zIndex: assigneeOpen ? 30 : 1 }]}>
+            <Text style={styles.sectionLabel}>Assignee</Text>
 
-          {/* Task Details Grid */}
-          <View style={{ marginHorizontal: 24, marginBottom: cardSpacing }}>
-            <View style={{
-              backgroundColor: 'white',
-              borderRadius: 16,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: 0.05,
-              shadowRadius: 2,
-              elevation: 2,
-              borderWidth: 1,
-              borderColor: '#f3f4f6',
-              overflow: 'hidden'
-            }}>
-              {/* Priority Section */}
-              <View style={{
-                padding: isLargeScreen ? 24 : 20,
-                borderBottomWidth: 1,
-                borderBottomColor: '#f3f4f6'
-              }}>
-                <View className="flex-row items-center justify-between">
-                  <View className="flex-row items-center">
-                    <View className="w-10 h-10 rounded-lg bg-red-100 items-center justify-center mr-3">
-                      <Ionicons name="flag" size={20} color="#EF4444" />
-                    </View>
-                    <View>
-                      <Text className="text-sm font-medium text-gray-600 mb-1">PRIORITY</Text>
-                      {currentTask.priority ? (
-                        <View className="flex-row items-center">
-                          <View
-                            className="w-3 h-3 rounded-full mr-2"
-                            style={{ backgroundColor: priorityOptions.find(p => p.id === currentTask.priority)?.color || '#6b7280' }}
-                          />
-                          <Text className="text-lg font-semibold text-gray-900">
-                            {priorityOptions.find(p => p.id === currentTask.priority)?.label || currentTask.priority}
-                          </Text>
-                        </View>
-                      ) : (
-                        <Text className="text-lg font-semibold text-gray-400">Not set</Text>
-                      )}
-                    </View>
-                  </View>
-                </View>
-              </View>
-
-              {/* Assigned To Section */}
-              <View style={{
-                padding: isLargeScreen ? 24 : 20,
-                borderBottomWidth: 1,
-                borderBottomColor: '#f3f4f6'
-              }}>
-                <View className="flex-row items-center mb-3">
-                  <View className="w-10 h-10 rounded-lg bg-green-100 items-center justify-center mr-3">
-                    <Ionicons name="person" size={20} color="#10B981" />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-sm font-medium text-gray-600 mb-1">ASSIGNED TO</Text>
-                    <View className="flex-row items-center justify-between">
-                      <View className="flex-row items-center flex-1">
-                        <Text 
-                          className="text-lg font-semibold text-gray-900"
-                          numberOfLines={1}
-                          ellipsizeMode="tail"
-                          style={{ flex: 1, marginRight: 8 }}
-                        >
-                          {assigning ? "Assigning..." :
-                            selectedEmployee ?
-                              `${selectedEmployee.first_name} ${selectedEmployee.last_name}`.trim() || selectedEmployee.email :
-                              getAssignedToName(currentTask.assigned_to || currentTask.assignedTo)
-                          }
-                        </Text>
-                        {getAssignedToName(currentTask.assigned_to || currentTask.assignedTo) === "Unassigned" && userRole !== 'Employee' && (
-                          <TouchableOpacity
-                            onPress={handleAssignmentPress}
-                            style={{ marginLeft: 8 }}
-                          >
-                            <Ionicons 
-                              name="chevron-down" 
-                              size={16} 
-                              color="#6B7280" 
-                            />
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                      {selectedEmployee && (
-                        <TouchableOpacity
-                          onPress={handleAssignTask}
-                          disabled={assigning}
-                          style={{
-                            backgroundColor: assigning ? '#6B7280' : '#000000',
-                            paddingVertical: 4,
-                            paddingHorizontal: 16,
-                            borderRadius: 6,
-                            marginLeft: 12,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            minWidth: 70,
-                          }}
-                        >
-                          {assigning ? (
-                            <ActivityIndicator
-                              size="small"
-                              color="white"
-                            />
-                          ) : (
-                            <Text style={{
-                              color: 'white',
-                              fontSize: 13,
-                              fontWeight: '600'
-                            }}>
-                              Assign
-                            </Text>
-                          )}
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
-                </View>
-
-              </View>
-
-              {/* Timeline Section */}
-              <View style={{
-                padding: isLargeScreen ? 24 : 20,
-                marginTop: isLargeScreen ? 20 : 16
-              }}>
-
-                <View className="space-y-4">
-                  <View className="flex-row items-center justify-between mb-4">
-                    <View className="flex-row items-center">
-                      <View className="w-8 h-8 rounded-lg bg-blue-100 items-center justify-center mr-3">
-                        <Ionicons name="play" size={16} color="#3B82F6" />
-                      </View>
-                      <Text className="text-sm font-medium text-gray-600">Start Date</Text>
-                    </View>
-                    <Text className="text-sm font-semibold text-gray-900">
-                      {formatDateTime(currentTask.startTime)}
-                    </Text>
-                  </View>
-
-                  <View className="flex-row items-center justify-between">
-                    <View className="flex-row items-center">
-                      <View className="w-8 h-8 rounded-lg bg-red-100 items-center justify-center mr-3">
-                        <Ionicons name="stop" size={16} color="#EF4444" />
-                      </View>
-                      <Text className="text-sm font-medium text-gray-600">End Date</Text>
-                    </View>
-                    <Text className="text-sm font-semibold text-gray-900">
-                      {currentTask.endTime ? formatDateTime(currentTask.endTime) : "Not selected"}
-                    </Text>
-                  </View>
-
-                  <View className="flex-row justify-end mt-3 ">
-                    <View className="flex-row items-center">
-                      <Text className="text-sm font-medium text-gray-600 mr-2">Created At:</Text>
-                    </View>
-                    <Text className="text-sm font-semibold text-gray-900">
-                      {formatDateTime(currentTask.createdAt)}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* Bottom Spacing */}
-          <View style={{ height: bottomSpacing }} />
-        </ScrollView>
-
-        {/* Update Task Button - Only show when in update mode */}
-        {isUpdateMode && (
-          <View style={{
-            position: 'absolute',
-            bottom: isLargeScreen ? 100 : 80,
-            left: 24,
-            right: 24,
-            zIndex: 20
-          }}>
-            <View className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4">
-              <View className="flex-row space-x-3">
-                <TouchableOpacity
-                  onPress={handleCancelUpdate}
-                  className="flex-1 bg-gray-100 rounded-xl py-4 items-center"
-                >
-                  <Text className="text-base font-semibold text-gray-700">Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={handleUpdateTask}
-                  className="flex-1 bg-black rounded-xl py-4 items-center"
-                >
-                  <Text className="text-base font-semibold text-white">Update Task</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* Update Task Modal */}
-        <UpdateTaskModal
-          visible={showUpdateModal}
-          onClose={() => setShowUpdateModal(false)}
-          task={currentTask}
-          projectId={currentTask?.project?.id}
-          projectName={currentTask?.project?.name}
-          onSuccess={handleUpdateSuccess}
-        />
-
-        {/* Beautiful Delete Confirmation Dialog */}
-        <Modal
-          visible={deleteDialogVisible}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={cancelDelete}
-        >
-          <View style={{
-            flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            paddingHorizontal: 20,
-          }}>
-            <View style={{
-              backgroundColor: 'white',
-              borderRadius: 16,
-              padding: 20,
-              width: '100%',
-              maxWidth: 320,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.2,
-              shadowRadius: 16,
-              elevation: 8,
-            }}>
-              {/* Warning Icon */}
-              <View style={{
-                alignItems: 'center',
-                marginBottom: 16,
-              }}>
-                <View style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
-                  backgroundColor: '#FEF2F2',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  marginBottom: 12,
-                }}>
-                  <Ionicons name="warning" size={24} color="#EF4444" />
-                </View>
-                <Text style={{
-                  fontSize: 18,
-                  fontWeight: 'bold',
-                  color: '#1F2937',
-                  textAlign: 'center',
-                  marginBottom: 4,
-                }}>
-                  Delete Task
-                </Text>
-              </View>
-
-              {/* Message */}
-              <Text style={{
-                fontSize: 15,
-                color: '#6B7280',
-                textAlign: 'center',
-                lineHeight: 22,
-                marginBottom: 16,
-              }}>
-                Are you sure you want to delete{' '}
-                <Text style={{ fontWeight: '600', color: '#1F2937' }}>
-                  "{taskToDelete?.title}"
-                </Text>
-                {' '}permanently?
-              </Text>
-              
-              <Text style={{
-                fontSize: 13,
-                color: '#EF4444',
-                textAlign: 'center',
-                fontWeight: '500',
-                marginBottom: 20,
-              }}>
-                This action cannot be undone.
-              </Text>
-
-              {/* Action Buttons */}
-              <View style={{
-                flexDirection: 'row',
-                gap: 10,
-              }}>
-                <TouchableOpacity
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#F3F4F6',
-                    paddingVertical: 12,
-                    borderRadius: 10,
-                    alignItems: 'center',
-                  }}
-                  onPress={cancelDelete}
-                  activeOpacity={0.8}
-                >
-                  <Text style={{
-                    fontSize: 15,
-                    fontWeight: '600',
-                    color: '#374151',
-                  }}>
-                    Cancel
+            {!canManageAssignee ? (
+              <View style={styles.assigneeChip}>
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>
+                    {initialFromName(assignedName)}
                   </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#EF4444',
-                    paddingVertical: 12,
-                    borderRadius: 10,
-                    alignItems: 'center',
-                  }}
-                  onPress={confirmDelete}
-                  activeOpacity={0.8}
-                >
-                  <Text style={{
-                    fontSize: 15,
-                    fontWeight: '600',
-                    color: 'white',
-                  }}>
-                    Delete
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-
-        <Modal
-          visible={showAssignmentModal}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => {
-            setShowAssignmentModal(false);
-            setSelectedEmployee(null);
-            setSearchQuery('');
-          }}
-        >
-          <View style={{
-            flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            paddingHorizontal: 20,
-          }}>
-            {/* Modal Container */}
-            <View style={{
-              backgroundColor: 'white',
-              borderRadius: 16,
-              width: '100%',
-              maxWidth: 400,
-              maxHeight: '70%',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.2,
-              shadowRadius: 8,
-              elevation: 8,
-            }}>
-              {/* Header */}
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                paddingHorizontal: 20,
-                paddingVertical: 16,
-                borderBottomWidth: 1,
-                borderBottomColor: '#E5E7EB',
-              }}>
-                <Text style={{
-                  fontSize: 18,
-                  fontWeight: '600',
-                  color: '#111827',
-                }}>
-                  Assign Employee
-                </Text>
-                <TouchableOpacity 
-                  onPress={() => {
-                    setShowAssignmentModal(false);
-                    setSelectedEmployee(null);
-                    setSearchQuery('');
-                  }}
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    backgroundColor: '#F3F4F6',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Ionicons name="close" size={20} color="#6B7280" />
-                </TouchableOpacity>
-              </View>
-
-              {/* Search Bar */}
-              <View style={{
-                paddingHorizontal: 20,
-                paddingVertical: 16,
-                backgroundColor: 'white',
-              }}>
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: '#F9FAFB',
-                  borderRadius: 10,
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  borderWidth: 1,
-                  borderColor: '#E5E7EB',
-                }}>
-                  <Ionicons name="search" size={18} color="#9CA3AF" style={{ marginRight: 8 }} />
-                  <TextInput
-                    placeholder="Search employees..."
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    style={{
-                      flex: 1,
-                      fontSize: 15,
-                      color: '#111827',
-                    }}
-                    placeholderTextColor="#9CA3AF"
-                  />
-                  {searchQuery.length > 0 && (
-                    <TouchableOpacity onPress={() => setSearchQuery('')}>
-                      <Ionicons name="close-circle" size={18} color="#9CA3AF" />
-                    </TouchableOpacity>
+                </View>
+                <View style={styles.flex}>
+                  <Text style={styles.assigneeName}>{assignedName}</Text>
+                  {!!assignedPerson?.email && !isUnassigned && (
+                    <Text style={styles.assigneeEmail}>
+                      {assignedPerson.email}
+                    </Text>
                   )}
                 </View>
               </View>
-
-              {/* Employee List */}
-              <ScrollView 
-                style={{ maxHeight: 300 }} 
-                showsVerticalScrollIndicator={true}
-              >
-                {loadingEmployees ? (
-                  <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-                    <ActivityIndicator size="large" color="#000000" />
-                    <Text style={{ color: '#6B7280', marginTop: 12, fontSize: 14 }}>
-                      Loading employees...
-                    </Text>
-                  </View>
-                ) : filteredEmployees.length === 0 ? (
-                  <View style={{ paddingVertical: 40, alignItems: 'center', paddingHorizontal: 20 }}>
-                    <Ionicons name="people-outline" size={48} color="#D1D5DB" />
-                    <Text style={{ color: '#6B7280', fontSize: 15, fontWeight: '600', marginTop: 12, textAlign: 'center' }}>
-                      {searchQuery ? 'No employees found' : 'No employees available'}
-                    </Text>
-                  </View>
-                ) : (
-                  filteredEmployees.map((employee, index) => (
-                    <TouchableOpacity
-                      key={employee.id || index}
-                      onPress={() => handleEmployeeSelect(employee)}
-                      style={{
-                        marginHorizontal: 16,
-                        marginBottom: 10,
-                        padding: 12,
-                        backgroundColor: selectedEmployee?.id === employee.id ? '#F3F4F6' : '#FFFFFF',
-                        borderRadius: 10,
-                        borderWidth: 1,
-                        borderColor: selectedEmployee?.id === employee.id ? '#000000' : '#E5E7EB',
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                      }}
+            ) : (
+              <View>
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    const next = !assigneeOpen;
+                    setAssigneeOpen(next);
+                    if (next && employees.length === 0 && !loadingEmployees) {
+                      fetchEmployees();
+                    }
+                  }}
+                  style={styles.dropdownTrigger}
+                >
+                  <View style={styles.dropdownTriggerLeft}>
+                    <View style={styles.avatarSm}>
+                      <Ionicons
+                        name="person-outline"
+                        size={14}
+                        color={Brand.inkMuted}
+                      />
+                    </View>
+                    <Text
+                      style={[
+                        styles.dropdownTriggerText,
+                        !selectedEmployeeLabel &&
+                          isUnassigned &&
+                          styles.placeholder,
+                      ]}
+                      numberOfLines={1}
                     >
-                      {/* Avatar */}
-                      <View style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 20,
-                        backgroundColor: selectedEmployee?.id === employee.id ? '#000000' : '#E5E7EB',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginRight: 12,
-                      }}>
-                        <Text style={{
-                          fontSize: 16,
-                          fontWeight: '600',
-                          color: selectedEmployee?.id === employee.id ? '#FFFFFF' : '#6B7280'
-                        }}>
-                          {employee.first_name?.charAt(0)?.toUpperCase() || employee.email?.charAt(0)?.toUpperCase() || 'U'}
+                      {loadingEmployees
+                        ? "Loading employees…"
+                        : selectedEmployeeLabel ||
+                          (!isUnassigned ? assignedName : "Select employee")}
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name={assigneeOpen ? "chevron-up" : "chevron-down"}
+                    size={16}
+                    color={Brand.inkFaint}
+                  />
+                </TouchableOpacity>
+
+                {assigneeOpen && (
+                  <View style={styles.dropdownPanel}>
+                    <View style={styles.searchRow}>
+                      <Ionicons
+                        name="search"
+                        size={15}
+                        color={Brand.inkFaint}
+                      />
+                      <TextInput
+                        value={employeeSearch}
+                        onChangeText={setEmployeeSearch}
+                        placeholder="Search employees…"
+                        placeholderTextColor={Brand.inkFaint}
+                        style={styles.searchInput}
+                        autoCorrect={false}
+                        autoCapitalize="none"
+                      />
+                    </View>
+
+                    {loadingEmployees ? (
+                      <View style={styles.dropdownEmpty}>
+                        <ActivityIndicator color={Brand.ink} />
+                      </View>
+                    ) : filteredEmployees.length === 0 ? (
+                      <View style={styles.dropdownEmpty}>
+                        <Text style={styles.dropdownEmptyText}>
+                          No employees found
                         </Text>
                       </View>
-                      
-                      {/* Employee Info */}
-                      <View style={{ flex: 1 }}>
-                        <Text style={{
-                          fontSize: 15,
-                          fontWeight: '600',
-                          color: '#111827',
-                        }}>
-                          {employee.first_name && employee.last_name
-                            ? `${employee.first_name} ${employee.last_name}`
-                            : employee.email || 'Unknown Employee'
-                          }
+                    ) : (
+                      filteredEmployees.map((employee, index) => {
+                        const name =
+                          `${employee.first_name || ""} ${
+                            employee.last_name || ""
+                          }`.trim() ||
+                          employee.email ||
+                          "Employee";
+                        const selected =
+                          Number(selectedEmployeeId) === Number(employee.id);
+                        const isLast = index === filteredEmployees.length - 1;
+                        return (
+                          <TouchableOpacity
+                            key={String(employee.id)}
+                            activeOpacity={0.75}
+                            onPress={() => {
+                              setSelectedEmployeeId(employee.id);
+                              setAssigneeOpen(false);
+                              setEmployeeSearch("");
+                            }}
+                            style={[
+                              styles.dropdownItem,
+                              selected && styles.dropdownItemSelected,
+                              isLast && { borderBottomWidth: 0 },
+                            ]}
+                          >
+                            <View style={styles.avatarSm}>
+                              <Text style={styles.avatarSmText}>
+                                {initialFromName(name)}
+                              </Text>
+                            </View>
+                            <View style={styles.flex}>
+                              <Text style={styles.dropdownItemName}>
+                                {name}
+                              </Text>
+                              {!!employee.email && (
+                                <Text
+                                  style={styles.dropdownItemEmail}
+                                  numberOfLines={1}
+                                >
+                                  {employee.email}
+                                </Text>
+                              )}
+                            </View>
+                            {selected && (
+                              <Ionicons
+                                name="checkmark"
+                                size={16}
+                                color={Brand.ink}
+                              />
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })
+                    )}
+                  </View>
+                )}
+
+                {selectedEmployeeId != null &&
+                  (isUnassigned ||
+                    Number(selectedEmployeeId) !==
+                      Number(
+                        assignedPerson?.id ||
+                          currentTask?.assignedToUserId ||
+                          NaN
+                      )) && (
+                    <TouchableOpacity
+                      style={[styles.assignBtn, assigning && { opacity: 0.65 }]}
+                      onPress={handleAssignTask}
+                      disabled={assigning}
+                      activeOpacity={0.85}
+                    >
+                      {assigning ? (
+                        <ActivityIndicator color={Brand.onInk} />
+                      ) : (
+                        <Text style={styles.assignBtnText}>
+                          {isUnassigned ? "Assign employee" : "Update assignee"}
                         </Text>
-                        {employee.email && employee.first_name && (
-                          <Text style={{
-                            fontSize: 13,
-                            color: '#6B7280',
-                            marginTop: 2,
-                          }}>
-                            {employee.email}
-                          </Text>
-                        )}
-                      </View>
-                      
-                      {/* Checkmark */}
-                      {selectedEmployee?.id === employee.id && (
-                        <Ionicons name="checkmark-circle" size={24} color="#000000" />
                       )}
                     </TouchableOpacity>
-                  ))
-                )}
-              </ScrollView>
+                  )}
+              </View>
+            )}
+          </View>
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Schedule</Text>
+            <View style={styles.scheduleCard}>
+              <View style={styles.scheduleRow}>
+                <View style={styles.scheduleIcon}>
+                  <Ionicons
+                    name="calendar-outline"
+                    size={16}
+                    color={Brand.ink}
+                  />
+                </View>
+                <View style={styles.flex}>
+                  <Text style={styles.scheduleKey}>Starts</Text>
+                  <Text style={styles.scheduleVal}>
+                    {formatDateTime(currentTask.startTime)}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.scheduleDivider} />
+              <View style={styles.scheduleRow}>
+                <View style={styles.scheduleIcon}>
+                  <Ionicons name="flag-outline" size={16} color={Brand.ink} />
+                </View>
+                <View style={styles.flex}>
+                  <Text style={styles.scheduleKey}>Ends</Text>
+                  <Text style={styles.scheduleVal}>
+                    {currentTask.endTime
+                      ? formatDateTime(currentTask.endTime)
+                      : "Not set"}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.scheduleDivider} />
+              <View style={styles.scheduleRow}>
+                <View style={styles.scheduleIcon}>
+                  <Ionicons name="time-outline" size={16} color={Brand.ink} />
+                </View>
+                <View style={styles.flex}>
+                  <Text style={styles.scheduleKey}>Created</Text>
+                  <Text style={styles.scheduleVal}>
+                    {formatDateTime(currentTask.createdAt)}
+                  </Text>
+                </View>
+              </View>
             </View>
           </View>
-        </Modal>
+        </ScrollView>
+      </SafeAreaView>
 
-        {/* Sidebar */}
-        <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
+      <UpdateTaskModal
+        visible={showUpdateModal}
+        onClose={() => setShowUpdateModal(false)}
+        task={currentTask}
+        projectId={currentTask?.project?.id}
+        projectName={currentTask?.project?.name}
+        onSuccess={handleUpdateSuccess}
+      />
 
-        {/* Bottom Navigation */}
-        <HomeBottomNav />
-      </View>
+      <Modal
+        visible={deleteDialogVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setDeleteDialogVisible(false);
+          setTaskToDelete(null);
+        }}
+      >
+        <View style={styles.dialogOverlay}>
+          <View style={styles.dialogCard}>
+            <View style={styles.dialogIconWrap}>
+              <Ionicons name="trash-outline" size={22} color={Brand.danger} />
+            </View>
+            <Text style={styles.dialogTitle}>Delete this task?</Text>
+            <Text style={styles.dialogBody}>
+              "{taskToDelete?.title}" will be permanently removed. This cannot
+              be undone.
+            </Text>
+            <View style={styles.dialogActions}>
+              <TouchableOpacity
+                style={styles.dialogCancel}
+                onPress={() => {
+                  setDeleteDialogVisible(false);
+                  setTaskToDelete(null);
+                }}
+              >
+                <Text style={styles.dialogCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.dialogDelete}
+                onPress={confirmDelete}
+              >
+                <Text style={styles.dialogDeleteText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Sidebar
+        isVisible={sidebarVisible}
+        onClose={() => setSidebarVisible(false)}
+      />
+      <HomeBottomNav hideFab />
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: Brand.paper,
+  },
+  flex: { flex: 1 },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 28,
+    gap: 12,
+  },
+  mutedCenter: {
+    fontSize: 14,
+    color: Brand.inkMuted,
+    fontWeight: "500",
+  },
+  errorText: {
+    fontSize: 15,
+    color: Brand.danger,
+    textAlign: "center",
+    marginBottom: 4,
+  },
+
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 120,
+  },
+  heroTopRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+    marginBottom: 12,
+  },
+  menuBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Brand.paperSoft,
+    borderWidth: 1,
+    borderColor: Brand.line,
+  },
+
+  hero: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    backgroundColor: Brand.paper,
+    overflow: "hidden",
+    marginBottom: 22,
+  },
+  priorityStripe: {
+    height: 4,
+    width: "100%",
+  },
+  heroBody: {
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 18,
+  },
+  pillRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Brand.paperSoft,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: Brand.line,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Brand.ink,
+  },
+  statusPillText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: Brand.inkSoft,
+  },
+  priorityPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  priorityDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  priorityPillText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  heroTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: Brand.ink,
+    letterSpacing: -0.4,
+    lineHeight: 30,
+  },
+  heroDesc: {
+    marginTop: 10,
+    fontSize: 15,
+    lineHeight: 22,
+    color: Brand.inkMuted,
+  },
+
+  section: {
+    marginBottom: 22,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: Brand.inkFaint,
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
+    marginBottom: 10,
+  },
+
+  assigneeChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    backgroundColor: Brand.paper,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: Brand.ink,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: {
+    color: Brand.onInk,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  assigneeName: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: Brand.ink,
+  },
+  assigneeEmail: {
+    marginTop: 2,
+    fontSize: 12,
+    color: Brand.inkMuted,
+  },
+  avatarSm: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: Brand.paperSoft,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarSmText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: Brand.ink,
+  },
+  dropdownTrigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1.5,
+    borderColor: Brand.ink,
+    backgroundColor: Brand.paper,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    minHeight: 52,
+  },
+  dropdownTriggerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+    marginRight: 8,
+  },
+  dropdownTriggerText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: Brand.ink,
+    flex: 1,
+  },
+  placeholder: {
+    color: Brand.inkFaint,
+    fontWeight: "500",
+  },
+  dropdownPanel: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    borderRadius: 14,
+    backgroundColor: Brand.paper,
+    overflow: "hidden",
+  },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Brand.line,
+    backgroundColor: Brand.paperSoft,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: Brand.ink,
+    paddingVertical: 2,
+  },
+  dropdownEmpty: {
+    paddingVertical: 28,
+    alignItems: "center",
+  },
+  dropdownEmptyText: {
+    fontSize: 13,
+    color: Brand.inkMuted,
+    fontWeight: "500",
+  },
+  dropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Brand.line,
+  },
+  dropdownItemSelected: {
+    backgroundColor: Brand.paperSoft,
+  },
+  dropdownItemName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: Brand.ink,
+  },
+  dropdownItemEmail: {
+    marginTop: 2,
+    fontSize: 12,
+    color: Brand.inkMuted,
+  },
+  assignBtn: {
+    marginTop: 12,
+    backgroundColor: Brand.ink,
+    borderRadius: 14,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  assignBtnText: {
+    color: Brand.onInk,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+
+  scheduleCard: {
+    borderWidth: 1,
+    borderColor: Brand.line,
+    borderRadius: 14,
+    backgroundColor: Brand.paper,
+    overflow: "hidden",
+  },
+  scheduleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  scheduleIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: Brand.paperSoft,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  scheduleKey: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: Brand.inkFaint,
+    marginBottom: 2,
+  },
+  scheduleVal: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: Brand.ink,
+  },
+  scheduleDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Brand.line,
+    marginLeft: 60,
+  },
+
+  menuContainer: {
+    backgroundColor: Brand.paper,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    paddingVertical: 4,
+    width: 148,
+    marginTop: 6,
+  },
+  menuRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  menuText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Brand.ink,
+  },
+
+  primaryBtn: {
+    backgroundColor: Brand.ink,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+  },
+  primaryBtnText: {
+    color: Brand.onInk,
+    fontWeight: "700",
+    fontSize: 15,
+  },
+
+  dialogOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(35, 31, 32, 0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  dialogCard: {
+    width: "100%",
+    maxWidth: 340,
+    backgroundColor: Brand.paper,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    padding: 22,
+  },
+  dialogIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#FEF2F2",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
+    marginBottom: 12,
+  },
+  dialogTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: Brand.ink,
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  dialogBody: {
+    fontSize: 14,
+    color: Brand.inkMuted,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 18,
+  },
+  dialogActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  dialogCancel: {
+    flex: 1,
+    backgroundColor: Brand.paperSoft,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: Brand.line,
+  },
+  dialogCancelText: {
+    color: Brand.ink,
+    fontWeight: "700",
+  },
+  dialogDelete: {
+    flex: 1,
+    backgroundColor: Brand.danger,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  dialogDeleteText: {
+    color: Brand.onInk,
+    fontWeight: "700",
+  },
+});
 
 export default TaskDetailsScreen;

@@ -94,6 +94,7 @@ function NavTab({ tab, active, hasNewNotification, onPress }) {
 export default function HomeBottomNav({
   keyboardVisible = false,
   onAddPress,
+  hideFab = false,
 }) {
   const navigation = useNavigation();
   const route = useRoute();
@@ -220,15 +221,17 @@ export default function HomeBottomNav({
         />
       ))}
 
-      <View style={styles.fabSlot}>
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={handleAddPress}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="add" size={28} color={Brand.onInk} />
-        </TouchableOpacity>
-      </View>
+      {!hideFab && (
+        <View style={styles.fabSlot}>
+          <TouchableOpacity
+            style={styles.fab}
+            onPress={handleAddPress}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="add" size={28} color={Brand.onInk} />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {RIGHT_TABS.map((tab) => (
         <NavTab

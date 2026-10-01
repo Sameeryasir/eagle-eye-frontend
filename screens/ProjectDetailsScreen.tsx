@@ -12,7 +12,9 @@ import {
   StatusBar,
   Modal,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { CheckSquare } from "lucide-react-native";
 import { useDispatch, useSelector } from "react-redux";
 import {
   selectTasks,
@@ -227,7 +229,6 @@ export default function ProjectDetailsScreen({ navigation, route }) {
   const [updateVisible, setUpdateVisible] = useState(false);
   const [createTaskVisible, setCreateTaskVisible] = useState(false);
 
-  // --- Single aggregate API: project + team + tasks + logs in one round-trip ---
   const loadAll = useCallback(
     async (isRefresh = false) => {
       if (!projectId) {
@@ -261,7 +262,6 @@ export default function ProjectDetailsScreen({ navigation, route }) {
           : fallback;
 
         setProject(nextProject);
-        // Normalize name fields so Team tab can render first_name / last_name
         setTeam(
           teamData.map((member) => ({
             ...member,
@@ -278,7 +278,6 @@ export default function ProjectDetailsScreen({ navigation, route }) {
           })
         );
       } catch {
-        // Keep any route fallback project so the screen still shows a header
         setProject((prev) =>
           prev || {
             id: projectId,
@@ -310,9 +309,12 @@ export default function ProjectDetailsScreen({ navigation, route }) {
 
   const displayTasks = tasks || [];
   const displayLogs = logs || [];
+  const hasTasks = displayTasks.length > 0;
 
   const canManage =
     userRole === "Owner" || userRole === "Admin" || userRole === "Manager";
+
+  const showCreateTask = canManage && !hasTasks;
 
   const recentTasks = tasksLoading ? [] : displayTasks.slice(0, 3);
   const recentLogs = displayLogs.slice(0, 3);
@@ -324,7 +326,7 @@ export default function ProjectDetailsScreen({ navigation, route }) {
         title={`Recent Tasks (${displayTasks.length})`}
         right={
           <View style={styles.rowActions}>
-            {canManage && (
+            {showCreateTask && (
               <TouchableOpacity
                 onPress={() => setCreateTaskVisible(true)}
                 activeOpacity={0.8}
@@ -332,7 +334,7 @@ export default function ProjectDetailsScreen({ navigation, route }) {
                 <Text style={styles.linkAction}>+ Add Task</Text>
               </TouchableOpacity>
             )}
-            {displayTasks.length > 0 && (
+            {hasTasks && (
               <TouchableOpacity
                 onPress={() =>
                   navigation.navigate("ViewAllTasksScreen", {
@@ -428,7 +430,7 @@ export default function ProjectDetailsScreen({ navigation, route }) {
         icon="checkbox-outline"
         title="All Tasks"
         right={
-          canManage ? (
+          showCreateTask ? (
             <TouchableOpacity onPress={() => setCreateTaskVisible(true)}>
               <Text style={styles.linkAction}>+ Add Task</Text>
             </TouchableOpacity>
@@ -717,8 +719,9 @@ export default function ProjectDetailsScreen({ navigation, route }) {
       )}
 
       <HomeBottomNav
+        hideFab={!showCreateTask}
         onAddPress={() => {
-          if (canManage) {
+          if (showCreateTask) {
             setCreateTaskVisible(true);
           }
         }}
@@ -736,21 +739,37 @@ export default function ProjectDetailsScreen({ navigation, route }) {
 
       <Modal
         visible={createTaskVisible}
-        animationType="slide"
+        animationType="fade"
         presentationStyle="fullScreen"
         statusBarTranslucent
         onRequestClose={() => setCreateTaskVisible(false)}
       >
         {createTaskVisible ? (
-          <CreateTask
-            projectId={projectId}
-            projectName={project?.name || projectName}
-            onCancel={() => setCreateTaskVisible(false)}
-            onSuccess={() => {
-              
-              setCreateTaskVisible(false);
-            }}
-          />
+          <View style={{ flex: 1, backgroundColor: Brand.paper }}>
+            <SafeAreaView
+              style={{ backgroundColor: Brand.paper }}
+              edges={["top"]}
+            >
+              <StatusBar barStyle="dark-content" backgroundColor={Brand.paper} />
+              <View style={styles.createTaskHeader}>
+                <CheckSquare size={20} color={Brand.ink} strokeWidth={2} />
+                <Text style={styles.createTaskHeaderTitle}>Create Task</Text>
+              </View>
+            </SafeAreaView>
+            <CreateTask
+              hideHeader
+              projectId={projectId}
+              projectName={project?.name || projectName}
+              navigation={{
+                goBack: () => setCreateTaskVisible(false),
+              }}
+              onCancel={() => setCreateTaskVisible(false)}
+              onSuccess={() => {
+                setCreateTaskVisible(false);
+                loadAll(true);
+              }}
+            />
+          </View>
         ) : null}
       </Modal>
     </View>
@@ -761,6 +780,23 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Brand.paper },
   flex: { flex: 1 },
   center: { alignItems: "center", justifyContent: "center" },
+  createTaskHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Brand.line,
+    backgroundColor: Brand.paper,
+  },
+  createTaskHeaderTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: Brand.ink,
+    letterSpacing: -0.2,
+  },
   topBar: {
     flexDirection: "row",
     alignItems: "center",

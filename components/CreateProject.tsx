@@ -24,7 +24,7 @@ import { uploadImage } from "../services/images/uploadImage";
 import { Brand } from "../constants/brandColors";
 import { useResponsiveLayout } from "../constants/responsiveLayout";
 import { useAppDispatch } from "../hooks";
-import { showErrorMessage, showSuccessToast } from "../utils/toast";
+import { showErrorMessage, showSuccessToastAfterModal } from "../utils/toast";
 
 const DESC_MAX = 120;
 
@@ -211,13 +211,15 @@ function CreateProject({
         })
       ).unwrap();
 
-      showSuccessToast("Project Created Successfully!", "Your new project has been added to the list");
-
       if (onSuccess) {
         onSuccess();
       } else {
         navigation.goBack();
       }
+      showSuccessToastAfterModal(
+        "Project Created Successfully!",
+        "Your new project has been added to the list"
+      );
     } catch (error) {
       console.error("Error creating project:", error);
 
@@ -300,8 +302,7 @@ function CreateProject({
     width: "100%",
     borderWidth: 1,
     borderColor: focusedField === field ? Brand.ink : Brand.line,
-    backgroundColor:
-      focusedField === field ? Brand.paper : Brand.paperSoft,
+    backgroundColor: "#FFFFFF",
     borderRadius: fieldRadius,
   });
 

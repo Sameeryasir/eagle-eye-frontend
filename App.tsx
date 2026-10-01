@@ -23,6 +23,7 @@ import { isRunningInExpoGo } from "expo";
 
 import { Provider } from "react-redux";
 import store from "./store";
+import { toastConfig } from "./utils/toast";
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -507,7 +508,7 @@ const AppNavigator = () => {
                     animationDuration: 160,
                     freezeOnBlur: true,
                   }}
-                  initialRouteName={isAuthenticated ? "HomeScreen" : "SignIn"}
+                  initialRouteName="SplashScreen"
                 >
                   <Stack.Screen name="SplashScreen" component={SplashScreen} />
                   <Stack.Screen name="SignIn" component={SignIn} />
@@ -603,7 +604,15 @@ const AppNavigator = () => {
               </View>
             </NavigationContainer>
           </View>
-          <Toast />
+          <Toast
+            position="top"
+            topOffset={56}
+            visibilityTime={2500}
+            autoHide
+            swipeable={false}
+            onPress={() => Toast.hide()}
+            config={toastConfig}
+          />
         </SafeAreaProvider>
       </MenuProvider>
     </GestureHandlerRootView>
