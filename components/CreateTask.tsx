@@ -17,13 +17,9 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import {
-  createNewTask,
-  selectTaskCreating,
-} from "../store/slices/taskSlice";
 import { Brand } from "../constants/brandColors";
 import { useResponsiveLayout } from "../constants/responsiveLayout";
-import { useAppDispatch, useAppSelector } from "../hooks";
+import { useCreateTaskMutation } from "../hooks/queries";
 import { showErrorToast, showSuccessToastAfterModal } from "../utils/toast";
 
 const PRIORITY_OPTIONS = [
@@ -41,8 +37,8 @@ function CreateTask({
   navigation,
   hideHeader = false,
 }) {
-  const dispatch = useAppDispatch();
-  const creating = useAppSelector(selectTaskCreating);
+  const createTaskMutation = useCreateTaskMutation();
+  const creating = createTaskMutation.isPending;
   const layout = useResponsiveLayout();
   const {
     width,
@@ -156,19 +152,13 @@ function CreateTask({
         projectId: Number(projectId),
       };
 
-      const result = await dispatch(createNewTask(taskPayload));
-      if (createNewTask.fulfilled.match(result)) {
-        if (onSuccess) onSuccess(result.payload);
-        else handleClose();
-        showSuccessToastAfterModal(
-          "Task Created Successfully!",
-          "Your task has been added to the list"
-        );
-      } else {
-        showErrorToast(
-          result.payload || "Failed to create task. Please try again."
-        );
-      }
+      const created = await createTaskMutation.mutateAsync(taskPayload);
+      if (onSuccess) onSuccess(created);
+      else handleClose();
+      showSuccessToastAfterModal(
+        "Task Created Successfully!",
+        "Your task has been added to the list"
+      );
     } catch (error) {
       showErrorToast(error, "An unexpected error occurred. Please try again.");
     }

@@ -15,21 +15,16 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { CheckSquare } from "lucide-react-native";
-import { useDispatch, useSelector } from "react-redux";
-import {
-  selectTasks,
-  selectTaskLoading,
-  setTasksForProject,
-} from "../store/slices/taskSlice";
-import { selectLogs, setLogsForProject } from "../store/slices/logSlice";
-import { getProjectDetails } from "../services/projects/getProjectDetails";
-import { mapLogsToUi } from "../services/api/mappers/logs";
+import { useQueryClient } from "@tanstack/react-query";
 import HomeBottomNav from "../components/HomeBottomNav";
 import UpdateProjectModal from "../components/UpdateProjectModal";
 import CreateTask from "../components/CreateTask";
 import TaskListCard from "../components/TaskListCard";
 import { Brand } from "../constants/brandColors";
 import { useAuth } from "../context/AuthContext";
+import { useProjectDetails } from "../hooks/queries";
+import { queryKeys } from "../services/api/queryKeys";
+import { mapLogsToUi } from "../services/api/mappers/logs";
 
 const TABS = ["Overview", "Tasks", "Team", "Logs"];
 
@@ -206,109 +201,81 @@ function ProjectDetailsSkeleton() {
 }
 
 export default function ProjectDetailsScreen({ navigation, route }) {
-  const dispatch = useDispatch();
   const { userRole } = useAuth();
-  const tasks = useSelector(selectTasks);
-  const tasksLoading = useSelector(selectTaskLoading);
-  const logs = useSelector(selectLogs);
-
+  const queryClient = useQueryClient();
   const { projectId, projectName, imageUrl: routeImageUrl } = route.params || {};
   const [activeTab, setActiveTab] = useState("Overview");
-  const [project, setProject] = useState(() =>
-    projectId
+  const [updateVisible, setUpdateVisible] = useState(false);
+  const [createTaskVisible, setCreateTaskVisible] = useState(false);
+
+  const {
+    data: details,
+    isLoading,
+    isFetching,
+    isRefetching,
+    refetch,
+  } = useProjectDetails(projectId);
+
+  const project = useMemo(() => {
+    const fallback = projectId
       ? {
           id: projectId,
           name: projectName,
           imageUrl: routeImageUrl || null,
         }
-      : null
+      : null;
+    const projectData = details?.project || null;
+    if (!projectData && !fallback) return null;
+    if (!projectData) return fallback;
+    return {
+      ...fallback,
+      ...projectData,
+      imageUrl:
+        resolveProjectImageUrl(projectData) || routeImageUrl || null,
+    };
+  }, [details?.project, projectId, projectName, routeImageUrl]);
+
+  const team = useMemo(() => {
+    const teamData = Array.isArray(details?.team) ? details.team : [];
+    return teamData.map((member) => ({
+      ...member,
+      firstName: member.firstName || member.first_name || "",
+      lastName: member.lastName || member.last_name || "",
+    }));
+  }, [details?.team]);
+
+  const displayTasks = useMemo(
+    () => (Array.isArray(details?.tasks) ? details.tasks : []),
+    [details?.tasks]
   );
-  const [team, setTeam] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [updateVisible, setUpdateVisible] = useState(false);
-  const [createTaskVisible, setCreateTaskVisible] = useState(false);
 
-  const loadAll = useCallback(
-    async (isRefresh = false) => {
-      if (!projectId) {
-        setLoading(false);
-        return;
-      }
-      if (isRefresh) setRefreshing(true);
-      else setLoading(true);
-
-      try {
-        const details = await getProjectDetails(projectId);
-        const projectData = details?.project || null;
-        const teamData = Array.isArray(details?.team) ? details.team : [];
-        const taskList = Array.isArray(details?.tasks) ? details.tasks : [];
-        const logList = Array.isArray(details?.logs) ? details.logs : [];
-
-        const fallback = {
-          id: projectId,
-          name: projectName,
-          imageUrl: routeImageUrl || null,
-        };
-        const nextProject = projectData
-          ? {
-              ...fallback,
-              ...projectData,
-              imageUrl:
-                resolveProjectImageUrl(projectData) ||
-                routeImageUrl ||
-                null,
-            }
-          : fallback;
-
-        setProject(nextProject);
-        setTeam(
-          teamData.map((member) => ({
-            ...member,
-            firstName: member.firstName || member.first_name || "",
-            lastName: member.lastName || member.last_name || "",
-          }))
-        );
-
-        dispatch(setTasksForProject({ projectId, tasks: taskList }));
-        dispatch(
-          setLogsForProject({
-            projectId,
-            logs: mapLogsToUi(logList),
-          })
-        );
-      } catch {
-        setProject((prev) =>
-          prev || {
-            id: projectId,
-            name: projectName,
-            imageUrl: routeImageUrl || null,
-          }
-        );
-        setTeam([]);
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    },
-    [dispatch, projectId, projectName, routeImageUrl]
-  );
+  const displayLogs = useMemo(() => {
+    const logList = Array.isArray(details?.logs) ? details.logs : [];
+    return mapLogsToUi(logList);
+  }, [details?.logs]);
 
   useEffect(() => {
-    loadAll();
-  }, [loadAll]);
+    if (!projectId || !details) return;
+    queryClient.setQueryData(queryKeys.projects.tasks(projectId), displayTasks);
+    queryClient.setQueryData(queryKeys.projects.logs(projectId), displayLogs);
+  }, [projectId, details, displayTasks, displayLogs, queryClient]);
+
+  const loading = isLoading && !details;
+  const refreshing = isRefetching || (isFetching && !!details);
+
+  const onRefresh = useCallback(() => {
+    refetch();
+  }, [refetch]);
 
   const meta = useMemo(
-    () => getProjectMeta(project, tasks),
-    [project, tasks]
+    () => getProjectMeta(project, displayTasks),
+    [project, displayTasks]
   );
   const projectImageUrl = useMemo(
     () => resolveProjectImageUrl(project),
     [project]
   );
 
-  const displayTasks = tasks || [];
-  const displayLogs = logs || [];
   const hasTasks = displayTasks.length > 0;
 
   const canManage =
@@ -316,7 +283,7 @@ export default function ProjectDetailsScreen({ navigation, route }) {
 
   const showCreateTask = canManage && !hasTasks;
 
-  const recentTasks = tasksLoading ? [] : displayTasks.slice(0, 3);
+  const recentTasks = loading ? [] : displayTasks.slice(0, 3);
   const recentLogs = displayLogs.slice(0, 3);
 
   const renderOverview = () => (
@@ -362,7 +329,7 @@ export default function ProjectDetailsScreen({ navigation, route }) {
           />
         ))
       ) : (
-        !tasksLoading && (
+        !loading && (
           <EmptyWidgetState
             icon="checkbox-outline"
             title="No task assigned"
@@ -591,7 +558,7 @@ export default function ProjectDetailsScreen({ navigation, route }) {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => loadAll(true)}
+              onRefresh={onRefresh}
               tintColor={Brand.ink}
               colors={[Brand.ink]}
             />
@@ -733,7 +700,7 @@ export default function ProjectDetailsScreen({ navigation, route }) {
         onClose={() => setUpdateVisible(false)}
         onSuccess={() => {
           setUpdateVisible(false);
-          loadAll(true);
+          refetch();
         }}
       />
 
@@ -766,7 +733,7 @@ export default function ProjectDetailsScreen({ navigation, route }) {
               onCancel={() => setCreateTaskVisible(false)}
               onSuccess={() => {
                 setCreateTaskVisible(false);
-                loadAll(true);
+                refetch();
               }}
             />
           </View>

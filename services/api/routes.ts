@@ -16,7 +16,7 @@ export const ApiRoutes = {
     create: '/users',
     team: '/users/team',
     push: '/users/push-notifications',
-    employeesForConversation: '/user/employees-for-conversation',
+    employeesForConversation: '/users/employees-for-conversation',
   },
   companies: {
     list: '/companies',
@@ -58,6 +58,9 @@ export const ApiRoutes = {
     byDate: (date: string) => `/events/by-date/${date}`,
     byId: (id: Id) => `/events/${id}`,
     create: '/events',
+  },
+  calendar: {
+    feed: '/calendar/feed',
   },
   images: {
     create: '/images',

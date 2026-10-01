@@ -34,9 +34,6 @@ function LogsDetailScreen({ navigation, route }) {
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
 
   // Debug: Log the received logId
-  console.log("LogsDetailScreen - Received logId:", logId);
-  console.log("LogsDetailScreen - logId type:", typeof logId);
-  console.log("LogsDetailScreen - logId is valid:", logId && logId !== null && logId !== undefined);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
 
@@ -78,10 +75,8 @@ function LogsDetailScreen({ navigation, route }) {
         setLoading(true);
         setError(null);
 
-        console.log("LogsDetailScreen - Fetching log with ID:", logId);
         const logData = await getLogById(logId);
 
-        console.log("LogsDetailScreen - Received log data:", logData);
         setLog(logData);
       } catch (err) {
         console.error("LogsDetailScreen - Error fetching log:", err);
@@ -161,13 +156,6 @@ function LogsDetailScreen({ navigation, route }) {
 
   const handleUpdate = () => {
     // Show the update modal with the current log data
-    console.log("LogsDetailScreen - handleUpdate called with log:", log);
-    console.log("LogsDetailScreen - log.note:", log?.note);
-    console.log("LogsDetailScreen - log.description:", log?.description);
-    console.log("LogsDetailScreen - log.images:", log?.images);
-    console.log("LogsDetailScreen - log.createdAt:", log?.createdAt);
-    console.log("LogsDetailScreen - log.tasks:", log?.tasks);
-    console.log("LogsDetailScreen - log.user:", log?.user);
     setUpdateModalVisible(true);
   };
 
@@ -198,11 +186,9 @@ function LogsDetailScreen({ navigation, route }) {
 
     setRefreshing(true);
     try {
-      console.log("LogsDetailScreen - Starting refresh for log ID:", logId);
 
       // Call getLogById to refresh the log data
       const refreshedLog = await getLogById(logId);
-      console.log("LogsDetailScreen - Log refreshed successfully");
 
       setLog(refreshedLog);
       setError(null);

@@ -30,24 +30,12 @@ import PriorityDropdown from "../components/PriorityDropdown";
 import { filterTask } from "../services/tasks/filterTask";
 import { useAuth } from "../context/AuthContext";
 
-import { useDispatch, useSelector } from 'react-redux';
 import {
-  fetchTasksByProjectId,
-  fetchTasks,
-  createNewTask,
-  deleteExistingTask,
-  fetchEmployeesForTaskAssignment,
-  setCurrentProjectId,
-  clearError,
-  selectTasks,
-  selectTaskLoading,
-  selectTaskError,
-  selectTaskCreating,
-  selectTaskDeleting,
-  selectTaskCreateError,
-  selectTaskDeleteError,
-  selectEmployeesForAssignment,
-} from '../store/slices/taskSlice';
+  useProjectTasks,
+  useTaskAssignees,
+  useCreateTaskMutation,
+  useDeleteTaskMutation,
+} from '../hooks/queries';
 import { Brand } from "../constants/brandColors";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
@@ -132,15 +120,31 @@ const SearchBarHeader = React.memo(function SearchBarHeader({
 });
 
 function ViewAllTasksScreen({ navigation, route }) {
-  const dispatch = useDispatch();
-  const tasks = useSelector(selectTasks);
-  const loading = useSelector(selectTaskLoading);
-  const error = useSelector(selectTaskError);
-  const creating = useSelector(selectTaskCreating);
-  const deleting = useSelector(selectTaskDeleting);
-  const createError = useSelector(selectTaskCreateError);
-  const deleteError = useSelector(selectTaskDeleteError);
-  const employees = useSelector(selectEmployeesForAssignment);
+  const { projectId, projectName, createDraft, showUpcomingTasks } = route.params || {};
+
+  const {
+    data: tasksData,
+    isLoading: tasksLoading,
+    isRefetching,
+    error: tasksError,
+    refetch: refetchTasks,
+  } = useProjectTasks(projectId);
+
+  const tasks = Array.isArray(tasksData) ? tasksData : [];
+  const createMutation = useCreateTaskMutation();
+  const deleteMutation = useDeleteTaskMutation();
+  const creating = createMutation.isPending;
+  const deleting = deleteMutation.isPending;
+  const loading = tasksLoading;
+  const error = tasksError
+    ? (tasksError?.response?.data?.message || tasksError?.message || 'Failed to load tasks')
+    : null;
+  const createError = createMutation.error
+    ? (createMutation.error?.response?.data?.message || createMutation.error?.message || null)
+    : null;
+  const deleteError = deleteMutation.error
+    ? (deleteMutation.error?.response?.data?.message || deleteMutation.error?.message || null)
+    : null;
 
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [filteredTasks, setFilteredTasks] = useState([]);
@@ -174,6 +178,9 @@ function ViewAllTasksScreen({ navigation, route }) {
   ];
   
   const { userRole } = useAuth();
+  const canManageAssignees = !!userRole && userRole !== "Employee";
+  const { data: employeesData } = useTaskAssignees(canManageAssignees);
+  const employees = Array.isArray(employeesData) ? employeesData : [];
   const [refreshing, setRefreshing] = useState(false);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
@@ -195,8 +202,6 @@ function ViewAllTasksScreen({ navigation, route }) {
   });
   const [filtersApplied, setFiltersApplied] = useState(false); 
 
-  const { projectId, projectName, createDraft, showUpcomingTasks } = route.params || {};
-
   const showErrorDialog = (title, message) => {
     setErrorDialog({
       visible: true,
@@ -213,12 +218,19 @@ function ViewAllTasksScreen({ navigation, route }) {
     });
   };
 
-  
   useEffect(() => {
-    loadProjectData(false);
-  }, [projectId]);
+    if (projectId) {
+      setProject({
+        id: projectId,
+        name: projectName || "Project",
+      });
+    }
+  }, [projectId, projectName]);
 
-  
+  useEffect(() => {
+    setInitialLoading(tasksLoading && tasks.length === 0);
+  }, [tasksLoading, tasks.length]);
+
   useEffect(() => {
     if (
       createDraft &&
@@ -237,18 +249,8 @@ function ViewAllTasksScreen({ navigation, route }) {
     }
   }, [tasks, filtersApplied]);
 
-  
   useEffect(() => {
-    if (userRole && userRole !== "Employee") {
-      dispatch(fetchEmployeesForTaskAssignment());
-    }
-  }, [userRole, dispatch]);
-
-  
-  useEffect(() => {
-    if (employees && Array.isArray(employees)) {
-      setFilteredEmployees(employees);
-    }
+    setFilteredEmployees(employees);
   }, [employees]);
 
   useEffect(() => {
@@ -534,33 +536,17 @@ function ViewAllTasksScreen({ navigation, route }) {
         priority: draftTask.priority || null,
       };
 
-      console.log('=== Task Creation Debug ===');
-      console.log('Original Start Time:', draftTask.startTime.toLocaleString());
-      console.log('Local Start Date:', localStartDate.toLocaleDateString());
-      console.log('Task Date (YYYY-MM-DD):', taskDate);
-      console.log('Task Payload Being Sent:', taskPayload);
-      console.log('=== End Task Creation Debug ===');
+      await createMutation.mutateAsync(taskPayload);
+      removeDraftTask(draftTask.id);
 
-      const result = await dispatch(createNewTask(taskPayload));
-      
-      if (createNewTask.fulfilled.match(result)) {
-        
-        
-        removeDraftTask(draftTask.id);
-
-        Toast.show({
-          type: 'success',
-          text1: 'Task Created Successfully!',
-          text2: 'Your new task has been added to the project',
-          visibilityTime: 3000,
-          autoHide: true,
-          topOffset: 80,
-        });
-      } else {
-        
-        const errorMessage = result.payload || 'Failed to create task. Please try again.';
-        throw new Error(errorMessage);
-      }
+      Toast.show({
+        type: 'success',
+        text1: 'Task Created Successfully!',
+        text2: 'Your new task has been added to the project',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
     } catch (error) {
       console.error("Error creating task:", error);
 
@@ -598,20 +584,6 @@ function ViewAllTasksScreen({ navigation, route }) {
         return;
       }
 
-      dispatch(setCurrentProjectId(projectId));
-
-      
-      if (!isRefresh && (!tasks || tasks.length === 0)) {
-        setInitialLoading(true);
-      }
-
-      
-      await dispatch(
-        fetchTasksByProjectId(
-          isRefresh ? { projectId, forceRefresh: true } : projectId
-        )
-      );
-
       setProject({
         id: projectId,
         name: projectName || "Project",
@@ -627,12 +599,10 @@ function ViewAllTasksScreen({ navigation, route }) {
           status: null,
         });
       }
+
+      await refetchTasks();
     } catch (err) {
       console.error("ViewAllTasksScreen - Error loading project data:", err);
-    } finally {
-      if (!isRefresh) {
-        setInitialLoading(false);
-      }
     }
   };
 
@@ -642,16 +612,13 @@ function ViewAllTasksScreen({ navigation, route }) {
     try {
       
       if (filtersApplied) {
-        console.log('ViewAllTasksScreen - Refreshing with applied filters (calling API):', selectedFilters);
         await handleApplyFilters(selectedFilters);
       } else {
-        console.log('ViewAllTasksScreen - Refreshing with getTaskByProjectId API call (no filters applied)');
         await loadProjectData(true); 
       }
     } catch (error) {
       console.error('ViewAllTasksScreen - Error during refresh:', error);
       
-      console.log('ViewAllTasksScreen - Fallback: Refreshing with getTaskByProjectId API call');
       await loadProjectData(true); 
     }
     
@@ -803,43 +770,32 @@ function ViewAllTasksScreen({ navigation, route }) {
     setTaskToDelete(null);
 
     try {
-      const result = await dispatch(deleteExistingTask(taskId));
-      
-      if (deleteExistingTask.fulfilled.match(result)) {
-        
-        
-        if (filtersApplied) {
-          setFilteredTasks(prevFilteredTasks => 
-            prevFilteredTasks.filter(task => task.id !== taskId)
-          );
-        }
-        
-        Toast.show({
-          type: 'success',
-          text1: 'Task Deleted Successfully!',
-          text2: 'The task has been permanently removed',
-          visibilityTime: 3000,
-          autoHide: true,
-          topOffset: 80,
-        });
-      } else {
-        
-        const errorMessage = result.payload || "Failed to delete task. Please try again.";
-        Toast.show({
-          type: 'error',
-          text1: 'Delete Failed',
-          text2: errorMessage,
-          visibilityTime: 4000,
-          autoHide: true,
-          topOffset: 80,
-        });
+      await deleteMutation.mutateAsync(taskId);
+
+      if (filtersApplied) {
+        setFilteredTasks(prevFilteredTasks =>
+          prevFilteredTasks.filter(task => task.id !== taskId)
+        );
       }
+
+      Toast.show({
+        type: 'success',
+        text1: 'Task Deleted Successfully!',
+        text2: 'The task has been permanently removed',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
     } catch (error) {
       console.error("ViewAllTasksScreen - Error deleting task:", error);
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "An unexpected error occurred";
       Toast.show({
         type: 'error',
         text1: 'Delete Failed',
-        text2: "An unexpected error occurred",
+        text2: Array.isArray(errorMessage) ? errorMessage.join(', ') : String(errorMessage),
         visibilityTime: 4000,
         autoHide: true,
         topOffset: 80,
@@ -873,7 +829,6 @@ function ViewAllTasksScreen({ navigation, route }) {
   };
 
   const handleClearFilters = async () => {
-    console.log('ViewAllTasksScreen - Clearing all filters');
     setFiltersApplied(false);
     setSelectedFilters({
       createdAt: null, 
@@ -885,12 +840,9 @@ function ViewAllTasksScreen({ navigation, route }) {
   };
 
   const handleApplyFilters = async (filters, preFilteredTasks = null) => {
-    console.log('Applied filters:', filters);
     
     try {
       setInitialLoading(true);
-      dispatch(clearError()); 
-
       if (!projectId) {
         console.error('ViewAllTasksScreen - No projectId available for filtering');
         showErrorDialog('Error', 'Project ID is required for filtering');
@@ -900,11 +852,9 @@ function ViewAllTasksScreen({ navigation, route }) {
       
       if (preFilteredTasks) {
         
-        console.log('Using pre-filtered tasks from FilterModal');
         setFilteredTasks(preFilteredTasks || []);
       } else {
         
-        console.log('Calling filterTask service directly');
         const backendFilteredTasks = await filterTask(filters, projectId);
         setFilteredTasks(backendFilteredTasks || []);
       }

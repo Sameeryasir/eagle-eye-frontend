@@ -22,21 +22,19 @@ import {
   MenuTrigger,
 } from "react-native-popup-menu";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useDispatch, useSelector } from "react-redux";
 
 import Sidebar from "../components/Sidebar";
 import HomeBottomNav from "../components/HomeBottomNav";
 import UpdateTaskModal from "../components/UpdateTaskModal";
 import { Brand } from "../constants/brandColors";
-import { deleteTaskById } from "../services/tasks/deleteTaskById";
 import { getUserRole } from "../services/utils/userRole";
-import { getTaskById } from "../services/tasks/getTaskById";
-import { getEmployeesToAssignTask } from "../services/employees/getEmployeesOfTheCompany";
 import { taskAssignement } from "../services/inAppNotification/taskAssignement";
 import {
-  assignTaskToUserAction,
-  selectTaskAssigning,
-} from "../store/slices/taskSlice";
+  useTaskDetails,
+  useTaskAssignees,
+  useAssignTaskMutation,
+  useDeleteTaskMutation,
+} from "../hooks/queries";
 
 const PRIORITY = {
   low: { label: "Low", color: "#059669", bg: "#ECFDF5" },
@@ -122,23 +120,35 @@ function TaskDetailsScreen({ navigation, route }) {
   const { taskId, projectId, task: routeTask } = route.params || {};
   const [sidebarVisible, setSidebarVisible] = useState(false);
 
-  const dispatch = useDispatch();
-  const assigning = useSelector(selectTaskAssigning);
-
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [userRole, setUserRole] = useState(null);
-  const [currentTask, setCurrentTask] = useState(routeTask || null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [loading, setLoading] = useState(Boolean(taskId) && !routeTask);
-  const [error, setError] = useState(null);
-
-  const [employees, setEmployees] = useState([]);
-  const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
+
+  const {
+    data: fetchedTask,
+    isLoading: taskLoading,
+    isRefetching,
+    error: taskError,
+    refetch: refetchTask,
+  } = useTaskDetails(taskId);
+
+  const currentTask = fetchedTask || routeTask || null;
+
+  const canManageAssignee = userRole !== "Employee";
+  const {
+    data: employeesData,
+    isLoading: loadingEmployees,
+    refetch: refetchEmployees,
+  } = useTaskAssignees(canManageAssignee);
+
+  const employees = Array.isArray(employeesData) ? employeesData : [];
+  const assignMutation = useAssignTaskMutation();
+  const deleteMutation = useDeleteTaskMutation();
+  const assigning = assignMutation.isPending;
 
   useEffect(() => {
     const loadUserRole = async () => {
@@ -151,37 +161,17 @@ function TaskDetailsScreen({ navigation, route }) {
     loadUserRole();
   }, []);
 
-  useEffect(() => {
-    const fetchTask = async () => {
-      if (!taskId || routeTask) return;
-      try {
-        setLoading(true);
-        setError(null);
-        setCurrentTask(await getTaskById(taskId));
-      } catch (err) {
-        const message =
-          err?.response?.data?.message || err?.message || "Failed to load task";
-        setError(`Unable to load task: ${message}`);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchTask();
-  }, [taskId, routeTask]);
-
   const assignedPerson =
     currentTask?.assigned_to || currentTask?.assignedTo || null;
   const assignedName = getAssignedToName(assignedPerson);
   const isUnassigned = assignedName === "Unassigned";
-  const canManageAssignee = userRole !== "Employee";
   const priorityMeta = getPriorityMeta(currentTask?.priority);
   const statusLabel = getStatusLabel(currentTask);
 
   const selectedEmployee = useMemo(
     () =>
-      employees.find(
-        (e) => Number(e.id) === Number(selectedEmployeeId)
-      ) || null,
+      employees.find((e) => Number(e.id) === Number(selectedEmployeeId)) ||
+      null,
     [employees, selectedEmployeeId]
   );
 
@@ -202,31 +192,6 @@ function TaskDetailsScreen({ navigation, route }) {
     });
   }, [employees, employeeSearch]);
 
-  const fetchEmployees = async () => {
-    try {
-      setLoadingEmployees(true);
-      const data = await getEmployeesToAssignTask();
-      setEmployees(Array.isArray(data) ? data : []);
-    } catch {
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Failed to load employees. Please try again.",
-        visibilityTime: 3000,
-        autoHide: true,
-        topOffset: 80,
-      });
-    } finally {
-      setLoadingEmployees(false);
-    }
-  };
-
-  useEffect(() => {
-    if (canManageAssignee && employees.length === 0 && !loadingEmployees) {
-      fetchEmployees();
-    }
-  }, [canManageAssignee]);
-
   useEffect(() => {
     const currentId =
       assignedPerson?.id ||
@@ -245,26 +210,11 @@ function TaskDetailsScreen({ navigation, route }) {
 
   const handleUpdateSuccess = () => {
     setShowUpdateModal(false);
+    refetchTask();
   };
 
   const onRefresh = async () => {
-    const id = currentTask?.id || taskId;
-    if (!id) return;
-    setRefreshing(true);
-    try {
-      setCurrentTask(await getTaskById(id));
-    } catch (err) {
-      Toast.show({
-        type: "error",
-        text1: "Refresh Failed",
-        text2: err?.message || "Unable to refresh task",
-        visibilityTime: 3000,
-        autoHide: true,
-        topOffset: 80,
-      });
-    } finally {
-      setRefreshing(false);
-    }
+    await refetchTask();
   };
 
   const handleDelete = () => {
@@ -284,14 +234,11 @@ function TaskDetailsScreen({ navigation, route }) {
     setTaskToDelete(null);
 
     try {
-      await deleteTaskById(id);
+      await deleteMutation.mutateAsync(id);
       Toast.show({
         type: "success",
         text1: "Task Deleted",
         text2: `"${title}" has been deleted`,
-        visibilityTime: 2500,
-        autoHide: true,
-        topOffset: 80,
       });
       setTimeout(() => {
         if (projId) {
@@ -305,9 +252,6 @@ function TaskDetailsScreen({ navigation, route }) {
         type: "error",
         text1: "Delete Failed",
         text2: "Failed to delete task. Please try again.",
-        visibilityTime: 3000,
-        autoHide: true,
-        topOffset: 80,
       });
     }
   };
@@ -318,9 +262,6 @@ function TaskDetailsScreen({ navigation, route }) {
         type: "error",
         text1: "Select Employee",
         text2: "Please select an employee first.",
-        visibilityTime: 2500,
-        autoHide: true,
-        topOffset: 80,
       });
       return;
     }
@@ -331,77 +272,59 @@ function TaskDetailsScreen({ navigation, route }) {
         type: "error",
         text1: "Error",
         text2: "Task ID not found.",
-        visibilityTime: 2500,
-        autoHide: true,
-        topOffset: 80,
       });
       return;
     }
 
     try {
-      const result = await dispatch(
-        assignTaskToUserAction({
-          taskId: taskIdToUse,
-          userId: selectedEmployee.id,
-        })
-      );
+      await assignMutation.mutateAsync({
+        taskId: taskIdToUse,
+        userId: selectedEmployee.id,
+      });
+      setAssigneeOpen(false);
 
-      if (assignTaskToUserAction.fulfilled.match(result)) {
-        setCurrentTask((prev) => ({
-          ...prev,
-          assigned_to: selectedEmployee,
-          assignedTo: selectedEmployee,
-          assignedToUserId: selectedEmployee.id,
-        }));
-        setAssigneeOpen(false);
-
-        try {
-          const raw = await AsyncStorage.getItem("user");
-          const user = raw ? JSON.parse(raw) : null;
-          await taskAssignement({
-            title: "New Task Assigned",
-            message: `You have been assigned a new task: ${
-              currentTask.title || currentTask.name
-            }`,
-            assignedToUserId: Number(selectedEmployee.id),
-            fromUserId: user?.id ? Number(user.id) : undefined,
-            priority: currentTask.priority || "low",
-            taskId: Number(taskIdToUse),
-          });
-        } catch {
-        }
-
-        Toast.show({
-          type: "success",
-          text1: "Task Assigned",
-          text2: `Assigned to ${selectedEmployee.first_name || ""} ${
-            selectedEmployee.last_name || ""
-          }`.trim(),
-          visibilityTime: 2500,
-          autoHide: true,
-          topOffset: 80,
+      try {
+        const raw = await AsyncStorage.getItem("user");
+        const user = raw ? JSON.parse(raw) : null;
+        await taskAssignement({
+          title: "New Task Assigned",
+          message: `You have been assigned a new task: ${
+            currentTask.title || currentTask.name
+          }`,
+          assignedToUserId: Number(selectedEmployee.id),
+          fromUserId: user?.id ? Number(user.id) : undefined,
+          priority: currentTask.priority || "low",
+          taskId: Number(taskIdToUse),
         });
-      } else {
-        Toast.show({
-          type: "error",
-          text1: "Assign Failed",
-          text2: result.payload || "Failed to assign task.",
-          visibilityTime: 3000,
-          autoHide: true,
-          topOffset: 80,
-        });
+      } catch {
       }
+
+      Toast.show({
+        type: "success",
+        text1: "Task Assigned",
+        text2: `Assigned to ${selectedEmployee.first_name || ""} ${
+          selectedEmployee.last_name || ""
+        }`.trim(),
+      });
+      refetchTask();
     } catch (err) {
       Toast.show({
         type: "error",
         text1: "Assign Failed",
         text2: err?.message || "Failed to assign task.",
-        visibilityTime: 3000,
-        autoHide: true,
-        topOffset: 80,
       });
     }
   };
+
+  const loading = taskLoading && !currentTask;
+  const refreshing = isRefetching;
+  const error = taskError
+    ? `Unable to load task: ${
+        taskError?.response?.data?.message ||
+        taskError?.message ||
+        "Failed to load task"
+      }`
+    : null;
 
   if (loading && !currentTask) {
     return (
@@ -584,7 +507,7 @@ function TaskDetailsScreen({ navigation, route }) {
                     const next = !assigneeOpen;
                     setAssigneeOpen(next);
                     if (next && employees.length === 0 && !loadingEmployees) {
-                      fetchEmployees();
+                      refetchEmployees();
                     }
                   }}
                   style={styles.dropdownTrigger}

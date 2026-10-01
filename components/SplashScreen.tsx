@@ -1,6 +1,3 @@
-// What changed: splash shows only the Eagle Eye logo (no "EAGLE EYE" text), then routes on.
-// Why: users were seeing SignIn brand text and treating it as the splash.
-// Related: App.tsx LoadingScreen / initial SplashScreen route, assets/Logo.svg.
 import React, { useEffect, useRef } from "react";
 import {
   View,
@@ -29,7 +26,6 @@ export default function SplashScreen({ navigation, bootGate = false }) {
   }, [scaleAnim]);
 
   useEffect(() => {
-    // Boot gate is only a loading placeholder — App.tsx decides the next screen.
     if (bootGate || !navigation) return;
     if (isLoading) return;
 
@@ -52,7 +48,6 @@ export default function SplashScreen({ navigation, bootGate = false }) {
           },
         ]}
       >
-        {/* Same brand logo used on SignIn — graphic only, no title text. */}
         <Logo width={140} height={140} />
       </Animated.View>
     </View>

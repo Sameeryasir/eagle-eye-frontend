@@ -71,9 +71,6 @@ export const saveMessageToSQLite = (
 
     if (isDuplicate) {
       if (logSkips) {
-        console.log(
-          `ℹ️ [${logLabel}] Message ${msg.id} already exists - skipping insert`
-        );
       }
       return;
     }
@@ -524,31 +521,21 @@ export const initializeMessagesTable = async (
   conversationId: string
 ): Promise<void> => {
   try {
-    console.log("🔄 Initializing database for conversation:", conversationId);
-    console.log("✅ Database connection established via context");
 
     // Create the messages table ONLY if it doesn't exist
-    console.log(
-      "🔨 Checking if messages table exists for conversation:",
-      conversationId
-    );
     db.execSync(createMessagesTableSQL(conversationId));
 
     // Add missing columns if they don't exist (for existing tables)
     try {
       db.execSync(addStatusColumnSQL(conversationId));
-      console.log("✅ Added status column to existing table");
     } catch (e) {
       // Column already exists, ignore error
-      console.log("ℹ️ status column already exists");
     }
 
     try {
       db.execSync(addConversationIdColumnSQL(conversationId));
-      console.log("✅ Added conversation_id column to existing table");
     } catch (e) {
       // Column already exists, ignore error
-      console.log("ℹ️ conversation_id column already exists");
     }
 
     // Add signature columns if they don't exist
@@ -556,44 +543,27 @@ export const initializeMessagesTable = async (
     signatureColumnSQLs.forEach((sql) => {
       try {
         db.execSync(sql);
-        console.log(`✅ Added column to existing table`);
       } catch (e) {
         // Column already exists, ignore error
-        console.log(`ℹ️ column already exists`);
       }
     });
-
-    console.log("✅ Messages table ready (created once only)");
 
     // Debug: Check table structure
     try {
       const tableName = getMessagesTableName(conversationId);
       const tableInfo = db.getAllSync(`PRAGMA table_info(${tableName})`);
-      console.log(
-        `🔍 Table structure for ${tableName}:`,
-        tableInfo
-      );
-      console.log(
-        "📋 Available columns:",
-        tableInfo.map((col: any) => col.name)
-      );
     } catch (e) {
-      console.log("❌ Could not get table info:", e);
     }
 
     // Delete entire database file and create fresh new one
 
-    console.log("🗑️ Deleting old database file...");
     try {
       const dbName = `chat_${conversationId}.db`;
       const dbPath = `${FileSystem.documentDirectory}SQLite/${dbName}`;
       await FileSystem.deleteAsync(dbPath, { idempotent: true });
-      console.log(`✅ Deleted database file: ${dbName}`);
     } catch (error) {
-      console.log("ℹ️ No database file to delete");
     }
 
-    console.log("✅ Database setup completed for conversation", conversationId);
   } catch (error: any) {
     console.error("❌ Database initialization failed:", error);
     console.error("❌ Error details:", error.message);

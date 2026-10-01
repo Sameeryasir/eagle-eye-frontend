@@ -1,34 +1,44 @@
-// What changed: toast auto-hides in ~2.5s, tap/X dismisses, safety timer prevents stuck toasts.
-// Why: library auto-hide can stall after swipe/pan; users need brief + dismissible feedback.
-// Related: App.tsx <Toast />, CreateTask / CreateProject success paths.
-// NOTE: must be .tsx because this file contains JSX.
 import React from 'react';
-import { TouchableOpacity, StyleSheet } from 'react-native';
+import {
+  TouchableOpacity,
+  StyleSheet,
+  InteractionManager,
+  Platform,
+} from 'react-native';
 import Toast, {
   BaseToast,
   ErrorToast,
   type ToastConfig,
+  type ToastShowParams,
 } from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 import { getErrorMessage } from '../services/api/errors';
 
 type ToastKind = 'success' | 'error' | 'info';
 
-const TOAST_TOP_OFFSET = 56;
-const TOAST_VISIBLE_MS = 2500;
+const TOAST_VISIBLE_MS = 2800;
+const TOAST_TOP_OFFSET = Platform.OS === 'ios' ? 54 : 40;
+const DEDUPE_MS = 900;
+const AFTER_MODAL_MS = 350;
 
-// Bumps on every show so an older safety timer cannot hide a newer toast.
 let toastGeneration = 0;
+let lastToastKey = '';
+let lastToastAt = 0;
+let guardInstalled = false;
+let nativeShow: ((params: ToastShowParams) => void) | null = null;
 
 function dismissToast(): void {
-  Toast.hide();
+  try {
+    Toast.hide();
+  } catch {
+  }
 }
 
 function DismissButton() {
   return (
     <TouchableOpacity
       onPress={dismissToast}
-      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       style={styles.dismissBtn}
       accessibilityRole="button"
       accessibilityLabel="Dismiss notification"
@@ -80,32 +90,61 @@ export const toastConfig: ToastConfig = {
   ),
 };
 
+function buildSafeParams(params: ToastShowParams = {}): ToastShowParams {
+  const visibilityTime = params.visibilityTime ?? TOAST_VISIBLE_MS;
+  return {
+    position: 'top',
+    topOffset: params.topOffset ?? TOAST_TOP_OFFSET,
+    ...params,
+    visibilityTime,
+    autoHide: true,
+    swipeable: false,
+    onPress: params.onPress || dismissToast,
+  };
+}
+
+export function installToastGuard(): void {
+  if (guardInstalled) return;
+  guardInstalled = true;
+
+  nativeShow = Toast.show.bind(Toast);
+
+  Toast.show = ((params: ToastShowParams = {}) => {
+    const safe = buildSafeParams(params);
+    const key = `${safe.type || ''}|${safe.text1 || ''}|${safe.text2 || ''}`;
+    const now = Date.now();
+
+    if (key === lastToastKey && now - lastToastAt < DEDUPE_MS) {
+      return;
+    }
+
+    lastToastKey = key;
+    lastToastAt = now;
+    const generation = ++toastGeneration;
+
+    nativeShow?.(safe);
+
+    setTimeout(() => {
+      if (generation === toastGeneration) {
+        dismissToast();
+      }
+    }, (safe.visibilityTime || TOAST_VISIBLE_MS) + 450);
+  }) as typeof Toast.show;
+}
+
 export function showToast(
   type: ToastKind,
   title: string,
   message?: string
 ): void {
-  const generation = ++toastGeneration;
-
+  if (!guardInstalled) {
+    installToastGuard();
+  }
   Toast.show({
     type,
     text1: title,
     text2: message,
-    position: 'top',
-    visibilityTime: TOAST_VISIBLE_MS,
-    autoHide: true,
-    topOffset: TOAST_TOP_OFFSET,
-    // Swipe can leave the library's pan flag stuck and block auto-hide.
-    swipeable: false,
-    onPress: dismissToast,
   });
-
-  // Safety net: force hide if the library timer never fires.
-  setTimeout(() => {
-    if (generation === toastGeneration) {
-      Toast.hide();
-    }
-  }, TOAST_VISIBLE_MS + 400);
 }
 
 export function showToastAfterModal(
@@ -113,9 +152,11 @@ export function showToastAfterModal(
   title: string,
   message?: string
 ): void {
-  setTimeout(() => {
-    showToast(type, title, message);
-  }, 320);
+  InteractionManager.runAfterInteractions(() => {
+    setTimeout(() => {
+      showToast(type, title, message);
+    }, AFTER_MODAL_MS);
+  });
 }
 
 export function showSuccessToast(title: string, message?: string): void {
@@ -158,9 +199,10 @@ export function showInfoToast(title: string, message?: string): void {
 const styles = StyleSheet.create({
   toast: {
     width: '92%',
-    minHeight: 56,
+    minHeight: 58,
     borderLeftWidth: 5,
-    borderRadius: 12,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
   },
   successBorder: {
     borderLeftColor: '#16A34A',

@@ -76,11 +76,8 @@ import AllSignaturesModal from "../components/AllSignaturesModal";
 import SignatureDetailModal from "../components/SignatureDetailModal";
 
 const emitVerticalLog = (heading, rows) => {
-  console.log(`\n${heading}`);
   Object.entries(rows || {}).forEach(([key, value]) => {
-    console.log(`  • ${key}: ${value}`);
   });
-  console.log('');
 };
 
 // Extract first letter of first name and first letter of last name
@@ -124,7 +121,6 @@ const UserChatScreen = ({ navigation, route }) => {
   } = route.params || {};
 
   // Log conversation type
-  console.log('💬 Conversation Type:', type);
 
   const isGroupChat = isGroupChatParam || conversation?.type === 'group' || type === 'group';
 
@@ -220,10 +216,8 @@ const UserChatScreen = ({ navigation, route }) => {
           const userIdNumber = parseInt(storedUserId, 10);
           if (!isCancelled) {
             setCurrentUserId(userIdNumber);
-            console.log('✅ Current user ID loaded:', userIdNumber);
           }
         } else {
-          console.log('⚠️ No user ID found in AsyncStorage');
         }
       } catch (error) {
         if (!isCancelled) {
@@ -246,7 +240,6 @@ const UserChatScreen = ({ navigation, route }) => {
   const registerAbortController = (contextLabel) => {
     const entry = { controller: new AbortController(), contextLabel };
     apiAbortControllersRef.current.add(entry);
-    console.log(`📡 [ABORT] Registered fetch controller for ${contextLabel}`);
     return entry;
   };
 
@@ -285,7 +278,6 @@ const UserChatScreen = ({ navigation, route }) => {
       return response;
     } catch (error) {
       if (wasRequestCancelled(error)) {
-        console.log(`🛑 [ABORT] Canceled fetching ${contextLabel} because user left chat`);
         return null;
       }
       throw error;
@@ -325,11 +317,9 @@ const UserChatScreen = ({ navigation, route }) => {
   useEffect(() => {
     isScreenActiveRef.current = true;
     return () => {
-      console.log('🛑 [ABORT] User left UserChatScreen – aborting outstanding message fetches');
       isScreenActiveRef.current = false;
       const activeControllers = Array.from(apiAbortControllersRef.current);
       activeControllers.forEach(({ controller, contextLabel }) => {
-        console.log(`🛑 [ABORT] Stopping request for ${contextLabel}`);
         controller.abort();
       });
       apiAbortControllersRef.current.clear();
@@ -338,7 +328,6 @@ const UserChatScreen = ({ navigation, route }) => {
 
   // This ensures fast subsequent loads and offline access
   const fetchAllMessagesFromAPI = async (conversationId) => {
-    console.log('📡 Fetching all messages from API...');
     setIsUsingAPI(true);
     setCurrentPage(1);
     
@@ -349,11 +338,9 @@ const UserChatScreen = ({ navigation, route }) => {
     
     // Load all pages from API
     while (hasMorePages) {
-      console.log(`📡 Loading page ${currentPageNum} from API...`);
       
       const apiResponse = await fetchMessagesPageSafely(currentPageNum, `initial-sync-page-${currentPageNum}`);
       if (!apiResponse) {
-        console.log('🛑 [ABORT] Initial sync stopped mid-loop because request was canceled');
         wasCancelled = true;
         break;
       }
@@ -369,11 +356,9 @@ const UserChatScreen = ({ navigation, route }) => {
     }
     
     if (wasCancelled) {
-      console.log('🛑 [ABORT] Skipping initial sync post-processing because the user left the screen');
       return [];
     }
 
-    console.log(`✅ Loaded ${allMessages.length} messages from API`);
     
     // Convert all messages to UI format
     const uiMessages = allMessages.map(msg => convertMessageToUI(msg));
@@ -385,9 +370,7 @@ const UserChatScreen = ({ navigation, route }) => {
     });
     
     // Save all messages to SQLite
-    console.log('💾 Saving messages to SQLite...');
     saveMessagesBatchToSQLite(db, allMessages, conversationId, 'INITIAL-API-BATCH');
-    console.log('✅ All messages saved to SQLite');
     
     // Update pagination state
     setCurrentOffset(0);
@@ -398,7 +381,6 @@ const UserChatScreen = ({ navigation, route }) => {
     const sortedMessages = sortMessagesByTime([...uiMessages]);
     storeLastMessageId(sortedMessages);
     
-    console.log('✅ All messages loaded and saved');
     return uiMessages;
   };
 
@@ -441,33 +423,24 @@ const UserChatScreen = ({ navigation, route }) => {
 
   // Loader only shown for API calls (SQLite is fast)
   const fetchMessages = async () => {
-    console.log('🚀 fetchMessages called - loading from SQLite database or API');
-    console.log('🔍 conversationId:', conversationId);
     
     if (!conversationId) {
-      console.log('❌ No conversation ID provided, skipping message fetch');
       return;
     }
 
-    console.log('✅ Conversation ID found, starting to fetch messages from SQLite');
     
     try {
       // Check if messages table exists before querying
-      console.log('🔍 Checking if messages table exists for conversation:', conversationId);
       
       try {
         const tableExists = messagesTableExists(db, conversationId);
         if (!tableExists) {
-          console.log('⚠️ Messages table does not exist yet - skipping SQLite query');
-          console.log('📭 No messages found in SQLite database - fetching from API');
           
-          console.log('🔒 Disabling input - will fetch from API');
           Keyboard.dismiss(); // Dismiss keyboard during API call
           setIsLoadingMessages(true); // Disable input during API call - SET BEFORE API CALL
           
           // No table exists - fetch from API with pagination
           try {
-            console.log('📡 Fetching from API...');
             setIsUsingAPI(true); // We're using API for this conversation
             setCurrentPage(1); // Start from page 1
             
@@ -477,12 +450,9 @@ const UserChatScreen = ({ navigation, route }) => {
             let hasMorePages = true;
             
             while (hasMorePages) {
-              console.log(`📡 Loading page ${currentPageNum} from API...`);
               const apiResponse = await getMessagesByConversationId(conversationId, currentPageNum, 20);
-              console.log(`📡 API Response for page ${currentPageNum}:`, apiResponse);
               
               const apiMessages = apiResponse?.messages || [];
-              console.log(`📋 Found ${apiMessages.length} messages in page ${currentPageNum} (Total: ${apiResponse?.total || 0})`);
               
               if (apiMessages && apiMessages.length > 0) {
                 allMessages = [...allMessages, ...apiMessages];
@@ -523,7 +493,6 @@ const UserChatScreen = ({ navigation, route }) => {
                 });
 
                 if (currentPageNum === 1) {
-                  console.log('✅ First page loaded - enabling input immediately');
                   setIsLoadingMessages(false);
                 }
 
@@ -536,12 +505,9 @@ const UserChatScreen = ({ navigation, route }) => {
               }
             }
             
-            console.log(`✅ Loaded all pages progressively. Total messages: ${allMessages.length}`);
             
             // Store all messages in SQLite database
-            console.log('💾 Storing all API messages in SQLite database...');
             saveMessagesBatchToSQLite(db, allMessages, conversationId, 'API-PROGRESSIVE-BATCH');
-            console.log('✅ All API messages stored in SQLite database');
 
             // Reset pagination state - no more pages to load
             setCurrentOffset(0);
@@ -577,7 +543,6 @@ const UserChatScreen = ({ navigation, route }) => {
             })));
             storeLastMessageId(finalMessages);
             
-            console.log('✅ All messages loaded progressively from API');
             return;
           } catch (error) {
             console.error('❌ Error fetching messages from API:', error);
@@ -592,7 +557,6 @@ const UserChatScreen = ({ navigation, route }) => {
         // Continue with API fallback
       }
 
-      console.log('📡 Loading messages from SQLite database for conversation:', conversationId);
       
       // Get total message count and latest 20 messages (same logic as test.js)
       const totalMessageCountRow = db.getFirstSync(`SELECT COUNT(*) as count FROM messages_${conversationId}`);
@@ -603,10 +567,8 @@ const UserChatScreen = ({ navigation, route }) => {
       
       // Debug: Show what columns are available in the first message
       if (dbMessages.length > 0) {
-        console.log('🔍 First message columns:', Object.keys(dbMessages[0]));
       }
       
-      console.log('📋 Found', dbMessages.length, 'messages in SQLite database (total stored:', totalMessageCount, ')');
       
       if (dbMessages && dbMessages.length > 0) {
         // Convert database messages to UI format with signature fields
@@ -658,17 +620,13 @@ const UserChatScreen = ({ navigation, route }) => {
           console.error('❌ [SIGNED SYNC] Background sync failed:', error);
         });
         
-        console.log('✅ Messages loaded from SQLite and sorted, setMessages called');
       } else {
-        console.log('📭 No messages found in SQLite database - fetching from API');
         
-        console.log('🔒 Disabling input - will fetch from API');
         Keyboard.dismiss(); // Dismiss keyboard during API call
         setIsLoadingMessages(true); // Disable input during API call - SET BEFORE API CALL
         
         // No messages in SQLite - fetch from API with pagination
         try {
-          console.log('📡 Fetching from API...');
           setIsUsingAPI(true); // We're using API for this conversation
           setCurrentPage(1); // Start from page 1
           
@@ -678,12 +636,9 @@ const UserChatScreen = ({ navigation, route }) => {
           let hasMorePages = true;
           
           while (hasMorePages) {
-            console.log(`📡 Loading page ${currentPageNum} from API...`);
             const apiResponse = await getMessagesByConversationId(conversationId, currentPageNum, 20);
-            console.log(`📡 API Response for page ${currentPageNum}:`, apiResponse);
             
             const apiMessages = apiResponse?.messages || [];
-            console.log(`📋 Found ${apiMessages.length} messages in page ${currentPageNum} (Total: ${apiResponse?.total || 0})`);
             
             if (apiMessages && apiMessages.length > 0) {
               allMessages = [...allMessages, ...apiMessages];
@@ -722,7 +677,6 @@ const UserChatScreen = ({ navigation, route }) => {
                 const message = currentPageMessages[i];
                 setMessages(prevMessages => {
                   if (!isScreenActiveRef.current) {
-                    console.log('🛑 [ABORT] Skipping per-message update because chat screen was closed');
                     return prevMessages;
                   }
                   const combinedMessages = [...prevMessages, message];
@@ -743,12 +697,9 @@ const UserChatScreen = ({ navigation, route }) => {
             }
           }
           
-          console.log(`✅ Loaded all pages progressively. Total messages: ${allMessages.length}`);
           
           // Store all messages in SQLite database
-          console.log('💾 Storing all API messages in SQLite database...');
           saveMessagesBatchToSQLite(allMessages, conversationId, 'API-PROGRESSIVE-BATCH');
-          console.log('✅ All API messages stored in SQLite database');
 
           // Reset pagination state - no more pages to load
           setCurrentOffset(0);
@@ -784,7 +735,6 @@ const UserChatScreen = ({ navigation, route }) => {
           })));
           storeLastMessageId(finalMessages);
           
-          console.log('✅ All messages loaded progressively from API and stored in SQLite');
           return;
         } catch (apiError) {
           console.error('❌ Error fetching messages from API:', apiError);
@@ -797,7 +747,6 @@ const UserChatScreen = ({ navigation, route }) => {
       console.error('❌ Error details:', err.message);
       setMessages([]);
     } finally {
-      console.log('🏁 fetchMessages completed, setting loading to false');
       setIsLoadingMessages(false);
     }
   };
@@ -805,23 +754,17 @@ const UserChatScreen = ({ navigation, route }) => {
   // Handles both SQLite pagination (offset) and API pagination (page)
   const loadMoreMessages = async () => {
     if (!hasMoreMessages) {
-      console.log('ℹ️ No more messages to load');
       return;
     }
-
-    console.log('📄 Loading more messages...');
 
     try {
       if (isUsingAPI) {
         // Load next page from API
         const nextPage = currentPage + 1;
-        console.log(`📡 Loading page ${nextPage} from API...`);
         
         const apiResponse = await getMessagesByConversationId(conversationId, nextPage, 20);
-        console.log(`📡 API Response for page ${nextPage}:`, apiResponse);
         
         const apiMessages = apiResponse?.messages || [];
-        console.log(`📋 Found ${apiMessages.length} messages in API response (Total: ${apiResponse?.total || 0})`);
 
         if (apiMessages && apiMessages.length > 0) {
           // Convert API messages to UI format
@@ -863,17 +806,13 @@ const UserChatScreen = ({ navigation, route }) => {
           setCurrentPage(nextPage);
           setHasMoreMessages(apiResponse?.page < apiResponse?.totalPages); // Check if there are more pages
 
-          console.log('✅ Older messages loaded successfully from API');
         } else {
-          console.log('📭 No more older messages found in API');
           setHasMoreMessages(false);
         }
       } else {
         // Load next 20 messages from SQLite
         const totalMessageCount = getMessageCountFromSQLite(db, conversationId);
         const olderMessages = getAllMessagesFromSQLite(db, conversationId, SQLITE_MESSAGES_PAGE_SIZE, currentOffset);
-
-        console.log(`📋 Found ${olderMessages.length} older messages (current offset: ${currentOffset}, total stored: ${totalMessageCount})`);
 
         if (olderMessages && olderMessages.length > 0) {
           // Convert database messages to UI format
@@ -920,9 +859,7 @@ const UserChatScreen = ({ navigation, route }) => {
           setCurrentOffset(newOffset);
           setHasMoreMessages(newOffset < totalMessageCount);
 
-          console.log('✅ Older messages loaded successfully from SQLite');
         } else {
-          console.log('📭 No more older messages found in SQLite');
           setHasMoreMessages(false);
         }
       }
@@ -933,7 +870,6 @@ const UserChatScreen = ({ navigation, route }) => {
 
   const fetchMessagesFromSQLite = () => {
     try {
-      console.log('🔄 Fetching messages from SQLite database for conversation:', conversationId);
       
       // Get all messages from database (both sent and pending)
       const totalMessageCount = getMessageCountFromSQLite(db, conversationId);
@@ -941,10 +877,8 @@ const UserChatScreen = ({ navigation, route }) => {
       
       // Debug: Show what columns are available in the first message
       if (dbMessages.length > 0) {
-        console.log('🔍 First message columns:', Object.keys(dbMessages[0]));
       }
       
-      console.log('📋 Found', dbMessages.length, 'messages in SQLite database (total stored:', totalMessageCount, ')');
       
       if (dbMessages && dbMessages.length > 0) {
         // Convert database messages to UI format with signature fields
@@ -989,9 +923,7 @@ const UserChatScreen = ({ navigation, route }) => {
         // Store last message ID when messages are loaded from SQLite
         storeLastMessageId(uiMessages);
         
-        console.log('✅ Messages loaded from SQLite database');
       } else {
-        console.log('📭 No messages found in SQLite database');
         setMessages([]);
         setCurrentOffset(0);
         setHasMoreMessages(false);
@@ -1016,7 +948,6 @@ const UserChatScreen = ({ navigation, route }) => {
         );
         
         if (confirmedMessages.length === 0) {
-          console.log('ℹ️ [ASYNCSTORAGE] No confirmed server messages found - not storing any ID');
           return;
         }
         
@@ -1024,37 +955,21 @@ const UserChatScreen = ({ navigation, route }) => {
         const lastConfirmedMessage = confirmedMessages[0];
         const messageId = lastConfirmedMessage.id;
         
-        console.log('🔍 [ASYNCSTORAGE] Messages array length:', messages.length);
-        console.log('🔍 [ASYNCSTORAGE] Confirmed server messages count:', confirmedMessages.length);
-        console.log('🔍 [ASYNCSTORAGE] Last confirmed message details:', {
-          id: messageId,
-          idType: typeof messageId,
-          isInteger: !isNaN(parseInt(messageId)),
-          content: lastConfirmedMessage.content ? lastConfirmedMessage.content.substring(0, 50) + '...' : '(no content)',
-          sender: lastConfirmedMessage.sender?.first_name || 'Unknown',
-          status: lastConfirmedMessage.status,
-          createdAt: lastConfirmedMessage.createdAt
-        });
         
         if (messageId && !isNaN(parseInt(messageId)) && parseInt(messageId) < 1000000) {
           await AsyncStorage.setItem('latestMessageId', messageId.toString());
-          console.log('💾 [ASYNCSTORAGE] ✅ Successfully stored latest CONFIRMED server message ID:', messageId);
-          console.log('💾 [ASYNCSTORAGE] 📱 Stored in AsyncStorage with key: "latestMessageId"');
         } else {
-          console.log('⚠️ [ASYNCSTORAGE] Skipping invalid message ID:', messageId, '(not a valid server ID)');
         }
       } catch (error) {
         console.error('❌ [ASYNCSTORAGE] Failed to store message ID:', error);
         console.error('❌ [ASYNCSTORAGE] Error details:', error.message);
       }
     } else {
-      console.log('📭 [ASYNCSTORAGE] No messages to store ID from');
     }
   };
 
   const syncSignedSignaturesFromAPI = async () => {
     if (!conversationId) {
-      console.log('⚠️ [SIGNED SYNC] No conversation ID available, skipping signed signatures sync');
       return;
     }
 
@@ -1069,17 +984,14 @@ const UserChatScreen = ({ navigation, route }) => {
     }
 
     if (pendingSignatureIds.size === 0) {
-      console.log('ℹ️ [SIGNED SYNC] No pending signatures found locally – skipping server sync');
       return;
     }
 
     try {
-      console.log('🔄 [SIGNED SYNC] Fetching signed signatures via getSignedSignatures()');
       
       const signedSignatures = await getSignedSignatures();
 
       if (!Array.isArray(signedSignatures) || signedSignatures.length === 0) {
-        console.log('ℹ️ [SIGNED SYNC] No signed signatures returned by API - nothing to update');
         return;
       }
 
@@ -1089,7 +1001,6 @@ const UserChatScreen = ({ navigation, route }) => {
         const signatureId = signature.id ?? signature.signatureId ?? null;
 
         if (!signatureId) {
-          console.log('⚠️ [SIGNED SYNC] Signature entry missing ID, skipping update');
           return;
         }
 
@@ -1110,14 +1021,12 @@ const UserChatScreen = ({ navigation, route }) => {
           signatureConversationId &&
           String(signatureConversationId) !== String(conversationId)
         ) {
-          console.log('ℹ️ [SIGNED SYNC] Signature', signatureId, 'belongs to conversation', signatureConversationId, '→ skipping for', conversationId);
           return;
         }
 
         const status = (signature.status ?? signature.signatureStatus ?? 'pending').toLowerCase();
 
         if (status !== 'signed') {
-          console.log(`ℹ️ [SIGNED SYNC] Signature ${signatureIdAsString} is still ${status} on server – keeping local pending state`);
           return;
         }
 
@@ -1152,7 +1061,6 @@ const UserChatScreen = ({ navigation, route }) => {
         });
 
         try {
-          console.log('📝 [SIGNED SYNC] Updating SQLite record for signature:', signatureId);
           updateSignatureFieldsBySignatureId(db, signatureId, conversationId, {
             status: status || undefined,
             fileUrl: fileUrl || null,
@@ -1168,13 +1076,11 @@ const UserChatScreen = ({ navigation, route }) => {
       });
 
       if (signatureUpdatesMap.size === 0) {
-        console.log('ℹ️ [SIGNED SYNC] No valid signature updates were collected, skipping UI refresh');
         return;
       }
 
       setMessages((prevMessages) => {
         if (!prevMessages || prevMessages.length === 0) {
-          console.log('ℹ️ [SIGNED SYNC] No messages in state to reconcile, skipping state update');
           return prevMessages;
         }
 
@@ -1190,8 +1096,6 @@ const UserChatScreen = ({ navigation, route }) => {
           if (!updates) {
             return message;
           }
-
-          console.log('🔁 [SIGNED SYNC] Applying signed updates to message:', message.id);
 
           return {
             ...message,
@@ -1209,7 +1113,6 @@ const UserChatScreen = ({ navigation, route }) => {
         return sortMessagesByTime(updatedMessages);
       });
 
-      console.log('✅ [SIGNED SYNC] Signed signatures synced successfully for conversation:', conversationId);
     } catch (error) {
       console.error('❌ [SIGNED SYNC] Unable to fetch signed signatures:', error);
     }
@@ -1217,7 +1120,6 @@ const UserChatScreen = ({ navigation, route }) => {
 
   const fetchNewMessagesAfterLast = async () => {
     try {
-      console.log('🔄 [NEW MESSAGES] Checking for new messages...');
 
       Keyboard.dismiss();
       
@@ -1225,47 +1127,34 @@ const UserChatScreen = ({ navigation, route }) => {
       const lastMessageId = await AsyncStorage.getItem('latestMessageId');
       
       if (!lastMessageId) {
-        console.log('📭 [NEW MESSAGES] No last message ID found in AsyncStorage');
         return;
       }
       
-      console.log('🔍 [NEW MESSAGES] Last message ID from AsyncStorage:', lastMessageId);
-      console.log('🔍 [NEW MESSAGES] Conversation ID:', conversationId);
       
       // Fetch all pages automatically and add to chat list one by one
       let currentPage = 1;
       let totalPages = 1;
       let totalMessages = 0;
       
-      console.log('📡 [NEW MESSAGES] Starting to fetch all pages automatically...');
       
       // Keep fetching until all pages are loaded
       while (currentPage <= totalPages) {
-        console.log(`📄 [NEW MESSAGES] Fetching page ${currentPage}...`);
         
         // Call the API to get new messages for current page
         const response = await getMessageAfterLastMessage(conversationId, lastMessageId, currentPage, 20);
         
-        console.log(`📨 [NEW MESSAGES] Page ${currentPage} response:`, response);
         
         // Extract messages from response object
         const pageMessages = response?.messages || [];
         totalPages = response?.totalPages || 1;
         totalMessages = response?.total || 0;
         
-        console.log(`📊 [NEW MESSAGES] Page ${currentPage} info:`, {
-          messagesInPage: pageMessages.length,
-          totalPages: totalPages,
-          totalMessages: totalMessages
-        });
         
         // Add messages from this page to the chat list immediately (WhatsApp-style)
         if (pageMessages.length > 0) {
-          console.log(`💬 [NEW MESSAGES] Adding ${pageMessages.length} messages from page ${currentPage} to chat list...`);
           
           // Store new messages in SQLite database first
           try {
-            console.log(`💾 [NEW MESSAGES] Storing ${pageMessages.length} messages from page ${currentPage} in SQLite database...`);
             
             pageMessages.forEach(msg => {
               try {
@@ -1276,16 +1165,13 @@ const UserChatScreen = ({ navigation, route }) => {
                   // Store message in SQLite database
                   saveMessageToSQLite(db, msg, conversationId, 'NEW-MESSAGES', false);
                   
-                  console.log(`✅ [NEW MESSAGES] Stored message ${msg.id} in database`);
                 } else {
-                  console.log(`ℹ️ [NEW MESSAGES] Message ${msg.id} already exists in database`);
                 }
               } catch (error) {
                 console.error(`❌ [NEW MESSAGES] Error storing message ${msg.id} in database:`, error);
               }
             });
             
-            console.log(`✅ [NEW MESSAGES] Completed storing messages from page ${currentPage} in database`);
           } catch (error) {
             console.error(`❌ [NEW MESSAGES] Error storing messages from page ${currentPage} in database:`, error);
           }
@@ -1296,14 +1182,12 @@ const UserChatScreen = ({ navigation, route }) => {
             const existingMessageIds = new Set(prevMessages.map(msg => msg.id));
             const newUniqueMessages = pageMessages.filter(msg => !existingMessageIds.has(msg.id));
             
-            console.log(`🔍 [NEW MESSAGES] Page ${currentPage} - Found ${pageMessages.length} messages, ${newUniqueMessages.length} are new (unique)`);
             
             if (newUniqueMessages.length > 0) {
               // Combine only new unique messages with existing messages and sort by time
               const combinedMessages = [...newUniqueMessages, ...prevMessages];
               const sortedMessages = sortMessagesByTime(combinedMessages);
               
-              console.log(`✅ [NEW MESSAGES] Page ${currentPage} - Added ${newUniqueMessages.length} new messages to chat. Total messages in chat: ${sortedMessages.length}`);
               
               // Store the latest message ID from this page
               const latestMessageFromPage = newUniqueMessages[0]; // First message is latest due to sorting
@@ -1311,37 +1195,22 @@ const UserChatScreen = ({ navigation, route }) => {
               
               return sortedMessages;
             } else {
-              console.log(`ℹ️ [NEW MESSAGES] Page ${currentPage} - No new unique messages to add (all already exist)`);
               return prevMessages; // No changes needed
             }
           });
           
-          console.log(`📋 [NEW MESSAGES] Page ${currentPage} messages details:`, pageMessages.map(msg => ({
-            id: msg.id,
-            content: msg.content ? msg.content.substring(0, 30) + '...' : '(no content)',
-            sender: msg.sender?.first_name || 'Unknown',
-            createdAt: msg.createdAt,
-            status: msg.status
-          })));
         }
         
-        console.log(`✅ [NEW MESSAGES] Page ${currentPage} loaded and added to chat list`);
         
         // Move to next page
         currentPage++;
         
         // Add a small delay between requests to avoid overwhelming the server
         if (currentPage <= totalPages) {
-          console.log(`⏳ [NEW MESSAGES] Waiting 500ms before fetching page ${currentPage}...`);
           await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
       
-      console.log('🎉 [NEW MESSAGES] All pages fetched and added to chat list successfully!');
-      console.log('📊 [NEW MESSAGES] Final summary:', {
-        totalPagesFetched: currentPage - 1,
-        totalMessagesFromAPI: totalMessages
-      });
       
     } catch (error) {
       console.error('❌ [NEW MESSAGES] Error fetching new messages:', error);
@@ -1372,7 +1241,6 @@ const UserChatScreen = ({ navigation, route }) => {
 
   // Fetch messages when component mounts and when conversationId changes
   useEffect(() => {
-    console.log('🔄 UserChatScreen mounted or conversationId changed - calling API');
     
     // Reset initial load flag when conversationId changes
     setIsInitialLoadComplete(false);
@@ -1389,18 +1257,15 @@ const UserChatScreen = ({ navigation, route }) => {
           const messageCount = getMessageCountFromSQLite(db, conversationId);
           
           if (messageCount > 0) {
-            console.log('📱 Database has messages - loading from SQLite and checking for new messages');
             // Load existing messages from SQLite
             await fetchMessages();
             // Then check for new messages after the last one
             await fetchNewMessagesAfterLast();
           } else {
-            console.log('📱 Database exists but is empty - fetching all messages from API');
             // Database exists but is empty - fetch all messages from API
             await fetchMessages();
           }
         } else {
-          console.log('📱 No database table - fetching all messages from API');
           // No table exists - fetch all messages from API
           await fetchMessages();
         }
@@ -1425,16 +1290,13 @@ const UserChatScreen = ({ navigation, route }) => {
   // This prevents unnecessary API calls and app refresh
   // useEffect(() => {
   //   const unsubscribe = navigation.addListener('focus', () => {
-  //     console.log('📱 UserChatScreen focused - calling API to refresh messages');
-  //     console.log('🔍 Current conversationId:', conversationId);
-  //     if (conversationId) {
+  //       //       //     if (conversationId) {
   //       fetchMessages();
   //       
   //       // Also check for new messages after the last stored message ID
   //       fetchNewMessagesAfterLast();
   //     } else {
-  //       console.log('⚠️ No conversationId available on focus');
-  //     }
+  //         //     }
   //   });
 
   //   return unsubscribe;
@@ -1474,7 +1336,6 @@ const UserChatScreen = ({ navigation, route }) => {
     const currentConversationId = route.params?.conversationId;
     
     if (!currentConversationId) {
-      console.log('❌ No conversation ID found');
       Alert.alert('Error', 'No conversation ID found');
       return;
     }
@@ -1482,15 +1343,12 @@ const UserChatScreen = ({ navigation, route }) => {
     setIsLoadingFiles(true);
     
     try {
-      console.log('🔄 Fetching files for conversation:', currentConversationId);
       const response = await getFilesForConversation(currentConversationId);
       
       if (response && Array.isArray(response)) {
         setConversationFiles(response);
-        console.log('✅ Files fetched successfully:', response.length, 'files');
       } else {
         setConversationFiles([]);
-        console.log('📭 No files found in conversation');
       }
     } catch (err) {
       console.error('❌ Error fetching conversation files:', err);
@@ -1505,7 +1363,6 @@ const UserChatScreen = ({ navigation, route }) => {
     const currentConversationId = route.params?.conversationId;
     
     if (!currentConversationId) {
-      console.log('❌ No conversation ID found');
       Toast.show({
         type: 'error',
         text1: 'Error',
@@ -1519,16 +1376,12 @@ const UserChatScreen = ({ navigation, route }) => {
     setIsLoadingSignatures(true);
     
     try {
-      console.log('🔄 Fetching signatures for conversation:', currentConversationId);
       const response = await getSignaturesOfConversation(currentConversationId);
       
       if (response && Array.isArray(response)) {
         setConversationSignatures(response);
-        console.log('✅ Signatures fetched successfully:', response.length, 'signatures');
-        console.log('📝 First signature data:', response[0]);
       } else {
         setConversationSignatures([]);
-        console.log('📭 No signatures found in conversation');
       }
     } catch (err) {
       console.error('❌ Error fetching conversation signatures:', err);
@@ -1546,16 +1399,11 @@ const UserChatScreen = ({ navigation, route }) => {
   };
 
   const handleSignatureCardTap = (signature) => {
-    console.log('📝 Signature card tapped:', signature);
-    console.log('📝 Requested by:', signature.requestedBy);
-    console.log('📝 Signature from:', signature.signatureFrom);
     setSelectedSignature(signature);
     setSignatureDetailModalVisible(true);
   };
 
   const handleFetchAllFiles = () => {
-    console.log('📁 Received fetchAllFiles event in UserChatScreen');
-    console.log('📁 Setting filesModalVisible to true');
     setFilesModalVisible(true);
     fetchConversationFiles();
   };
@@ -1564,8 +1412,6 @@ const UserChatScreen = ({ navigation, route }) => {
     try {
       const cachedMessages = getAllMessagesAscending(db, conversationId);
       cachedMessages.forEach((msg, index) => {
-        console.log(`📁 [OFFLINE CACHE] Message ${index + 1} (full payload below):`);
-        console.log(JSON.stringify(msg, null, 2));
       });
 
       fetchMessagesFromSQLite();
@@ -1590,34 +1436,26 @@ const UserChatScreen = ({ navigation, route }) => {
 
   // Added guard to prevent automatic fetching during offline-to-online transition
   const handleFetchAllSignatures = () => {
-    console.log('📝 Received fetchSignatures event in UserChatScreen');
-    console.log('📝 Setting signaturesModalVisible to true');
     setSignaturesModalVisible(true);
     fetchConversationSignatures();
   };
 
   useEffect(() => {
-    console.log('🔌 Setting up fetchAllFiles event listener');
     // Listen for fetchAllFiles event
     appEmitter.on('fetchAllFiles', handleFetchAllFiles);
-    console.log('✅ Event listener set up successfully');
     
     // Cleanup listener on unmount
     return () => {
-      console.log('🔌 Cleaning up fetchAllFiles event listener');
       appEmitter.off('fetchAllFiles', handleFetchAllFiles);
     };
   }, []);
 
   useEffect(() => {
-    console.log('🔌 Setting up fetchSignatures event listener');
     // Listen for fetchSignatures event
     appEmitter.on('fetchSignatures', handleFetchAllSignatures);
-    console.log('✅ Signatures event listener set up successfully');
     
     // Cleanup listener on unmount
     return () => {
-      console.log('🔌 Cleaning up fetchSignatures event listener');
       appEmitter.off('fetchSignatures', handleFetchAllSignatures);
     };
   }, []);
@@ -1626,41 +1464,32 @@ const UserChatScreen = ({ navigation, route }) => {
   // For existing conversations: use existing subscription or create new one
   useEffect(() => {
     if (!conversationId) {
-      console.log('⚠️ No conversation ID, skipping Pusher');
       return;
     }
 
     const channelName = `conversation-${conversationId}`;
     const signatureChannelName = `conversation-signature-${conversationId}`;
-    console.log('📡 [PUSHER] Setting up listener for:', channelName);
-    console.log('📡 [PUSHER] Setting up signature listener for:', signatureChannelName);
     
     // Always try to get or create the channel
     let channel = pusher.channel(channelName);
     let signatureChannel = pusher.channel(signatureChannelName);
     
     if (!channel) {
-      console.log('🆕 [PUSHER] Channel not found, subscribing now');
       channel = pusher.subscribe(channelName);
     } else {
-      console.log('✅ [PUSHER] Using existing channel');
     }
 
     if (!signatureChannel) {
-      console.log('🆕 [PUSHER] Signature channel not found, subscribing now');
       signatureChannel = pusher.subscribe(signatureChannelName);
     } else {
-      console.log('✅ [PUSHER] Using existing signature channel');
     }
 
     // Define message handler
     const handleNewMessage = async (data) => {
-      console.log('📨 [PUSHER] New message event received');
       const newMessage = data.message || data;
 
       // Basic validation
       if (!newMessage || !newMessage.id) {
-        console.log('❌ [PUSHER] Invalid message - missing ID');
         return;
       }
 
@@ -1668,7 +1497,6 @@ const UserChatScreen = ({ navigation, route }) => {
       try {
         const messageId = newMessage.id;
         await AsyncStorage.setItem('latestMessageId', messageId.toString());
-        console.log('💾 [ASYNCSTORAGE] Stored latest message ID:', messageId);
       } catch (error) {
         console.error('❌ [ASYNCSTORAGE] Failed to store message ID:', error);
       }
@@ -1677,33 +1505,7 @@ const UserChatScreen = ({ navigation, route }) => {
       const isSignatureMessage = !newMessage.content && newMessage.signature;
       
       // 🔍 COMPREHENSIVE SIGNATURE LOGGING
-      console.log('========================================');
-      console.log('📝 [PUSHER] FULL MESSAGE RESPONSE:');
-      console.log('========================================');
-      console.log('📨 Complete Message Object:', JSON.stringify(newMessage, null, 2));
-      console.log('----------------------------------------');
-      console.log('📝 Signature Data:', JSON.stringify(newMessage.signature, null, 2));
-      console.log('----------------------------------------');
-      console.log('📝 Signed By Info:', JSON.stringify(newMessage.signature?.signedBy, null, 2));
-      console.log('========================================');
       
-      console.log('📬 [PUSHER] Message details:', {
-        id: newMessage.id,
-        senderId: newMessage.sender?.id,
-        senderName: `${newMessage.sender?.first_name} ${newMessage.sender?.last_name}`.trim(),
-        content: newMessage.content ? `"${newMessage.content.substring(0, 30)}..."` : '(no content)',
-        hasFile: !!newMessage.fileUrl,
-        isSignatureMessage: isSignatureMessage,
-        signatureTitle: isSignatureMessage ? newMessage.signature?.title : 'N/A',
-        signatureStatus: isSignatureMessage ? newMessage.signature?.status : 'N/A',
-        signatureId: newMessage.signature?.id,
-        signatureFileUrl: newMessage.signature?.fileUrl,
-        signatureFileName: newMessage.signature?.fileName,
-        signatureFileSize: newMessage.signature?.fileSize,
-        signedById: newMessage.signature?.signedBy?.id,
-        signedByName: newMessage.signature?.signedBy?.name,
-        signedByEmail: newMessage.signature?.signedBy?.email
-      });
 
       // Add message to state
       setMessages((prevMessages) => {
@@ -1712,13 +1514,10 @@ const UserChatScreen = ({ navigation, route }) => {
         const existsById = messageIds.has(String(newMessage.id));
         
         if (existsById) {
-          console.log('⚠️ [PUSHER] Message already exists in chat (by ID) - skipping duplicate and updating signature if needed');
           
           // Check if this is a signature update and update the database
           if (newMessage.signature?.id) {
             try {
-              console.log('🔄 [PUSHER] Updating signature data in database for existing message');
-              console.log('🔍 [PUSHER] Updating signature ID:', newMessage.signature.id);
               
               // Log the values being stored
               const updateValues = {
@@ -1731,7 +1530,6 @@ const UserChatScreen = ({ navigation, route }) => {
                 signed_by_email: newMessage.signature?.signedBy?.email || null
               };
               
-              console.log('📊 [PUSHER] Values to be stored in database:', JSON.stringify(updateValues, null, 2));
               
               // Update by message ID first
               updateSignatureFields(db, newMessage.id, conversationId, {
@@ -1744,7 +1542,6 @@ const UserChatScreen = ({ navigation, route }) => {
                 signedByEmail: updateValues.signed_by_email || null,
               });
               
-              console.log('✅ [PUSHER] Updated message with ID:', newMessage.id);
               
               // Also update by signature_id to catch any messages with the same signature
               if (newMessage.signature?.id) {
@@ -1759,8 +1556,6 @@ const UserChatScreen = ({ navigation, route }) => {
                 });
               }
               
-              console.log('✅ [PUSHER] Updated signature with ID:', newMessage.signature.id);
-              console.log('✅ [PUSHER] Signature data updated in database for existing message');
             } catch (error) {
               console.error('❌ [PUSHER] Error updating signature in database:', error);
           }
@@ -1774,14 +1569,12 @@ const UserChatScreen = ({ navigation, route }) => {
           }
           
           // Message exists but no signature update - return early to prevent duplicate
-          console.log('⚠️ [PUSHER] Message already exists, no signature update needed - returning early');
           return prevMessages;
         }
 
         const isMyMessage = String(newMessage.sender?.id) === String(currentUserIdRef.current);
         
         if (isMyMessage) {
-          console.log('🔄 [PUSHER] This is my message - checking for pending message to replace');
           
           // Find pending message with same content and timestamp (within 30 seconds)
           const messageTime = new Date(newMessage.createdAt).getTime();
@@ -1801,7 +1594,6 @@ const UserChatScreen = ({ navigation, route }) => {
           });
           
           if (pendingMessageIndex !== -1) {
-            console.log('✅ [PUSHER] Found pending message to replace at index:', pendingMessageIndex);
             
             // Replace pending message with real message from Pusher
             const updatedMessages = [...prevMessages];
@@ -1811,8 +1603,6 @@ const UserChatScreen = ({ navigation, route }) => {
               createdAt: pendingMessage.createdAt, // Keep local timestamp (when message was created offline)
             };
             
-            console.log('🔄 [PUSHER] Replaced pending message with real message from server (preserved local timestamp)');
-            console.log('🔄 [PUSHER] Local timestamp:', pendingMessage.createdAt, 'Server timestamp:', newMessage.createdAt);
             
             // Store the last message ID in AsyncStorage
             const sortedMessages = sortMessagesByTime(updatedMessages);
@@ -1820,46 +1610,29 @@ const UserChatScreen = ({ navigation, route }) => {
             
             return sortedMessages; // Return early to prevent duplicate addition
           } else {
-            console.log('ℹ️ [PUSHER] No matching pending message found - will add as new message');
           }
         }
 
         // Show message to all users (including current user's own messages)
-        console.log('✅ [PUSHER] Adding message to chat from:', newMessage.sender?.first_name || 'Unknown');
-        console.log('👤 [PUSHER] Message sender ID:', newMessage.sender?.id, 'Current user ID:', currentUserIdRef.current);
 
         // Add new message from other user and sort by timestamp
         if (isSignatureMessage) {
-          console.log('✅ [PUSHER] Adding signature contract to chat from:', newMessage.sender?.first_name || 'Unknown');
         } else {
-          console.log('✅ [PUSHER] Adding message to chat from:', newMessage.sender?.first_name || 'Unknown');
         }
         
         // Messages from current user are already stored when sent offline
         const isMyOwnMessage = String(newMessage.sender?.id) === String(currentUserIdRef.current);
         
-        console.log('🔍 [PUSHER] Message ownership check:', {
-          messageSenderId: newMessage.sender?.id,
-          currentUserId: currentUserIdRef.current,
-          messageSenderIdString: String(newMessage.sender?.id),
-          currentUserIdString: String(currentUserIdRef.current),
-          isMyOwnMessage: isMyOwnMessage
-        });
         
         if (!isMyOwnMessage) {
           // Only store messages from other users
           try {
-            console.log('✅ [PUSHER] Saving message from other user to database');
-            console.log('🔍 [PUSHER] Signature data from newMessage:', newMessage.signature);
-            console.log('🔍 [PUSHER] Full newMessage:', JSON.stringify(newMessage, null, 2));
             
             // Debug: Check if signature columns exist in database
             try {
               const tableInfo = db.getAllSync(`PRAGMA table_info(messages_${conversationId})`);
               const signatureColumns = tableInfo.filter(col => col.name.startsWith('signature_'));
-              console.log('🔍 [PUSHER] Signature columns in database:', signatureColumns.map(col => col.name));
             } catch (e) {
-              console.log('❌ [PUSHER] Could not check table structure:', e);
             }
             
             const dataToStore = {
@@ -1887,16 +1660,6 @@ const UserChatScreen = ({ navigation, route }) => {
               signed_by_email: newMessage.signature?.signedBy?.email || null
             };
             
-            console.log('🔍 [PUSHER] Data to store:', {
-              conversation_id: dataToStore.conversation_id,
-              content: dataToStore.content,
-              sender_id: dataToStore.sender_id,
-              status: dataToStore.status,
-              signature_id: dataToStore.signature_id,
-              signature_status: dataToStore.signature_status,
-              signed_by_id: dataToStore.signed_by_id,
-              signed_by_name: dataToStore.signed_by_name
-            });
             
             // Check if message already exists (by ID or by signature_id)
             const existingMessage = messageExistsInSQLite(db, newMessage.id, conversationId);
@@ -1916,11 +1679,7 @@ const UserChatScreen = ({ navigation, route }) => {
             
             if (existingMessage || existingSignatureMessage) {
               // Message exists in database - UPDATE signature data if it's a signature message
-              console.log('ℹ️ [PUSHER] Message already exists in database (ID:', newMessage.id, ') - skipping insert');
               if (dataToStore.signature_id) {
-                console.log('🔄 [PUSHER] Message exists, updating signature data');
-                console.log('🔍 [PUSHER] Updating by message ID:', newMessage.id);
-                console.log('🔍 [PUSHER] Updating by signature ID:', dataToStore.signature_id);
                 
                 // Update by message ID
                 updateSignatureFields(db, newMessage.id, conversationId, {
@@ -1946,11 +1705,9 @@ const UserChatScreen = ({ navigation, route }) => {
                   });
                 }
                 
-                console.log('✅ [PUSHER] Signature data updated in database by both message ID and signature ID');
               }
             } else {
               // Message doesn't exist in database - INSERT new message
-              console.log('📝 [PUSHER] Inserting new message to database');
               // Convert dataToStore to MessageData format
               const messageData = {
                 id: newMessage.id,
@@ -1983,22 +1740,18 @@ const UserChatScreen = ({ navigation, route }) => {
                 } : null,
               };
               saveMessageToSQLite(db, messageData, conversationId, 'PUSHER-MESSAGE', true);
-              console.log('✅ Pusher message from other user saved to database');
             }
             
             // This prevents duplicates when message was already loaded from database or API
             const messageIdsSet = new Set(prevMessages.map(msg => String(msg.id)));
             if (messageIdsSet.has(String(newMessage.id))) {
-              console.log('⚠️ [PUSHER] Message already exists in UI (ID:', newMessage.id, ') - skipping UI update');
               return prevMessages; // Return early to prevent duplicate in UI
             }
           } catch (e) {
-            console.log('❌ Database save failed for Pusher message:', e);
           }
         } else {
           // CRITICAL FIX: Update pending messages from current user when Pusher delivers them
           try {
-            console.log('🔄 [PUSHER] This is my own message - checking for pending message to update in database');
             
             // Find any pending message with matching content and sender
             // We'll check timestamp difference in JavaScript for better reliability
@@ -2022,7 +1775,6 @@ const UserChatScreen = ({ navigation, route }) => {
               const pendingMsg = pendingMessages[0];
               const offlineMessageId = pendingMsg.id;
               
-              console.log(`🔄 [PUSHER] Found pending message with ID ${offlineMessageId} - replacing with server ID ${newMessage.id}`);
               
               // Delete old pending message
               deletePendingMessage(db, offlineMessageId, conversationId);
@@ -2056,7 +1808,6 @@ const UserChatScreen = ({ navigation, route }) => {
               };
               saveMessageToSQLite(db, serverMessageData, conversationId, 'PUSHER-OWN-MESSAGE', false);
               
-              console.log(`✅ [PUSHER] Replaced pending message (ID: ${offlineMessageId}) with server message (ID: ${newMessage.id})`);
             } else {
               // Check if server message already exists
               const existingMessage = getMessageFromSQLite(db, newMessage.id, conversationId);
@@ -2065,11 +1816,9 @@ const UserChatScreen = ({ navigation, route }) => {
                 // Just update status to 'sent' if it's not already
                 if (existingMessage.status !== 'sent') {
                   updateMessageStatus(db, newMessage.id, conversationId, 'sent');
-                  console.log(`✅ [PUSHER] Updated message status to 'sent' for ID: ${newMessage.id}`);
                 }
               } else {
                 // No pending message found and no server message - insert it
-                console.log('📝 [PUSHER] No pending message found - inserting new server message');
                 const serverMessageData2 = {
                   id: newMessage.id,
                   content: newMessage.content || null,
@@ -2097,7 +1846,6 @@ const UserChatScreen = ({ navigation, route }) => {
                   } : null,
                 };
                 saveMessageToSQLite(db, serverMessageData2, conversationId, 'PUSHER-OWN-MESSAGE-2', false);
-                console.log(`✅ [PUSHER] Inserted new server message with ID: ${newMessage.id}`);
               }
             }
           } catch (error) {
@@ -2111,7 +1859,6 @@ const UserChatScreen = ({ navigation, route }) => {
 
         // If duplicate, don't add
         if (isDuplicate) {
-          console.log('⚠️ [PUSHER] Duplicate message detected - not adding to list');
           return prevMessages;
         }
 
@@ -2127,12 +1874,10 @@ const UserChatScreen = ({ navigation, route }) => {
 
     // Define signature message handler
     const handleSignatureMessage = async (data) => {
-      console.log('📝 [PUSHER] Signature message event received');
       const rawSignatureMessage = data.message || data;
 
       // Basic validation
       if (!rawSignatureMessage || !rawSignatureMessage.id) {
-        console.log('❌ [PUSHER] Invalid signature message - missing ID');
         return;
       }
 
@@ -2140,7 +1885,6 @@ const UserChatScreen = ({ navigation, route }) => {
       try {
         const messageId = rawSignatureMessage.id;
         await AsyncStorage.setItem('latestMessageId', messageId.toString());
-        console.log('💾 [ASYNCSTORAGE] Stored latest signature message ID:', messageId);
       } catch (error) {
         console.error('❌ [ASYNCSTORAGE] Failed to store signature message ID:', error);
       }
@@ -2163,14 +1907,6 @@ const UserChatScreen = ({ navigation, route }) => {
       // Check if it's a signature message
       const isSignatureMessage = !signatureMessage.content && signatureMessage.signature;
       
-      console.log('📬 [PUSHER] Signature message details:', {
-        id: signatureMessage.id,
-        senderId: signatureMessage.sender?.id,
-        senderName: `${signatureMessage.sender?.first_name} ${signatureMessage.sender?.last_name}`.trim(),
-        hasSignature: !!signatureMessage.signature,
-        signatureTitle: signatureMessage.signature?.title,
-        signatureStatus: signatureMessage.signature?.status
-      });
 
       // Add message to state
       setMessages((prevMessages) => {
@@ -2179,7 +1915,6 @@ const UserChatScreen = ({ navigation, route }) => {
         const exists = prevMessages.some(msg => String(msg.id) === String(messageId));
         
         if (exists) {
-          console.log('⚠️ [PUSHER] Signature message already exists in chat - skipping duplicate (ID:', messageId, ')');
           return prevMessages;
         }
 
@@ -2191,7 +1926,6 @@ const UserChatScreen = ({ navigation, route }) => {
         const isMySignature = String(messageSenderId) === String(myUserId);
         
         if (isMySignature) {
-          console.log('🔄 [PUSHER] This is my signature - checking for pending signature to replace');
           
           // Find pending signature with same title and timestamp (within 60 seconds)
           // Also check if any message with this server ID already exists (was updated from offline)
@@ -2218,27 +1952,19 @@ const UserChatScreen = ({ navigation, route }) => {
           });
           
           if (pendingSignatureIndex !== -1) {
-            console.log('✅ [PUSHER] Found pending signature to replace at index:', pendingSignatureIndex);
-            console.log(`🔄 [PUSHER] Replacing message ID ${prevMessages[pendingSignatureIndex].id} with server ID ${messageId}`);
             
             // Replace pending signature with real signature from Pusher
             const updatedMessages = [...prevMessages];
             updatedMessages[pendingSignatureIndex] = signatureMessage;
             
-            console.log('🔄 [PUSHER] Replaced pending signature with real signature from server');
             return sortMessagesByTime(updatedMessages);
           } else {
-            console.log('ℹ️ [PUSHER] No matching pending signature found - adding as new signature');
           }
         }
 
         // Show signature contract to everyone (including the creator)
-        console.log('✅ [PUSHER] Adding signature contract to chat from:', signatureMessage.sender?.first_name || 'Unknown');
-        console.log('👤 [PUSHER] Message sender ID:', messageSenderId, 'Current user ID:', myUserId);
-        console.log('📋 [PUSHER] Normalized signature message structure:', JSON.stringify(signatureMessage, null, 2));
         
         try {
-          console.log('📝 [PUSHER] Storing signature message in database');
           
           const signatureDataToStore = {
             conversation_id: signatureMessage.conversationId || conversationId,
@@ -2265,12 +1991,6 @@ const UserChatScreen = ({ navigation, route }) => {
             signed_by_email: signatureMessage.signedBy?.email || null
           };
           
-          console.log('📝 [PUSHER] Signature data to store:', {
-            conversation_id: signatureDataToStore.conversation_id,
-            signature_id: signatureDataToStore.signature_id,
-            signature_title: signatureDataToStore.signature_title,
-            signature_status: signatureDataToStore.signature_status
-          });
           
           const signatureMessageData = {
             id: signatureMessage.messageId || signatureMessage.id,
@@ -2304,7 +2024,6 @@ const UserChatScreen = ({ navigation, route }) => {
           };
           saveMessageToSQLite(db, signatureMessageData, conversationId, 'PUSHER-SIGNATURE', false);
           
-          console.log('✅ [PUSHER] Signature message stored in database');
           
         } catch (error) {
           console.error('❌ [PUSHER] Error storing signature message in database:', error);
@@ -2322,26 +2041,12 @@ const UserChatScreen = ({ navigation, route }) => {
 
     // Define signature file upload handler
     const handleSignatureFileUpload = (data) => {
-      console.log('📁 [PUSHER] Signature file upload event received:');
-      console.log('📁 [PUSHER] Full response data:', JSON.stringify(data, null, 2));
       
       const { signatureId, fileUrl, status, fileName, fileSize, signedBy, createdAt } = data;
       
       if (!signatureId || !fileUrl) {
-        console.log('❌ [PUSHER] Invalid signature file upload - missing signatureId or fileUrl');
         return;
       }
-
-      console.log('📬 [PUSHER] Signature file upload details:', {
-        signatureId,
-        fileUrl,
-        status,
-        fileName,
-        fileSize,
-        signedBy: signedBy?.name || signedBy,
-        createdAt,
-        fullSignedBy: signedBy
-      });
 
       // Extract signedBy information
       const signedById = signedBy?.id || null;
@@ -2352,10 +2057,8 @@ const UserChatScreen = ({ navigation, route }) => {
       setMessages((prevMessages) => {
         return prevMessages.map(msg => {
           if (msg.signature && msg.signature.id === signatureId) {
-            console.log('✅ [PUSHER] Updating signature with file URL for signature ID:', signatureId);
             
             try {
-              console.log('📝 [PUSHER] Updating signature in database for ID:', signatureId);
               
               updateSignatureFieldsBySignatureId(db, signatureId, conversationId, {
                 status: status || 'signed',
@@ -2367,7 +2070,6 @@ const UserChatScreen = ({ navigation, route }) => {
                 signedByEmail: signedByEmail || null,
               });
               
-              console.log('✅ [PUSHER] Signature updated in database with all fields');
               
             } catch (error) {
               console.error('❌ [PUSHER] Error updating signature in database:', error);
@@ -2394,15 +2096,10 @@ const UserChatScreen = ({ navigation, route }) => {
     channel.bind('new-message', handleNewMessage);
     signatureChannel.bind('message-with-signature', handleSignatureMessage);
     signatureChannel.bind('signature-file-uploaded', handleSignatureFileUpload);
-    console.log('✅ [PUSHER] Listening for new messages on:', channelName);
-    console.log('✅ [PUSHER] Listening for signature messages on:', signatureChannelName);
-    console.log('✅ [PUSHER] Listening for signature file uploads on:', signatureChannelName);
 
     // Cleanup: Only unbind our listeners, don't unsubscribe
     // Let ChatScreen manage subscriptions
     return () => {
-      console.log('🔌 [PUSHER] Unbinding listeners from:', channelName);
-      console.log('🔌 [PUSHER] Unbinding signature listeners from:', signatureChannelName);
       channel.unbind('new-message', handleNewMessage);
       signatureChannel.unbind('message-with-signature', handleSignatureMessage);
       signatureChannel.unbind('signature-file-uploaded', handleSignatureFileUpload);
@@ -2425,7 +2122,6 @@ const UserChatScreen = ({ navigation, route }) => {
 
   const checkTablesInDatabase = () => {
     try {
-      console.log('🔍 Checking what tables exist in SQLite database...');
       
       // Query to get all table names
       const tables = db.getAllSync(`
@@ -2434,30 +2130,20 @@ const UserChatScreen = ({ navigation, route }) => {
         ORDER BY name
       `);
       
-      console.log('=== TABLES IN DATABASE ===');
-      console.log('Total tables found:', tables.length);
       
       if (tables.length === 0) {
-        console.log('📭 No user tables found in database');
       } else {
         tables.forEach((table, index) => {
-          console.log(`Table ${index + 1}:`, table.name);
           
           // Check how many records are in each table
           try {
             const count = db.getFirstSync(`SELECT COUNT(*) as count FROM ${table.name}`);
-            console.log(`  └─ Records in ${table.name}:`, count.count);
           } catch (error) {
-            console.log(`  └─ Error counting records in ${table.name}:`, error.message);
           }
         });
       }
       
       // Show database file location
-      console.log('📁 Database Location:');
-      console.log('  └─ File System Path:', FileSystem.documentDirectory + 'SQLite/');
-      console.log('  └─ Database Name: chat_*.db files');
-      console.log('=========================');
       
       return tables;
     } catch (error) {
@@ -2468,7 +2154,6 @@ const UserChatScreen = ({ navigation, route }) => {
 
   const deleteAllTables = () => {
     try {
-      console.log('🗑️ Deleting all tables from SQLite database...');
       
       // Get all table names first
       const tables = db.getAllSync(`
@@ -2477,24 +2162,17 @@ const UserChatScreen = ({ navigation, route }) => {
         ORDER BY name
       `);
       
-      console.log('=== DELETING TABLES ===');
-      console.log('Tables to delete:', tables.length);
       
       if (tables.length === 0) {
-        console.log('📭 No tables to delete');
       } else {
         tables.forEach((table, index) => {
           try {
             db.execSync(`DROP TABLE IF EXISTS ${table.name}`);
-            console.log(`✅ Deleted table ${index + 1}: ${table.name}`);
           } catch (error) {
-            console.log(`❌ Error deleting table ${table.name}:`, error.message);
           }
         });
       }
       
-      console.log('✅ All tables deleted successfully');
-      console.log('=========================');
       
     } catch (error) {
       console.error('❌ Error deleting tables:', error);
@@ -2503,46 +2181,16 @@ const UserChatScreen = ({ navigation, route }) => {
 
   const getAllMessagesFromDB = () => {
     try {
-      console.log('🔄 Getting all messages from database...');
-      console.log('✅ Database connection successful via context');
       
       // Get messages from database without clearing
       const messages = getAllMessagesFromSQLite(db, conversationId);
-      console.log('✅ Query executed successfully');
       
-      console.log('=== ALL MESSAGES FROM DATABASE ===');
-      console.log('Total messages:', messages.length);
-      console.log('Table name:', `messages_${conversationId}`);
       
       if (messages.length === 0) {
-        console.log('📭 No messages found in database');
       } else {
         messages.forEach((msg, index) => {
-            console.log(`📨 Message ${index + 1}:`);
-            console.log('  └─ ID:', msg.id);
-            console.log('  └─ Content:', msg.content);
-            console.log('  └─ File Name:', msg.file_name);
-            console.log('  └─ File Type:', msg.file_type);
-            console.log('  └─ File URL:', msg.file_uri);
-            console.log('  └─ File Size:', msg.file_size);
-            console.log('  └─ Sender ID:', msg.sender_id);
-            console.log('  └─ Sender Name:', `${msg.sender_first_name} ${msg.sender_last_name}`);
-            console.log('  └─ Created At:', msg.created_at);
-            console.log('  └─ Status:', msg.status);
-            console.log('  └─ Signature ID:', msg.signature_id);
-            console.log('  └─ Signature Title:', msg.signature_title);
-            console.log('  └─ Signature Notes:', msg.signature_notes);
-            console.log('  └─ Signature Status:', msg.signature_status);
-            console.log('  └─ Signature File URL:', msg.signature_file_url);
-            console.log('  └─ Signature File Name:', msg.signature_file_name);
-            console.log('  └─ Signature File Size:', msg.signature_file_size);
-            console.log('  └─ Signed By ID:', msg.signed_by_id);
-            console.log('  └─ Signed By Name:', msg.signed_by_name);
-            console.log('  └─ Signed By Email:', msg.signed_by_email);
-            console.log('  └─ ---');
         });
       }
-      console.log('================================');
       
       return messages;
     } catch (error) {
@@ -2556,12 +2204,10 @@ const UserChatScreen = ({ navigation, route }) => {
 
   const sendPendingMessagesQueue = async () => {
     if (!conversationId) {
-      console.log('⚠️ [PENDING QUEUE] No conversation ID, skipping pending messages');
       return;
     }
 
     try {
-      console.log('📤 [PENDING QUEUE] Starting to send pending messages...');
       
       // Get all pending messages from database (only from current user)
       const allPendingMessages = getPendingMessages(db, conversationId, currentUserId);
@@ -2570,16 +2216,12 @@ const UserChatScreen = ({ navigation, route }) => {
       const pendingMessages = allPendingMessages.filter(msg => !msg.signature_id);
       
       if (pendingMessages.length === 0) {
-        console.log('ℹ️ [PENDING QUEUE] No pending regular messages found (signature messages are handled separately)');
         return;
       }
-
-      console.log(`📋 [PENDING QUEUE] Found ${pendingMessages.length} pending messages to send`);
 
       // Send messages one at a time
       for (let i = 0; i < pendingMessages.length; i++) {
         const pendingMsg = pendingMessages[i];
-        console.log(`📤 [PENDING QUEUE] Sending message ${i + 1}/${pendingMessages.length} (ID: ${pendingMsg.id})`);
 
         try {
           // Prepare file object if message has a file
@@ -2598,10 +2240,8 @@ const UserChatScreen = ({ navigation, route }) => {
                 type: pendingMsg.file_type || 'application/octet-stream',
                 mimeType: pendingMsg.file_type || 'application/octet-stream',
               };
-              console.log(`📎 [PENDING QUEUE] Prepared local file: ${pendingMsg.file_name}`);
             } else {
               // File is already a URL (might have been uploaded), skip file attachment
-              console.log(`ℹ️ [PENDING QUEUE] File is already a URL, skipping file attachment`);
             }
           }
 
@@ -2612,8 +2252,6 @@ const UserChatScreen = ({ navigation, route }) => {
             fileToSend,
             null // messageId - let server generate new ID
           );
-
-          console.log(`✅ [PENDING QUEUE] Message ${i + 1} sent successfully. Server ID: ${serverResponse?.id}`);
 
           // Replace local message with server response
           // Delete the old pending message
@@ -2647,7 +2285,6 @@ const UserChatScreen = ({ navigation, route }) => {
             );
             
             if (pendingIndex === -1) {
-              console.log(`⚠️ [PENDING QUEUE] Pending message ${pendingMsg.id} not found in UI, adding as new message`);
               // Message not found in UI, add it as new message
               const newMessage = {
                 id: serverResponse?.id || pendingMsg.id,
@@ -2673,7 +2310,6 @@ const UserChatScreen = ({ navigation, route }) => {
             }
             
             // Replace the pending message in place to maintain its position
-            console.log(`🔄 [PENDING QUEUE] Replacing pending message ${pendingMsg.id} with server message ${serverResponse?.id} at index ${pendingIndex}`);
             const updatedMessages = [...prevMessages];
             updatedMessages[pendingIndex] = {
               ...updatedMessages[pendingIndex],
@@ -2695,8 +2331,6 @@ const UserChatScreen = ({ navigation, route }) => {
             return sortedMessages;
           });
 
-          console.log(`✅ [PENDING QUEUE] Message ${i + 1} replaced with server data`);
-
           // Small delay between messages to avoid overwhelming the server
           if (i < pendingMessages.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 500));
@@ -2709,8 +2343,6 @@ const UserChatScreen = ({ navigation, route }) => {
         }
       }
 
-      console.log(`✅ [PENDING QUEUE] Finished sending pending messages queue`);
-
     } catch (error) {
       console.error('❌ [PENDING QUEUE] Error in sendPendingMessagesQueue:', error);
     }
@@ -2718,18 +2350,14 @@ const UserChatScreen = ({ navigation, route }) => {
 
   useEffect(() => {
     if (netInfo.isConnected === true) {
-      console.log('📡 Internet connection restored');
       
       // Load messages from SQLite database (fast loading)
-      console.log('📡 Loading messages from SQLite database after internet restoration');
       fetchMessages();
       
       // Send pending messages queue (one at a time)
-      console.log('📤 Sending pending messages queue...');
       sendPendingMessagesQueue();
       
       // Also fetch new messages from API (after last stored message ID)
-      console.log('📡 Fetching new messages from API after internet restoration');
       fetchNewMessagesAfterLast();
     }
   }, [netInfo.isConnected, conversationId]);
@@ -2741,17 +2369,13 @@ const UserChatScreen = ({ navigation, route }) => {
   }, []);
 
   const handleTestGetMessages = () => {
-    console.log('🧪 Test button pressed - getting all messages from database');
     getAllMessagesFromDB();
   };
 
   const handleTestOfflineMessages = () => {
-    console.log('🧪 Test offline messages button pressed');
     if (netInfo.isConnected === false) {
-      console.log('📱 Currently offline - loading messages from SQLite');
       fetchMessages();
     } else {
-      console.log('📡 Currently online - would load from API');
       Toast.show({
         type: 'info',
         text1: 'Online Mode',
@@ -2764,11 +2388,9 @@ const UserChatScreen = ({ navigation, route }) => {
 
   const clearDatabase = () => {
     try {
-      console.log('🗑️ Clearing database...');
       
       const success = clearAllMessagesFromSQLite(db, conversationId);
       if (success) {
-      console.log('✅ Database cleared successfully');
       } else {
         throw new Error('Failed to clear database');
       }
@@ -2777,7 +2399,6 @@ const UserChatScreen = ({ navigation, route }) => {
 
       // Clear AsyncStorage message ID as well
       AsyncStorage.removeItem('latestMessageId');
-      console.log('✅ AsyncStorage message ID cleared');
       
       // Show success message
       Toast.show({
@@ -2847,14 +2468,12 @@ const UserChatScreen = ({ navigation, route }) => {
 
   // Opens image in full-screen modal viewer
   const handleOpenImage = (imageUrl) => {
-    console.log('🖼️ Opening image in full view:', imageUrl);
     setSelectedImageUrl(imageUrl);
     setImageViewerVisible(true);
   };
 
   // Closes the full-screen image viewer modal
   const handleCloseImageViewer = () => {
-    console.log('❌ Closing image viewer');
     setImageViewerVisible(false);
     setSelectedImageUrl(null);
   };
@@ -2862,7 +2481,6 @@ const UserChatScreen = ({ navigation, route }) => {
   // Downloads image to device and opens share dialog (WhatsApp-style)
   const handleDownloadAndShareImage = async (imageUrl, fileName) => {
     try {
-      console.log('📥 Downloading image:', fileName || 'image');
 
       // Check if sharing is available on device
       const isAvailable = await Sharing.isAvailableAsync();
@@ -2878,7 +2496,6 @@ const UserChatScreen = ({ navigation, route }) => {
       // Download the image from URL
       const downloadResult = await FileSystem.downloadAsync(imageUrl, fileUri);
       
-      console.log('✅ Image downloaded to:', downloadResult.uri);
 
       // Share the downloaded image
       await Sharing.shareAsync(downloadResult.uri, {
@@ -2887,7 +2504,6 @@ const UserChatScreen = ({ navigation, route }) => {
         UTI: 'public.image',
       });
       
-      console.log('✅ Image shared successfully');
 
     } catch (error) {
       console.error('❌ Error downloading/sharing image:', error);
@@ -2898,7 +2514,6 @@ const UserChatScreen = ({ navigation, route }) => {
   // Downloads file to device and opens share dialog using expo-sharing
   const handleDownloadAndShareFile = async (fileUrl, fileName) => {
     try {
-      console.log('📥 Downloading file:', fileName);
 
       // Check if sharing is available on device
       const isAvailable = await Sharing.isAvailableAsync();
@@ -2913,7 +2528,6 @@ const UserChatScreen = ({ navigation, route }) => {
       // Download the file from URL
       const downloadResult = await FileSystem.downloadAsync(fileUrl, fileUri);
       
-      console.log('✅ File downloaded to:', downloadResult.uri);
 
       // Share the downloaded file
       await Sharing.shareAsync(downloadResult.uri, {
@@ -2922,7 +2536,6 @@ const UserChatScreen = ({ navigation, route }) => {
         UTI: 'public.item',
       });
       
-      console.log('✅ File shared successfully');
 
     } catch (error) {
       console.error('❌ Error downloading/sharing file:', error);
@@ -2933,7 +2546,6 @@ const UserChatScreen = ({ navigation, route }) => {
   // Opens file URL in browser or appropriate app
   const handleOpenFile = async (fileUrl, fileName) => {
     try {
-      console.log('📂 Opening file:', fileName);
       const canOpen = await Linking.canOpenURL(fileUrl);
       
       if (canOpen) {
@@ -2954,7 +2566,6 @@ const UserChatScreen = ({ navigation, route }) => {
 
   const handlePickImage = async () => {
     try {
-      console.log('📸 Opening image picker...');
       setAttachmentMenuVisible(false);
       
       // Request permission to access media library
@@ -2983,7 +2594,6 @@ const UserChatScreen = ({ navigation, route }) => {
           mimeType: 'image/jpeg',
         };
 
-        console.log('✅ Image selected:', fileToUpload.name);
         setSelectedFile(fileToUpload);
       }
     } catch (error) {
@@ -2994,7 +2604,6 @@ const UserChatScreen = ({ navigation, route }) => {
 
   const handlePickDocument = async () => {
     try {
-      console.log('📄 Opening document picker...');
       setAttachmentMenuVisible(false);
       
       // Launch document picker
@@ -3003,7 +2612,6 @@ const UserChatScreen = ({ navigation, route }) => {
         copyToCacheDirectory: true,
       });
 
-      console.log('Document picker result:', result);
  
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const document = result.assets[0];
@@ -3015,7 +2623,6 @@ const UserChatScreen = ({ navigation, route }) => {
           mimeType: document.mimeType || 'application/octet-stream',
         };
 
-        console.log('✅ Document selected:', fileToUpload.name);
         setSelectedFile(fileToUpload);
       }
     } catch (error) {
@@ -3026,7 +2633,6 @@ const UserChatScreen = ({ navigation, route }) => {
 
   // Removes the selected file before sending
   const handleRemoveFile = () => {
-    console.log('🗑️ Removing selected file');
     setSelectedFile(null);
   };
 
@@ -3035,11 +2641,6 @@ const UserChatScreen = ({ navigation, route }) => {
   };
 
   const handleOfflineSignatureRequest = async (signatureData) => {
-    console.log('📝 [OFFLINE] Storing signature request in database');
-    console.log('🔍 [DEBUG] handleOfflineSignatureRequest - received signatureData:', signatureData);
-    console.log('🔍 [DEBUG] handleOfflineSignatureRequest - dueDate value:', signatureData.dueDate);
-    console.log('🔍 [DEBUG] handleOfflineSignatureRequest - dueDate type:', typeof signatureData.dueDate);
-    console.log('🔍 [DEBUG] handleOfflineSignatureRequest - dueDate is null?', signatureData.dueDate === null || signatureData.dueDate === undefined);
     
     try {
       const signatureRequestData = {
@@ -3069,21 +2670,6 @@ const UserChatScreen = ({ navigation, route }) => {
         signed_by_email: signatureData.signedBy?.email || null
       };
       
-      console.log('📝 [OFFLINE] Inserting signature request with data:', {
-        conversationId: signatureRequestData.conversation_id,
-        title: signatureRequestData.signature_title,
-        notes: signatureRequestData.signature_notes,
-        dueDate: signatureRequestData.signature_due_date,
-        status: signatureRequestData.signature_status,
-        fileUrl: signatureRequestData.signature_file_url,
-        fileName: signatureRequestData.signature_file_name,
-        sender: {
-          id: signatureRequestData.sender_id,
-          name: `${signatureRequestData.sender_first_name} ${signatureRequestData.sender_last_name}`,
-          email: userInfo?.email || 'unknown@email.com'
-        },
-        createdAt: signatureRequestData.created_at
-      });
       
       const offlineMessageData = {
         content: signatureRequestData.content || null,
@@ -3116,7 +2702,6 @@ const UserChatScreen = ({ navigation, route }) => {
       };
       
       const offlineInsertRowId = insertOfflineMessage(db, offlineMessageData, conversationId);
-      console.log('✅ [OFFLINE] Signature request stored in database');
       let offlineMessageId = offlineInsertRowId ? Number(offlineInsertRowId) : 0;
       if (!Number.isFinite(offlineMessageId) || offlineMessageId <= 0) {
         console.warn('⚠️ [OFFLINE] Could not read AUTOINCREMENT id for signature request; defaulting to 0');
@@ -3159,7 +2744,6 @@ const UserChatScreen = ({ navigation, route }) => {
         const exists = prevMessages.some(msg => msg.id === uiMessage.id);
         
         if (exists) {
-          console.log('⚠️ [OFFLINE] Signature request already exists in chat - skipping duplicate (ID:', uiMessage.id, ')');
           return prevMessages;
         }
         
@@ -3167,9 +2751,7 @@ const UserChatScreen = ({ navigation, route }) => {
         const sortedMessages = sortMessagesByTime(updatedMessages);
         
         // DON'T store offline signature request ID in AsyncStorage - it hasn't been created on server yet
-        console.log('ℹ️ [OFFLINE] Not storing offline signature request ID in AsyncStorage - request not created on server yet');
         
-        console.log('✅ [OFFLINE] Signature request added to UI. Total messages:', sortedMessages.length);
         return sortedMessages;
       });
       
@@ -3202,7 +2784,6 @@ const UserChatScreen = ({ navigation, route }) => {
         
         try {
           const tableInfo = db.getAllSync(`PRAGMA table_info(messages_${conversationId})`);
-          console.log('🔍 [OFFLINE] Table structure:', tableInfo);
         } catch (schemaError) {
           console.error('❌ [OFFLINE] Could not get table info:', schemaError);
         }
@@ -3220,7 +2801,6 @@ const UserChatScreen = ({ navigation, route }) => {
 
   const handleSendMessage = async () => {
     if (!inputText.trim() && !selectedFile) {
-      console.log('Empty message and no file, not sending');
       return;
     }
 
@@ -3233,13 +2813,6 @@ const UserChatScreen = ({ navigation, route }) => {
     const messageText = inputText.trim();
     const fileToSend = selectedFile;
     
-    console.log('=== Sending Message ===');
-    console.log('Conversation ID:', conversationId);
-    console.log('Message content:', messageText || '(no text)');
-    console.log('File:', fileToSend ? fileToSend.name : '(no file)');
-    console.log('Internet connected:', netInfo.isConnected);
-    console.log('Current user ID:', currentUserId);
-    console.log('User info:', userInfo);
 
     // Clear input and file immediately for better UX
     setInputText('');
@@ -3250,14 +2823,6 @@ const UserChatScreen = ({ navigation, route }) => {
     // CHECK INTERNET CONNECTION
     if (netInfo.isConnected === false) {
       // OFFLINE: Store message in SQLite database
-      console.log('📡 No internet - storing message in SQLite database');
-      console.log('🔍 [OFFLINE] Message data:', {
-        conversationId: conversationId,
-        messageText: messageText,
-        hasFile: !!fileToSend,
-        fileName: fileToSend?.name,
-        currentUserId: currentUserId
-      });
       
       try {
         // Create message object for database storage
@@ -3298,7 +2863,6 @@ const UserChatScreen = ({ navigation, route }) => {
         };
         
         const offlineInsertRowId = insertOfflineMessage(db, offlineMessageData, conversationId);
-        console.log('✅ Message stored in SQLite database');
         let offlineMessageId = offlineInsertRowId ? Number(offlineInsertRowId) : 0;
         if (!Number.isFinite(offlineMessageId)) {
 
@@ -3306,13 +2870,6 @@ const UserChatScreen = ({ navigation, route }) => {
           offlineMessageId = 0;
         }
         
-        console.log('✅ [OFFLINE] Message successfully saved with DB-managed ID:', {
-          id: offlineMessageId,
-          idType: typeof offlineMessageId,
-          content: messageText,
-          status: 'pending',
-          conversationId: conversationId
-        });
         
         // Create message object for UI display
         const uiMessage = {
@@ -3337,7 +2894,6 @@ const UserChatScreen = ({ navigation, route }) => {
           const exists = prevMessages.some(msg => msg.id === uiMessage.id);
           
           if (exists) {
-            console.log('⚠️ [OFFLINE] Message already exists in chat - skipping duplicate (ID:', uiMessage.id, ')');
             return prevMessages;
           }
           
@@ -3345,9 +2901,7 @@ const UserChatScreen = ({ navigation, route }) => {
           const sortedMessages = sortMessagesByTime(updatedMessages);
           
           // DON'T store offline message ID in AsyncStorage - it hasn't been created on server yet
-          console.log('ℹ️ [OFFLINE] Not storing offline message ID in AsyncStorage - message not created on server yet');
           
-          console.log('✅ [OFFLINE] Message added to UI. Total messages:', sortedMessages.length);
           return sortedMessages;
         });
         
@@ -3372,24 +2926,9 @@ const UserChatScreen = ({ navigation, route }) => {
     }
     
     // ONLINE: Send to API and store in database
-    console.log('📡 Internet connected - sending to API and storing in database');
-    console.log('🔍 [ONLINE] About to send message:', {
-      conversationId: conversationId,
-      messageText: messageText,
-      hasFile: !!fileToSend,
-      fileName: fileToSend?.name
-    });
 
     try {
-      console.log('📡 Sending message to API');
       const response = await sendMessage(conversationId, messageText, fileToSend);
-      console.log('✅ Message sent successfully:', response);
-      console.log('🔍 [ONLINE] API Response details:', {
-        responseType: typeof response,
-        responseKeys: response ? Object.keys(response) : 'No response',
-        hasSignature: !!response?.signature,
-        signatureData: response?.signature
-      });
       
       // Extract data from server response
       const serverMessageId = response?.id; // 1006
@@ -3401,16 +2940,8 @@ const UserChatScreen = ({ navigation, route }) => {
       const serverCreatedAt = response?.createdAt; // "2025-10-24T17:11:56.996Z"
       const serverSender = response?.sender; // { id: 3, first_name: "Shah", last_name: "Malik s" }
       
-      console.log('🆔 Server message ID:', serverMessageId);
-      console.log('🆔 Server message ID type:', typeof serverMessageId);
-      console.log('📋 Server content:', serverContent);
-      console.log('📁 Server file:', serverFileName);
-      console.log('📋 Full server response:', JSON.stringify(response, null, 2));
       
       // Debug: Check if message ID is being extracted correctly
-      console.log('🔍 Debug - response.id:', response?.id);
-      console.log('🔍 Debug - response.data?.id:', response?.data?.id);
-      console.log('🔍 Debug - response.message?.id:', response?.message?.id);
       
       // Store message in SQLite database with server response
       const localTimestamp = new Date().toISOString(); // Use local timestamp when message is sent
@@ -3446,9 +2977,6 @@ const UserChatScreen = ({ navigation, route }) => {
       };
       saveMessageToSQLite(db, serverMessageDataForStorage, conversationId, 'ONLINE-SEND', false);
       
-      console.log('✅ Message stored in SQLite database with server ID:', serverMessageId);
-      console.log('🔍 Debug - Stored messageData.server_message_id:', messageData.server_message_id);
-      console.log('🔍 Debug - Stored messageData.id (should be same):', messageData.id);
       
       // Add or update message in UI with 'sent' status
       setMessages(prevMessages => {
@@ -3470,13 +2998,6 @@ const UserChatScreen = ({ navigation, route }) => {
           
           if (isSameMessage) {
             foundPending = true;
-            console.log('🔄 Updating pending message status to sent:', {
-              content: prevMsg.content,
-              fileName: prevMsg.fileName,
-              oldStatus: prevMsg.status,
-              newStatus: 'sent',
-              serverId: serverMessageId
-            });
             
             return { 
               ...prevMsg, 
@@ -3498,7 +3019,6 @@ const UserChatScreen = ({ navigation, route }) => {
         // If no pending message was found, add the new message directly with 'sent' status
         // This ensures the message appears immediately when sent online
         if (!foundPending) {
-          console.log('✅ Adding new message to UI with sent status (optimistic update)');
           const newMessage = {
             id: serverMessageId,
             content: serverContent || messageText || null,
@@ -3535,7 +3055,6 @@ const UserChatScreen = ({ navigation, route }) => {
         return sortedMessages;
       });
       
-      console.log('✅ Message status updated to sent in UI');
       try {
         const conversationType = type || conversation?.type || "private";
         const isGroup = conversationType === 'group' || isGroupChat;
@@ -3553,9 +3072,7 @@ const UserChatScreen = ({ navigation, route }) => {
             conversationType: "group"
           };
           
-          console.log('🔔 Notification Body (Group):', JSON.stringify(notificationData, null, 2));
           await createMessageNotification(notificationData);
-          console.log('✅ Group message notification sent successfully');
         } else {
           // Private chat: Send notification to the other participant
           // Use sender name as fromUserName
@@ -3585,9 +3102,7 @@ const UserChatScreen = ({ navigation, route }) => {
               conversationType: "private"
             };
             
-            console.log('🔔 Sending private message notification:', notificationData);
             await createMessageNotification(notificationData);
-            console.log('✅ Private message notification sent successfully');
           }
         }
       } catch (notificationError) {
@@ -3652,17 +3167,12 @@ const UserChatScreen = ({ navigation, route }) => {
               const signatureStatus = item.signature?.status || item.status;
               const signatureUploadChannelName = `signature-${signatureId}`;
               
-              console.log('📡 [CONTRACT] Contract form displayed - Signature ID:', signatureId);
-              console.log('📡 [CONTRACT] Contract status:', signatureStatus);
               
               // Only subscribe to signature upload events for pending contracts
               if (signatureId && signatureStatus !== 'signed') {
-                console.log('📡 [CONTRACT] Contract is pending - subscribing to signature channel:', signatureUploadChannelName);
                 
                 const contractChannel = pusher.subscribe(signatureUploadChannelName);
                 contractChannel.bind('signature-file-uploaded', (data) => {
-                  console.log('🎯 [CONTRACT] Signature uploaded - updating contract for all users');
-                  console.log('🎯 [CONTRACT] Upload data:', JSON.stringify(data, null, 2));
                   
                   // Update the message for everyone
                   setMessages(prevMessages => 
@@ -3683,7 +3193,6 @@ const UserChatScreen = ({ navigation, route }) => {
                   );
                 });
               } else if (signatureStatus === 'signed') {
-                console.log('📡 [CONTRACT] Contract already signed - skipping signature channel subscription');
               }
               return (
                 <View>
@@ -3763,18 +3272,14 @@ const UserChatScreen = ({ navigation, route }) => {
                           onPress={() => {
                             // Get signature ID from the message
                             const signatureId = item.signature?.id || item.signatureId || item.id;
-                            console.log('🔍 [SIGNATURE] Signature ID for upload channel:', signatureId);
                             
                             // Subscribe to the signature-specific channel for file uploads
                             const signatureUploadChannelName = `signature-${signatureId}`;
-                            console.log('📡 [PUSHER] Subscribing to signature upload channel:', signatureUploadChannelName);
                             
                             const signatureUploadChannel = pusher.subscribe(signatureUploadChannelName);
                             
                             // Listen for signature file upload events
                             signatureUploadChannel.bind('signature-file-uploaded', (data) => {
-                              console.log('🎯 [PUSHER] Signature file uploaded for ID:', signatureId);
-                              console.log('🎯 [PUSHER] Upload data:', JSON.stringify(data, null, 2));
                               
                               // Update the message with the uploaded signature file
                               setMessages(prevMessages => 
@@ -3796,7 +3301,6 @@ const UserChatScreen = ({ navigation, route }) => {
                             });
                             
                             // Navigate to signature screen
-                            console.log('Navigating to signature screen for contract:', item.signature?.title || item.title);
                             navigation.navigate('SignatureScreen', {
                               signatureData: {
                                 title: item.signature?.title || item.title,
@@ -3806,24 +3310,14 @@ const UserChatScreen = ({ navigation, route }) => {
                               },
                               onSignatureComplete: async (signatureData) => {
                                 try {
-                                  console.log('Signature completed:', signatureData);
-                                  console.log('Signature image name:', signatureData?.fileName || signatureData?.name || 'Unknown');
-                                  console.log('Signature image type:', signatureData?.type || signatureData?.mimeType || 'Unknown');
-                                  console.log('Signature image size:', signatureData?.size || 'Unknown');
                                   
                                   // Call submitSignature API with contract ID
                                   const contractId = item.signature?.id || item.signatureId || item.id; // Use signature ID as contract ID
-                                  console.log('Submitting signature for contract ID:', contractId);
                                   
                                   const result = await submitSignature(contractId, signatureData);
-                                  console.log('✅ Signature submitted successfully:', result);
                                   
                                   // Update database with signature data from API response
                                   try {
-                                    console.log('🔄 [SIGNATURE] Updating database with API response');
-                                    console.log('🔍 [SIGNATURE] Original signature ID:', contractId);
-                                    console.log('🔍 [SIGNATURE] API response signature ID:', result.id);
-                                    console.log('🔍 [SIGNATURE] API response data:', JSON.stringify(result, null, 2));
                                     
                                     // Extract data from API response
                                     const apiSignatureData = {
@@ -3836,7 +3330,6 @@ const UserChatScreen = ({ navigation, route }) => {
                                       signed_by_email: result.signatureFrom?.email || null
                                     };
                                     
-                                    console.log('📊 [SIGNATURE] Data to update in database:', JSON.stringify(apiSignatureData, null, 2));
                                     
                                     // Update by original signature ID (contractId)
                                     updateSignatureFieldsBySignatureId(db, contractId, conversationId, {
@@ -3849,7 +3342,6 @@ const UserChatScreen = ({ navigation, route }) => {
                                       signedByEmail: apiSignatureData.signed_by_email || null,
                                     });
                                     
-                                    console.log('✅ [SIGNATURE] Database updated successfully');
                                   } catch (dbError) {
                                     console.error('❌ [SIGNATURE] Error updating database:', dbError);
                                   }
@@ -4469,7 +3961,6 @@ const UserChatScreen = ({ navigation, route }) => {
       <AllFilesModal
         visible={filesModalVisible}
         onClose={() => {
-          console.log('📁 Files modal closed');
           setFilesModalVisible(false);
         }}
         files={conversationFiles}
@@ -4501,7 +3992,6 @@ const UserChatScreen = ({ navigation, route }) => {
       <AllSignaturesModal
         visible={signaturesModalVisible}
         onClose={() => {
-          console.log('📝 Signatures modal closed');
           setSignaturesModalVisible(false);
         }}
         signatures={conversationSignatures}
@@ -4512,7 +4002,6 @@ const UserChatScreen = ({ navigation, route }) => {
       <SignatureDetailModal
         visible={signatureDetailModalVisible}
         onClose={() => {
-          console.log('📝 Signature detail modal closed');
           setSignatureDetailModalVisible(false);
           setSelectedSignature(null);
         }}
@@ -4525,13 +4014,11 @@ const UserChatScreen = ({ navigation, route }) => {
         onClose={() => setSignatureModalVisible(false)}
         conversationId={conversationId}
         onSuccess={(result) => {
-          console.log('✅ Signature request created successfully:', result);
           
           // Note: Database storage is handled by Pusher handler (handleSignatureMessage)
           // This callback only provides immediate feedback to user
           // The actual message will appear in chat via Pusher real-time update
           
-          console.log('📝 Signature request sent to server - waiting for Pusher update...');
         }}
         onOfflineRequest={handleOfflineSignatureRequest}
         recipientUserId={signatureRecipientUserId}

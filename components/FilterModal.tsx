@@ -69,7 +69,6 @@ const FilterModal = ({
     try {
       setLoadingEmployees(true);
       const data = await getEmployeesToAssignTask();
-      console.log("📋 Fetched employees:", data);
       setEmployees(data || []);
     } catch (error) {
       console.error("Error fetching employees:", error);
@@ -97,8 +96,6 @@ const FilterModal = ({
   });
 
   const handleEmployeeSelect = (employee) => {
-    console.log("🎯 Employee selected:", employee);
-    console.log("🎯 Employee email:", employee.email);
 
     setSelectedEmployee(employee);
     setShowEmployeePopup(false);
@@ -136,7 +133,6 @@ const FilterModal = ({
   };
 
   const handleApplyFilters = async () => {
-    console.log("Applying filters:", selectedFilters);
 
     const hasFilters =
       selectedFilters.createdAt ||
@@ -144,7 +140,6 @@ const FilterModal = ({
       selectedFilters.status;
 
     if (!hasFilters) {
-      console.log("No filters selected - calling clear filters instead");
       handleClearFilters();
       return;
     }
@@ -160,20 +155,12 @@ const FilterModal = ({
 
         if (filtersWithClosedTask.closedTask === true) {
           filtersWithClosedTask.createdAt = null;
-          console.log(
-            "🔒 Closed task selected - resetting date filter to avoid backend conflict"
-          );
         }
 
-        console.log(
-          "Calling filterTask service with filters:",
-          filtersWithClosedTask
-        );
         const filteredTasks = await filterTask(
           filtersWithClosedTask,
           projectId
         );
-        console.log("Filtered tasks received:", filteredTasks);
 
         onApplyFilters(filtersWithClosedTask, filteredTasks);
       } else {
@@ -284,7 +271,6 @@ const FilterModal = ({
                     onPress={async () => {
                       if (selectedFilters.status === "closed") return;
 
-                      console.log("🎯 assignedTo = others - toggling popup");
                       setSelectedFilters((prev) => ({ ...prev, assignedTo }));
 
                       if (!showEmployeePopup) {
@@ -380,10 +366,8 @@ const FilterModal = ({
                         return;
 
                       if (assignedTo === "assigned-to-me") {
-                        console.log("assignedTo = me");
                         setSelectedFilters((prev) => ({ ...prev, assignedTo }));
                       } else if (assignedTo === "unassigned") {
-                        console.log("unassigned = true");
                         setSelectedFilters((prev) => ({ ...prev, assignedTo }));
                       } else {
                         setSelectedFilters((prev) => ({ ...prev, assignedTo }));
@@ -473,11 +457,8 @@ const FilterModal = ({
                   if (selectedFilters.status === "closed") return;
 
                   if (createdAt === "created-at") {
-                    console.log("createdAt");
                   } else if (createdAt === "start-date") {
-                    console.log("startTime");
                   } else if (createdAt === "due-date") {
-                    console.log("endTime");
                   }
                   setSelectedFilters((prev) => ({ ...prev, createdAt }));
                 }}

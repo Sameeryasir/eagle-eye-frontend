@@ -1,4 +1,4 @@
-const DEFAULT_API = 'https://1339-203-99-184-85.ngrok-free.app';
+const DEFAULT_API = 'http://192.168.1.2:3000';
 
 const getApiUrl = (): string => {
   const candidates = [
@@ -18,8 +18,3 @@ const getApiUrl = (): string => {
 
 export const API_URL: string = getApiUrl();
 
-console.log('=== API Configuration Debug ===');
-console.log('- EXPO_PUBLIC_API_URL:', process.env.EXPO_PUBLIC_API_URL);
-console.log('- process.env.API_URL:', process.env.API_URL);
-console.log('- Final API_URL being used:', API_URL);
-console.log('===============================');

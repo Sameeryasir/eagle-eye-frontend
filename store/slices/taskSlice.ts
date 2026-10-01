@@ -153,7 +153,6 @@ export const assignTaskToUserAction = createAsyncThunk(
     try {
       const result = await assignTaskToUser(taskId, userId);
       
-      console.log('🔧 assignTaskToUserAction - API Response:', result);
       
       
       if (result && typeof result === 'object') {
@@ -504,7 +503,6 @@ const taskSlice = createSlice({
               assignedTo: result.assignedTo,
               assignedToUserId: result.assignedTo?.id || userId
             };
-            console.log('✅ Task assignment updated with complete user object:', result.assignedTo);
           } else {
             
             state.tasks[taskIndex] = {
@@ -512,7 +510,6 @@ const taskSlice = createSlice({
               assignedToUserId: userId,
               assignedTo: { id: userId } 
             };
-            console.log('⚠️ Task assignment updated with userId only (fallback):', userId);
           }
           
           

@@ -77,15 +77,12 @@ function ProjectAssignment({ navigation, route }) {
     try {
       // Get employee data with assigned projects directly from getUserById API
       const employeeData = await getUserById(employeeId);
-      console.log('Employee data received:', employeeData);
       setFetchedEmployee(employeeData);
       
       // Extract assigned projects directly from the API response
       if (employeeData?.assignedProjects) {
-        console.log('Found assignedProjects:', employeeData.assignedProjects);
         setFetchedAssignedProjects(employeeData.assignedProjects);
       } else {
-        console.log('No assignedProjects found for this employee');
         setFetchedAssignedProjects([]);
       }
     } catch (err) {
@@ -183,9 +180,7 @@ function ProjectAssignment({ navigation, route }) {
             fromUserName: currentUserName
           };
           
-          console.log(`🔔 CALLING API FOR PROJECT ASSIGNMENT NOTIFICATION (${project.name}):`, apiNotificationData);
           await projectAssignement(apiNotificationData);
-          console.log(`✅ API NOTIFICATION SENT SUCCESSFULLY for project: ${project.name}`);
         }
       } catch (apiError) {
         console.error('❌ Error sending API notification:', apiError);

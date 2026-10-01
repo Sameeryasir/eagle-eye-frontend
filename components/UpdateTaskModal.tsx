@@ -23,16 +23,14 @@ import ErrorDialog from "./ErrorDialog";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import DropDownPicker from "react-native-dropdown-picker";
 
-import { useDispatch, useSelector } from "react-redux";
-import {
-  updateExistingTask,
-  selectTaskUpdating,
-  selectTaskUpdateError,
-} from "../store/slices/taskSlice";
+import { useDispatch } from "react-redux";
 import { addNotification } from "../store/slices/notificationSlice";
-import { getEmployeesToAssignTask } from "../services/employees/getEmployeesOfTheCompany";
 import { taskAssignement } from "../services/inAppNotification/taskAssignement";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  useTaskAssignees,
+  useUpdateTaskMutation,
+} from "../hooks/queries";
 
 export default function UpdateTaskModal({
   visible,
@@ -42,14 +40,13 @@ export default function UpdateTaskModal({
   projectName,
   onSuccess,
 }) {
-  console.log("🔍 UpdateTaskModal - Navigation Params Received:");
-  console.log("📱 Project ID:", projectId);
-  console.log("📝 Project Name:", projectName);
-  console.log("📋 Task:", task);
 
   const dispatch = useDispatch();
-  const updating = useSelector(selectTaskUpdating);
-  const updateError = useSelector(selectTaskUpdateError);
+  const updateMutation = useUpdateTaskMutation();
+  const updating = updateMutation.isPending;
+  const {
+    data: employeesData,
+  } = useTaskAssignees(visible);
 
   const [taskData, setTaskData] = useState({
     title: "",
@@ -65,7 +62,7 @@ export default function UpdateTaskModal({
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [employees, setEmployees] = useState([]);
+  const employees = Array.isArray(employeesData) ? employeesData : [];
   const [filteredEmployees, setFilteredEmployees] = useState([]);
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [showAssignedDropdown, setShowAssignedDropdown] = useState(false);
@@ -128,22 +125,10 @@ export default function UpdateTaskModal({
   }, [task]);
 
   useEffect(() => {
-    if (visible) {
-      loadEmployees();
-    }
-  }, [visible]);
-
-  const loadEmployees = async () => {
-    try {
-      const response = await getEmployeesToAssignTask();
-      if (response && Array.isArray(response)) {
-        setEmployees(response);
-        setFilteredEmployees(response);
-      }
-    } catch (error) {
-      console.error("Error loading employees:", error);
-    }
-  };
+    if (!visible) return;
+    setFilteredEmployees(employees);
+    setSearchQuery("");
+  }, [visible, employees]);
 
   const showErrorDialog = (title, message) => {
     setErrorDialog({
@@ -427,12 +412,12 @@ export default function UpdateTaskModal({
     taskPayload.projectId = projectId;
 
     try {
-      const result = await dispatch(
-        updateExistingTask({ taskId: task.id, taskData: taskPayload })
-      );
+      const updatedTask = await updateMutation.mutateAsync({
+        taskId: task.id,
+        taskData: taskPayload,
+      });
 
-      if (updateExistingTask.fulfilled.match(result)) {
-        if (originalTask.assignedTo?.id !== currentTask.assignedTo?.id) {
+      if (originalTask.assignedTo?.id !== currentTask.assignedTo?.id) {
           try {
             const currentUserId = await AsyncStorage.getItem("userId");
             const currentUserFirstName =
@@ -456,10 +441,6 @@ export default function UpdateTaskModal({
                 priority: currentTask.priority || "medium",
               };
 
-              console.log(
-                "🔔 NEW ASSIGNEE NOTIFICATION BEING STORED IN REDUX:",
-                newAssigneeNotification
-              );
               dispatch(addNotification(newAssigneeNotification));
 
               try {
@@ -474,12 +455,7 @@ export default function UpdateTaskModal({
                   taskName: task.title,
                 };
 
-                console.log(
-                  "🔔 CALLING API FOR NEW ASSIGNEE NOTIFI-CATION:",
-                  apiNotificationData
-                );
                 await taskAssignement(apiNotificationData);
-                console.log("✅ API NOTIFICATION SENT SUCCESSFULLY");
               } catch (apiError) {
                 console.error("❌ Error sending API notification:", apiError);
               }
@@ -500,26 +476,20 @@ export default function UpdateTaskModal({
 
         setTimeout(() => {
           onClose();
-          if (onSuccess) onSuccess(result.payload);
+          if (onSuccess) onSuccess(updatedTask);
         }, 1000);
-      } else {
-        const errorMessage =
-          result.payload || "Failed to update task. Please try again.";
-        Toast.show({
-          type: "error",
-          text1: "Update Failed",
-          text2: errorMessage,
-          visibilityTime: 4000,
-          autoHide: true,
-          topOffset: 80,
-        });
-      }
     } catch (error) {
       console.error("Error updating task:", error);
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to update task. Please try again.";
       Toast.show({
         type: "error",
         text1: "Update Failed",
-        text2: "An unexpected error occurred",
+        text2: Array.isArray(errorMessage)
+          ? errorMessage.join(", ")
+          : String(errorMessage),
         visibilityTime: 4000,
         autoHide: true,
         topOffset: 80,

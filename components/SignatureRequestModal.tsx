@@ -81,42 +81,9 @@ const SignatureRequestModal = ({
         dueDate: dueDateString,
       };
 
-      console.log(
-        "🔍 [DEBUG] SignatureRequestModal - signatureData being sent:",
-        signatureData
-      );
-      console.log(
-        "🔍 [DEBUG] SignatureRequestModal - signatureDueDate value:",
-        signatureDueDate
-      );
-      console.log(
-        "🔍 [DEBUG] SignatureRequestModal - selectedDate:",
-        selectedDate
-      );
-      console.log(
-        "🔍 [DEBUG] SignatureRequestModal - dueDateString:",
-        dueDateString
-      );
-      console.log(
-        "🔍 [DEBUG] SignatureRequestModal - dueDate is null?",
-        dueDateString === null || dueDateString === undefined
-      );
-
-      console.log(
-        "📝 [SIGNATURE] Creating signature request with body:",
-        JSON.stringify(signatureData, null, 2)
-      );
-      console.log("📝 [SIGNATURE] Conversation ID:", conversationId);
-      console.log("📝 [SIGNATURE] Title:", signatureData.title);
-      console.log("📝 [SIGNATURE] Notes:", signatureData.notes);
-      console.log("📝 [SIGNATURE] Due Date:", signatureData.dueDate);
-
       const netInfo = await NetInfo.fetch();
 
       if (netInfo.isConnected === false) {
-        console.log(
-          "📝 [OFFLINE] User is offline - storing signature request offline"
-        );
 
         if (onOfflineRequest) {
           onOfflineRequest(signatureData);
@@ -135,19 +102,11 @@ const SignatureRequestModal = ({
         return;
       }
 
-      console.log(
-        "📡 [ONLINE] User is online - sending signature request to API"
-      );
       try {
         const result = await createSignature(conversationId, signatureData);
 
-        console.log("Signature request created successfully:", result);
-
         try {
           if (!recipientUserId) {
-            console.log(
-              "⚠️ [SIGNATURE] recipientUserId missing - skipping notification payload build"
-            );
           } else {
             const fromUserName =
               `${userInfo?.firstName || ""} ${userInfo?.lastName || ""}`.trim() ||
@@ -164,18 +123,7 @@ const SignatureRequestModal = ({
               conversationType: "private",
             };
 
-            console.log(
-              "🔔 [SIGNATURE] Sending notification for signature request:",
-              JSON.stringify(notificationData, null, 2)
-            );
-            console.log("📤 [SIGNATURE] Notification payload to DB:", {
-              ...notificationData,
-              endpoint: "/users-notifications/message",
-            });
             await createMessageNotification(notificationData);
-            console.log(
-              "✅ [SIGNATURE] Notification sent successfully for signature request"
-            );
           }
         } catch (notificationError) {
           console.error(

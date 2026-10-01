@@ -5,6 +5,4 @@ import { registerRootComponent } from 'expo';
 import App from './App';
 import './pusherClient';
 
-console.log('🚀 App initializing with Pusher...');
-
 registerRootComponent(App);

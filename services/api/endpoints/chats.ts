@@ -1,6 +1,6 @@
 import { apiGet, apiPost } from '../client';
 import { ApiRoutes } from '../routes';
-import { requireId, toNumberId, unwrapList } from '../normalize';
+import { requireId, toNumberId, unwrapData, unwrapList } from '../normalize';
 import type {
   ChatMessage,
   Conversation,
@@ -20,20 +20,24 @@ export const chatsApi = {
     ]);
   },
 
-  createConversation: (payload: {
+  createConversation: async (payload: {
     type?: string;
     participantIds: Id[];
-  }): Promise<Conversation> =>
-    apiPost(ApiRoutes.chat.conversations, {
+  }): Promise<Conversation> => {
+    const response = await apiPost(ApiRoutes.chat.conversations, {
       type: payload.type || 'private',
       participantIds: payload.participantIds,
-    }),
+    });
+    return unwrapData<Conversation>(response);
+  },
 
-  projectConversation: (projectId: Id): Promise<Conversation> =>
-    apiPost(
+  projectConversation: async (projectId: Id): Promise<Conversation> => {
+    const response = await apiPost(
       ApiRoutes.chat.projectConversation(requireId(projectId, 'Project ID')),
       {}
-    ),
+    );
+    return unwrapData<Conversation>(response);
+  },
 
   messages: (
     conversationId: Id,
@@ -65,7 +69,7 @@ export const chatsApi = {
       unwrapList<ChatMessage>(response, ['messages', 'data', 'items'])
     ),
 
-  sendMessage: (
+  sendMessage: async (
     conversationId: Id,
     content: string,
     file: { uri: string; name?: string; mimeType?: string } | null = null,
@@ -92,7 +96,8 @@ export const chatsApi = {
       if (messageId) requestBody.message_id = messageId;
     }
 
-    return apiPost(ApiRoutes.chat.messages, requestBody);
+    const response = await apiPost(ApiRoutes.chat.messages, requestBody);
+    return unwrapData<ChatMessage>(response);
   },
 
   typing: (conversationId: Id, isTypingStatus: boolean): Promise<unknown> =>
@@ -101,10 +106,14 @@ export const chatsApi = {
       isTyping: isTypingStatus,
     }),
 
-  files: (conversationId: Id): Promise<unknown> =>
-    apiGet(
-      ApiRoutes.chat.conversationFiles(requireId(conversationId, 'Conversation ID'))
-    ),
+  files: async (conversationId: Id): Promise<unknown> => {
+    const response = await apiGet(
+      ApiRoutes.chat.conversationFiles(
+        requireId(conversationId, 'Conversation ID')
+      )
+    );
+    return unwrapList(response, ['data', 'items', 'messages']);
+  },
 
   createSignature: (
     conversationId: Id,

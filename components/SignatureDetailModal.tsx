@@ -178,9 +178,7 @@ const SignatureDetailModal = ({
                                 source={{ uri: fileUrl }}
                                 className="w-full h-32 rounded-lg"
                                 resizeMode="contain"
-                                onError={() =>
-                                  console.log("Failed to load image:", fileUrl)
-                                }
+                                onError={() => {}}
                               />
                               <Text className="text-[10px] text-[#666] mt-2 text-center">
                                 {signature.fileName || "Image"}

@@ -17,7 +17,6 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from "react-native";
-import { useSelector, useDispatch } from 'react-redux';
 import Toast from 'react-native-toast-message';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
@@ -36,57 +35,32 @@ import {
   MenuTrigger,
 } from "react-native-popup-menu";
 
-// Import project selectors and actions from Redux store
-import { 
-  selectProjects, 
-  selectProjectLoading, 
-  selectProjectError,
-  fetchProjects,
-  refreshProjects 
-} from '../store/slices/projectSlice';
+import { useProjectsList } from '../hooks/queries';
 
 const searchBarClasses = `flex-row items-center rounded-2xl px-4 py-3 bg-[#F8FAFC] border border-[#EAECF0]`;
 
 const ViewAllLogScreen = ({ route, navigation }) => {
   const { logs, projectName } = route.params || [];
 
-  // Access Redux store for projects data instead of making API calls
-  const dispatch = useDispatch();
-  const projects = useSelector(selectProjects);
-  const projectsLoading = useSelector(selectProjectLoading);
-  const projectsError = useSelector(selectProjectError);
+  const {
+    data: projectsListData,
+    isLoading: projectsLoading,
+    error: projectsQueryError,
+    refetch: refetchProjects,
+  } = useProjectsList();
+  const projects = Array.isArray(projectsListData) ? projectsListData : [];
+  const projectsError = projectsQueryError
+    ? (projectsQueryError?.response?.data?.message || projectsQueryError?.message || null)
+    : null;
 
   // Debug: Log the received parameters from navigation
-  console.log("=== ViewAllLogScreen - Navigation Parameters Debug ===");
-  console.log("ViewAllLogScreen - All route params:", route.params);
-  console.log("ViewAllLogScreen - route.params keys:", route.params ? Object.keys(route.params) : 'no params');
-  console.log("ViewAllLogScreen - logs length:", logs ? logs.length : 'no logs');
-  console.log("ViewAllLogScreen - managerProjectId:", route.params?.managerProjectId);
-  console.log("ViewAllLogScreen - projectId:", route.params?.projectId);
-  console.log("ViewAllLogScreen - projectName:", route.params?.projectName);
-  console.log("ViewAllLogScreen - Projects from Redux store:", projects.length);
-  console.log("======================================================");
 
   // Debug: Log the received logs data to check createdAt field
-  console.log("ViewAllLogScreen - Received logs from route.params:", logs);
 
   // Debug: Show current date and time for reference
   const now = new Date();
-  console.log("ViewAllLogScreen - Current date/time:", {
-    fullDate: now.toISOString(),
-    dateOnly: now.toISOString().split('T')[0],
-    localDate: now.toLocaleDateString(),
-    localTime: now.toLocaleTimeString()
-  });
-  console.log("ViewAllLogScreen - Expected log createdAt format: '2025-08-28T10:44:55.453Z'");
 
   if (logs && logs.length > 0) {
-    console.log("ViewAllLogScreen - Sample log data:", {
-      id: logs[0].id,
-      createdAt: logs[0].createdAt,
-      date: logs[0].date,
-      description: logs[0].description
-    });
   }
 
   // State to store all logs from projects
@@ -115,23 +89,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     fetchUserRole();
   }, []);
 
-  // Fetch projects from Redux store instead of making direct API calls
-  React.useEffect(() => {
-    const loadProjectsFromStore = () => {
-      // If projects are not loaded yet, dispatch the fetch action
-      if (projects.length === 0 && !projectsLoading) {
-        console.log("ViewAllLogScreen - No projects in store, fetching...");
-        dispatch(fetchProjects());
-      } else if (projects.length > 0) {
-        console.log("ViewAllLogScreen - Projects already loaded from store:", projects.length);
-        generateProjectOptionsFromStore();
-      }
-    };
-
-    loadProjectsFromStore();
-  }, [projects.length, projectsLoading, dispatch]);
-
-  // Trigger project options generation when projects are loaded from Redux store
   React.useEffect(() => {
     if (projects.length > 0 && !projectsLoading) {
       generateProjectOptionsFromStore();
@@ -140,7 +97,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
 
   // Create project filter options from Redux store data instead of API
   const generateProjectOptionsFromStore = () => {
-    console.log("ViewAllLogScreen - Generating project options from Redux store");
     
     if (projects && projects.length > 0) {
       // Create project filter options
@@ -185,18 +141,11 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         }
       });
 
-      console.log("ViewAllLogScreen - Extracted all logs from projects:", allLogs.length);
       if (allLogs.length > 0) {
-        console.log("ViewAllLogScreen - Sample log from projects:", {
-          id: allLogs[0].id,
-          createdAt: allLogs[0].createdAt,
-          projectName: allLogs[0].projectName
-        });
       }
 
       setAllLogsFromProjects(allLogs);
     } else {
-      console.log("ViewAllLogScreen - No projects available in store");
       // Set default options if no projects
       setProjectFilterOptions([{ label: "All Logs", value: "All Logs" }]);
       setProjectsData([]);
@@ -270,7 +219,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         const currentProject = projectsData.find(p => p.id === currentProjectId);
         
         if (currentProject && currentProject.startDate) {
-          console.log(`generateDateOptions - Generating dates for All Logs based on current project: ${currentProject.name}`);
           
           // Generate daily slots from project start date to today
           const startDate = new Date(currentProject.startDate);
@@ -294,14 +242,10 @@ const ViewAllLogScreen = ({ route, navigation }) => {
             currentDate.setDate(currentDate.getDate() + 1);
           }
           
-          console.log(`generateDateOptions - Generated ${dateOptions.length} date options for All Logs based on project start date`);
-          console.log(`generateDateOptions - Project start date: ${startDate.toLocaleDateString()}, Today: ${today.toLocaleDateString()}`);
           return dateOptions;
         } else {
-          console.log("generateDateOptions - Current project not found or has no start date, using last 30 days");
         }
       } else {
-        console.log("generateDateOptions - No current project ID found, using last 30 days");
       }
 
       // Fallback: Generate daily slots for the last 30 days if no project context
@@ -323,29 +267,21 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         });
       }
 
-      console.log(`generateDateOptions - Generated ${dateOptions.length} date options for All Logs (fallback: last 30 days)`);
-      console.log(`generateDateOptions - Today's date string: ${getDateString(today)}`);
       return dateOptions;
     }
 
     // For specific project selection, get the project's start date and generate dates till today
     const selectedProject = projectsData.find(p => p.name === selectedProjectFilter);
     if (!selectedProject) {
-      console.log("generateDateOptions - Selected project not found");
       return dateOptions; // Return just "All Time" if project not found
     }
 
     if (!selectedProject.startDate) {
-      console.log("generateDateOptions - Project has no start date");
       return dateOptions; // Return just "All Time" if no start date
     }
 
     // Generate daily slots from project start date to today
     const startDate = new Date(selectedProject.startDate);
-
-    console.log(`generateDateOptions - Selected project: ${selectedProject.name}`);
-    console.log(`generateDateOptions - Project start date: ${startDate.toLocaleDateString()}`);
-    console.log(`generateDateOptions - Today: ${today.toLocaleDateString()}`);
 
     // Generate daily slots from project start date to today
     const currentDate = new Date(startDate);
@@ -377,8 +313,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    console.log(`generateDateOptions - Generated ${dateOptions.length} date options for project: ${selectedProjectFilter}`);
-    console.log(`generateDateOptions - Date range: ${startDate.toLocaleDateString()} to ${today.toLocaleDateString()}`);
     return dateOptions;
   };
 
@@ -403,15 +337,12 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       const currentProjectId = route.params?.managerProjectId || route.params?.projectId;
       
       if (!currentProjectId) {
-        console.log("getLogsForProject - No current project ID found for All Logs");
         return [];
       }
 
-      console.log(`getLogsForProject - Getting logs for current project context (ID: ${currentProjectId})`);
       
       try {
         const logsResponse = await getLogs(currentProjectId);
-        console.log(`getLogsForProject - API response for current project:`, logsResponse);
         
         // Check if response has logs array or if it's directly an array
         let logsArray = [];
@@ -420,7 +351,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         } else if (Array.isArray(logsResponse)) {
           logsArray = logsResponse;
         } else {
-          console.log(`getLogsForProject - No logs found in API response for current project:`, logsResponse);
           logsArray = [];
         }
 
@@ -447,10 +377,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
           return dateB - dateA;
         });
 
-        console.log(`getLogsForProject - Transformed ${sortedLogs.length} logs for current project context`);
         if (sortedLogs.length > 0) {
-          console.log(`getLogsForProject - Sample log createdAt: ${sortedLogs[0].createdAt}`);
-          console.log(`getLogsForProject - Sample log description: ${sortedLogs[0].description}`);
         }
         return sortedLogs;
 
@@ -463,17 +390,14 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     // Find the project by name in projectsData to get its actual ID
     const project = projectsData.find(p => p.name === projectName);
     if (!project) {
-      console.log(`getLogsForProject - Project "${projectName}" not found in projectsData`);
       return [];
     }
 
     const projectId = project.id;
-    console.log(`getLogsForProject - Found project "${projectName}" with ID: ${projectId}`);
 
     try {
       // Use the getLogs service with the actual project ID
       const logsResponse = await getLogs(projectId);
-      console.log(`getLogsForProject - API response for projectId ${projectId}:`, logsResponse);
 
       // Check if response has logs array or if it's directly an array
       let logsArray = [];
@@ -482,7 +406,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       } else if (Array.isArray(logsResponse)) {
         logsArray = logsResponse;
       } else {
-        console.log(`getLogsForProject - No logs found in API response for projectId ${projectId}:`, logsResponse);
         logsArray = [];
       }
 
@@ -498,10 +421,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         projectName: projectName, // Use the project name from the filter
       }));
 
-      console.log(`getLogsForProject - Transformed ${transformedLogs.length} logs for projectId: ${projectId}`);
       if (transformedLogs.length > 0) {
-        console.log(`getLogsForProject - Sample log createdAt: ${transformedLogs[0].createdAt}`);
-        console.log(`getLogsForProject - Sample log description: ${transformedLogs[0].description}`);
       }
       return transformedLogs;
 
@@ -536,7 +456,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   };
 
   const handleProjectFilterChange = async (filter) => {
-    console.log(`handleProjectFilterChange - Selected project: ${filter}`);
     setSelectedProjectFilter(filter);
     setShowProjectDropdown(false);
 
@@ -573,9 +492,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   const applyFilters = async (query, timeFilter, projectFilter) => {
     // First, get logs based on project filter
     let filtered = await getLogsForProject(projectFilter);
-    console.log(`applyFilters - Initial logs for project '${projectFilter}':`, filtered.length);
-    console.log(`applyFilters - Time filter: '${timeFilter}'`);
-    console.log(`applyFilters - Search query: '${query}'`);
 
     // Remove duplicate logs based on log ID (same log can appear in multiple projects)
     const uniqueLogs = [];
@@ -592,26 +508,16 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     });
 
     filtered = uniqueLogs;
-    console.log(`applyFilters - After removing duplicates:`, filtered.length);
 
     if (duplicateLogIds.length > 0) {
-      console.log(`applyFilters - Found ${duplicateLogIds.length} duplicate log IDs:`, duplicateLogIds);
     }
 
     // Debug: Show sample log data structure
     if (filtered.length > 0) {
-      console.log("applyFilters - Sample log structure:", {
-        id: filtered[0].id,
-        createdAt: filtered[0].createdAt,
-        date: filtered[0].date,
-        description: filtered[0].description
-      });
     }
 
     // Apply time filter
     if (timeFilter && timeFilter !== "All Time") {
-      console.log("Filtering by time:", timeFilter);
-      console.log("Available logs before time filtering:", filtered.length);
 
       // Fix: Use local date comparison to avoid timezone issues
       // Helper function to get local date string in YYYY-MM-DD format
@@ -634,12 +540,9 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         const logDateString = getLocalDateString(logCreatedAt);
         
         const matches = logDateString === filterDateString;
-        console.log(`applyFilters - Comparing: ${logDateString} === ${filterDateString} = ${matches}`);
-        console.log(`applyFilters - Log createdAt: ${logCreatedAt}, Local date: ${logDateString}`);
         return matches;
       });
 
-      console.log("Logs after time filtering:", filtered.length);
     }
 
     // Apply search filter
@@ -653,27 +556,16 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       );
     }
 
-    console.log(`applyFilters - Final filtered logs:`, filtered.length);
     if (filtered.length > 0) {
-      console.log(`applyFilters - Sample log dates:`, filtered.slice(0, 3).map(log => ({
-        id: log.id,
-        date: log.date,
-        createdAt: log.createdAt
-      })));
     }
     setFilteredLogs(filtered);
   };
 
   const handleUpdate = (log) => {
-    console.log("handleUpdate called with log:", log);
-    console.log("Current userRole:", userRole);
-    console.log("Log ID for update:", log.id);
 
     // Open update modal with selected log
     setSelectedLogForUpdate(log);
     setUpdateModalVisible(true);
-    console.log("Modal state set - updateModalVisible:", true);
-    console.log("Selected log:", log);
   };
 
   const handleUpdateLog = async (updateData) => {
@@ -685,7 +577,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       // Check if the new note is empty or just whitespace
       const newNote = updateData.note || '';
       if (!newNote.trim()) {
-        console.log("Note is empty, skipping update");
         Alert.alert("Error", "Please enter a note before updating");
         return;
       }
@@ -694,19 +585,12 @@ const ViewAllLogScreen = ({ route, navigation }) => {
       const currentNote = selectedLogForUpdate.description || '';
 
       if (currentNote.trim() === newNote.trim()) {
-        console.log("No changes detected, skipping update");
         Alert.alert("Info", "No changes to update");
         return;
       }
 
-      console.log("Updating log ID:", selectedLogForUpdate.id);
-      console.log("Current note:", currentNote);
-      console.log("New note:", newNote);
-
       // Call the update log API with only the note
       const response = await updateLogById(selectedLogForUpdate.id, { note: updateData.note });
-
-      console.log("Log updated successfully:", response);
 
       // Get current logs from route params or fallback to logs state
       const currentLogs = route.params?.logs || logs || [];
@@ -744,14 +628,11 @@ const ViewAllLogScreen = ({ route, navigation }) => {
     setRefreshing(true);
     setLoadingLogs(true);
     try {
-      console.log("ViewAllLogScreen - Starting refresh for user role:", userRole);
 
       // Use Redux refresh action instead of direct API calls
-      console.log("ViewAllLogScreen - Refreshing projects from Redux store...");
-      await dispatch(refreshProjects());
+      await refetchProjects();
       
       // Projects will be updated automatically via Redux state
-      console.log("ViewAllLogScreen - Projects refreshed via Redux:", projects.length);
 
       // Extract all logs from all projects
       const allLogs = [];
@@ -775,13 +656,10 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         }
       });
 
-      console.log("ViewAllLogScreen - Extracted logs from projects:", allLogs.length);
       setAllLogsFromProjects(allLogs);
 
       // Refresh logs from API based on current filter selection
       if (userRole === "Employee" || userRole === "Manager" || userRole === "Admin" || userRole === "Owner") {
-        console.log("ViewAllLogScreen - Refreshing logs from API for role:", userRole);
-        console.log("ViewAllLogScreen - Current project filter:", selectedProjectFilter);
         try {
           let sortedLogs = [];
 
@@ -791,7 +669,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
             const currentProjectId = route.params?.managerProjectId || route.params?.projectId;
             
             if (currentProjectId) {
-              console.log(`ViewAllLogScreen - Refreshing logs for current project context (ID: ${currentProjectId})`);
               try {
                 const { getLogs } = require("../services/log/getLogs");
                 const logsResponse = await getLogs(currentProjectId);
@@ -828,14 +705,12 @@ const ViewAllLogScreen = ({ route, navigation }) => {
                 sortedLogs = [];
               }
             } else {
-              console.log("ViewAllLogScreen - No current project ID found for All Logs refresh");
               sortedLogs = [];
             }
           } else {
             // For specific project, get logs for that project
             const selectedProject = projects.find(p => p.name === selectedProjectFilter);
             if (selectedProject) {
-              console.log(`ViewAllLogScreen - Refreshing logs for project: ${selectedProject.name} (ID: ${selectedProject.id})`);
               const { getLogs } = require("../services/log/getLogs");
               const logsResponse = await getLogs(selectedProject.id);
               
@@ -866,7 +741,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
           }
 
           // The logs are already fetched above based on current filter selection
-          console.log("ViewAllLogScreen - Refreshed logs from API:", sortedLogs.length);
 
           // Update the logs in route params so "All Logs" section gets refreshed
           if (route.params) {
@@ -915,7 +789,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
         }
       }
 
-      console.log("ViewAllLogScreen - Refresh completed successfully for role:", userRole);
     } catch (error) {
       console.error("ViewAllLogScreen - Error refreshing data:", error);
     } finally {
@@ -1003,9 +876,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   const ManagerLogCard = ({ log, projectName, selectedProjectFilter, userRole }) => (
     <TouchableOpacity
       onPress={() => {
-        console.log("ManagerLogCard - Log tapped:", log);
-        console.log("ManagerLogCard - Log ID:", log.id);
-        console.log("ManagerLogCard - Navigating to LogsDetail with logId:", log.id);
         navigation.navigate('LogsDetail', { logId: log.id });
       }}
       style={{
@@ -1229,9 +1099,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   const LogCard = ({ log, projectName, selectedProjectFilter, userRole }) => (
     <TouchableOpacity
       onPress={() => {
-        console.log("LogCard - Log tapped:", log);
-        console.log("LogCard - Log ID:", log.id);
-        console.log("LogCard - Navigating to LogsDetail with logId:", log.id);
         navigation.navigate('LogsDetail', { logId: log.id });
       }}
       style={{
@@ -1876,9 +1743,7 @@ const ViewAllLogScreen = ({ route, navigation }) => {
             // Employee should use the same project ID that was used to load the logs
             // This could come from managerProjectId or any other project context
             const projectId = route.params?.managerProjectId || route.params?.projectId || null;
-            console.log("ViewAllLogScreen - Employee FAB pressed, projectId:", projectId);
             const navigationParams = projectId ? { projectId: projectId } : {};
-            console.log("ViewAllLogScreen - Employee navigating to CreatLog with params:", navigationParams);
             navigation.navigate("CreatLog", navigationParams);
             return;
           }
@@ -1887,7 +1752,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
           if (userRole === "Manager") {
             // Get the managerProjectId passed from WidgetScreen
             const managerProjectId = route.params?.managerProjectId || null;
-            console.log("ViewAllLogScreen - Manager FAB pressed, managerProjectId:", managerProjectId);
 
             let navigationParams = {};
 
@@ -1896,7 +1760,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
               navigationParams.projectId = managerProjectId;
             }
 
-            console.log("ViewAllLogScreen - Navigating to CreatLog with params:", navigationParams);
             navigation.navigate("CreatLog", navigationParams);
             return;
           }

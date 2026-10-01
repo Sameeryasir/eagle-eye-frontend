@@ -175,14 +175,6 @@ const CreateEventModal = ({
   };
 
   const resetEventForm = () => {
-    console.log("=== Resetting Event Form ===");
-    console.log("Before reset - assignedTo:", eventForm.assignedTo);
-    console.log("Before reset - projects:", eventForm.projects);
-    console.log(
-      "Before reset - selectedEmployeeValues:",
-      selectedEmployeeValues
-    );
-    console.log("Before reset - selectedProjectValues:", selectedProjectValues);
 
     setEventForm({
       title: "",
@@ -200,8 +192,6 @@ const CreateEventModal = ({
     setSelectedProjectValues([]);
     setProjectDropdownOpen(false);
 
-    console.log("Form reset completed");
-    console.log("=== End Form Reset ===");
   };
 
   const showErrorDialog = (title, message) => {
@@ -247,19 +237,10 @@ const CreateEventModal = ({
             project: project,
           };
 
-          console.log("Formatted Project:", formattedProject);
-          console.log("Project ID:", project.id);
-          console.log("Project Name:", project.name || project.title);
-
           return formattedProject;
         });
 
-        console.log("=== Projects Loaded Successfully ===");
-        console.log("All Formatted Projects from API:", formattedProjects);
-        console.log("Total projects loaded:", formattedProjects.length);
-        console.log("Setting projects state...");
         setProjects(formattedProjects);
-        console.log("=== End Projects Loading ===");
 
         setTimeout(() => {
           setIsLoadingProjects(false);
@@ -302,15 +283,9 @@ const CreateEventModal = ({
             employee: employee,
           };
 
-          console.log("Formatted Employee:", formattedEmployee);
-          console.log("Employee Email:", employee.email);
-          console.log("Employee ID:", employee.id);
-
           return formattedEmployee;
         });
 
-        console.log("All Formatted Employees from API:", formattedEmployees);
-        console.log("Total employees loaded:", formattedEmployees.length);
         setEmployees(formattedEmployees);
 
         setTimeout(() => {
@@ -332,52 +307,37 @@ const CreateEventModal = ({
   };
 
   const handleProjectCheckboxChange = (isChecked) => {
-    console.log("Project checkbox changed to:", isChecked);
     handleEventFormChange("isProject", isChecked);
 
     if (isChecked) {
-      console.log(
-        "Project checkbox is checked - fetching employees and clearing projects"
-      );
       fetchEmployees();
 
       setSelectedProjectValues([]);
       handleEventFormChange("projects", []);
     } else {
-      console.log("Project checkbox is unchecked - clearing employees");
       setSelectedEmployeeValues([]);
       handleEventFormChange("assignedTo", []);
     }
   };
 
   const handleProjectSelection = (values) => {
-    console.log("=== handleProjectSelection called ===");
-    console.log("Values received:", values);
-    console.log("Available projects:", projects);
 
     setSelectedProjectValues(values);
 
     const selectedProjects = projects
       .filter((proj) => values.includes(proj.value))
       .map((proj) => proj.project);
-    console.log("Found selected projects:", selectedProjects);
 
     handleEventFormChange("projects", selectedProjects);
 
     if (values.length > 0) {
       setSelectedEmployeeValues([]);
       handleEventFormChange("assignedTo", []);
-      console.log("Cleared employee selection due to project selection");
     }
 
-    console.log("Updated form with projects:", selectedProjects);
-    console.log("=== End handleProjectSelection ===");
   };
 
   const handleEmployeeSelection = (values) => {
-    console.log("=== Employee Selection Debug ===");
-    console.log("Selected values:", values);
-    console.log("Available employees:", employees);
 
     setSelectedEmployeeValues(values);
 
@@ -385,21 +345,13 @@ const CreateEventModal = ({
       .filter((emp) => values.includes(emp.value))
       .map((emp) => emp.employee);
 
-    console.log("Selected employee objects:", selectedEmployees);
-    console.log(
-      "Employee IDs being stored:",
-      selectedEmployees.map((emp) => emp.id)
-    );
-
     handleEventFormChange("assignedTo", selectedEmployees);
 
     if (values.length > 0) {
       setSelectedProjectValues([]);
       handleEventFormChange("projects", []);
-      console.log("Cleared project selection due to employee selection");
     }
 
-    console.log("=== End Employee Selection Debug ===");
   };
 
   const handleStartDateChange = (event, selectedDate) => {
@@ -504,10 +456,6 @@ const CreateEventModal = ({
   };
 
   const handleCreateEvent = async () => {
-    console.log("=== handleCreateEvent called ===");
-    console.log("Event form data:", eventForm);
-    console.log("Start DateTime:", startDateTime);
-    console.log("End DateTime:", endDateTime);
 
     if (!eventForm.title.trim()) {
       showErrorDialog("Error", "Please enter a title for the event");
@@ -579,18 +527,15 @@ const CreateEventModal = ({
         eventForm.assignedTo.length > 0
       ) {
         assignedToIds = eventForm.assignedTo.map((emp) => emp.id);
-        console.log("Sending EMPLOYEE IDs to API (assignedTo):", assignedToIds);
       } else if (
         !eventForm.isProject &&
         eventForm.projects &&
         eventForm.projects.length > 0
       ) {
         projectIds = eventForm.projects.map((proj) => proj.id);
-        console.log("Sending PROJECT IDs to API (projects):", projectIds);
       } else {
         assignedToIds = [];
         projectIds = [];
-        console.log("No assignments - sending empty arrays to API");
       }
 
       const formatWithTimezone = (date) => {
@@ -624,53 +569,9 @@ const CreateEventModal = ({
         projects: projectIds,
       };
 
-      console.log("=== Event Creation Debug (Timezone-Aware) ===");
-      console.log("Selected Date:", selectedDate);
-      console.log("Start DateTime:", startDateTime.toLocaleString());
-      console.log("End DateTime:", endDateTime.toLocaleString());
-      console.log("Local Start Date:", localStartDate.toLocaleDateString());
-      console.log("Event Date (YYYY-MM-DD):", eventDate);
-      console.log(
-        "--- TIMEZONE INFORMATION (Expo Localization) - DEBUG ONLY ---"
-      );
-      console.log("Timezone Name:", timezoneName);
-      console.log("Timezone Offset (Minutes):", debugTimezoneOffset);
-      console.log("--- LOCALIZATION INFORMATION - DEBUG ONLY ---");
-      console.log("Locale:", locale);
-      console.log("Locales:", locales);
-      console.log("Region:", Localization.region);
-      console.log("--- TIME INFORMATION - DEBUG ONLY ---");
-      console.log("Local Start Time:", startDateTime.toLocaleString());
-      console.log("Local End Time:", endDateTime.toLocaleString());
-      console.log("UTC Start Time:", eventData.startTime);
-      console.log("UTC End Time:", eventData.endTime);
-      console.log("--- UI STATE DEBUG ---");
-      console.log("Is Project:", eventForm.isProject);
-      console.log("AssignedTo (UI State):", eventForm.assignedTo);
-      console.log("Projects (UI State):", eventForm.projects);
-      console.log("Selected Employee Values:", selectedEmployeeValues);
-      console.log("Selected Project Values:", selectedProjectValues);
-      console.log("--- BACKEND DATA (Local Timezone Format) ---");
-      console.log("Event Data Being Sent:", eventData);
-      console.log("Start Time (Local):", eventData.startTime);
-      console.log("End Time (Local):", eventData.endTime);
-      console.log("AssignedTo Array (Employee IDs):", eventData.assignedTo);
-      console.log("Projects Array (Project IDs):", eventData.projects);
-      console.log(
-        "Assignment Type:",
-        eventForm.isProject ? "Employees" : "Projects"
-      );
-      console.log("Employee Count:", eventData.assignedTo.length);
-      console.log("Project Count:", eventData.projects.length);
-      console.log("=== End Event Creation Debug ===");
-
-      console.log("🚀 SENDING TO API:", JSON.stringify(eventData, null, 2));
-
       const response = await createEvent(eventData);
-      console.log("✅ API RESPONSE SUCCESS:", response);
 
       if (response) {
-        console.log("Event created successfully:", response);
 
         try {
           const currentUserId = await AsyncStorage.getItem("userId");
@@ -703,18 +604,8 @@ const CreateEventModal = ({
               fromUserName: currentUserName,
             };
 
-            console.log("🔔 CALLING API FOR EVENT ASSIGNMENT NOTIFICATION:");
-            console.log("📋 Event Form assignedTo:", eventForm.assignedTo);
-            console.log("📋 Extracted assignedToUserIds:", assignedToUserIds);
-            console.log("📋 Event ID from response:", eventId);
-            console.log("📋 Full notification data:", apiNotificationData);
-
             await eventAssignement(apiNotificationData);
-            console.log("✅ API EVENT NOTIFICATION SENT SUCCESSFULLY");
           } else {
-            console.log(
-              "⚠️ No employees assigned to event, skipping notification"
-            );
           }
         } catch (apiError) {
           console.error("❌ Error sending API event notification:", apiError);
@@ -918,7 +809,6 @@ const CreateEventModal = ({
                                 if (isAllSelected) {
                                   setSelectedProjectValues([]);
                                   handleEventFormChange("projects", []);
-                                  console.log("Unselected all projects");
                                 } else {
                                   setSelectedProjectValues(allProjectIds);
                                   const allProjects = projects.map(
@@ -927,10 +817,6 @@ const CreateEventModal = ({
                                   handleEventFormChange(
                                     "projects",
                                     allProjects
-                                  );
-                                  console.log(
-                                    "Selected all projects:",
-                                    allProjectIds
                                   );
                                 }
                               }}
@@ -961,10 +847,6 @@ const CreateEventModal = ({
                             setProjectDropdownOpen(open);
                           }}
                           setValue={(callback) => {
-                            console.log(
-                              "Project dropdown setValue called with callback:",
-                              callback
-                            );
                           }}
                           setItems={setProjects}
                           multiple={true}
@@ -983,7 +865,6 @@ const CreateEventModal = ({
                             fontWeight: "600",
                           }}
                           onSelectItem={(items) => {
-                            console.log("Selected project items:", items);
                             const values = items.map((item) => item.value);
                             handleProjectSelection(values);
                           }}
@@ -1206,7 +1087,6 @@ const CreateEventModal = ({
                                 if (isAllSelected) {
                                   setSelectedEmployeeValues([]);
                                   handleEventFormChange("assignedTo", []);
-                                  console.log("Unselected all employees");
                                 } else {
                                   setSelectedEmployeeValues(allEmployeeIds);
                                   const allEmployees = employees.map(
@@ -1215,10 +1095,6 @@ const CreateEventModal = ({
                                   handleEventFormChange(
                                     "assignedTo",
                                     allEmployees
-                                  );
-                                  console.log(
-                                    "Selected all employees:",
-                                    allEmployeeIds
                                   );
                                 }
                               }}
@@ -1266,7 +1142,6 @@ const CreateEventModal = ({
                             fontWeight: "600",
                           }}
                           onSelectItem={(items) => {
-                            console.log("Selected items:", items);
                             const values = items.map((item) => item.value);
                             handleEmployeeSelection(values);
                           }}

@@ -34,7 +34,6 @@ const EventDetailsModal = ({ visible, onClose, event, onEventUpdated }) => {
           setIsLoadingRole(true);
           const role = await getUserRole();
           setUserRole(role);
-          console.log("EventDetailsModal - User role:", role);
         } catch (error) {
           console.error("Error fetching user role:", error);
           setUserRole(null);

@@ -47,18 +47,12 @@ const UpdateLogModal = ({ visible, onClose, log, onUpdate, userRole }) => {
     );
 
     if (visible && log) {
-      console.log("UpdateLogModal - Initializing with log:", log);
-      console.log("UpdateLogModal - log.description:", log.description);
-      console.log("UpdateLogModal - log.note:", log.note);
-      console.log("UpdateLogModal - log.images:", log.images);
 
       const noteText = log.description || log.note || "";
-      console.log("UpdateLogModal - Setting logNote to:", noteText);
       setLogNote(noteText);
       setExistingImages(log.images || []);
       setSelectedImage(null);
     } else if (!visible) {
-      console.log("UpdateLogModal - Modal closed, resetting form");
       setLogNote("");
       setExistingImages([]);
       setSelectedImage(null);
@@ -116,7 +110,6 @@ const UpdateLogModal = ({ visible, onClose, log, onUpdate, userRole }) => {
   };
 
   const removeNewImage = () => {
-    console.log("Removing selected image");
     setSelectedImage(null);
   };
 
@@ -146,23 +139,15 @@ const UpdateLogModal = ({ visible, onClose, log, onUpdate, userRole }) => {
         return;
       }
 
-      console.log("UpdateLogModal - Changes detected:", {
-        noteChanged: hasNoteChange,
-        newImage: hasNewImage,
-      });
-
       if (hasNoteChange) {
-        console.log("UpdateLogModal - Updating log note");
         const updateData = {
           note: newNote,
         };
 
         await updateLogById(log.id, updateData);
-        console.log("UpdateLogModal - Log note updated successfully");
       }
 
       if (hasNewImage) {
-        console.log(`UpdateLogModal - Handling upload for new image only`);
         await uploadNewImage(log.id);
       }
 
@@ -203,7 +188,6 @@ const UpdateLogModal = ({ visible, onClose, log, onUpdate, userRole }) => {
 
     try {
       if (selectedImage) {
-        console.log(`UpdateLogModal - Regular upload for new image`);
 
         const uploadResponse = await uploadImage(
           [
@@ -216,8 +200,6 @@ const UpdateLogModal = ({ visible, onClose, log, onUpdate, userRole }) => {
           { logId }
         );
 
-        console.log("UpdateLogModal - Upload response:", uploadResponse);
-
         const responseImages =
           uploadResponse.images ||
           uploadResponse.Image ||
@@ -227,10 +209,6 @@ const UpdateLogModal = ({ visible, onClose, log, onUpdate, userRole }) => {
         if (responseImages?.length > 0) {
           const successful = responseImages.filter((img) => !img.error);
           const failed = responseImages.filter((img) => img.error);
-
-          console.log(
-            `UpdateLogModal - Upload result: ${successful.length} successful, ${failed.length} failed`
-          );
 
           if (failed.length > 0) {
             Toast.show({
@@ -242,7 +220,6 @@ const UpdateLogModal = ({ visible, onClose, log, onUpdate, userRole }) => {
               topOffset: 80,
             });
           } else {
-            console.log("UpdateLogModal - Image uploaded successfully");
           }
         }
       }
@@ -320,14 +297,7 @@ const UpdateLogModal = ({ visible, onClose, log, onUpdate, userRole }) => {
     setNoChangesDialogVisible(false);
   };
 
-  console.log("UpdateLogModal render - visible:", visible);
-  console.log("UpdateLogModal render - log:", log);
-  console.log("UpdateLogModal render - userRole:", userRole);
-  console.log("UpdateLogModal render - logNote state:", logNote);
-  console.log("UpdateLogModal render - existingImages state:", existingImages);
-
   if (!log) {
-    console.log("UpdateLogModal - no log provided, returning null");
     return null;
   }
 

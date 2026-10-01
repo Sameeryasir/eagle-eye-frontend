@@ -29,9 +29,6 @@ try {
 export const requestNotificationPermissions = async () => {
   try {
     if (!pushSupportedInThisRuntime()) {
-      console.log(
-        'Skipping push permissions — Expo Go does not support remote push (use a dev build).',
-      );
       return false;
     }
 

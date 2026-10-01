@@ -96,10 +96,6 @@ export default function AccountInfoScreen({ navigation }) {
         phone: userInfo.phone || '',
       };
       
-      console.log('Sending only changed fields:', updateData);
-      console.log('Full update data being sent to API:', JSON.stringify(updateData, null, 2));
-      console.log('Current userInfo state:', JSON.stringify(userInfo, null, 2));
-      console.log('Original userInfo state:', JSON.stringify(originalUserInfo, null, 2));
       
       await updateUserById(userId, updateData);
       

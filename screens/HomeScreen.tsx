@@ -67,15 +67,10 @@ function OverflowMenuRenderer({ style, children, layouts, ...other }) {
     </View>
   );
 }
-import { useSelector, useDispatch } from "react-redux";
 import {
-  fetchProjects,
-  refreshProjects,
-  deleteProject,
-  selectProjects,
-  selectProjectLoading,
-  selectProjectError,
-} from "../store/slices/projectSlice";
+  useProjectsList,
+  useDeleteProjectMutation,
+} from "../hooks/queries";
 import Sidebar from "../components/Sidebar";
 import HomeBottomNav from "../components/HomeBottomNav";
 import CreateProject from "../components/CreateProject";
@@ -149,13 +144,24 @@ function ProjectCardSkeleton() {
 }
 
 function HomeScreen({ navigation }) {
-  const dispatch = useDispatch();
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { userRole, userInfo } = useAuth();
-  const projects = useSelector(selectProjects);
-  const loading = useSelector(selectProjectLoading);
-  const error = useSelector(selectProjectError);
+
+  const {
+    data: projectsData,
+    isLoading: projectsLoading,
+    isFetching,
+    error: projectsError,
+    refetch: refetchProjects,
+  } = useProjectsList();
+  const deleteProjectMutation = useDeleteProjectMutation();
+
+  const projects = Array.isArray(projectsData) ? projectsData : [];
+  const loading = projectsLoading;
+  const error = projectsError
+    ? (projectsError?.response?.data?.message || projectsError?.message || "Failed to load projects")
+    : null;
 
   const [filteredProjects, setFilteredProjects] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -190,16 +196,8 @@ function HomeScreen({ navigation }) {
   const canManage = canCreate;
 
   useEffect(() => {
-    const loadProjects = async () => {
-      setIsLoading(true);
-      try {
-        await dispatch(fetchProjects());
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    loadProjects();
-  }, [dispatch]);
+    setIsLoading(projectsLoading && projects.length === 0);
+  }, [projectsLoading, projects.length]);
 
   useEffect(() => {
     if (searchTerm.trim() === "") {
@@ -248,8 +246,8 @@ function HomeScreen({ navigation }) {
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
-    dispatch(refreshProjects()).finally(() => setRefreshing(false));
-  }, [dispatch]);
+    refetchProjects().finally(() => setRefreshing(false));
+  }, [refetchProjects]);
 
   const formatDate = (dateString) => {
     if (!dateString) return "No start date";
@@ -288,18 +286,14 @@ function HomeScreen({ navigation }) {
     setProjectToDelete(null);
 
     try {
-      const resultAction = await dispatch(deleteProject(projectId));
-      if (deleteProject.fulfilled.match(resultAction)) {
-        Toast.show({
-          type: "success",
-          text1: "Project Deleted Successfully!",
-          text2: `"${projectName}" has been permanently deleted`,
-          visibilityTime: 3000,
-          topOffset: 80,
-        });
-      } else {
-        throw new Error("Delete failed");
-      }
+      await deleteProjectMutation.mutateAsync(projectId);
+      Toast.show({
+        type: "success",
+        text1: "Project Deleted Successfully!",
+        text2: `"${projectName}" has been permanently deleted`,
+        visibilityTime: 3000,
+        topOffset: 80,
+      });
     } catch (error) {
       Toast.show({
         type: "error",
@@ -364,6 +358,7 @@ function HomeScreen({ navigation }) {
 
   const handleCreateProjectSuccess = () => {
     setCreateProjectModalVisible(false);
+    refetchProjects();
   };
 
   const ProjectCard = ({ project }) => {
@@ -635,7 +630,7 @@ function HomeScreen({ navigation }) {
                     <Text style={styles.emptyError}>{error}</Text>
                     <TouchableOpacity
                       style={styles.retryBtn}
-                      onPress={() => dispatch(fetchProjects())}
+                      onPress={() => refetchProjects()}
                     >
                       <Text style={styles.retryText}>Retry</Text>
                     </TouchableOpacity>
@@ -733,6 +728,7 @@ function HomeScreen({ navigation }) {
         onSuccess={() => {
           setUpdateProjectModalVisible(false);
           setSelectedProject(null);
+          refetchProjects();
           Toast.show({
             type: "success",
             text1: "Project Updated Successfully!",

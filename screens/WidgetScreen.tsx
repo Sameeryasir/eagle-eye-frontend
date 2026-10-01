@@ -18,27 +18,12 @@ import Toast from 'react-native-toast-message';
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { useDispatch, useSelector } from 'react-redux';
 import {
-  fetchTasksByProjectId,
-  fetchTasks,
-  fetchTodaysTasks,
-  deleteExistingTask,
-  setCurrentProjectId,
-  clearError,
-  selectTasks,
-  selectTaskLoading,
-  selectTaskError,
-  selectTaskDeleting,
-  selectTaskDeleteError,
-} from '../store/slices/taskSlice';
-import {
-  fetchLogsByProjectId,
-  clearError as clearLogError,
-  selectLogs,
-  selectLogLoading,
-  selectLogError,
-} from '../store/slices/logSlice';
+  useProjectTasks,
+  useProjectLogs,
+  useMyTasks,
+  useDeleteTaskMutation,
+} from '../hooks/queries';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
@@ -56,129 +41,103 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { CheckSquare } from "lucide-react-native";
 
 function WidgetScreen({ navigation, route }) {
-  const dispatch = useDispatch();
-  const tasks = useSelector(selectTasks);
-  const loading = useSelector(selectTaskLoading);
-  const error = useSelector(selectTaskError);
-  const deleting = useSelector(selectTaskDeleting);
-  const deleteError = useSelector(selectTaskDeleteError);
-  
-  const logs = useSelector(selectLogs);
-  const logsLoading = useSelector(selectLogLoading);
-  const logsError = useSelector(selectLogError);
+  const { projectId, projectName } = route.params || {};
+  const isProjectIdMissing = !projectId;
 
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [project, setProject] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [userRole, setUserRole] = useState(null);
   const [managerProjectId, setManagerProjectId] = useState(null);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [createTaskVisible, setCreateTaskVisible] = useState(false);
   const isFirstMount = useRef(true);
 
-  const { projectId, projectName } = route.params || {};
-  const isProjectIdMissing = !projectId;
+  const {
+    data: projectTasksData,
+    isLoading: projectTasksLoading,
+    isRefetching: projectTasksRefetching,
+    error: projectTasksError,
+    refetch: refetchProjectTasks,
+  } = useProjectTasks(projectId);
 
-  const loadLogs = async (projectId) => {
-    try {
-      console.log("WidgetScreen - Starting to load logs with projectId:", projectId);
-      
-      dispatch(clearLogError());
-      
-      await dispatch(fetchLogsByProjectId(projectId));
-      
-      console.log("WidgetScreen - Logs loaded via Redux");
-    } catch (error) {
-      console.error("WidgetScreen - Error loading logs:", error);
-    }
-  };
+  const {
+    data: myTasksData,
+    isLoading: myTasksLoading,
+    isRefetching: myTasksRefetching,
+    error: myTasksError,
+    refetch: refetchMyTasks,
+  } = useMyTasks(isProjectIdMissing && userRole === "Employee");
+
+  const {
+    data: logsData,
+    isLoading: logsLoading,
+    isRefetching: logsRefetching,
+    error: logsQueryError,
+    refetch: refetchLogs,
+  } = useProjectLogs(projectId);
+
+  const deleteMutation = useDeleteTaskMutation();
+  const deleting = deleteMutation.isPending;
+  const deleteError = deleteMutation.error
+    ? (deleteMutation.error?.response?.data?.message || deleteMutation.error?.message || null)
+    : null;
+
+  const tasks = Array.isArray(projectId ? projectTasksData : myTasksData)
+    ? (projectId ? projectTasksData : myTasksData)
+    : [];
+  const logs = Array.isArray(logsData) ? logsData : [];
+  const loading = projectId ? projectTasksLoading : myTasksLoading;
+  const error = projectId
+    ? (projectTasksError?.response?.data?.message || projectTasksError?.message || null)
+    : (myTasksError?.response?.data?.message || myTasksError?.message || null);
+  const logsError = logsQueryError
+    ? (logsQueryError?.response?.data?.message || logsQueryError?.message || null)
+    : null;
+  const isInitialLoad = (loading || logsLoading) && tasks.length === 0 && logs.length === 0;
 
   useEffect(() => {
-    loadData();
-  }, [projectId]);
+    const loadRole = async () => {
+      try {
+        const role = await getUserRole();
+        setUserRole(role);
+      } catch {
+        setUserRole(null);
+      }
+    };
+    loadRole();
+  }, []);
 
-  const loadData = async (isRefresh = false) => {
+  useEffect(() => {
+    if (projectId) {
+      if (userRole === "Manager") setManagerProjectId(projectId);
+      setProject({
+        id: projectId,
+        name: projectName || "Project",
+      });
+    } else if (userRole === "Employee") {
+      setProject({ name: "My Tasks" });
+    } else if (userRole === "Manager") {
+      setProject({ name: "No Projects" });
+    } else {
+      setProject({ name: "Project" });
+    }
+  }, [projectId, projectName, userRole]);
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
     try {
-      console.log("WidgetScreen - loadData started:", { isRefresh, projectId });
-      
-      if (isRefresh) {
-        setRefreshing(true);
-      } else {
-        setIsInitialLoad(true);
-      }
-      
-      if (isProjectIdMissing) {
-        setIsInitialLoad(false);
-        setRefreshing(false);
-        return;
-      }
-
-      dispatch(clearError());
-      dispatch(clearLogError());
-
-      const role = await getUserRole();
-      setUserRole(role);
-      console.log("WidgetScreen - User role:", role);
-
+      const jobs = [];
       if (projectId) {
-        dispatch(setCurrentProjectId(projectId));
+        jobs.push(refetchProjectTasks());
+        jobs.push(refetchLogs());
+      } else if (userRole === "Employee") {
+        jobs.push(refetchMyTasks());
       }
-
-      await loadLogs(projectId);
-
-      if (role === "Employee") {
-        if (projectId) {
-          console.log("WidgetScreen - Employee: Fetching tasks by project ID:", projectId);
-          await dispatch(fetchTasksByProjectId(projectId));
-          
-          setProject({
-            id: projectId,
-            name: projectName || "Project",
-          });
-        } else {
-          console.log("WidgetScreen - Employee: Fetching user's tasks");
-          await dispatch(fetchTasks());
-          setProject({ name: "My Tasks" });
-        }
-      } else if (role === "Manager") {
-        if (projectId) {
-          console.log("WidgetScreen - Manager: Fetching tasks by project ID:", projectId);
-          setManagerProjectId(projectId);
-          await dispatch(fetchTasksByProjectId(projectId));
-          
-          setProject({
-            id: projectId,
-            name: projectName || "Project",
-          });
-        } else {
-          setProject({ name: "No Projects" });
-        }
-      } else if (role === "Admin" || role === "Owner") {
-        if (projectId) {
-          console.log("WidgetScreen - Admin/Owner: Fetching tasks by project ID:", projectId);
-          await dispatch(fetchTasksByProjectId(projectId));
-          
-          setProject({
-            id: projectId,
-            name: projectName || "Project",
-          });
-        } else {
-          setProject({ name: "Project" });
-        }
-      }
-    } catch (err) {
-      console.error("WidgetScreen - Error in loadData:", err);
-      Alert.alert("Error", "Failed to load project data. Please try again.");
+      await Promise.all(jobs);
     } finally {
-      console.log("WidgetScreen - loadData completed, setting isInitialLoad to false");
-      setIsInitialLoad(false);
       setRefreshing(false);
     }
-  };
-
-  const onRefresh = React.useCallback(() => {
-    loadData(true);
-  }, [userRole]);
+  }, [projectId, userRole, refetchProjectTasks, refetchLogs, refetchMyTasks]);
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
@@ -237,34 +196,25 @@ function WidgetScreen({ navigation, route }) {
           style: "destructive",
           onPress: async () => {
             try {
-              const result = await dispatch(deleteExistingTask(taskId));
-              
-              if (deleteExistingTask.fulfilled.match(result)) {
-                Toast.show({
-                  type: 'success',
-                  text1: 'Task Deleted Successfully!',
-                  text2: `"${taskTitle}" has been permanently deleted`,
-                  visibilityTime: 3000,
-                  autoHide: true,
-                  topOffset: 80,
-                });
-              } else {
-                const errorMessage = result.payload || "Failed to delete task. Please try again.";
-                Toast.show({
-                  type: 'error',
-                  text1: 'Delete Failed',
-                  text2: errorMessage,
-                  visibilityTime: 4000,
-                  autoHide: true,
-                  topOffset: 80,
-                });
-              }
+              await deleteMutation.mutateAsync(taskId);
+              Toast.show({
+                type: 'success',
+                text1: 'Task Deleted Successfully!',
+                text2: `"${taskTitle}" has been permanently deleted`,
+                visibilityTime: 3000,
+                autoHide: true,
+                topOffset: 80,
+              });
             } catch (error) {
               console.error("WidgetScreen - Error deleting task:", error);
+              const errorMessage =
+                error?.response?.data?.message ||
+                error?.message ||
+                "An unexpected error occurred";
               Toast.show({
                 type: 'error',
                 text1: 'Delete Failed',
-                text2: "An unexpected error occurred",
+                text2: Array.isArray(errorMessage) ? errorMessage.join(', ') : String(errorMessage),
                 visibilityTime: 4000,
                 autoHide: true,
                 topOffset: 80,
@@ -327,10 +277,6 @@ function WidgetScreen({ navigation, route }) {
               showUpcomingTasks: true,
             };
             
-            console.log('🔍 NAVIGATION DEBUG - WidgetScreen to ViewAllTasksScreen:');
-            console.log('📱 Project ID:', navigationParams.projectId);
-            console.log('📝 Project Name:', navigationParams.projectName);
-            console.log('🚀 Navigating to ViewAllTasksScreen with params:', navigationParams);
             
             navigation.navigate("ViewAllTasksScreen", navigationParams);
           }}
@@ -509,7 +455,6 @@ function WidgetScreen({ navigation, route }) {
           }}
           onPress={() => {
             if (logs.length > 0) {
-              console.log("WidgetScreen - Navigating to ViewAllLogScreen with logs:", logs);
               
               const navigationParams = { 
                 logs: logs,
@@ -650,16 +595,6 @@ function WidgetScreen({ navigation, route }) {
   );
 
   const renderContent = () => {
-    console.log("WidgetScreen - renderContent:", {
-      loading,
-      logsLoading,
-      isInitialLoad,
-      error,
-      logsError,
-      tasksLength: tasks.length,
-      logsLength: logs.length,
-      project: !!project
-    });
 
     if (loading || logsLoading || isInitialLoad) {
       return null;
@@ -717,16 +652,6 @@ function WidgetScreen({ navigation, route }) {
       
       {(() => {
         const shouldShowLoader = loading || logsLoading || isInitialLoad;
-        console.log("WidgetScreen - Main render condition:", {
-          loading,
-          logsLoading,
-          isInitialLoad,
-          shouldShowLoader,
-          error,
-          logsError,
-          tasksLength: tasks.length,
-          logsLength: logs.length
-        });
         return shouldShowLoader;
       })() ? (
         <View className="flex-1 items-center justify-center">

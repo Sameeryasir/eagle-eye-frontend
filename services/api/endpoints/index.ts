@@ -46,6 +46,11 @@ export {
   getEventsForLogInUser,
 } from './events';
 export {
+  calendarApi,
+  getCalendarFeed,
+  defaultCalendarRange,
+} from './calendar';
+export {
   usersApi,
   getUserById,
   updateUserById,

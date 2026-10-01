@@ -157,15 +157,6 @@ async function apiRequest<TResponse>(
       }
     }
 
-    if (apiError.isNetworkError) {
-      console.error('Network request failed:', {
-        method,
-        url,
-        message: apiError.message,
-        apiBase: API_URL,
-      });
-    }
-
     throw apiError;
   }
 }

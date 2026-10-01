@@ -24,9 +24,6 @@ export default function NotificationScreen() {
     setLoading(true);
     try {
       const response = await getNotificationforCurrentUser();
-      console.log("🔔 NOTIFICATIONS RESPONSE:", response);
-      console.log("🔍 RESPONSE TYPE:", typeof response);
-      console.log("🔍 RESPONSE KEYS:", Object.keys(response || {}));
 
       let notificationsData = [];
 
@@ -42,17 +39,11 @@ export default function NotificationScreen() {
         }
       }
 
-      console.log("📋 PROCESSED NOTIFICATIONS:", notificationsData);
-      console.log("📊 NOTIFICATIONS COUNT:", notificationsData.length);
-
       setApiNotifications(notificationsData);
-      console.log("✅ NOTIFICATIONS LOADED:", notificationsData.length);
 
       if (notificationsData.length > 0) {
         try {
-          console.log("🔔 AUTO CALLING API TO MARK ALL NOTIFICATIONS AS READ");
           await markAllRead();
-          console.log("✅ ALL NOTIFICATIONS AUTO-MARKED AS READ");
         } catch (markError) {
           console.error(
             "❌ Error auto-marking notifications as read:",
@@ -70,15 +61,12 @@ export default function NotificationScreen() {
 
   const handleMarkAllRead = async () => {
     if (apiNotifications.length === 0) {
-      console.log("📝 No notifications to mark as read");
       return;
     }
 
     setMarkingAllRead(true);
     try {
-      console.log("🔔 CALLING API TO MARK ALL NOTIFICATIONS AS READ");
       const result = await markAllRead();
-      console.log("✅ ALL NOTIFICATIONS MARKED AS READ:", result);
 
       await fetchNotifications();
     } catch (error) {
@@ -90,7 +78,6 @@ export default function NotificationScreen() {
 
   const handleDeleteNotification = async (notificationId) => {
     try {
-      console.log("🗑️ DELETING NOTIFICATION:", notificationId);
 
       await deleteNotificationById(notificationId);
 
@@ -107,7 +94,6 @@ export default function NotificationScreen() {
         topOffset: 80,
       });
 
-      console.log("✅ NOTIFICATION DELETED SUCCESSFULLY");
     } catch (error) {
       console.error("❌ Error deleting notification:", error);
 
@@ -123,25 +109,14 @@ export default function NotificationScreen() {
   };
 
   const handleNotificationTap = (notification) => {
-    console.log("🔔 Notification tapped:", notification);
 
     if (notification.taskId) {
-      console.log(
-        "📋 Navigating to TaskDetailsScreen with taskId:",
-        notification.taskId
-      );
       navigation.navigate("TaskDetails", { taskId: notification.taskId });
     } else if (notification.projectId) {
-      console.log("📁 Navigating to HomeScreen");
       navigation.navigate("HomeScreen");
     } else if (notification.eventId) {
-      console.log("📅 Navigating to CalenderScreen from event notification");
       navigation.navigate("CalenderScreen");
     } else if (notification.conversationId) {
-      console.log(
-        "💬 Navigating to UserChatScreen from message notification with conversationId:",
-        notification.conversationId
-      );
       const conversationType =
         notification.conversationType || notification.type || "private";
       navigation.navigate("UserChatScreen", {
@@ -158,36 +133,23 @@ export default function NotificationScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
-      console.log("🔔 NotificationScreen focused - hiding red dot");
     }, [])
   );
 
   useEffect(() => {
     if (!currentUserId) {
-      console.log("⚠️ No user ID available for Pusher channel");
       return;
     }
 
     const channelName = `user-notifications-${currentUserId}`;
-    console.log("🔔 Setting up Pusher listener for channel:", channelName);
-    console.log("🔌 Pusher connection state:", pusher.connection.state);
-    console.log(
-      "✅ Pusher is connected:",
-      pusher.connection.state === "connected"
-    );
 
     const channel = pusher.subscribe(channelName);
 
     const handleNewAssignment = async (data, assignmentType) => {
-      console.log(
-        `🔔 NEW ${assignmentType.toUpperCase()} ASSIGNMENT NOTIFICATION RECEIVED:`,
-        data
-      );
 
       let notificationData = data;
       if (Array.isArray(data) && data.length > 0) {
         notificationData = data[0];
-        console.log("📦 Data was array, extracted object:", notificationData);
       }
 
       setApiNotifications((prevNotifications) => {
@@ -196,26 +158,15 @@ export default function NotificationScreen() {
         );
 
         if (exists) {
-          console.log(
-            `📝 ${assignmentType} notification already exists (ID: ${notificationData.id}), skipping duplicate`
-          );
           return prevNotifications;
         }
 
         const newNotifications = [notificationData, ...prevNotifications];
-        console.log(
-          `✅ New ${assignmentType} notification added to list:`,
-          newNotifications.length
-        );
         return newNotifications;
       });
 
       try {
-        console.log(
-          "🔔 AUTO CALLING API TO MARK ALL NOTIFICATIONS AS READ (from Pusher)"
-        );
         await markAllRead();
-        console.log("✅ ALL NOTIFICATIONS AUTO-MARKED AS READ (from Pusher)");
       } catch (markError) {
         console.error(
           "❌ Error auto-marking notifications as read (from Pusher):",
@@ -239,12 +190,9 @@ export default function NotificationScreen() {
     channel.bind("new-message", (data) => handleNewAssignment(data, "message"));
 
     return () => {
-      console.log("🧹 Unsubscribing from Pusher channel:", channelName);
       pusher.unsubscribe(channelName);
     };
   }, [currentUserId]);
-
-  console.log("API Notifications:", apiNotifications);
 
   return (
     <View className="flex-1 bg-white">

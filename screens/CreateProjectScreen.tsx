@@ -166,16 +166,6 @@ function CreateProjectScreen({ navigation }) {
         endDate: endDateISO, // ISO 8601 string format
       };
 
-      console.log('=== Project Creation Debug ===');
-      console.log('Original Start Date:', startDate.toLocaleString());
-      console.log('Local Start Date:', localStartDate.toLocaleDateString());
-      console.log('Project Start Date (YYYY-MM-DD):', projectStartDate);
-      console.log('Original End Date:', endDate.toLocaleString());
-      console.log('Local End Date:', localEndDate.toLocaleDateString());
-      console.log('Project End Date (YYYY-MM-DD):', projectEndDate);
-      console.log('Project Payload Being Sent:', projectPayload);
-      console.log('=== End Project Creation Debug ===');
-
       const response = await createProject(projectPayload);
       
       Toast.show({

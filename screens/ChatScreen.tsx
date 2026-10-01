@@ -190,7 +190,6 @@ const ChatScreen = ({ navigation }) => {
 
     try {
       const response = await getUserConversations();
-      console.log("💬 Get Conversation by User ID Response:", response);
       const formattedConversations = processConversations(response);
       const sortedConversations = sortConversationsByLatest(
         formattedConversations
@@ -215,7 +214,6 @@ const ChatScreen = ({ navigation }) => {
   const fetchConversationsSilently = async () => {
     try {
       const response = await getUserConversations();
-      console.log("💬 Get Conversation by User ID Response:", response);
       const formattedConversations = processConversations(response);
       const sortedConversations = sortConversationsByLatest(
         formattedConversations
@@ -308,11 +306,6 @@ const ChatScreen = ({ navigation }) => {
       return;
     }
 
-    console.log(
-      "📝 [PUSHER] Processing signature message for conversation:",
-      conversationId
-    );
-
     setConversations((prevConversations) => {
       const conversationIndex = prevConversations.findIndex(
         (u) => u.conversation?.id?.toString() === conversationId?.toString()
@@ -396,24 +389,12 @@ const ChatScreen = ({ navigation }) => {
     );
 
     if (newChannels.length === 0) {
-      console.log("✅ [PUSHER] Already subscribed to all channels");
       return;
     }
-
-    console.log(
-      "📡 [PUSHER] Subscribing to",
-      newChannels.length,
-      "new channels"
-    );
 
     newChannels.forEach((id) => {
       const channelName = `conversation-${id}`;
       const signatureChannelName = `conversation-signature-${id}`;
-      console.log("✅ [PUSHER] Subscribing to:", channelName);
-      console.log(
-        "✅ [PUSHER] Subscribing to signature channel:",
-        signatureChannelName
-      );
 
       const channel = pusher.subscribe(channelName);
       const signatureChannel = pusher.subscribe(signatureChannelName);
@@ -423,35 +404,24 @@ const ChatScreen = ({ navigation }) => {
       });
 
       signatureChannel.bind("message-with-signature", (data) => {
-        console.log(
-          "📝 [PUSHER] Signature message received for conversation:",
-          id
-        );
         handleSignatureMessage(id, data);
       });
 
       subscribedChannelsRef.current.add(id);
     });
 
-    console.log(
-      "📡 [PUSHER] Total subscribed channels:",
-      subscribedChannelsRef.current.size
-    );
   }, [conversations.length]);
 
   useEffect(() => {
     if (!currentUserId) {
-      console.log("⚠️ [PUSHER] No user ID, skipping user channel subscription");
       return;
     }
 
     const userChannelName = `user-${currentUserId}`;
-    console.log("📡 [PUSHER] Subscribing to user channel:", userChannelName);
 
     const userChannel = pusher.subscribe(userChannelName);
 
     userChannel.bind("new-conversation", (data) => {
-      console.log("🆕 [PUSHER] New conversation created:", data);
 
       const newConversation = data.conversation || data;
 
@@ -472,14 +442,9 @@ const ChatScreen = ({ navigation }) => {
           );
 
           if (exists) {
-            console.log("⚠️ [PUSHER] Conversation already exists in list");
             return prevConversations;
           }
 
-          console.log(
-            "✅ [PUSHER] Adding new conversation to list:",
-            formattedConversation.name
-          );
           const finalConversations = [
             formattedConversation,
             ...prevConversations,
@@ -493,12 +458,6 @@ const ChatScreen = ({ navigation }) => {
         const signatureChannelName = `conversation-signature-${conversationId}`;
 
         if (!subscribedChannelsRef.current.has(conversationId)) {
-          console.log(
-            "📡 [PUSHER] Auto-subscribing to new conversation channels:",
-            conversationChannelName,
-            "and",
-            signatureChannelName
-          );
 
           const channel = pusher.subscribe(conversationChannelName);
           const signatureChannel = pusher.subscribe(signatureChannelName);
@@ -508,29 +467,15 @@ const ChatScreen = ({ navigation }) => {
           });
 
           signatureChannel.bind("message-with-signature", (signatureData) => {
-            console.log(
-              "📝 [PUSHER] Signature message received for new conversation:",
-              conversationId
-            );
             handleSignatureMessage(conversationId, signatureData);
           });
 
           subscribedChannelsRef.current.add(conversationId);
-          console.log("✅ [PUSHER] Subscribed to new conversation channel");
         }
       }
     });
 
-    console.log(
-      "✅ [PUSHER] Listening for new conversations on:",
-      userChannelName
-    );
-
     return () => {
-      console.log(
-        "🔴 [PUSHER] Unsubscribing from user channel:",
-        userChannelName
-      );
       userChannel.unbind("new-conversation");
       pusher.unsubscribe(userChannelName);
     };
@@ -538,29 +483,20 @@ const ChatScreen = ({ navigation }) => {
 
   useEffect(() => {
     return () => {
-      console.log(
-        "🔴 [PUSHER] Component unmounting - Unsubscribing from all channels"
-      );
       subscribedChannelsRef.current.forEach((id) => {
         const channelName = `conversation-${id}`;
-        console.log("❌ [PUSHER] Unsubscribing from:", channelName);
         pusher.unsubscribe(channelName);
       });
       subscribedChannelsRef.current.clear();
-      console.log("🔴 [PUSHER] All channels unsubscribed");
     };
   }, []);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", () => {
-      console.log("🟢 [CHAT SCREEN] Screen focused - refreshing conversations");
       fetchConversations();
     });
 
     const unsubscribeBlur = navigation.addListener("blur", () => {
-      console.log(
-        "🔴 [CHAT SCREEN] Screen blurred - Pusher still listening in background"
-      );
       Keyboard.dismiss();
     });
 

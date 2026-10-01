@@ -20,9 +20,8 @@ import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
 import Toast from "react-native-toast-message";
-import { useDispatch } from "react-redux";
-import { updateProject } from "../store/slices/projectSlice";
 import { uploadImage } from "../services/images/uploadImage";
+import { useUpdateProjectMutation } from "../hooks/queries";
 import NoChangesDialog from "./NoChangesDialog";
 import { Brand } from "../constants/brandColors";
 import { useResponsiveLayout } from "../constants/responsiveLayout";
@@ -35,7 +34,7 @@ export default function UpdateProjectModal({
   project,
   onSuccess,
 }) {
-  const dispatch = useDispatch();
+  const updateProjectMutation = useUpdateProjectMutation();
   const layout = useResponsiveLayout();
   const {
     width,
@@ -332,17 +331,10 @@ export default function UpdateProjectModal({
         projectPayload.imageUrl = "";
       }
 
-      console.log("Updating project via API:", {
+      await updateProjectMutation.mutateAsync({
         projectId: project.id,
-        payload: projectPayload,
+        projectData: projectPayload,
       });
-
-      await dispatch(
-        updateProject({
-          projectId: project.id,
-          projectData: projectPayload,
-        })
-      ).unwrap();
 
       onClose();
       if (onSuccess) onSuccess();

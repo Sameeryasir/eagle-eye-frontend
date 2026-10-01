@@ -36,7 +36,6 @@ const storeProjectsCache = async (projects) => {
       userId: await getSessionUserId(),
     };
     await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
-    console.log('💾 Projects cached successfully for user');
   } catch (error) {
     console.error('Error storing projects cache:', error);
   }
@@ -54,7 +53,6 @@ const getProjectsCache = async () => {
     
     const currentUserId = await getSessionUserId();
     if (userId !== currentUserId) {
-      console.log('⚠️ Cache belongs to different user, clearing...');
       await AsyncStorage.removeItem(cacheKey);
       return null;
     }
@@ -62,12 +60,10 @@ const getProjectsCache = async () => {
     const isExpired = Date.now() - timestamp > CACHE_TTL;
     
     if (isExpired) {
-      console.log('⏰ Projects cache expired, removing...');
       await AsyncStorage.removeItem(cacheKey);
       return null;
     }
 
-    console.log('📱 Using cached projects data for current user');
     return data;
   } catch (error) {
     console.error('Error retrieving projects cache:', error);
@@ -80,7 +76,6 @@ export const clearProjectsCache = async () => {
     const cacheKey = await getCacheKey();
     if (cacheKey) {
       await AsyncStorage.removeItem(cacheKey);
-      console.log('🗑️ Projects cache cleared for current user');
     }
     
     try {
@@ -88,7 +83,6 @@ export const clearProjectsCache = async () => {
       const oldCacheKeys = allKeys.filter(key => key.startsWith(CACHE_KEY_PREFIX));
       if (oldCacheKeys.length > 0) {
         await AsyncStorage.multiRemove(oldCacheKeys);
-        console.log('🗑️ Cleared old project caches:', oldCacheKeys.length);
       }
     } catch (error) {
       console.error('Error clearing old caches:', error);
@@ -108,7 +102,6 @@ export const fetchProjects = createAsyncThunk(
         return cachedProjects;
       }
 
-      console.log('🌐 Fetching projects from API...');
       const projects = await getMyProjects();
       
       await storeProjectsCache(projects);
@@ -120,7 +113,6 @@ export const fetchProjects = createAsyncThunk(
       
       const cachedProjects = await getProjectsCache();
       if (cachedProjects) {
-        console.log('📱 API failed, using cached data as fallback');
         dispatch(setCacheStatus(true));
         return cachedProjects;
       }
@@ -134,7 +126,6 @@ export const refreshProjects = createAsyncThunk(
   'projects/refreshProjects',
   async (_, { rejectWithValue }) => {
     try {
-      console.log('🔄 Refreshing projects data...');
       
       await clearProjectsCache();
       
@@ -142,7 +133,6 @@ export const refreshProjects = createAsyncThunk(
       
       await storeProjectsCache(projects);
       
-      console.log('✅ Projects data refreshed successfully');
       return projects;
     } catch (error) {
       console.error('Error refreshing projects:', error);

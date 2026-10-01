@@ -134,7 +134,6 @@ const SignatureScreen = ({ navigation, route }) => {
         ...signatureData
       };
 
-      console.log('✅ Signature converted to image:', signatureData);
       
       // Call the completion callback if provided
       if (onSignatureComplete) {

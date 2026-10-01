@@ -24,15 +24,12 @@ const FilesScreen = ({ navigation }) => {
     setError(null);
     
     try {
-      console.log('🔄 Fetching my projects...');
       const response = await getMyProjects();
       
       if (response && Array.isArray(response)) {
         setProjects(response);
-        console.log('✅ Projects fetched successfully:', response.length, 'projects');
       } else {
         setProjects([]);
-        console.log('📭 No projects found');
       }
     } catch (err) {
       console.error('❌ Error fetching projects:', err);
@@ -53,7 +50,6 @@ const FilesScreen = ({ navigation }) => {
         className="bg-white rounded-lg p-4 mb-3 mx-4 shadow-sm border border-gray-100"
         activeOpacity={0.7}
         onPress={() => {
-          console.log('Project tapped:', item.name, 'ID:', item.id);
           navigation.navigate('ProjectFiles', {
             projectId: item.id,
             projectName: item.name

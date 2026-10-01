@@ -19,11 +19,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
-import { createProject } from "../store/slices/projectSlice";
 import { uploadImage } from "../services/images/uploadImage";
 import { Brand } from "../constants/brandColors";
 import { useResponsiveLayout } from "../constants/responsiveLayout";
-import { useAppDispatch } from "../hooks";
+import { useCreateProjectMutation } from "../hooks/queries";
 import { showErrorMessage, showSuccessToastAfterModal } from "../utils/toast";
 
 const DESC_MAX = 120;
@@ -34,7 +33,7 @@ function CreateProject({
   onCancel,
   hideHeader = false,
 }) {
-  const dispatch = useAppDispatch();
+  const createProjectMutation = useCreateProjectMutation();
   const layout = useResponsiveLayout();
   const {
     width,
@@ -202,14 +201,12 @@ function CreateProject({
         imageUrl = await uploadCoverImage();
       }
 
-      await dispatch(
-        createProject({
-          name: projectData.name.trim(),
-          description: projectData.description.trim(),
-          startDate: startDate.toISOString(),
-          ...(imageUrl ? { imageUrl } : {}),
-        })
-      ).unwrap();
+      await createProjectMutation.mutateAsync({
+        name: projectData.name.trim(),
+        description: projectData.description.trim(),
+        startDate: startDate.toISOString(),
+        ...(imageUrl ? { imageUrl } : {}),
+      });
 
       if (onSuccess) {
         onSuccess();

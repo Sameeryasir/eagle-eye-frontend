@@ -9,8 +9,13 @@ import {
   StatusBar,
   Text,
   Keyboard,
+  StyleSheet,
 } from "react-native";
-import { SafeAreaView, SafeAreaProvider } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -22,8 +27,12 @@ import * as Notifications from "expo-notifications";
 import { isRunningInExpoGo } from "expo";
 
 import { Provider } from "react-redux";
+import { QueryClientProvider } from "@tanstack/react-query";
 import store from "./store";
-import { toastConfig } from "./utils/toast";
+import { queryClient } from "./lib/queryClient";
+import { installToastGuard, toastConfig } from "./utils/toast";
+
+installToastGuard();
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -124,12 +133,10 @@ const AppHeader = ({
   };
 
   const handleAllFiles = () => {
-    console.log('📁 All Files option selected');
     appEmitter.emit('fetchAllFiles');
   };
 
   const handleAllSignatures = () => {
-    console.log('📝 All Signatures option selected');
     appEmitter.emit('fetchSignatures');
   };
 
@@ -604,29 +611,40 @@ const AppNavigator = () => {
               </View>
             </NavigationContainer>
           </View>
-          <Toast
-            position="top"
-            topOffset={56}
-            visibilityTime={2500}
-            autoHide
-            swipeable={false}
-            onPress={() => Toast.hide()}
-            config={toastConfig}
-          />
+          <AppToastHost />
         </SafeAreaProvider>
       </MenuProvider>
     </GestureHandlerRootView>
   );
 };
 
+function AppToastHost() {
+  const insets = useSafeAreaInsets();
+  return (
+    <View pointerEvents="box-none" style={StyleSheet.absoluteFillObject}>
+      <Toast
+        position="top"
+        topOffset={Math.max(insets.top + 8, 40)}
+        visibilityTime={2800}
+        autoHide
+        swipeable={false}
+        onPress={() => Toast.hide()}
+        config={toastConfig}
+      />
+    </View>
+  );
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
       <SQLiteProvider databaseName="messages.db">
         <Provider store={store}>
-          <AuthProvider>
-            <AppNavigator />
-          </AuthProvider>
+          <QueryClientProvider client={queryClient}>
+            <AuthProvider>
+              <AppNavigator />
+            </AuthProvider>
+          </QueryClientProvider>
         </Provider>
       </SQLiteProvider>
     </ErrorBoundary>

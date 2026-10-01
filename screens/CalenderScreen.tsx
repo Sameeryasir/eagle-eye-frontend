@@ -1,626 +1,813 @@
 // @ts-nocheck
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
-  Dimensions,
   ActivityIndicator,
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Animated,
-} from "react-native";
-import { Calendar } from "react-native-calendars";
+  StatusBar,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Calendar } from 'react-native-calendars';
 import Toast from 'react-native-toast-message';
-import { getUserRole } from "../services/utils/userRole";
-import HomeBottomNav from "../components/HomeBottomNav";
-import MyWeekView from "../components/WeekView";
-import CalendarToggle from "../components/CalendarToggle";
-import CreateEventModal from "../components/CreateEventModal";
-import { getEventsForLogInUser } from "../services/event/getEventsForLogInUser";
-import getAllTasks from "../services/tasks/getAllTasks";
+import { Ionicons } from '@expo/vector-icons';
+import { getUserRole } from '../services/utils/userRole';
+import HomeBottomNav from '../components/HomeBottomNav';
+import MyWeekView from '../components/WeekView';
+import CalendarToggle from '../components/CalendarToggle';
+import CreateEventModal from '../components/CreateEventModal';
+import TaskDetailsModal from '../components/TaskDetailsModal';
+import EventDetailsModal from '../components/EventDetailsModal';
+import { useCalendarFeed, useInvalidateCalendar } from '../hooks/queries';
+import { calendarRangeForMonth } from '../services/api/endpoints/calendar';
+import {
+  getPriorityColor,
+  toLocalDateKey,
+} from '../services/calendar/calendarHelpers';
 
-const { height } = Dimensions.get("window");
+const ACCENT = '#2563EB';
+const EVENT_DOT = '#2563EB';
+const PAGE_BG = '#F3F4F6';
+const TEXT = '#111827';
+const TEXT_MUTED = '#9CA3AF';
+const TEXT_SOFT = '#6B7280';
+
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+const WEEKDAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function shiftMonth(dateKey, delta) {
+  const [y, m] = String(dateKey).split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+}
+
+function formatMonthTitle(dateKey) {
+  const [y, m] = String(dateKey).split('-').map(Number);
+  return `${MONTH_NAMES[(m || 1) - 1]} ${y}`;
+}
+
+function formatAgendaHeader(dateKey) {
+  if (!dateKey) return '';
+  const [y, m, d] = String(dateKey).split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  const weekday = WEEKDAYS_SHORT[date.getDay()];
+  const month = MONTH_NAMES[date.getMonth()].slice(0, 3);
+  return `${weekday}, ${month} ${d}`;
+}
+
+function formatTimeRange(item) {
+  const start = item.startTime ? new Date(item.startTime) : null;
+  const end = item.endTime ? new Date(item.endTime) : null;
+  if (!start || Number.isNaN(start.getTime())) return 'All day';
+
+  const fmt = (date) =>
+    date.toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+
+  if (!end || Number.isNaN(end.getTime()) || !item.hasEndTime && !item.endTime) {
+    return fmt(start);
+  }
+  return `${fmt(start)} — ${fmt(end)}`;
+}
+
+function getItemMeta(item) {
+  if (item.type === 'event') {
+    return {
+      kind: 'Event',
+      label: 'Event',
+      color: EVENT_DOT,
+      soft: '#EFF6FF',
+    };
+  }
+
+  const priority = String(item.priority || 'medium').toLowerCase();
+  const color = getPriorityColor(priority);
+
+  if (priority === 'critical') {
+    return {
+      kind: 'Task',
+      label: 'Critical',
+      color,
+      soft: '#FFF1F2',
+    };
+  }
+  if (priority === 'high') {
+    return {
+      kind: 'Task',
+      label: 'High',
+      color,
+      soft: '#FDF2F8',
+    };
+  }
+  if (priority === 'low') {
+    return {
+      kind: 'Task',
+      label: 'Low',
+      color,
+      soft: '#F0FDF4',
+    };
+  }
+  return {
+    kind: 'Task',
+    label: 'Medium',
+    color,
+    soft: '#FFF7ED',
+  };
+}
+
+const MonthDayCell = React.memo(function MonthDayCell({
+  date,
+  state,
+  dots,
+  selected,
+  onPress,
+}) {
+  const isDisabled = state === 'disabled';
+  const isToday = state === 'today';
+
+  return (
+    <TouchableOpacity
+      onPress={() => onPress(date)}
+      activeOpacity={0.75}
+      style={styles.dayCell}
+    >
+      <View
+        style={[
+          styles.dayCircle,
+          isToday && !selected && styles.dayCircleToday,
+          selected && styles.dayCircleSelected,
+        ]}
+      >
+        <Text
+          style={[
+            styles.dayNumber,
+            isDisabled && styles.dayNumberDisabled,
+            selected && styles.dayNumberSelected,
+            isToday && !selected && styles.dayNumberToday,
+          ]}
+        >
+          {date.day}
+        </Text>
+      </View>
+      <View style={styles.dotRow}>
+        {(dots || []).slice(0, 3).map((color, index) => (
+          <View
+            key={`${date.dateString}-dot-${index}`}
+            style={[styles.dot, { backgroundColor: color }]}
+          />
+        ))}
+      </View>
+    </TouchableOpacity>
+  );
+});
+
+function AgendaCard({ item, onPress }) {
+  const meta = getItemMeta(item);
+  const description = String(item.description || '').trim();
+  const timeLabel = formatTimeRange(item);
+
+  return (
+    <TouchableOpacity
+      style={styles.agendaCard}
+      activeOpacity={0.8}
+      onPress={() => onPress(item)}
+    >
+      <View style={[styles.agendaAccent, { backgroundColor: meta.color }]} />
+
+      <View style={styles.agendaBody}>
+        <View style={styles.agendaTopRow}>
+          <View style={[styles.kindChip, { backgroundColor: meta.soft }]}>
+            <Text style={[styles.kindChipText, { color: meta.color }]}>
+              {meta.kind}
+              {item.type === 'task' ? ` · ${meta.label}` : ''}
+            </Text>
+          </View>
+          <Text style={styles.agendaTime}>{timeLabel}</Text>
+        </View>
+
+        <Text style={styles.agendaTitle} numberOfLines={2}>
+          {item.title || 'Untitled'}
+        </Text>
+
+        {description ? (
+          <Text style={styles.agendaDesc} numberOfLines={1}>
+            {description}
+          </Text>
+        ) : null}
+      </View>
+    </TouchableOpacity>
+  );
+}
 
 function CalenderScreen({ navigation }) {
-  const [tasks, setTasks] = useState({});
-  const [localEvents, setLocalEvents] = useState({}); // Processed events grouped by date
-  const [combinedItems, setCombinedItems] = useState({}); // Combined tasks and events
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState(null);
-  const [viewMode, setViewMode] = useState('monthly'); // 'monthly' or 'weekly' - controls which view to show
-  const [weekViewEvents, setWeekViewEvents] = useState([]); // Events formatted for WeekView
-  const [monthlyViewLoading, setMonthlyViewLoading] = useState(false); // Loading state for monthly view switch
-  const [userRole, setUserRole] = useState(null); // User role state to prevent FAB lag
-  
+  const insets = useSafeAreaInsets();
+  const todayKey = toLocalDateKey(new Date());
+  const [viewMode, setViewMode] = useState('monthly');
+  const [userRole, setUserRole] = useState(null);
   const [showEventCreationDialog, setShowEventCreationDialog] = useState(false);
-  
-  const weeklyButtonScale = useState(new Animated.Value(viewMode === 'weekly' ? 1 : 0.95))[0];
-  const monthlyButtonScale = useState(new Animated.Value(viewMode === 'monthly' ? 1 : 0.95))[0];
+  const [visibleMonth, setVisibleMonth] = useState(() => todayKey);
+  const [selectedDate, setSelectedDate] = useState(() => todayKey);
+  const [dialogTask, setDialogTask] = useState(null);
+  const [showTaskDialog, setShowTaskDialog] = useState(false);
+  const [dialogEvent, setDialogEvent] = useState(null);
+  const [showEventDetailsDialog, setShowEventDetailsDialog] = useState(false);
 
-  const formatDateTime = (dateString) => {
-    if (!dateString) return "N/A";
-    const date = new Date(dateString);
-    const dateStr = date.toLocaleDateString(); // "1/15/2024"
-    const timeStr = date.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit", 
-      hour12: true,
-    }); // "2:30 PM"
-    return `${dateStr} ${timeStr}`; // "1/15/2024 2:30 PM"
-  };
+  const monthRange = useMemo(
+    () => calendarRangeForMonth(visibleMonth),
+    [visibleMonth]
+  );
 
-  const processTasks = (tasksArray) => {
-    try {
-      console.log('CalenderScreen - Processing tasks from Redux:', tasksArray.length);
-      
-      if (tasksArray && tasksArray.length > 0) {
-        const tasksByDate = {};
-        
-        tasksArray.forEach(task => {
-          // Extract date from startTime only
-          if (!task.startTime) {
-            return; // Skip tasks without startTime
-          }
-          
-          // This ensures tasks created "today" appear on "today" in the calendar
-          const localDate = new Date(task.startTime);
-          const taskDate = localDate.getFullYear() + '-' + 
-            String(localDate.getMonth() + 1).padStart(2, '0') + '-' + 
-            String(localDate.getDate()).padStart(2, '0');
-          
-          console.log(`Task "${task.title}" - Original: ${task.startTime}, Local Date: ${localDate.toLocaleDateString()}, Task Date: ${taskDate}`);
-          
-          if (!tasksByDate[taskDate]) {
-            tasksByDate[taskDate] = [];
-          }
-          
-          tasksByDate[taskDate].push({
-            id: task.id,
-            title: task.title,
-            startTime: task.startTime ? new Date(task.startTime) : null,
-            endTime: task.endTime ? new Date(task.endTime) : null,
-            startTimeFormatted: task.startTime ? formatDateTime(task.startTime) : 'No time set',
-            endTimeFormatted: task.endTime ? formatDateTime(task.endTime) : 'No end time',
-            hasEndTime: task.endTime !== null && task.endTime !== undefined,
-            description: task.description || 'No description',
-            priority: task.priority,
-            status: task.status,
-            assignedTo: task.assigned_to || task.assignedTo
-          });
-        });
-        
-        setTasks(tasksByDate);
-      } else {
-        setTasks({});
-      }
-    } catch (err) {
-      console.error('CalenderScreen - Error processing tasks:', err);
-      setTasks({});
-    }
-  };
+  const {
+    data: feed,
+    isLoading,
+    isRefetching,
+    error,
+    refetch,
+  } = useCalendarFeed(viewMode === 'monthly', monthRange);
+  const invalidateCalendar = useInvalidateCalendar();
 
-  const processEvents = (eventsArray) => {
-    try {
-      console.log('=== CalenderScreen processEvents Debug ===');
-      console.log('User role:', userRole);
-      console.log('Events array:', eventsArray);
-      console.log('Events array type:', typeof eventsArray);
-      console.log('Events array length:', eventsArray ? eventsArray.length : 'N/A');
-      console.log('==========================================');
-      
-      // Check user role - Owner, Employee, and Manager can access events
-      const allowedRoles = ["Owner", "Employee", "Manager"];
-      
-      if (!userRole || !allowedRoles.includes(userRole)) {
-        console.log('CalenderScreen - User role is not allowed, skipping event processing. User role:', userRole);
-        console.log('CalenderScreen - Allowed roles:', allowedRoles);
-        setLocalEvents({});
-        return;
-      }
-
-      console.log('CalenderScreen - Processing events from Redux:', eventsArray.length);
-      
-      if (eventsArray && eventsArray.length > 0) {
-        const eventsByDate = {};
-        
-        eventsArray.forEach(event => {
-          // Extract date from startTime only
-          if (!event.startTime) {
-            return; // Skip events without startTime
-          }
-          
-          // This ensures events created "today" appear on "today" in the calendar
-          const localStartDate = new Date(event.startTime);
-          const localEndDate = event.endTime ? new Date(event.endTime) : localStartDate;
-          
-          const eventStartDate = localStartDate.toLocaleString('en-CA', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit'
-          }).replace(/,/g, ''); // Format: YYYY-MM-DD
-          
-          const eventEndDate = localEndDate.toLocaleString('en-CA', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit'
-          }).replace(/,/g, ''); // Format: YYYY-MM-DD
-          
-          console.log(`Event "${event.title}" - Original: ${event.startTime}, Local Start: ${localStartDate.toLocaleDateString()}, Local End: ${localEndDate.toLocaleDateString()}`);
-          console.log(`Event "${event.title}" - Start Date: ${eventStartDate}, End Date: ${eventEndDate}`);
-          
-          const isMultiDayEvent = eventStartDate !== eventEndDate;
-          
-          const eventObject = {
-            id: event.id,
-            title: event.title,
-            type: 'event', // Mark as event for identification
-            startTime: event.startTime ? new Date(event.startTime) : null,
-            endTime: event.endTime ? new Date(event.endTime) : null,
-            startTimeFormatted: event.startTime ? formatDateTime(event.startTime) : 'No time set',
-            endTimeFormatted: event.endTime ? formatDateTime(event.endTime) : 'No end time',
-            description: event.description || 'No description',
-            priority: event.priority,
-            status: event.status,
-            assignedTo: event.assignedTo || [],
-            projects: event.projects || [],
-            isMultiDayEvent: isMultiDayEvent,
-            originalStartDate: eventStartDate,
-            originalEndDate: eventEndDate
-          };
-          
-          if (isMultiDayEvent) {
-            console.log(`Multi-day event "${event.title}" - Adding to all dates from ${eventStartDate} to ${eventEndDate}`);
-            
-            // Generate all dates between start and end (inclusive)
-            const startDateObj = new Date(eventStartDate);
-            const endDateObj = new Date(eventEndDate);
-            
-            for (let currentDate = new Date(startDateObj); currentDate <= endDateObj; currentDate.setDate(currentDate.getDate() + 1)) {
-              const currentDateString = currentDate.getFullYear() + '-' + 
-                String(currentDate.getMonth() + 1).padStart(2, '0') + '-' + 
-                String(currentDate.getDate()).padStart(2, '0');
-              
-              if (!eventsByDate[currentDateString]) {
-                eventsByDate[currentDateString] = [];
-              }
-              
-              // Add the event to this date
-              eventsByDate[currentDateString].push({
-                ...eventObject,
-                currentDisplayDate: currentDateString
-              });
-              
-              console.log(`Added event "${event.title}" to date: ${currentDateString}`);
-            }
-          } else {
-            // Single-day event - add only to start date
-            if (!eventsByDate[eventStartDate]) {
-              eventsByDate[eventStartDate] = [];
-            }
-            
-            eventsByDate[eventStartDate].push(eventObject);
-            console.log(`Single-day event "${event.title}" added to date: ${eventStartDate}`);
-          }
-        });
-        
-        setLocalEvents(eventsByDate);
-      } else {
-        setLocalEvents({});
-      }
-    } catch (err) {
-      console.error('CalenderScreen - Error processing events:', err);
-      setLocalEvents({});
-    }
-  };
-
-  const combineTasksAndEvents = () => {
-    const combined = {};
-    
-    const allDates = new Set([
-      ...Object.keys(tasks),
-      ...Object.keys(localEvents)
-    ]);
-    
-    allDates.forEach(date => {
-      const taskList = tasks[date] || [];
-      const eventList = localEvents[date] || [];
-      
-      const markedTasks = taskList.map(task => ({ ...task, type: 'task' }));
-      const markedEvents = eventList.map(event => ({ ...event, type: 'event' }));
-      
-      const combinedItems = [...markedTasks, ...markedEvents].sort((a, b) => {
-        if (!a.startTime || !b.startTime) return 0;
-        return new Date(a.startTime) - new Date(b.startTime);
-      });
-      
-      if (combinedItems.length > 0) {
-        combined[date] = combinedItems;
-      }
-    });
-    
-    setCombinedItems(combined);
-  };
+  const tasksByDate = feed?.tasksByDate || {};
+  const eventsByDate = feed?.eventsByDate || {};
+  const combinedByDate = feed?.combinedByDate || {};
+  const feedTruncated =
+    !!feed?.meta?.truncatedTasks || !!feed?.meta?.truncatedEvents;
 
   useEffect(() => {
-    const loadUserRole = async () => {
+    let mounted = true;
+    (async () => {
       try {
         const role = await getUserRole();
-        setUserRole(role);
-        console.log('CalenderScreen - User role loaded early:', role);
-      } catch (error) {
-        console.error('CalenderScreen - Error loading user role:', error);
+        if (mounted) setUserRole(role);
+      } catch {
+        if (mounted) setUserRole(null);
       }
+    })();
+    return () => {
+      mounted = false;
     };
-    
-    loadUserRole();
   }, []);
 
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        console.log('CalenderScreen - Starting to load data...');
-        console.log('CalenderScreen - User role:', userRole);
-        
-        // Fetch tasks and events directly from API
-        const [tasksResponse, eventsResponse] = await Promise.all([
-          getAllTasks(),
-          getEventsForLogInUser()
-        ]);
-        
-        console.log('CalenderScreen - Tasks response:', tasksResponse);
-        console.log('CalenderScreen - Events response:', eventsResponse);
-        
-        // Process the API responses
-        if (tasksResponse && tasksResponse.data) {
-          console.log('CalenderScreen - Processing tasks:', tasksResponse.data.length);
-          processTasks(tasksResponse.data);
-        }
-        
-        if (eventsResponse && eventsResponse.data) {
-          console.log('CalenderScreen - Processing events:', eventsResponse.data.length);
-          processEvents(eventsResponse.data);
-        } else if (eventsResponse && Array.isArray(eventsResponse)) {
-          console.log('CalenderScreen - Processing events (fallback):', eventsResponse.length);
-          processEvents(eventsResponse);
-        } else {
-          console.log('CalenderScreen - No events data found in response:', eventsResponse);
-          setLocalEvents({});
-        }
-      } catch (err) {
-        console.error('CalenderScreen - Error loading initial data:', err);
-        console.error('CalenderScreen - Error details:', err.message);
-        
-        if (err.message.includes('Access denied')) {
-          setError(`Access denied: ${err.message}`);
-        } else if (err.message.includes('No token found')) {
-          setError('Authentication required. Please log in again.');
-        } else {
-          setError(`Failed to load calendar data: ${err.message}`);
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    if (userRole !== null) {
-      loadData();
-    }
-  }, [userRole]); // Add userRole as dependency
-
-  useEffect(() => {
-    // Re-process events when user role is loaded
-    if (userRole) {
-      // Events will be processed when data is loaded
-    }
-  }, [userRole]);
-
-  useEffect(() => {
-    combineTasksAndEvents();
-  }, [tasks, localEvents]);
-
-  const handleEventCreated = async () => {
-    // Refresh both tasks and events when a new event is created
-    try {
-      const [tasksResponse, eventsResponse] = await Promise.all([
-        getAllTasks(),
-        getEventsForLogInUser()
-      ]);
-      
-      // Process the API responses
-      if (tasksResponse && tasksResponse.data) {
-        processTasks(tasksResponse.data);
-      }
-      
-      if (eventsResponse && eventsResponse.data) {
-        processEvents(eventsResponse.data);
-      } else if (eventsResponse && Array.isArray(eventsResponse)) {
-        processEvents(eventsResponse);
-      } else {
-        console.log('CalenderScreen - No events data found after event creation:', eventsResponse);
-        setLocalEvents({});
-      }
-    } catch (err) {
-      console.error('CalenderScreen - Error refreshing data after event creation:', err);
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to refresh calendar data',
-        visibilityTime: 3000,
-      });
-    }
-  };
-
-  const onDayPress = (day) => {
-    const combinedList = combinedItems[day.dateString] || [];
-    const taskList = tasks[day.dateString] || [];
-    const eventList = localEvents[day.dateString] || [];
-    
-    console.log('=== CalenderScreen onDayPress Debug ===');
-    console.log('Selected Date:', day.dateString);
-    console.log('Combined Items:', combinedItems);
-    console.log('Combined List for this date:', combinedList);
-    console.log('Task List for this date:', taskList);
-    console.log('Event List for this date:', eventList);
-    console.log('Combined List length:', combinedList.length);
-    console.log('=====================================');
-    
-    const totalItems = combinedList.length;
-    const taskCount = taskList.length;
-    const eventCount = eventList.length;
-    
-    // Toast notification removed - no longer showing "Found X task(s) and X event(s)"
-    
-    // Pass date in YYYY-MM-DD format as expected by backend
-    navigation.navigate("CalenderDetailScreen", {
-      selectedDate: day.dateString, // This is already in YYYY-MM-DD format from calendar
-      tasks: taskList,
-      events: eventList, // Pass events separately for backward compatibility
-      combinedItems: combinedList, // Pass combined items for new functionality
+  const selectedItems = useMemo(() => {
+    const list = combinedByDate[selectedDate] || [
+      ...(tasksByDate[selectedDate] || []),
+      ...(eventsByDate[selectedDate] || []),
+    ];
+    return [...list].sort((a, b) => {
+      const aTime = a.startTime ? new Date(a.startTime).getTime() : 0;
+      const bTime = b.startTime ? new Date(b.startTime).getTime() : 0;
+      return aTime - bTime;
     });
-  };
+  }, [combinedByDate, tasksByDate, eventsByDate, selectedDate]);
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    try {
-      // Fetch fresh data from API
-      const [tasksResponse, eventsResponse] = await Promise.all([
-        getAllTasks(),
-        getEventsForLogInUser()
-      ]);
-      
-      // Process the API responses
-      if (tasksResponse && tasksResponse.data) {
-        processTasks(tasksResponse.data);
+  const onDayPress = useCallback((day) => {
+    setSelectedDate(day.dateString);
+    setVisibleMonth(`${day.dateString.slice(0, 8)}01`);
+  }, []);
+
+  const renderDay = useCallback(
+    ({ date, state }) => {
+      const combined = combinedByDate[date.dateString] || [
+        ...(tasksByDate[date.dateString] || []),
+        ...(eventsByDate[date.dateString] || []),
+      ];
+      const dots = combined.slice(0, 3).map((item) =>
+        item.type === 'event' ? EVENT_DOT : getPriorityColor(item.priority)
+      );
+
+      return (
+        <MonthDayCell
+          date={date}
+          state={state}
+          dots={dots}
+          selected={date.dateString === selectedDate}
+          onPress={onDayPress}
+        />
+      );
+    },
+    [tasksByDate, eventsByDate, combinedByDate, selectedDate, onDayPress]
+  );
+
+  const onRefresh = useCallback(async () => {
+    await refetch();
+  }, [refetch]);
+
+  const handleEventCreated = useCallback(async () => {
+    await invalidateCalendar();
+    await refetch();
+  }, [invalidateCalendar, refetch]);
+
+  const openItem = useCallback(
+    (item) => {
+      if (item.type === 'event') {
+        setDialogEvent(item);
+        setShowEventDetailsDialog(true);
+        return;
       }
-      
-      if (eventsResponse && eventsResponse.data) {
-        processEvents(eventsResponse.data);
-      } else if (eventsResponse && Array.isArray(eventsResponse)) {
-        processEvents(eventsResponse);
-      } else {
-        console.log('CalenderScreen - No events data found during refresh:', eventsResponse);
-        setLocalEvents({});
-      }
-    } catch (err) {
-      console.error('CalenderScreen - Error refreshing data:', err);
-      Toast.show({
-        type: 'error',
-        text1: 'Error',
-        text2: 'Failed to refresh calendar data',
-        visibilityTime: 3000,
-      });
-    } finally {
-      setRefreshing(false);
-    }
-  };
+      setDialogTask(item);
+      setShowTaskDialog(true);
+    },
+    []
+  );
 
-  const handleViewModeChange = (newViewMode) => {
-    if (newViewMode === viewMode) return; // No change needed
-    
-    // Animate button scales
-    if (newViewMode === 'weekly') {
-      Animated.parallel([
-        Animated.spring(weeklyButtonScale, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.spring(monthlyButtonScale, {
-          toValue: 0.95,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.spring(monthlyButtonScale, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.spring(weeklyButtonScale, {
-          toValue: 0.95,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-    
-    setViewMode(newViewMode);
-  };
-
-  if (loading) {
+  if (isLoading && !feed) {
     return (
-      <View className="flex-1 bg-white">
-        <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" color="black" />
-          <Text className="text-base text-gray-600 mt-4 text-center">Loading your tasks and events...</Text>
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <StatusBar barStyle="dark-content" backgroundColor={PAGE_BG} />
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={ACCENT} />
+          <Text style={styles.muted}>Loading calendar…</Text>
         </View>
         <HomeBottomNav />
       </View>
     );
   }
 
-  if (error) {
+  if (error && !feed) {
     return (
-      <View className="flex-1 bg-white">
-        <View className="flex-1 justify-center items-center">
-          <Text className="text-base text-red-600 text-center mb-5 px-5">❌ {error}</Text>
-          <TouchableOpacity 
-            className="bg-blue-500 px-6 py-3 rounded-lg" 
-            onPress={async () => {
-              setError(null);
-              setLoading(true);
-              try {
-                const [tasksResponse, eventsResponse] = await Promise.all([
-                  getAllTasks(),
-                  getEventsForLogInUser()
-                ]);
-                
-                if (tasksResponse && tasksResponse.data) {
-                  processTasks(tasksResponse.data);
-                }
-                
-                if (eventsResponse && eventsResponse.data) {
-                  processEvents(eventsResponse.data);
-                } else if (eventsResponse && Array.isArray(eventsResponse)) {
-                  processEvents(eventsResponse);
-                } else {
-                  console.log('CalenderScreen - No events data found during retry:', eventsResponse);
-                  setLocalEvents({});
-                }
-              } catch (err) {
-                console.error('CalenderScreen - Error retrying data load:', err);
-                setError('Failed to load calendar data. Please try again.');
-              } finally {
-                setLoading(false);
-              }
-            }}
-          >
-            <Text className="text-white text-base font-semibold">Retry</Text>
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <StatusBar barStyle="dark-content" backgroundColor={PAGE_BG} />
+        <View style={styles.center}>
+          <Ionicons name="calendar-outline" size={36} color={TEXT_MUTED} />
+          <Text style={styles.errorText}>
+            {error?.message || 'Failed to load calendar'}
+          </Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()}>
+            <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
         </View>
+        <HomeBottomNav />
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-white">
-      <CalendarToggle
-        currentView={viewMode}
-        onWeeklyPress={() => setViewMode('weekly')}
-        onMonthlyPress={() => setViewMode('monthly')}
-      />
+    <View style={styles.root}>
+      <StatusBar barStyle="dark-content" backgroundColor={PAGE_BG} />
 
       {viewMode === 'monthly' ? (
-        /* --- Monthly Calendar View in ScrollView --- */
-        <ScrollView 
-          className="flex-1"
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[ "#3155A1"]}
-              tintColor="#3155A1"
-              progressBackgroundColor="#ffffff"
+        <View style={styles.monthLayout}>
+          <ScrollView
+            style={styles.flex}
+            contentContainerStyle={[
+              styles.monthScroll,
+              { paddingTop: insets.top },
+            ]}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefetching}
+                onRefresh={onRefresh}
+                colors={[ACCENT]}
+                tintColor={ACCENT}
+                progressBackgroundColor="#FFFFFF"
+              />
+            }
+            showsVerticalScrollIndicator={false}
+          >
+            <CalendarToggle
+              currentView={viewMode}
+              onWeeklyPress={() => setViewMode('weekly')}
+              onMonthlyPress={() => setViewMode('monthly')}
+              containerStyle={styles.toggleInScroll}
+            />
+
+            <View style={styles.monthNav}>
+              <TouchableOpacity
+                style={styles.monthNavBtn}
+                onPress={() => setVisibleMonth((m) => shiftMonth(m, -1))}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="chevron-back" size={22} color={TEXT} />
+              </TouchableOpacity>
+              <Text style={styles.monthTitle}>
+                {formatMonthTitle(visibleMonth)}
+              </Text>
+              <TouchableOpacity
+                style={styles.monthNavBtn}
+                onPress={() => setVisibleMonth((m) => shiftMonth(m, 1))}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="chevron-forward" size={22} color={TEXT} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.calendarCard}>
+              <Calendar
+                key={visibleMonth}
+                current={visibleMonth}
+                onDayPress={onDayPress}
+                onMonthChange={(month) => {
+                  setVisibleMonth(
+                    `${month.year}-${String(month.month).padStart(2, '0')}-01`
+                  );
+                }}
+                dayComponent={renderDay}
+                hideArrows
+                renderHeader={() => null}
+                enableSwipeMonths
+                theme={{
+                  backgroundColor: 'transparent',
+                  calendarBackground: 'transparent',
+                  textSectionTitleColor: TEXT_MUTED,
+                  textDayHeaderFontSize: 12,
+                  textDayHeaderFontWeight: '500',
+                  stylesheet: {
+                    calendar: {
+                      header: {
+                        height: 0,
+                        margin: 0,
+                        padding: 0,
+                        opacity: 0,
+                      },
+                    },
+                  },
+                }}
+              />
+            </View>
+
+            <View style={styles.agendaSheet}>
+              <View style={styles.agendaHeader}>
+                <View>
+                  <Text style={styles.agendaHeaderDate}>
+                    {formatAgendaHeader(selectedDate)}
+                  </Text>
+                  <Text style={styles.agendaSubtitle}>
+                    {selectedDate === todayKey ? 'Today' : 'Schedule'}
+                  </Text>
+                </View>
+                <View style={styles.agendaCountPill}>
+                  <Text style={styles.agendaCount}>
+                    {selectedItems.length}{' '}
+                    {selectedItems.length === 1 ? 'item' : 'items'}
+                  </Text>
+                </View>
+              </View>
+
+              {feedTruncated ? (
+                <Text style={styles.truncatedNotice}>
+                  Showing the first batch of items for this range
+                </Text>
+              ) : null}
+
+              {selectedItems.length === 0 ? (
+                <View style={styles.emptyAgenda}>
+                  <View style={styles.emptyIconWrap}>
+                    <Ionicons
+                      name="calendar-outline"
+                      size={22}
+                      color={TEXT_MUTED}
+                    />
+                  </View>
+                  <Text style={styles.emptyAgendaTitle}>No plans yet</Text>
+                  <Text style={styles.emptyAgendaText}>
+                    Tasks and events for this day will show up here
+                  </Text>
+                </View>
+              ) : (
+                selectedItems.map((item) => (
+                  <AgendaCard
+                    key={`${item.type}-${item.id}-${item.currentDisplayDate || ''}`}
+                    item={item}
+                    onPress={openItem}
+                  />
+                ))
+              )}
+            </View>
+          </ScrollView>
+        </View>
+      ) : (
+        <MyWeekView
+          navigation={navigation}
+          hideBottomNav
+          topInset={insets.top}
+          header={
+            <CalendarToggle
+              currentView={viewMode}
+              onWeeklyPress={() => setViewMode('weekly')}
+              onMonthlyPress={() => setViewMode('monthly')}
+              containerStyle={styles.toggleInScroll}
             />
           }
-        >
-          <Calendar
-            markingType={"custom"}
-            onDayPress={onDayPress}
-            dayComponent={({ date, state }) => {
-              const taskList = tasks[date.dateString] || [];
-              const eventList = localEvents[date.dateString] || [];
-              const combinedList = [...taskList, ...eventList];
-              
-              const visibleItem = combinedList.slice(0, 1)[0];
-              const hiddenCount = combinedList.length > 1 ? combinedList.length - 1 : 0;
-
-              return (
-                <TouchableOpacity onPress={() => onDayPress(date)}>
-                  <View className="items-center py-1 mx-1 min-h-14 h-auto">
-                    <Text className="text-lg text-black font-medium mb-1">{date.day}</Text>
-                    <View className="w-full items-center gap-1">
-                      {visibleItem && (
-                        <View 
-                          className={`px-1.5 py-1 rounded-md border-l-2 my-0.5 min-w-15 max-w-11/12 shadow-sm ${
-                            visibleItem.type === 'event' 
-                              ? visibleItem.isMultiDayEvent
-                                ? 'bg-blue-100 border-l-blue-600' // Multi-day events get darker blue
-                                : 'bg-blue-50 border-l-blue-500' // Single-day events get lighter blue
-                              : 'bg-gray-50 border-l-black'
-                          }`}
-                          style={{
-                            borderStyle: visibleItem.isMultiDayEvent ? 'dashed' : 'solid' // Dashed border for multi-day events
-                          }}
-                        >
-                          <Text numberOfLines={1} className="text-xs text-gray-800 font-medium text-center">
-                            {visibleItem.title.length > 8
-                              ? `${visibleItem.title.slice(0, 8)}...`
-                              : visibleItem.title}
-                          </Text>
-                        </View>
-                      )}
-                      
-                      {hiddenCount > 0 && (
-                        <View className="bg-gray-100 px-1 py-0.5 rounded-lg border border-gray-400">
-                          <Text className="text-xs text-gray-600 font-semibold text-center">+{hiddenCount} more</Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              );
-            }}
-            theme={{
-              todayTextColor: "#000000",
-              arrowColor: "black",
-            }}
-            enableSwipeMonths={true}
-          />
-        </ScrollView>
-      ) : (
-        /* --- Weekly View Component --- */
-        <MyWeekView />
+        />
       )}
-      
+
       <HomeBottomNav
         onAddPress={() => {
-          // Use already loaded user role to prevent async lag
-          if (userRole === "Owner") {
+          if (userRole === 'Owner') {
             setShowEventCreationDialog(true);
-          } else {
-            // Show message for non-Owner users
-            Toast.show({
-              type: 'info',
-              text1: 'Access Restricted',
-              text2: 'Only Owners can create events',
-              visibilityTime: 3000,
-              autoHide: true,
-              topOffset: 80,
-            });
+            return;
           }
+          Toast.show({
+            type: 'info',
+            text1: 'Access Restricted',
+            text2: 'Only Owners can create events',
+            visibilityTime: 3000,
+            autoHide: true,
+            topOffset: 80,
+          });
         }}
       />
 
       <CreateEventModal
         visible={showEventCreationDialog}
         onClose={() => setShowEventCreationDialog(false)}
-        selectedDate={null} // Let CreateEventModal use current date
+        selectedDate={selectedDate}
         onEventCreated={handleEventCreated}
+      />
+
+      <TaskDetailsModal
+        visible={showTaskDialog}
+        onClose={() => setShowTaskDialog(false)}
+        task={dialogTask}
+        onViewTask={(task) => {
+          setShowTaskDialog(false);
+          navigation.navigate('TaskDetails', {
+            taskId: task.originalTaskId || task.id,
+          });
+        }}
+      />
+
+      <EventDetailsModal
+        visible={showEventDetailsDialog}
+        onClose={() => setShowEventDetailsDialog(false)}
+        event={dialogEvent}
+        onEventUpdated={handleEventCreated}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  // Other styles can be added here if needed
+  root: {
+    flex: 1,
+    backgroundColor: PAGE_BG,
+  },
+  flex: { flex: 1 },
+  monthLayout: {
+    flex: 1,
+  },
+  toggleInScroll: {
+    marginTop: 0,
+    marginBottom: 8,
+  },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  muted: {
+    marginTop: 12,
+    color: TEXT_SOFT,
+    fontSize: 14,
+  },
+  errorText: {
+    marginTop: 12,
+    color: '#DC2626',
+    textAlign: 'center',
+    fontSize: 14,
+  },
+  retryBtn: {
+    marginTop: 16,
+    backgroundColor: ACCENT,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  retryText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  monthScroll: {
+    paddingBottom: 120,
+  },
+  monthNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 28,
+    marginBottom: 6,
+  },
+  monthNavBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: TEXT,
+    letterSpacing: -0.3,
+  },
+  calendarCard: {
+    marginHorizontal: 12,
+    paddingBottom: 4,
+  },
+  dayCell: {
+    width: 44,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 2,
+  },
+  dayCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayCircleToday: {
+    borderWidth: 1.5,
+    borderColor: ACCENT,
+  },
+  dayCircleSelected: {
+    backgroundColor: ACCENT,
+  },
+  dayNumber: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: TEXT,
+  },
+  dayNumberToday: {
+    color: ACCENT,
+    fontWeight: '700',
+  },
+  dayNumberSelected: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  dayNumberDisabled: {
+    color: '#D1D5DB',
+  },
+  dotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    marginTop: 3,
+    minHeight: 6,
+  },
+  dot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  agendaSheet: {
+    marginTop: 10,
+    marginHorizontal: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    paddingHorizontal: 14,
+    paddingTop: 18,
+    paddingBottom: 18,
+    minHeight: 220,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  agendaHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  agendaHeaderDate: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: TEXT,
+    letterSpacing: -0.2,
+  },
+  agendaSubtitle: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: '500',
+    color: TEXT_MUTED,
+  },
+  agendaCountPill: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  agendaCount: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: TEXT_SOFT,
+  },
+  truncatedNotice: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: TEXT_MUTED,
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  emptyAgenda: {
+    paddingVertical: 36,
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  emptyIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  emptyAgendaTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: TEXT,
+    marginBottom: 4,
+  },
+  emptyAgendaText: {
+    color: TEXT_MUTED,
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  agendaCard: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    backgroundColor: '#FAFAFA',
+    borderRadius: 16,
+    marginBottom: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+  },
+  agendaAccent: {
+    width: 4,
+  },
+  agendaBody: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  agendaTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+    gap: 8,
+  },
+  kindChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  kindChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.1,
+  },
+  agendaTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: TEXT,
+    lineHeight: 20,
+    letterSpacing: -0.1,
+  },
+  agendaDesc: {
+    marginTop: 4,
+    fontSize: 12,
+    color: TEXT_SOFT,
+    lineHeight: 16,
+  },
+  agendaTime: {
+    fontSize: 12,
+    color: TEXT_MUTED,
+    fontWeight: '600',
+  },
 });
 
 export default CalenderScreen;

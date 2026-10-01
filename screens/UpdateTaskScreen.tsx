@@ -35,8 +35,6 @@ function UpdateTaskScreen({ navigation, route }) {
   const { task, projectId } = route.params || {};
   
   // Log task data for debugging
-  console.log('UpdateTaskScreen - task:', task);
-  console.log('UpdateTaskScreen - projectId:', projectId);
 
   useEffect(() => {
     // Initialize form with existing task data

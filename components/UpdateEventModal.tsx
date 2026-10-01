@@ -98,13 +98,6 @@ const UpdateEventModal = ({ visible, onClose, event, onEventUpdated }) => {
       setStartDate(actualStartDate);
       setEndDate(actualEndDate);
 
-      console.log("=== UpdateEventModal Initialization ===");
-      console.log("Event isMultiDayEvent:", event.isMultiDayEvent);
-      console.log("Event originalStartDate:", event.originalStartDate);
-      console.log("Event originalEndDate:", event.originalEndDate);
-      console.log("Actual Start Date:", actualStartDate.toLocaleString());
-      console.log("Actual End Date:", actualEndDate.toLocaleString());
-      console.log("=== End Initialization ===");
     }
   }, [event, visible]);
 
@@ -252,15 +245,6 @@ const UpdateEventModal = ({ visible, onClose, event, onEventUpdated }) => {
   };
 
   const handleUpdateEvent = async () => {
-    console.log("=== USER TAPPED UPDATE EVENT BUTTON ===");
-    console.log("Current Date/Time:", new Date().toLocaleString());
-    console.log("Event Object:", event);
-    console.log("Event Start Date:", event.startDate);
-    console.log("Event End Date:", event.endDate);
-    console.log("Start Time State:", startTime.toLocaleString());
-    console.log("End Time State:", endTime.toLocaleString());
-    console.log("Event Form:", eventForm);
-    console.log("==========================================");
 
     const today = new Date();
     const todayDateOnly = new Date(
@@ -279,16 +263,6 @@ const UpdateEventModal = ({ visible, onClose, event, onEventUpdated }) => {
 
     const isEventOngoing =
       originalStartDate < currentTime && originalEndDate > currentTime;
-
-    console.log("=== PAST DATE VALIDATION ===");
-    console.log("Today Date Only:", todayDateOnly.toLocaleDateString());
-    console.log("Original Start Date:", originalStartDate.toLocaleString());
-    console.log("Original End Date:", originalEndDate.toLocaleString());
-    console.log("Current Time:", currentTime.toLocaleString());
-    console.log("Is Event Ongoing:", isEventOngoing);
-    console.log("New Start Date:", startDate.toLocaleDateString());
-    console.log("New End Date:", endDate.toLocaleDateString());
-    console.log("============================");
 
     const validationStartDateOnly = new Date(
       startDate.getFullYear(),
@@ -317,9 +291,6 @@ const UpdateEventModal = ({ visible, onClose, event, onEventUpdated }) => {
         return;
       }
 
-      console.log(
-        "Ongoing event - allowing past end date, will check end time"
-      );
     }
 
     const startDateOnly = new Date(
@@ -358,14 +329,6 @@ const UpdateEventModal = ({ visible, onClose, event, onEventUpdated }) => {
       newEndDateTime.setSeconds(endTime.getSeconds());
       newEndDateTime.setMilliseconds(endTime.getMilliseconds());
 
-      console.log("=== ONGOING EVENT END TIME CHECK ===");
-      console.log("New End DateTime:", newEndDateTime.toLocaleString());
-      console.log("Current Time:", currentTime.toLocaleString());
-      console.log(
-        "Is new end time > current time?",
-        newEndDateTime > currentTime
-      );
-
       if (newEndDateTime <= currentTime) {
         showErrorDialog(
           "Cannot Update to Past Time",
@@ -374,7 +337,6 @@ const UpdateEventModal = ({ visible, onClose, event, onEventUpdated }) => {
         return;
       }
 
-      console.log("Ongoing event end time update allowed");
     } else {
       if (startDateOnly.getTime() === todayDateOnly.getTime()) {
         const startDateTime = new Date(startDate);
@@ -468,27 +430,6 @@ const UpdateEventModal = ({ visible, onClose, event, onEventUpdated }) => {
     const endTimeChanged =
       Math.abs(endTime.getTime() - originalEndTime.getTime()) > 1000;
 
-    console.log("=== CHANGE DETECTION DEBUG ===");
-    console.log("Title Changed:", titleChanged);
-    console.log("Description Changed:", descriptionChanged);
-    console.log("Start Date Changed:", startDateChanged);
-    console.log("End Date Changed:", endDateChanged);
-    console.log("Start Time Changed:", startTimeChanged);
-    console.log("End Time Changed:", endTimeChanged);
-    console.log("--- Original Values ---");
-    console.log(
-      "Original Start Date:",
-      originalStartDateOnly.toLocaleDateString()
-    );
-    console.log("New Start Date:", newStartDateOnly.toLocaleDateString());
-    console.log("Original End Date:", originalEndDateOnly.toLocaleDateString());
-    console.log("New End Date:", newEndDateOnly.toLocaleDateString());
-    console.log("Original Start Time:", originalStartTime.toLocaleTimeString());
-    console.log("New Start Time:", startTime.toLocaleTimeString());
-    console.log("Original End Time:", originalEndTime.toLocaleTimeString());
-    console.log("New End Time:", endTime.toLocaleTimeString());
-    console.log("===============================");
-
     if (
       !titleChanged &&
       !descriptionChanged &&
@@ -497,7 +438,6 @@ const UpdateEventModal = ({ visible, onClose, event, onEventUpdated }) => {
       !startTimeChanged &&
       !endTimeChanged
     ) {
-      console.log("No changes detected - showing no changes dialog");
       setNoChangesDialogVisible(true);
       return;
     }
@@ -556,32 +496,6 @@ const UpdateEventModal = ({ visible, onClose, event, onEventUpdated }) => {
         endTime: formatWithTimezone(eventEndTime),
       };
 
-      console.log("=== EVENT UPDATE PROCESSING ===");
-      console.log("Original Event Start Date:", event.startDate);
-      console.log("Original Event End Date:", event.endDate);
-      console.log("Start Date State:", startDate.toLocaleDateString());
-      console.log("Start Date State (ISO):", startDate.toISOString());
-      console.log("End Date State:", endDate.toLocaleDateString());
-      console.log("End Date State (ISO):", endDate.toISOString());
-      console.log("Start Time State:", startTime.toLocaleString());
-      console.log("Start Time State (ISO):", startTime.toISOString());
-      console.log("End Time State:", endTime.toLocaleString());
-      console.log("End Time State (ISO):", endTime.toISOString());
-      console.log("--- Processed Dates ---");
-      console.log("Event Start Time:", eventStartTime.toLocaleString());
-      console.log("Event Start Time (ISO):", eventStartTime.toISOString());
-      console.log("Event End Time:", eventEndTime.toLocaleString());
-      console.log("Event End Time (ISO):", eventEndTime.toISOString());
-      console.log("Local Start Date:", localStartDate.toLocaleDateString());
-      console.log("Event Date (YYYY-MM-DD):", eventDate);
-      console.log(
-        "--- Final Data Being Sent to API (Local Timezone Format) ---"
-      );
-      console.log("Event Data:", eventData);
-      console.log("Start Time Being Sent (Local):", eventData.startTime);
-      console.log("End Time Being Sent (Local):", eventData.endTime);
-      console.log("=== END EVENT UPDATE PROCESSING ===");
-
       const result = await updateEventById(
         event.originalEventId || event.id,
         eventData
@@ -626,8 +540,6 @@ const UpdateEventModal = ({ visible, onClose, event, onEventUpdated }) => {
       } else if (error.response?.status === 500) {
         errorMessage = "Server error. Please try again later.";
       }
-
-      console.log("Showing toast with message:", errorMessage);
 
       Toast.show({
         type: "error",

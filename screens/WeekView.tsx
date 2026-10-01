@@ -71,13 +71,11 @@ export default function MyWeekView() {
   };
 
   const handleFabPress = () => {
-    console.log('WeekView - FAB pressed, opening CreateEventModal');
     setSelectedDate(new Date()); // Use current date as default
     setCreateEventModalVisible(true);
   };
 
   const handleEventCreated = () => {
-    console.log('WeekView - Event created successfully, refreshing calendar');
     // TODO: Replace with real API call to fetch events
     // For now, we'll keep the sample events
     // In real implementation, fetch events from your API here
@@ -89,12 +87,10 @@ export default function MyWeekView() {
   };
 
   const handleEventPress = (event) => {
-    console.log('Event pressed:', event);
     // TODO: Implement event details modal or navigation
   };
 
   const handleDayPress = (date) => {
-    console.log('Day pressed:', date);
     setSelectedDate(date);
     setCreateEventModalVisible(true);
   };

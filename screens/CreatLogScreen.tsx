@@ -51,31 +51,11 @@ function CreatLogScreen({ navigation, route }) {
   const managerProjectId = route.params?.["Manager projectId"] || route.params?.id || null;
   const regularProjectId = route.params?.projectId || null;
 
-  console.log("=== CreateLogScreen - Parameter Debug ===");
-  console.log("🔍 NAVIGATION SOURCE: ViewAllLogScreen or WidgetScreen");
-  console.log("CreatLogScreen - All route params:", route.params);
-  console.log("CreatLogScreen - route.params type:", typeof route.params);
-  console.log("CreatLogScreen - route.params keys:", route.params ? Object.keys(route.params) : 'no params');
   
   // Check if this is coming from an unexpected source
   if (!route.params || Object.keys(route.params || {}).length === 0) {
-    console.log("🚨 WARNING: CreatLogScreen received NO PARAMETERS!");
-    console.log("🚨 This suggests navigation from a source that doesn't pass project ID");
-    console.log("🚨 Check: HomeScreen, direct navigation, or other unexpected sources");
   } else {
-    console.log("✅ CreatLogScreen received parameters - checking project ID availability...");
   }
-  console.log("CreatLogScreen - route.params?.projectId:", route.params?.projectId);
-  console.log("CreatLogScreen - PROJECT ID FOR MANAGER:", route.params?.projectId);
-  console.log("CreatLogScreen - Received Employee projectId:", employeeProjectId);
-  console.log("CreatLogScreen - Received Manager projectId:", managerProjectId);
-  console.log("CreatLogScreen - Received regular projectId:", regularProjectId);
-  console.log("CreatLogScreen - route.params?.id:", route.params?.id);
-  console.log("🧩 PARAMETER EXTRACTION BREAKDOWN:");
-  console.log("- employeeProjectId = route.params?.['Employee projectId']:", route.params?.["Employee projectId"]);
-  console.log("- managerProjectId = route.params?.['Manager projectId'] || route.params?.id:", route.params?.["Manager projectId"], "||", route.params?.id);
-  console.log("- regularProjectId = route.params?.projectId:", route.params?.projectId);
-  console.log("========================================");
 
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [logs, setLogs] = useState([]);
@@ -95,7 +75,6 @@ function CreatLogScreen({ navigation, route }) {
 
   useFocusEffect(
     React.useCallback(() => {
-      console.log("CreatLogScreen - useFocusEffect triggered");
       loadLogData();
     }, [])
   );
@@ -129,87 +108,38 @@ function CreatLogScreen({ navigation, route }) {
 
       // Re-extract parameters inside the function to ensure we have the latest values
       const currentProjectId = route.params?.projectId || null;
-      console.log("CreatLogScreen - loadLogData - Current route params:", route.params);
-      console.log("CreatLogScreen - loadLogData - Extracted projectId:", currentProjectId);
-      console.log("🎯 MANAGER PROJECT ID IN CREATELOGSCREEN:", currentProjectId);
 
       // Get user role first
       const role = await getUserRole();
-      console.log("CreatLogScreen - User Role:", role);
       setUserRole(role);
 
       // Get data based on user role
       let response;
       if (role === "Manager") {
         // Console log the project ID from params
-        console.log("CreatLogScreen - Manager Role - Project ID from params:", currentProjectId);
         
         // For managers, use getTaskAssignedToManager service with the projectId
         if (currentProjectId) {
-          console.log("CreatLogScreen - Calling getTaskAssignedToManager for Manager with projectId:", currentProjectId);
-          console.log("🚀 MAKING API CALL: getTaskAssignedToManager(" + currentProjectId + ")");
           response = await getTaskAssignedToManager(currentProjectId);
-          console.log("CreatLogScreen - Manager getTaskAssignedToManager response:", response);
-          console.log("📊 MANAGER RESPONSE DETAILS:");
-          console.log("- Response Type:", typeof response);
-          console.log("- Response Keys:", response ? Object.keys(response) : 'No response');
-          console.log("- Response JSON:", JSON.stringify(response, null, 2));
           if (response?.tasks) {
-            console.log("- Tasks Count:", response.tasks.length);
-            console.log("- First Task:", response.tasks[0]);
           }
-          console.log("✅ API CALL COMPLETED for projectId:", currentProjectId);
         } else {
-          console.log("❌ NO PROJECT ID FOUND - Manager cannot load tasks");
         }
       } else if (role === "Employee") {
         // For employees, use getTaskAssignedToManager with projectId
-        console.log("🔍 EMPLOYEE PROJECT ID DEBUG:");
-        console.log("- employeeProjectId:", employeeProjectId);
-        console.log("- currentProjectId:", currentProjectId);
-        console.log("- regularProjectId:", regularProjectId);
-        console.log("- route.params?.id:", route.params?.id);
-        console.log("- All possible IDs:", {
-          employeeProjectId,
-          currentProjectId,
-          regularProjectId,
-          routeParamsId: route.params?.id,
-          managerProjectId
-        });
         
         const employeeProjectIdToUse = employeeProjectId || currentProjectId || regularProjectId || route.params?.id;
-        console.log("- Final employeeProjectIdToUse:", employeeProjectIdToUse);
         
         if (employeeProjectIdToUse) {
-          console.log("CreatLogScreen - Calling getTaskAssignedToManager for Employee with projectId:", employeeProjectIdToUse);
-          console.log("🚀 MAKING API CALL: getTaskAssignedToManager(" + employeeProjectIdToUse + ") for Employee");
           response = await getTaskAssignedToManager(employeeProjectIdToUse);
-          console.log("CreatLogScreen - Employee getTaskAssignedToManager response:", response);
-          console.log("📊 EMPLOYEE RESPONSE DETAILS:");
-          console.log("- Response Type:", typeof response);
-          console.log("- Response Keys:", response ? Object.keys(response) : 'No response');
-          console.log("- Response JSON:", JSON.stringify(response, null, 2));
           if (response?.tasks) {
-            console.log("- Tasks Count:", response.tasks.length);
-            console.log("- First Task:", response.tasks[0]);
           }
-          console.log("✅ API CALL COMPLETED for Employee with projectId:", employeeProjectIdToUse);
         } else {
-          console.log("❌ NO PROJECT ID FOUND - Employee cannot load tasks");
-          console.log("❌ All projectId sources are null/undefined");
         }
       }
 
       // Convert data to logs format for display
       let logsData = [];
-
-      console.log("🔍 DEBUGGING RESPONSE PROCESSING:");
-      console.log("- Response exists:", !!response);
-      console.log("- Response type:", typeof response);
-      console.log("- Response.tasks exists:", !!response?.tasks);
-      console.log("- Response.tasks type:", typeof response?.tasks);
-      console.log("- Response.tasks length:", response?.tasks?.length);
-      console.log("- Full response structure:", response);
 
       if (response) {
         // Handle different response structures for Manager role
@@ -222,18 +152,13 @@ function CreatLogScreen({ navigation, route }) {
           if (response.tasks && Array.isArray(response.tasks)) {
             tasksArray = response.tasks;
             projectInfo = response.project || response;
-            console.log("✅ Found tasks in response.tasks for", role);
           } else if (Array.isArray(response)) {
             tasksArray = response;
-            console.log("✅ Response is directly an array of tasks for", role);
           } else {
-            console.log("❌ Unexpected response structure for", role);
           }
         }
         
         if (tasksArray && tasksArray.length > 0) {
-          console.log("✅ PROCESSING TASKS - Role:", role, "Tasks count:", tasksArray.length);
-          console.log("📋 TASKS TO PROCESS:", tasksArray);
           logsData = tasksArray.map(task => ({
             id: task.id,
             title: task.title,
@@ -252,32 +177,15 @@ function CreatLogScreen({ navigation, route }) {
             logCreatedAt: task.log?.createdAt || null
           }));
         } else if (tasksArray && tasksArray.length === 0) {
-          console.log("⚠️ TASKS ARRAY IS EMPTY - No tasks found for this project");
         } else {
-          console.log("❌ NO TASKS FOUND - Unable to extract tasks from response");
-          console.log("- Role:", role);
-          console.log("- TasksArray:", tasksArray);
-          console.log("- Response structure doesn't match expected format");
         }
 
-        console.log("CreatLogScreen - Processed tasks for", role + ":", logsData.length);
       } else {
-        console.log("❌ NO RESPONSE OR NO TASKS FOUND");
-        console.log("- Role:", role);
-        console.log("- Response exists:", !!response);
-        console.log("- Response.tasks exists:", !!response?.tasks);
-        console.log("- CurrentProjectId:", currentProjectId);
-        console.log("- EmployeeProjectId:", employeeProjectId);
       }
-
-      console.log("🎯 FINAL LOGS DATA:");
-      console.log("- LogsData length:", logsData.length);
-      console.log("- LogsData content:", logsData);
 
       setLogs(logsData);
       setFilteredLogs(logsData);
       
-      console.log("📊 STATE UPDATED - Logs set to:", logsData.length, "items");
     } catch (err) {
       console.error("CreatLogScreen - Error loading log data:", err);
       console.error("CreatLogScreen - Error response:", err.response);
@@ -429,7 +337,6 @@ function CreatLogScreen({ navigation, route }) {
 
       // Extract project ID from route params to send to service
       const projectIdForLog = route.params?.projectId || employeeProjectId || managerProjectId || regularProjectId || route.params?.id;
-      console.log("🔗 SENDING PROJECT ID TO CREATE LOG SERVICE:", projectIdForLog);
       
       const response = await createLog({
         task_id: Array.from(checkedTasks),
@@ -475,7 +382,6 @@ function CreatLogScreen({ navigation, route }) {
     setIsUploadingImages(true);
 
     try {
-      console.log(`CreatLogScreen - Uploading ${selectedImages.length} images at once`);
 
       const uploadResponse = await uploadImage(selectedImages, { logId });
 
@@ -483,8 +389,6 @@ function CreatLogScreen({ navigation, route }) {
       if (uploadResponse.images?.length > 0) {
         const successful = uploadResponse.images.filter(img => !img.error);
         const failed = uploadResponse.images.filter(img => img.error);
-
-        console.log(`CreatLogScreen - Upload result: ${successful.length} successful, ${failed.length} failed`);
 
         if (failed.length > 0) {
           Toast.show({
@@ -750,10 +654,6 @@ function CreatLogScreen({ navigation, route }) {
   const keyExtractor = React.useCallback((item) => String(item.id), []);
 
   const renderContent = () => {
-    console.log("🖥️ RENDERING CONTENT:");
-    console.log("- filteredLogs length:", filteredLogs.length);
-    console.log("- logs length:", logs.length);
-    console.log("- filteredLogs data:", filteredLogs);
     
     return (
             <View style={{ flex: 1 }}>
@@ -989,7 +889,7 @@ function CreatLogScreen({ navigation, route }) {
                             source={{ uri: image.uri }}
                             className="w-full h-full"
                             style={{ resizeMode: 'cover' }}
-                            onError={() => console.log(`Failed to load image: ${image.name}`)}
+                            onError={() => {}}
                           />
                           {/* Individual Cross Button */}
                           <TouchableOpacity

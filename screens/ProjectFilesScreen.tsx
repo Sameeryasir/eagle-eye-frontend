@@ -34,15 +34,12 @@ const ProjectFilesScreen = ({ navigation, route }) => {
     setError(null);
     
     try {
-      console.log('🔄 Fetching files for project:', projectId);
       const response = await getFilesByProjectId(projectId);
       
       if (response && Array.isArray(response)) {
         setFiles(response);
-        console.log('✅ Files fetched successfully:', response.length, 'files');
       } else {
         setFiles([]);
-        console.log('📭 No files found for this project');
       }
     } catch (err) {
       console.error('❌ Error fetching files:', err);
@@ -59,7 +56,6 @@ const ProjectFilesScreen = ({ navigation, route }) => {
 
   const handleFileShare = async (fileUrl, fileName) => {
     try {
-      console.log('🔄 Sharing file:', fileName, 'URL:', fileUrl);
       
       // Check if sharing is available
       const isAvailable = await Sharing.isAvailableAsync();
@@ -72,11 +68,9 @@ const ProjectFilesScreen = ({ navigation, route }) => {
       const fileUri = `${FileSystem.documentDirectory}${fileName}`;
       
       // Download file from internet to local storage
-      console.log('📥 Downloading file to:', fileUri);
       const downloadResult = await FileSystem.downloadAsync(fileUrl, fileUri);
       
       if (downloadResult.status === 200) {
-        console.log('✅ File downloaded successfully');
         
         // Mark file as downloaded
         setDownloadedFiles(prev => new Set([...prev, fileName]));
@@ -88,7 +82,6 @@ const ProjectFilesScreen = ({ navigation, route }) => {
           UTI: 'public.item',
         });
         
-        console.log('✅ File shared successfully');
       } else {
         throw new Error('Failed to download file');
       }
