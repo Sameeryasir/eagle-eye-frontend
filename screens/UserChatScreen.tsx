@@ -3031,58 +3031,84 @@ const UserChatScreen = ({ navigation, route }) => {
                 });
               } else if (signatureStatus === 'signed') {
               }
+              // Soft status colors for the in-chat signature card (no black fills)
+              const isSignedCard =
+                (item.signature?.status || item.status) === 'signed';
+
               return (
                 <View
                   className={`mb-3 px-4 ${isMyMessage ? 'items-end' : 'items-start'}`}
                 >
                   <View
                     style={{
-                      width: '78%',
-                      maxWidth: 320,
+                      width: '82%',
+                      maxWidth: 330,
                       backgroundColor: Brand.paper,
-                      borderRadius: 18,
-                      borderWidth: 1,
+                      borderRadius: 22,
+                      borderWidth: 1.5,
                       borderColor: Brand.line,
                       overflow: 'hidden',
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.06,
-                      shadowRadius: 10,
+                      shadowColor: Brand.ink,
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.07,
+                      shadowRadius: 14,
                       elevation: 3,
                     }}
                   >
-                    {/* Top accent bar */}
-                    <View style={{ height: 4, backgroundColor: Brand.ink }} />
-
-                    <View style={{ padding: 14 }}>
-                      {/* Header */}
+                    {/* Soft header wash — matches request modal tone */}
+                    <View
+                      style={{
+                        backgroundColor: Brand.paperSoft,
+                        borderBottomWidth: StyleSheet.hairlineWidth,
+                        borderBottomColor: Brand.line,
+                        paddingHorizontal: 14,
+                        paddingTop: 14,
+                        paddingBottom: 12,
+                      }}
+                    >
                       <View
                         style={{
                           flexDirection: 'row',
                           alignItems: 'center',
-                          marginBottom: 14,
                         }}
                       >
+                        {/* Seal-style icon (outline rings, not solid black) */}
                         <View
                           style={{
-                            width: 42,
-                            height: 42,
-                            borderRadius: 12,
-                            backgroundColor: Brand.ink,
+                            width: 48,
+                            height: 48,
+                            borderRadius: 24,
+                            borderWidth: 1.5,
+                            borderColor: Brand.lineStrong,
+                            borderStyle: 'dashed',
                             alignItems: 'center',
                             justifyContent: 'center',
                             marginRight: 12,
                           }}
                         >
-                          <Ionicons name="create" size={20} color={Brand.onInk} />
+                          <View
+                            style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: 18,
+                              backgroundColor: Brand.paper,
+                              borderWidth: 1,
+                              borderColor: Brand.line,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <Ionicons name="create" size={18} color={Brand.inkSoft} />
+                          </View>
                         </View>
+
                         <View style={{ flex: 1, paddingRight: 8 }}>
                           <Text
                             style={{
-                              fontSize: 11,
-                              fontWeight: '600',
-                              color: Brand.inkMuted,
-                              letterSpacing: 0.3,
+                              fontSize: 10,
+                              fontWeight: '700',
+                              color: Brand.inkFaint,
+                              letterSpacing: 1.1,
                               textTransform: 'uppercase',
                             }}
                           >
@@ -3093,49 +3119,61 @@ const UserChatScreen = ({ navigation, route }) => {
                               fontSize: 15,
                               fontWeight: '700',
                               color: Brand.ink,
-                              marginTop: 2,
+                              marginTop: 3,
+                              letterSpacing: -0.2,
+                              lineHeight: 20,
                             }}
                             numberOfLines={2}
                           >
                             {item.signature?.title || item.title || 'Contract for Signature'}
                           </Text>
                         </View>
+
                         <View
                           style={{
-                            paddingHorizontal: 8,
-                            paddingVertical: 4,
-                            borderRadius: 8,
-                            backgroundColor:
-                              (item.signature?.status || item.status) === 'signed'
-                                ? '#E8F6EE'
-                                : '#FFF6E5',
+                            paddingHorizontal: 9,
+                            paddingVertical: 5,
+                            borderRadius: 999,
+                            borderWidth: 1,
+                            borderColor: isSignedCard ? '#B7E0C5' : '#F0D9A8',
+                            backgroundColor: isSignedCard ? '#E8F6EE' : '#FFF8EC',
                           }}
                         >
                           <Text
                             style={{
                               fontSize: 10,
                               fontWeight: '700',
-                              color:
-                                (item.signature?.status || item.status) === 'signed'
-                                  ? '#1B7A45'
-                                  : '#B76A0A',
+                              letterSpacing: 0.2,
+                              color: isSignedCard ? '#1B7A45' : '#A16207',
                             }}
                           >
-                            {(item.signature?.status || item.status) === 'signed'
-                              ? 'Signed'
-                              : 'Pending'}
+                            {isSignedCard ? 'Signed' : 'Pending'}
                           </Text>
                         </View>
                       </View>
+                    </View>
 
-                      {/* Notes */}
+                    <View style={{ paddingHorizontal: 14, paddingTop: 12, paddingBottom: 12 }}>
+                      {/* Notes / instructions */}
                       {(item.signature?.notes || item.notes) ? (
-                        <View style={{ marginBottom: 12 }}>
+                        <View
+                          style={{
+                            marginBottom: 12,
+                            backgroundColor: Brand.paperSoft,
+                            borderRadius: 14,
+                            borderWidth: 1,
+                            borderColor: Brand.line,
+                            paddingHorizontal: 12,
+                            paddingVertical: 10,
+                          }}
+                        >
                           <Text
                             style={{
-                              fontSize: 11,
-                              fontWeight: '600',
-                              color: Brand.inkMuted,
+                              fontSize: 10,
+                              fontWeight: '700',
+                              color: Brand.inkFaint,
+                              letterSpacing: 0.6,
+                              textTransform: 'uppercase',
                               marginBottom: 4,
                             }}
                           >
@@ -3153,73 +3191,101 @@ const UserChatScreen = ({ navigation, route }) => {
                         </View>
                       ) : null}
 
-                      {/* Due date chip */}
+                      {/* Due date row */}
                       {(item.signature?.dueDate || item.dueDate) ? (
                         <View
                           style={{
                             flexDirection: 'row',
                             alignItems: 'center',
-                            alignSelf: 'flex-start',
-                            backgroundColor: Brand.paperSoft,
+                            marginBottom: 14,
+                            backgroundColor: Brand.paper,
                             borderWidth: 1,
                             borderColor: Brand.line,
-                            borderRadius: 10,
+                            borderRadius: 14,
                             paddingHorizontal: 10,
-                            paddingVertical: 7,
-                            marginBottom: 14,
+                            paddingVertical: 9,
                           }}
                         >
-                          <Ionicons
-                            name="calendar-outline"
-                            size={14}
-                            color={Brand.inkMuted}
-                            style={{ marginRight: 6 }}
-                          />
-                          <Text
+                          <View
                             style={{
-                              fontSize: 12,
-                              fontWeight: '600',
-                              color: Brand.inkSoft,
+                              width: 30,
+                              height: 30,
+                              borderRadius: 9,
+                              backgroundColor: Brand.paperSoft,
+                              borderWidth: 1,
+                              borderColor: Brand.line,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              marginRight: 10,
                             }}
                           >
-                            Due{' '}
-                            {(() => {
-                              const dateString = item.signature?.dueDate || item.dueDate;
-                              if (!dateString) return '';
-                              if (
-                                typeof dateString === 'string' &&
-                                dateString.match(/^\d{4}-\d{2}-\d{2}$/)
-                              ) {
-                                const [year, month, day] = dateString.split('-').map(Number);
-                                return new Date(year, month - 1, day).toLocaleDateString(
-                                  undefined,
-                                  { month: 'short', day: 'numeric', year: 'numeric' }
-                                );
-                              }
-                              return new Date(dateString).toLocaleDateString(undefined, {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric',
-                              });
-                            })()}
-                          </Text>
+                            <Ionicons
+                              name="calendar-outline"
+                              size={14}
+                              color={Brand.inkMuted}
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                fontWeight: '600',
+                                color: Brand.inkFaint,
+                                marginBottom: 1,
+                              }}
+                            >
+                              Complete by
+                            </Text>
+                            <Text
+                              style={{
+                                fontSize: 13,
+                                fontWeight: '700',
+                                color: Brand.inkSoft,
+                              }}
+                            >
+                              {(() => {
+                                const dateString = item.signature?.dueDate || item.dueDate;
+                                if (!dateString) return '';
+                                if (
+                                  typeof dateString === 'string' &&
+                                  dateString.match(/^\d{4}-\d{2}-\d{2}$/)
+                                ) {
+                                  const [year, month, day] = dateString.split('-').map(Number);
+                                  return new Date(year, month - 1, day).toLocaleDateString(
+                                    undefined,
+                                    { month: 'short', day: 'numeric', year: 'numeric' }
+                                  );
+                                }
+                                return new Date(dateString).toLocaleDateString(undefined, {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                });
+                              })()}
+                            </Text>
+                          </View>
                         </View>
                       ) : null}
 
                       {/* Sign action — receiver only while pending */}
-                      {!isMyMessage && (item.signature?.status || item.status) !== 'signed' ? (
+                      {!isMyMessage && !isSignedCard ? (
                         <TouchableOpacity
                           style={{
                             width: '100%',
                             backgroundColor: Brand.ink,
-                            borderRadius: 12,
-                            paddingVertical: 12,
+                            borderRadius: 14,
+                            paddingVertical: 13,
                             flexDirection: 'row',
                             alignItems: 'center',
                             justifyContent: 'center',
                             marginBottom: 12,
+                            shadowColor: Brand.ink,
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.16,
+                            shadowRadius: 8,
+                            elevation: 3,
                           }}
-                          activeOpacity={0.8}
+                          activeOpacity={0.85}
                           onPress={() => {
                             const signatureId = item.signature?.id || item.signatureId || item.id;
                             const signatureUploadChannelName = `signature-${signatureId}`;
@@ -3330,6 +3396,7 @@ const UserChatScreen = ({ navigation, route }) => {
                               color: Brand.onInk,
                               fontSize: 14,
                               fontWeight: '700',
+                              letterSpacing: 0.1,
                             }}
                           >
                             Sign document
@@ -3338,14 +3405,15 @@ const UserChatScreen = ({ navigation, route }) => {
                       ) : null}
 
                       {/* Signed preview */}
-                      {(item.signature?.status || item.status) === 'signed' &&
-                      (item.signature?.fileUrl || item.fileUrl) ? (
+                      {isSignedCard && (item.signature?.fileUrl || item.fileUrl) ? (
                         <View style={{ marginBottom: 12 }}>
                           <Text
                             style={{
-                              fontSize: 11,
-                              fontWeight: '600',
-                              color: Brand.inkMuted,
+                              fontSize: 10,
+                              fontWeight: '700',
+                              color: Brand.inkFaint,
+                              letterSpacing: 0.6,
+                              textTransform: 'uppercase',
                               marginBottom: 8,
                             }}
                           >
@@ -3356,17 +3424,17 @@ const UserChatScreen = ({ navigation, route }) => {
                             activeOpacity={0.9}
                             style={{
                               backgroundColor: Brand.paperSoft,
-                              borderRadius: 12,
+                              borderRadius: 14,
                               borderWidth: 1,
                               borderColor: Brand.line,
-                              padding: 10,
+                              padding: 12,
                             }}
                           >
                             <Image
                               source={{ uri: item.signature?.fileUrl || item.fileUrl }}
                               style={{
                                 width: '100%',
-                                height: 110,
+                                height: 118,
                                 resizeMode: 'contain',
                               }}
                             />
@@ -3411,14 +3479,23 @@ const UserChatScreen = ({ navigation, route }) => {
                             </View>
                           ) : null}
                         </View>
-                        {(item.signature?.status || item.status) === 'signed' ? (
-                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        {isSignedCard ? (
+                          <View
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              backgroundColor: '#E8F6EE',
+                              paddingHorizontal: 8,
+                              paddingVertical: 4,
+                              borderRadius: 999,
+                            }}
+                          >
                             <Ionicons name="shield-checkmark" size={12} color="#1B7A45" />
                             <Text
                               style={{
                                 marginLeft: 4,
                                 fontSize: 11,
-                                fontWeight: '600',
+                                fontWeight: '700',
                                 color: '#1B7A45',
                               }}
                             >
@@ -3426,7 +3503,24 @@ const UserChatScreen = ({ navigation, route }) => {
                             </Text>
                           </View>
                         ) : (
-                          <Text style={{ fontSize: 11, color: Brand.inkFaint }}>Awaiting signature</Text>
+                          <View
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <Ionicons name="time-outline" size={12} color={Brand.inkFaint} />
+                            <Text
+                              style={{
+                                marginLeft: 4,
+                                fontSize: 11,
+                                color: Brand.inkFaint,
+                                fontWeight: '500',
+                              }}
+                            >
+                              Awaiting signature
+                            </Text>
+                          </View>
                         )}
                       </View>
                     </View>
@@ -3602,13 +3696,13 @@ const UserChatScreen = ({ navigation, route }) => {
                       className={`px-3.5 py-2.5 ${hasFile ? 'mt-1' : ''}`}
                       style={{
                         alignSelf: isMyMessage ? 'flex-end' : 'flex-start',
-                        // Brand-aligned bubbles: ink for mine, soft paper for theirs
-                        backgroundColor: isMyMessage ? Brand.ink : Brand.paper,
+                        // Soft fill for "mine" — no black/ink bubble fill
+                        backgroundColor: isMyMessage ? Brand.paperSoft : Brand.paper,
                         borderRadius: 18,
                         borderBottomRightRadius: isMyMessage ? 6 : 18,
                         borderBottomLeftRadius: isMyMessage ? 18 : 6,
-                        borderWidth: isMyMessage ? 0 : 1,
-                        borderColor: Brand.line,
+                        borderWidth: 1,
+                        borderColor: isMyMessage ? Brand.lineStrong : Brand.line,
                       }}
                     >
                       {/* Show sender name ONLY in group chats for received messages */}
@@ -3623,7 +3717,7 @@ const UserChatScreen = ({ navigation, route }) => {
                       
                       <Text
                         className="text-[15px] leading-5"
-                        style={{ color: isMyMessage ? Brand.onInk : Brand.ink }}
+                        style={{ color: Brand.ink }}
                       >
                         {item.content}
                       </Text>

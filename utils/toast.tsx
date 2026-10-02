@@ -17,7 +17,7 @@ import { getErrorMessage } from '../services/api/errors';
 type ToastKind = 'success' | 'error' | 'info';
 
 const TOAST_VISIBLE_MS = 2800;
-const TOAST_TOP_OFFSET = Platform.OS === 'ios' ? 54 : 40;
+const TOAST_TOP_OFFSET = Platform.OS === 'ios' ? 54 : 48;
 const DEDUPE_MS = 900;
 const AFTER_MODAL_MS = 350;
 
@@ -93,9 +93,11 @@ export const toastConfig: ToastConfig = {
 function buildSafeParams(params: ToastShowParams = {}): ToastShowParams {
   const visibilityTime = params.visibilityTime ?? TOAST_VISIBLE_MS;
   return {
+    ...params,
+    // Always force top — never let callers park it on the tab bar
     position: 'top',
     topOffset: params.topOffset ?? TOAST_TOP_OFFSET,
-    ...params,
+    bottomOffset: undefined,
     visibilityTime,
     autoHide: true,
     swipeable: false,
@@ -203,6 +205,14 @@ const styles = StyleSheet.create({
     borderLeftWidth: 5,
     borderRadius: 14,
     backgroundColor: '#FFFFFF',
+    opacity: 1,
+    // Solid card on Android emulator — without elevation it looks see-through over the tab bar
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    zIndex: 9999,
   },
   successBorder: {
     borderLeftColor: '#16A34A',
@@ -216,6 +226,7 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 12,
     paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
   },
   text1: {
     fontSize: 15,

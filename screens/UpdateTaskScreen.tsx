@@ -14,7 +14,6 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { updateTask } from '../services/tasks/updateTaskById';
 import Toast from 'react-native-toast-message';
-import HomeBottomNav from '../components/HomeBottomNav';
 
 function UpdateTaskScreen({ navigation, route }) {
   const [taskData, setTaskData] = useState({
@@ -444,8 +443,6 @@ function UpdateTaskScreen({ navigation, route }) {
         )}
 
       </View>
-
-      <HomeBottomNav keyboardVisible={isKeyboardVisible} />
     </View>
   );
 }

@@ -29,6 +29,8 @@ import {
   groupEventsByDate,
   groupTasksByDate,
 } from '../../services/calendar/calendarHelpers';
+import { getUserConversations } from '../../services/chats/getConversation';
+import { getNotificationforCurrentUser } from '../../services/inAppNotification/getNotificationforCurrentUser';
 
 export function useProjectsList(enabled = true) {
   return useQuery({
@@ -291,7 +293,7 @@ export function useCalendarFeed(
     queryKey: queryKeys.calendar.feed(resolved.from, resolved.to),
     queryFn: () => fetchCalendarFeed(resolved.from, resolved.to),
     enabled,
-    staleTime: 60_000,
+    staleTime: 2 * 60_000,
     placeholderData: keepPreviousData,
   });
 }
@@ -300,4 +302,22 @@ export function useInvalidateCalendar() {
   const queryClient = useQueryClient();
   return () =>
     queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all });
+}
+
+export function useConversationsList(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.chats.conversations(),
+    queryFn: () => getUserConversations(),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+export function useNotificationsList(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.notifications.list(),
+    queryFn: () => getNotificationforCurrentUser(),
+    enabled,
+    staleTime: 60_000,
+  });
 }

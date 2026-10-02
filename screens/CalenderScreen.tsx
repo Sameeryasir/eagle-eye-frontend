@@ -15,7 +15,6 @@ import { Calendar } from 'react-native-calendars';
 import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 import { getUserRole } from '../services/utils/userRole';
-import HomeBottomNav from '../components/HomeBottomNav';
 import MyWeekView from '../components/WeekView';
 import CalendarToggle from '../components/CalendarToggle';
 import CreateEventModal from '../components/CreateEventModal';
@@ -27,13 +26,15 @@ import {
   getPriorityColor,
   toLocalDateKey,
 } from '../services/calendar/calendarHelpers';
+import appEmitter from '../utils/appEmitter';
+import { Brand } from '../constants/brandColors';
 
-const ACCENT = '#2563EB';
-const EVENT_DOT = '#2563EB';
-const PAGE_BG = '#F3F4F6';
-const TEXT = '#111827';
-const TEXT_MUTED = '#9CA3AF';
-const TEXT_SOFT = '#6B7280';
+const ACCENT = Brand.ink;
+const EVENT_DOT = Brand.inkSoft;
+const PAGE_BG = Brand.paperSoft;
+const TEXT = Brand.ink;
+const TEXT_MUTED = Brand.inkFaint;
+const TEXT_SOFT = Brand.inkMuted;
 
 const MONTH_NAMES = [
   'January',
@@ -67,9 +68,11 @@ function formatAgendaHeader(dateKey) {
   if (!dateKey) return '';
   const [y, m, d] = String(dateKey).split('-').map(Number);
   const date = new Date(y, m - 1, d);
-  const weekday = WEEKDAYS_SHORT[date.getDay()];
-  const month = MONTH_NAMES[date.getMonth()].slice(0, 3);
-  return `${weekday}, ${month} ${d}`;
+  return date.toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 function formatTimeRange(item) {
@@ -96,7 +99,7 @@ function getItemMeta(item) {
       kind: 'Event',
       label: 'Event',
       color: EVENT_DOT,
-      soft: '#EFF6FF',
+      soft: Brand.paperSoft,
     };
   }
 
@@ -189,31 +192,36 @@ function AgendaCard({ item, onPress }) {
   return (
     <TouchableOpacity
       style={styles.agendaCard}
-      activeOpacity={0.8}
+      activeOpacity={0.85}
       onPress={() => onPress(item)}
     >
       <View style={[styles.agendaAccent, { backgroundColor: meta.color }]} />
 
       <View style={styles.agendaBody}>
-        <View style={styles.agendaTopRow}>
-          <View style={[styles.kindChip, { backgroundColor: meta.soft }]}>
-            <Text style={[styles.kindChipText, { color: meta.color }]}>
-              {meta.kind}
-              {item.type === 'task' ? ` · ${meta.label}` : ''}
-            </Text>
-          </View>
-          <Text style={styles.agendaTime}>{timeLabel}</Text>
+        <View style={[styles.kindChip, { backgroundColor: meta.soft }]}>
+          <Text style={[styles.kindChipText, { color: meta.color }]}>
+            {meta.kind}
+            {item.type === 'task' ? ` · ${meta.label}` : ''}
+          </Text>
         </View>
 
-        <Text style={styles.agendaTitle} numberOfLines={2}>
-          {item.title || 'Untitled'}
-        </Text>
+        <View style={styles.agendaMainRow}>
+          <View style={styles.agendaTextCol}>
+            <Text style={styles.agendaTitle} numberOfLines={2}>
+              {item.title || 'Untitled'}
+            </Text>
+            {description ? (
+              <Text style={styles.agendaDesc} numberOfLines={1}>
+                {description}
+              </Text>
+            ) : null}
+          </View>
 
-        {description ? (
-          <Text style={styles.agendaDesc} numberOfLines={1}>
-            {description}
-          </Text>
-        ) : null}
+          <View style={styles.agendaRightCol}>
+            <Text style={styles.agendaTime}>{timeLabel}</Text>
+            <Ionicons name="chevron-forward" size={16} color={TEXT_MUTED} />
+          </View>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -266,6 +274,25 @@ function CalenderScreen({ navigation }) {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    const openCreate = () => {
+      if (userRole === 'Owner') {
+        setShowEventCreationDialog(true);
+        return;
+      }
+      Toast.show({
+        type: 'info',
+        text1: 'Access Restricted',
+        text2: 'Only Owners can create events',
+        visibilityTime: 3000,
+        autoHide: true,
+        topOffset: 80,
+      });
+    };
+    appEmitter.on('calendar-fab-press', openCreate);
+    return () => appEmitter.off('calendar-fab-press', openCreate);
+  }, [userRole]);
 
   const selectedItems = useMemo(() => {
     const list = combinedByDate[selectedDate] || [
@@ -331,20 +358,19 @@ function CalenderScreen({ navigation }) {
 
   if (isLoading && !feed) {
     return (
-      <View style={[styles.root, { paddingTop: insets.top }]}>
+      <View style={styles.root}>
         <StatusBar barStyle="dark-content" backgroundColor={PAGE_BG} />
         <View style={styles.center}>
           <ActivityIndicator size="large" color={ACCENT} />
           <Text style={styles.muted}>Loading calendar…</Text>
         </View>
-        <HomeBottomNav />
       </View>
     );
   }
 
   if (error && !feed) {
     return (
-      <View style={[styles.root, { paddingTop: insets.top }]}>
+      <View style={styles.root}>
         <StatusBar barStyle="dark-content" backgroundColor={PAGE_BG} />
         <View style={styles.center}>
           <Ionicons name="calendar-outline" size={36} color={TEXT_MUTED} />
@@ -355,7 +381,6 @@ function CalenderScreen({ navigation }) {
             <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
         </View>
-        <HomeBottomNav />
       </View>
     );
   }
@@ -368,10 +393,7 @@ function CalenderScreen({ navigation }) {
         <View style={styles.monthLayout}>
         <ScrollView 
             style={styles.flex}
-            contentContainerStyle={[
-              styles.monthScroll,
-              { paddingTop: insets.top },
-            ]}
+            contentContainerStyle={styles.monthScroll}
           refreshControl={
             <RefreshControl
                 refreshing={isRefetching}
@@ -390,31 +412,31 @@ function CalenderScreen({ navigation }) {
               containerStyle={styles.toggleInScroll}
             />
 
-            <View style={styles.monthNav}>
-              <TouchableOpacity
-                style={styles.monthNavBtn}
-                onPress={() => setVisibleMonth((m) => shiftMonth(m, -1))}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="chevron-back" size={22} color={TEXT} />
-              </TouchableOpacity>
-              <Text style={styles.monthTitle}>
-                {formatMonthTitle(visibleMonth)}
-              </Text>
-              <TouchableOpacity
-                style={styles.monthNavBtn}
-                onPress={() => setVisibleMonth((m) => shiftMonth(m, 1))}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="chevron-forward" size={22} color={TEXT} />
-              </TouchableOpacity>
-            </View>
-
             <View style={styles.calendarCard}>
-          <Calendar
+              <View style={styles.monthNav}>
+                <TouchableOpacity
+                  style={styles.monthNavBtn}
+                  onPress={() => setVisibleMonth((m) => shiftMonth(m, -1))}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="chevron-back" size={20} color={TEXT} />
+                </TouchableOpacity>
+                <Text style={styles.monthTitle}>
+                  {formatMonthTitle(visibleMonth)}
+                </Text>
+                <TouchableOpacity
+                  style={styles.monthNavBtn}
+                  onPress={() => setVisibleMonth((m) => shiftMonth(m, 1))}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="chevron-forward" size={20} color={TEXT} />
+                </TouchableOpacity>
+              </View>
+
+              <Calendar
                 key={visibleMonth}
                 current={visibleMonth}
-            onDayPress={onDayPress}
+                onDayPress={onDayPress}
                 onMonthChange={(month) => {
                   setVisibleMonth(
                     `${month.year}-${String(month.month).padStart(2, '0')}-01`
@@ -429,7 +451,7 @@ function CalenderScreen({ navigation }) {
                   calendarBackground: 'transparent',
                   textSectionTitleColor: TEXT_MUTED,
                   textDayHeaderFontSize: 12,
-                  textDayHeaderFontWeight: '500',
+                  textDayHeaderFontWeight: '600',
                   stylesheet: {
                     calendar: {
                       header: {
@@ -445,22 +467,60 @@ function CalenderScreen({ navigation }) {
             </View>
 
             <View style={styles.agendaSheet}>
+              <View style={styles.sheetHandle} />
+
               <View style={styles.agendaHeader}>
-                <View>
-                  <Text style={styles.agendaHeaderDate}>
-                    {formatAgendaHeader(selectedDate)}
-                  </Text>
-                  <Text style={styles.agendaSubtitle}>
-                    {selectedDate === todayKey ? 'Today' : 'Schedule'}
-                          </Text>
-                        </View>
-                <View style={styles.agendaCountPill}>
-                  <Text style={styles.agendaCount}>
-                    {selectedItems.length}{' '}
-                    {selectedItems.length === 1 ? 'item' : 'items'}
-                  </Text>
-                        </View>
-                    </View>
+                <View style={styles.agendaHeaderLeft}>
+                  <View style={styles.dateBadge}>
+                    <Text style={styles.dateBadgeDay}>
+                      {String(selectedDate).split('-')[2]}
+                    </Text>
+                    <Text style={styles.dateBadgeWeek}>
+                      {WEEKDAYS_SHORT[
+                        new Date(
+                          Number(String(selectedDate).split('-')[0]),
+                          Number(String(selectedDate).split('-')[1]) - 1,
+                          Number(String(selectedDate).split('-')[2])
+                        ).getDay()
+                      ]}
+                    </Text>
+                  </View>
+                  <View style={styles.agendaHeaderCopy}>
+                    <Text style={styles.agendaHeaderDate}>
+                      {formatAgendaHeader(selectedDate)}
+                    </Text>
+                    <Text style={styles.agendaSubtitle}>
+                      {selectedItems.length}{' '}
+                      {selectedItems.length === 1 ? 'item' : 'items'} scheduled
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.agendaActions}>
+                  <TouchableOpacity
+                    style={styles.agendaActionBtn}
+                    onPress={() => {
+                      if (userRole === 'Owner') {
+                        setShowEventCreationDialog(true);
+                        return;
+                      }
+                      Toast.show({
+                        type: 'info',
+                        text1: 'Access Restricted',
+                        text2: 'Only Owners can create events',
+                        visibilityTime: 3000,
+                        topOffset: 80,
+                      });
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons name="calendar-outline" size={18} color={TEXT_SOFT} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.agendaActionBtn} activeOpacity={0.75}>
+                    <Ionicons name="ellipsis-vertical" size={16} color={TEXT_SOFT} />
+                  </TouchableOpacity>
+                </View>
+              </View>
 
               {feedTruncated ? (
                 <Text style={styles.truncatedNotice}>
@@ -498,7 +558,7 @@ function CalenderScreen({ navigation }) {
         <MyWeekView
           navigation={navigation}
           hideBottomNav
-          topInset={insets.top}
+          topInset={0}
           header={
             <CalendarToggle
               currentView={viewMode}
@@ -509,23 +569,6 @@ function CalenderScreen({ navigation }) {
           }
         />
       )}
-      
-      <HomeBottomNav
-        onAddPress={() => {
-          if (userRole === 'Owner') {
-            setShowEventCreationDialog(true);
-            return;
-          }
-            Toast.show({
-              type: 'info',
-              text1: 'Access Restricted',
-              text2: 'Only Owners can create events',
-              visibilityTime: 3000,
-              autoHide: true,
-              topOffset: 80,
-            });
-        }}
-      />
 
       <CreateEventModal
         visible={showEventCreationDialog}
@@ -600,13 +643,15 @@ const styles = StyleSheet.create({
   },
   monthScroll: {
     paddingBottom: 120,
+    paddingTop: 4,
   },
   monthNav: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 28,
-    marginBottom: 6,
+    paddingHorizontal: 12,
+    marginBottom: 4,
+    paddingTop: 8,
   },
   monthNavBtn: {
     width: 36,
@@ -614,16 +659,27 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Brand.paperSoft,
   },
   monthTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: TEXT,
     letterSpacing: -0.3,
   },
   calendarCard: {
-    marginHorizontal: 12,
-    paddingBottom: 4,
+    marginHorizontal: 14,
+    backgroundColor: Brand.paper,
+    borderRadius: 24,
+    paddingBottom: 10,
+    paddingHorizontal: 6,
+    shadowColor: Brand.ink,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Brand.line,
   },
   dayCell: {
     width: 44,
@@ -656,11 +712,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   dayNumberSelected: {
-    color: '#FFFFFF',
+    color: Brand.onInk,
     fontWeight: '700',
   },
   dayNumberDisabled: {
-    color: '#D1D5DB',
+    color: Brand.lineStrong,
   },
   dotRow: {
     flexDirection: 'row',
@@ -676,29 +732,69 @@ const styles = StyleSheet.create({
     borderRadius: 2.5,
   },
   agendaSheet: {
-    marginTop: 10,
-    marginHorizontal: 12,
-    backgroundColor: '#FFFFFF',
+    marginTop: 14,
+    marginHorizontal: 14,
+    backgroundColor: Brand.paper,
     borderRadius: 24,
     paddingHorizontal: 14,
-    paddingTop: 18,
+    paddingTop: 10,
     paddingBottom: 18,
     minHeight: 220,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
+    shadowColor: Brand.ink,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.07,
+    shadowRadius: 14,
     elevation: 3,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Brand.line,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Brand.lineStrong,
+    marginBottom: 14,
   },
   agendaHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 16,
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
+  },
+  agendaHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingRight: 8,
+  },
+  dateBadge: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: Brand.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  dateBadgeDay: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Brand.onInk,
+    lineHeight: 18,
+  },
+  dateBadgeWeek: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.75)',
+    marginTop: 1,
+  },
+  agendaHeaderCopy: {
+    flex: 1,
   },
   agendaHeaderDate: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: TEXT,
     letterSpacing: -0.2,
@@ -709,16 +805,18 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: TEXT_MUTED,
   },
-  agendaCountPill: {
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
+  agendaActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  agendaCount: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: TEXT_SOFT,
+  agendaActionBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Brand.paperSoft,
   },
   truncatedNotice: {
     fontSize: 12,
@@ -736,7 +834,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: Brand.paperSoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
@@ -756,12 +854,12 @@ const styles = StyleSheet.create({
   agendaCard: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    backgroundColor: '#FAFAFA',
+    backgroundColor: Brand.paper,
     borderRadius: 16,
     marginBottom: 10,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#F0F0F0',
+    borderColor: Brand.line,
   },
   agendaAccent: {
     width: 4,
@@ -771,24 +869,32 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
   },
-  agendaTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-    gap: 8,
-  },
   kindChip: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 999,
+    marginBottom: 8,
   },
   kindChipText: {
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.1,
+  },
+  agendaMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  agendaTextCol: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  agendaRightCol: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    gap: 6,
   },
   agendaTitle: {
     fontSize: 15,
@@ -804,9 +910,9 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   agendaTime: {
-    fontSize: 12,
-    color: TEXT_MUTED,
+    fontSize: 11,
     fontWeight: '600',
+    color: TEXT_MUTED,
   },
 });
 

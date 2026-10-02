@@ -24,7 +24,6 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import Sidebar from "../components/Sidebar";
-import HomeBottomNav from "../components/HomeBottomNav";
 import UpdateTaskModal from "../components/UpdateTaskModal";
 import { Brand } from "../constants/brandColors";
 import { getUserRole } from "../services/utils/userRole";
@@ -334,7 +333,6 @@ function TaskDetailsScreen({ navigation, route }) {
           <ActivityIndicator color={Brand.ink} />
           <Text style={styles.mutedCenter}>Loading task…</Text>
         </View>
-        <HomeBottomNav hideFab />
       </View>
     );
   }
@@ -370,7 +368,7 @@ function TaskDetailsScreen({ navigation, route }) {
   return (
     <View style={styles.root}>
       <StatusBar barStyle="dark-content" backgroundColor={Brand.paper} />
-      <SafeAreaView style={styles.flex} edges={["top"]}>
+      <SafeAreaView style={styles.flex} edges={[]}>
         <ScrollView
           style={styles.flex}
           contentContainerStyle={styles.scrollContent}
@@ -757,7 +755,6 @@ function TaskDetailsScreen({ navigation, route }) {
         isVisible={sidebarVisible}
         onClose={() => setSidebarVisible(false)}
       />
-      <HomeBottomNav hideFab />
     </View>
   );
 }

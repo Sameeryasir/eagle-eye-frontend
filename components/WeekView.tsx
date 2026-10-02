@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
-import HomeBottomNav from './HomeBottomNav';
 import TaskDetailsModal from './TaskDetailsModal';
 import EventDetailsModal from './EventDetailsModal';
 import CreateEventModal from './CreateEventModal';
@@ -340,7 +339,6 @@ export default function MyWeekView({
           <ActivityIndicator color={ACCENT} />
           <Text style={styles.muted}>Loading week…</Text>
         </View>
-        {!hideBottomNav ? <HomeBottomNav onAddPress={handleFabPress} /> : null}
       </View>
     );
   }
@@ -457,8 +455,6 @@ export default function MyWeekView({
           </View>
         </View>
       </ScrollView>
-
-      {!hideBottomNav ? <HomeBottomNav onAddPress={handleFabPress} /> : null}
 
       <TaskDetailsModal
         visible={showTaskDialog}

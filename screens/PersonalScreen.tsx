@@ -22,7 +22,6 @@ import Loader from "../services/utils/loader";
 import Toast from "react-native-toast-message";
 import { useAuth } from "../context/AuthContext";
 import { Brand } from "../constants/brandColors";
-import HomeBottomNav from "../components/HomeBottomNav";
 
 function PersonalScreen({ navigation }) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -443,8 +442,6 @@ function PersonalScreen({ navigation }) {
           <Ionicons name="person-add" size={24} color={Brand.onInk} />
         </TouchableOpacity>
       )}
-
-      <HomeBottomNav />
 
       <Modal
         visible={addVisible}

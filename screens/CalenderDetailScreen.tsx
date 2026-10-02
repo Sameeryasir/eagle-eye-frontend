@@ -12,7 +12,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Timetable from 'react-native-calendar-timetable';
 import { Ionicons } from '@expo/vector-icons';
-import HomeBottomNav from '../components/HomeBottomNav';
 import { getUserRole } from '../services/utils/userRole';
 import CreateEventModal from '../components/CreateEventModal';
 import EventDetailsModal from '../components/EventDetailsModal';
@@ -309,7 +308,7 @@ const CalenderDetailScreen = ({ route, navigation }) => {
     : new Date();
 
   return (
-    <SafeAreaView style={styles.root} edges={['top']}>
+    <SafeAreaView style={styles.root} edges={[]}>
       <StatusBar barStyle="dark-content" backgroundColor={Brand.paper} />
 
       <View style={styles.topBar}>
@@ -367,28 +366,6 @@ const CalenderDetailScreen = ({ route, navigation }) => {
           </View>
         </ScrollView>
       )}
-
-      <HomeBottomNav
-        onAddPress={() => {
-          if (userRole === 'Owner') {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const selectedDateObj = selectedDate
-              ? new Date(`${selectedDate}T12:00:00`)
-              : new Date();
-            selectedDateObj.setHours(0, 0, 0, 0);
-
-            if (selectedDateObj < today) {
-              setShowPastDateDialog(true);
-            } else {
-              setShowEventCreationDialog(true);
-            }
-            return;
-          }
-
-          setAccessDeniedDialogVisible(true);
-        }}
-      />
 
       <TaskDetailsModal
         visible={showTaskDialog}

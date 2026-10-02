@@ -33,4 +33,12 @@ export const queryKeys = {
     all: ['employees'] as const,
     assignees: () => [...queryKeys.employees.all, 'assignees'] as const,
   },
+  chats: {
+    all: ['chats'] as const,
+    conversations: () => [...queryKeys.chats.all, 'conversations'] as const,
+  },
+  notifications: {
+    all: ['notifications'] as const,
+    list: () => [...queryKeys.notifications.all, 'list'] as const,
+  },
 };

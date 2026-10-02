@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   Modal,
   StyleSheet,
   Pressable,
+  Animated,
+  Easing,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
@@ -18,17 +20,84 @@ import { Brand } from "../constants/brandColors";
 
 const { width: WINDOW_WIDTH } = Dimensions.get("window");
 const DRAWER_WIDTH = Math.min(WINDOW_WIDTH * 0.78, 320);
+const OPEN_MS = 280;
+const CLOSE_MS = 220;
 
 const Sidebar = ({ isVisible, onClose, onNavigate, onLogoutComplete }) => {
   const [showLogoutDialog, setShowLogoutDialog] = React.useState(false);
   const [activeMenuItem, setActiveMenuItem] = React.useState(null);
+  const [modalVisible, setModalVisible] = React.useState(false);
   const insets = useSafeAreaInsets();
   const { logout, userRole, userInfo } = useAuth();
+
+  const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
+  const backdropAnim = useRef(new Animated.Value(0)).current;
+  const closingRef = useRef(false);
+
   const userData = {
     name:
       `${userInfo?.firstName || ""} ${userInfo?.lastName || ""}`.trim() ||
       "User",
     role: userRole || "User",
+  };
+
+  const animateOpen = () => {
+    closingRef.current = false;
+    setModalVisible(true);
+    slideAnim.setValue(-DRAWER_WIDTH);
+    backdropAnim.setValue(0);
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: OPEN_MS,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropAnim, {
+        toValue: 1,
+        duration: OPEN_MS,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const animateClose = (afterClose) => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: -DRAWER_WIDTH,
+        duration: CLOSE_MS,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropAnim, {
+        toValue: 0,
+        duration: CLOSE_MS,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (!finished) return;
+      setModalVisible(false);
+      closingRef.current = false;
+      afterClose?.();
+    });
+  };
+
+  useEffect(() => {
+    if (isVisible) {
+      animateOpen();
+      return;
+    }
+    if (modalVisible) {
+      animateClose();
+    }
+  }, [isVisible]);
+
+  const requestClose = () => {
+    animateClose(() => onClose?.());
   };
 
   const getMenuItems = () => {
@@ -67,8 +136,10 @@ const Sidebar = ({ isVisible, onClose, onNavigate, onLogoutComplete }) => {
 
   const handleNavigate = (itemId) => {
     setActiveMenuItem(itemId);
-    onClose?.();
-    onNavigate?.(itemId);
+    animateClose(() => {
+      onClose?.();
+      onNavigate?.(itemId);
+    });
   };
 
   const handleLogout = () => {
@@ -78,8 +149,10 @@ const Sidebar = ({ isVisible, onClose, onNavigate, onLogoutComplete }) => {
   const confirmLogout = async () => {
     try {
       setShowLogoutDialog(false);
-      onClose?.();
-      onLogoutComplete?.();
+      animateClose(() => {
+        onClose?.();
+        onLogoutComplete?.();
+      });
 
       clearAllReduxStores().catch((error) => {
         console.error("Error clearing Redux stores:", error);
@@ -103,20 +176,21 @@ const Sidebar = ({ isVisible, onClose, onNavigate, onLogoutComplete }) => {
   return (
     <>
       <Modal
-        visible={!!isVisible}
+        visible={modalVisible}
         transparent
-        animationType="fade"
+        animationType="none"
         statusBarTranslucent
-        onRequestClose={() => onClose?.()}
+        onRequestClose={requestClose}
       >
         <View style={styles.modalRoot}>
-          <View
+          <Animated.View
             style={[
               styles.drawerContainer,
               {
                 width: DRAWER_WIDTH,
                 paddingTop: insets.top,
                 paddingBottom: Math.max(insets.bottom, 16),
+                transform: [{ translateX: slideAnim }],
               },
             ]}
           >
@@ -170,14 +244,23 @@ const Sidebar = ({ isVisible, onClose, onNavigate, onLogoutComplete }) => {
                 <Text style={styles.logoutLabel}>Logout</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </Animated.View>
 
           <Pressable
-            style={styles.backdrop}
-            onPress={() => onClose?.()}
+            style={styles.backdropHit}
+            onPress={requestClose}
             accessibilityRole="button"
             accessibilityLabel="Close menu"
-          />
+          >
+            <Animated.View
+              style={[
+                styles.backdrop,
+                {
+                  opacity: backdropAnim,
+                },
+              ]}
+            />
+          </Pressable>
         </View>
       </Modal>
 
@@ -232,8 +315,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     backgroundColor: "transparent",
   },
-  backdrop: {
+  backdropHit: {
     flex: 1,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(35, 31, 32, 0.45)",
   },
   drawerContainer: {
@@ -244,6 +330,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: 16,
     elevation: 24,
+    zIndex: 2,
   },
   profileRow: {
     flexDirection: "row",

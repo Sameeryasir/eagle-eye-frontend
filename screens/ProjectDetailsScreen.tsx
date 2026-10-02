@@ -16,7 +16,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { CheckSquare } from "lucide-react-native";
 import { useQueryClient } from "@tanstack/react-query";
-import HomeBottomNav from "../components/HomeBottomNav";
 import UpdateProjectModal from "../components/UpdateProjectModal";
 import CreateTask from "../components/CreateTask";
 import TaskListCard from "../components/TaskListCard";
@@ -684,15 +683,6 @@ export default function ProjectDetailsScreen({ navigation, route }) {
           <View style={styles.contentPad}>{tabBody()}</View>
         </ScrollView>
       )}
-
-      <HomeBottomNav
-        hideFab={!showCreateTask}
-        onAddPress={() => {
-          if (showCreateTask) {
-            setCreateTaskVisible(true);
-          }
-        }}
-      />
 
       <UpdateProjectModal
         visible={updateVisible}

@@ -33,7 +33,6 @@ const isMediumScreen = screenWidth < 450;
 const isLargeScreen = screenWidth >= 450;
 
 import Sidebar from "../components/Sidebar";
-import HomeBottomNav from "../components/HomeBottomNav";
 import CreateTask from "../components/CreateTask";
 import { Brand } from "../constants/brandColors";
 import { getUserRole } from "../services/utils/userRole";
@@ -684,30 +683,6 @@ function WidgetScreen({ navigation, route }) {
         isVisible={sidebarVisible}
         onClose={() => setSidebarVisible(false)}
         onNavigate={() => setSidebarVisible(false)}
-      />
-
-      <HomeBottomNav
-        onAddPress={() => {
-          if (userRole === "Manager" && tasks.length === 0) {
-            setCreateTaskVisible(true);
-            return;
-          }
-
-          if (userRole === "Employee") {
-            navigation.navigate("CreatLog", { projectId });
-            return;
-          }
-
-          if (userRole === "Manager" && logs.length === 0) {
-            navigation.navigate("CreatLog", { projectId });
-            return;
-          }
-
-          if (userRole !== "Employee" && userRole !== "Manager" && tasks.length === 0) {
-            setCreateTaskVisible(true);
-            return;
-          }
-        }}
       />
 
       <Modal

@@ -15,7 +15,7 @@ import {
   saveTokenToServer,
   removeTokenFromServer,
 } from "../services/notifications/sendTokenToServer";
-import { clearAllReduxStores } from "../store/utils/clearAllReduxStores";
+import { clearAppCaches } from "../utils/clearAppCaches";
 import {
   clearAuthSession,
   getAuthSnapshot,
@@ -112,7 +112,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = useCallback(
     async (userData: LoginUserPayload) => {
-      await clearAllReduxStores();
+      await clearAppCaches();
       await persistLoginSession(userData);
 
       const notificationResult = await setupNotifications();
@@ -155,7 +155,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     await clearAuthSession();
-    await clearAllReduxStores();
+    await clearAppCaches();
     applySnapshot(getAuthSnapshot());
   }, [applySnapshot]);
 

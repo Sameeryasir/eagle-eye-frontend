@@ -76,7 +76,7 @@ export function AuthScreenShell({
       >
         <View
           style={{
-            paddingTop: Math.max(insets.top, 10),
+            paddingTop: 8,
             paddingHorizontal: Math.max(horizontalPad - 12, 8),
             paddingBottom: 4,
             flexDirection: "row",

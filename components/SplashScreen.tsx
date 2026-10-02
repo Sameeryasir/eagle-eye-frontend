@@ -30,7 +30,7 @@ export default function SplashScreen({ navigation, bootGate = false }) {
     if (isLoading) return;
 
     const timer = setTimeout(() => {
-      navigation.replace(isAuthenticated ? "HomeScreen" : "SignIn");
+      navigation.replace(isAuthenticated ? "MainTabs" : "SignIn");
     }, SPLASH_HOLD_MS);
 
     return () => clearTimeout(timer);

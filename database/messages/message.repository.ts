@@ -1,5 +1,4 @@
 // @ts-nocheck
-// Repository: single chat_messages table — raw SQLite only.
 import { SQLiteDatabase } from "expo-sqlite";
 import {
   MessageRow,
@@ -20,11 +19,9 @@ export const MessageRepository = {
       try {
         db.execSync(sql);
       } catch {
-        // index may already exist
       }
     });
 
-    // One-time migrate legacy messages_<id> tables into chat_messages
     if (conversationId !== undefined && conversationId !== null) {
       this.migrateLegacyConversationTable(db, conversationId);
     }
@@ -85,7 +82,6 @@ export const MessageRepository = {
     return result.length > 0;
   },
 
-  /** True when this conversation already has locally cached rows. */
   hasCachedMessages(
     db: SQLiteDatabase,
     conversationId: string | number
@@ -155,7 +151,6 @@ export const MessageRepository = {
     msg: Omit<MessageData, "id">,
     conversationId: string | number
   ): void {
-    // Local-only id: negative timestamp-based to avoid colliding with server ids
     const localId = -Math.abs(Date.now() % 1000000000);
     const safeConversationId = sanitizeConversationId(conversationId);
     db.runSync(
@@ -382,7 +377,6 @@ export const MessageRepository = {
     return result?.id || null;
   },
 
-  /** After insertOffline, return the local id we assigned (stored as last written). */
   lastOfflineId(
     db: SQLiteDatabase,
     conversationId: string | number
@@ -391,7 +385,6 @@ export const MessageRepository = {
       `SELECT id FROM ${T} WHERE conversation_id = ? AND id < 0 ORDER BY id ASC LIMIT 1`,
       [sanitizeConversationId(conversationId)]
     );
-    // Prefer newest local row by created_at
     const newest = db.getFirstSync<{ id: number }>(
       `SELECT id FROM ${T}
        WHERE conversation_id = ? AND id < 0

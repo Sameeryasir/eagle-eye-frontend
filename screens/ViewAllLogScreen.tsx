@@ -22,7 +22,6 @@ import Toast from 'react-native-toast-message';
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
-import HomeBottomNav from "../components/HomeBottomNav";
 import { getUserRole } from "../services/utils/userRole";
 import { deleteLogById } from "../services/log/deleteLogById";
 import { updateLogById } from "../services/log/updateLogById";
@@ -1735,50 +1734,6 @@ const ViewAllLogScreen = ({ route, navigation }) => {
   return (
     <View className="flex-1 bg-white">
       {renderContent()}
-      <HomeBottomNav
-        keyboardVisible={keyboardVisible}
-        onAddPress={() => {
-          // For Employee role, navigate to CreatLog with projectId
-          if (userRole === "Employee") {
-            // Employee should use the same project ID that was used to load the logs
-            // This could come from managerProjectId or any other project context
-            const projectId = route.params?.managerProjectId || route.params?.projectId || null;
-            const navigationParams = projectId ? { projectId: projectId } : {};
-            navigation.navigate("CreatLog", navigationParams);
-            return;
-          }
-
-          // For Manager role, navigate to CreatLog with project data
-          if (userRole === "Manager") {
-            // Get the managerProjectId passed from WidgetScreen
-            const managerProjectId = route.params?.managerProjectId || null;
-
-            let navigationParams = {};
-
-            // Pass the Manager project ID as projectId to CreateLogScreen
-            if (managerProjectId) {
-              navigationParams.projectId = managerProjectId;
-            }
-
-            navigation.navigate("CreatLog", navigationParams);
-            return;
-          }
-
-          // For Admin role, navigate to CreatLog with project data
-          if (userRole === "Admin") {
-            const projectId = route.params?.projectId || null;
-            const navigationParams = projectId ? { projectId: projectId } : {};
-            navigation.navigate("CreatLog", navigationParams);
-            return;
-          }
-
-          // Owner role - do nothing (no navigation)
-          if (userRole === "Owner") {
-            // Owner cannot create logs, so do nothing when FAB is pressed
-            return;
-          }
-        }}
-      />
 
       {/* Full Screen Image Modal */}
       <Modal

@@ -8,12 +8,10 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { getUserById } from '../services/user/getUserById';
 import { updateUserById } from '../services/user/updateUserById';
-import HomeBottomNav from '../components/HomeBottomNav';
 import { useAuth } from '../context/AuthContext';
 import { getSessionUserId } from '../services/auth/session';
 
@@ -215,16 +213,16 @@ export default function AccountInfoScreen({ navigation }) {
 
   if (loading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#f8f9fa' }}>
+      <View style={{ flex: 1, backgroundColor: '#f8f9fa' }}>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <Text style={{ fontSize: 16, color: '#666' }}>Loading...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f8f9fa' }}>
+    <View style={{ flex: 1, backgroundColor: '#f8f9fa' }}>
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
         
         <View style={{ backgroundColor: '#ffffff', alignItems: 'center', paddingVertical: 30, paddingHorizontal: 20, marginBottom: 20 }}>
@@ -321,8 +319,7 @@ export default function AccountInfoScreen({ navigation }) {
 
         <View style={{ height: 100 }} />
       </ScrollView>
-      <HomeBottomNav />
-    </SafeAreaView>
+    </View>
   );
 }
 

@@ -50,26 +50,29 @@ const Code = () => {
       await clearOnboardingSession();
       setCode("");
 
-      Toast.show({
-        type: "success",
-        text1: fromRegister ? "Welcome aboard" : "You're logged in",
-        text2: fromRegister
-          ? "Your company is ready. Add crew from Crew in the menu."
-          : "Welcome back to Eagle Eye",
-        visibilityTime: 3000,
-        topOffset: 80,
-      });
+      const welcomeTitle = fromRegister ? "Welcome aboard" : "You're logged in";
+      const welcomeMessage = fromRegister
+        ? "Your company is ready. Add crew from Crew in the menu."
+        : "Welcome back to Eagle Eye";
 
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "HomeScreen" }],
-      });
+      // login() flips auth → App swaps to MainTabs automatically
+      setTimeout(() => {
+        Toast.show({
+          type: "success",
+          text1: welcomeTitle,
+          text2: welcomeMessage,
+          visibilityTime: 3000,
+          position: "top",
+          topOffset: 80,
+        });
+      }, 450);
     } catch (error) {
       Toast.show({
         type: "error",
         text1: "Verification failed",
         text2: error?.message || "Please check your code and try again",
         visibilityTime: 4000,
+        position: "top",
         topOffset: 80,
       });
     } finally {

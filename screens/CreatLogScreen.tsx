@@ -22,10 +22,8 @@ import Toast from 'react-native-toast-message'; 76
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
 
 import Sidebar from "../components/Sidebar";
-import HomeBottomNav from "../components/HomeBottomNav";
 import getTodaysTask from "../services/tasks/getTodayTask";
 import { getProjectById } from "../services/projects/getProject";
 import { getTaskByProjectId } from "../services/tasks/getTaskByProjectId";
@@ -73,11 +71,9 @@ function CreatLogScreen({ navigation, route }) {
   const [isUploadingImages, setIsUploadingImages] = useState(false);
   const [serviceError, setServiceError] = useState(null);
 
-  useFocusEffect(
-    React.useCallback(() => {
-      loadLogData();
-    }, [])
-  );
+  useEffect(() => {
+    loadLogData();
+  }, [projectId, taskId]);
 
   useEffect(() => {
     if (logs.length > 0) {
@@ -806,8 +802,6 @@ function CreatLogScreen({ navigation, route }) {
           {renderContent()}
         </View>
       )}
-
-      <HomeBottomNav />
 
       <Sidebar
         isVisible={sidebarVisible}

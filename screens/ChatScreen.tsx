@@ -5,7 +5,6 @@ import {
   Text,
   FlatList,
   TouchableOpacity,
-  SafeAreaView,
   TextInput,
   KeyboardAvoidingView,
   Platform,
@@ -15,11 +14,18 @@ import {
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { getUserConversations } from "../services/chats/getConversation";
 import SelectUserModal from "../components/SelectUserModal";
-import HomeBottomNav from "../components/HomeBottomNav";
 import Toast from "react-native-toast-message";
 import { useAuth } from "../context/AuthContext";
 import pusher from "../pusherClient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  ApiCacheKeys,
+  getApiCache,
+  setApiCache,
+} from "../utils/apiCache";
+import appEmitter from "../utils/appEmitter";
+
+const CONVERSATIONS_STALE_MS = 60_000;
 
 const getInitials = (name) => {
   if (!name) return "?";
@@ -54,12 +60,20 @@ const getAvatarColor = (name) => {
 };
 
 const ChatScreen = ({ navigation }) => {
-  const [conversations, setConversations] = useState([]);
+  const cachedConversations = getApiCache(
+    ApiCacheKeys.conversations,
+    CONVERSATIONS_STALE_MS
+  );
+  const [conversations, setConversations] = useState(
+    () => cachedConversations ?? []
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [isSelectUserModalVisible, setIsSelectUserModalVisible] =
     useState(false);
-  const [isLoadingConversations, setIsLoadingConversations] = useState(false);
+  const [isLoadingConversations, setIsLoadingConversations] = useState(
+    () => cachedConversations == null
+  );
   const [conversationsError, setConversationsError] = useState(null);
   const [messageCounts, setMessageCounts] = useState({});
   const searchInputRef = useRef(null);
@@ -184,7 +198,19 @@ const ChatScreen = ({ navigation }) => {
     });
   };
 
-  const fetchConversations = async () => {
+  const fetchConversations = async ({ force = false } = {}) => {
+    if (!force) {
+      const fresh = getApiCache(
+        ApiCacheKeys.conversations,
+        CONVERSATIONS_STALE_MS
+      );
+      if (fresh != null) {
+        setConversations(fresh);
+        setIsLoadingConversations(false);
+        return;
+      }
+    }
+
     setIsLoadingConversations(true);
     setConversationsError(null);
 
@@ -195,6 +221,7 @@ const ChatScreen = ({ navigation }) => {
         formattedConversations
       );
       setConversations(sortedConversations);
+      setApiCache(ApiCacheKeys.conversations, sortedConversations);
     } catch (err) {
       console.error("Error fetching conversations:", err);
       setConversationsError("Failed to load conversations");
@@ -208,19 +235,6 @@ const ChatScreen = ({ navigation }) => {
       });
     } finally {
       setIsLoadingConversations(false);
-    }
-  };
-
-  const fetchConversationsSilently = async () => {
-    try {
-      const response = await getUserConversations();
-      const formattedConversations = processConversations(response);
-      const sortedConversations = sortConversationsByLatest(
-        formattedConversations
-      );
-      setConversations(sortedConversations);
-    } catch (err) {
-      console.error("Error silently fetching conversations:", err);
     }
   };
 
@@ -294,6 +308,7 @@ const ChatScreen = ({ navigation }) => {
         ...updatedConversations,
       ];
 
+      setApiCache(ApiCacheKeys.conversations, finalConversations);
       return finalConversations;
     });
   };
@@ -354,12 +369,13 @@ const ChatScreen = ({ navigation }) => {
         ...updatedConversations,
       ];
 
+      setApiCache(ApiCacheKeys.conversations, finalConversations);
       return finalConversations;
     });
   }
 
   useEffect(() => {
-    fetchConversationsSilently();
+    fetchConversations({ force: false });
 
     const loadMessageCounts = async () => {
       try {
@@ -450,6 +466,7 @@ const ChatScreen = ({ navigation }) => {
             ...prevConversations,
           ];
 
+          setApiCache(ApiCacheKeys.conversations, finalConversations);
           return finalConversations;
         });
 
@@ -492,16 +509,11 @@ const ChatScreen = ({ navigation }) => {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener("focus", () => {
-      fetchConversations();
-    });
-
     const unsubscribeBlur = navigation.addListener("blur", () => {
       Keyboard.dismiss();
     });
 
     return () => {
-      unsubscribe();
       unsubscribeBlur();
     };
   }, [navigation]);
@@ -556,6 +568,12 @@ const ChatScreen = ({ navigation }) => {
     Keyboard.dismiss();
     setIsSelectUserModalVisible(true);
   };
+
+  useEffect(() => {
+    const openNewChat = () => handleOpenSelectUserModal();
+    appEmitter.on("chat-fab-press", openNewChat);
+    return () => appEmitter.off("chat-fab-press", openNewChat);
+  }, []);
 
   const handleCloseSelectUserModal = () => {
     setIsSelectUserModalVisible(false);
@@ -796,11 +814,11 @@ const ChatScreen = ({ navigation }) => {
           keyExtractor={(item) => item.id}
           className="flex-1"
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 100 }}
+          contentContainerStyle={{ paddingBottom: 110 }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="none"
           refreshing={isLoadingConversations}
-          onRefresh={fetchConversations}
+          onRefresh={() => fetchConversations({ force: true })}
           ListHeaderComponent={renderSearchBar()}
         />
       ) : (
@@ -811,11 +829,6 @@ const ChatScreen = ({ navigation }) => {
         visible={isSelectUserModalVisible}
         onClose={handleCloseSelectUserModal}
         onUserSelect={handleUserSelectFromModal}
-      />
-
-      <HomeBottomNav
-        keyboardVisible={isKeyboardVisible}
-        onAddPress={handleOpenSelectUserModal}
       />
     </View>
   );

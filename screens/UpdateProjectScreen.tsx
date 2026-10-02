@@ -13,7 +13,6 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { updateProjectById } from "../services/projects/updateProjectById";
 import Toast from 'react-native-toast-message';
-import HomeBottomNav from "../components/HomeBottomNav";
 
 export default function UpdateProjectScreen({ navigation, route }) {
   const [projectData, setProjectData] = useState({
@@ -337,8 +336,6 @@ export default function UpdateProjectScreen({ navigation, route }) {
           </TouchableOpacity>
         </View>
       )}
-
-      <HomeBottomNav keyboardVisible={keyboardVisible} />
     </View>
   );
 }

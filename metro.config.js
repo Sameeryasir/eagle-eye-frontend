@@ -54,4 +54,25 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
 
 config = withNativeWind(config, { input: "./global.css" });
 
+const previousGetTransformOptions = config.transformer?.getTransformOptions;
+config.transformer = {
+  ...config.transformer,
+  getTransformOptions: async (entryPoints, transformOptions, getDependenciesOf) => {
+    const previous = previousGetTransformOptions
+      ? await previousGetTransformOptions(
+          entryPoints,
+          transformOptions,
+          getDependenciesOf
+        )
+      : {};
+    return {
+      ...previous,
+      transform: {
+        ...(previous.transform || {}),
+        inlineRequires: true,
+      },
+    };
+  },
+};
+
 module.exports = config;

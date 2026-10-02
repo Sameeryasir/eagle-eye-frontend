@@ -1,8 +1,8 @@
 // @ts-nocheck
 import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
-
-const ACCENT = '#2563EB';
+import { Ionicons } from '@expo/vector-icons';
+import { Brand } from '../constants/brandColors';
 
 export default function CalendarToggle({
   currentView,
@@ -20,6 +20,12 @@ export default function CalendarToggle({
         onPress={onMonthlyPress}
         activeOpacity={0.85}
       >
+        <Ionicons
+          name="calendar"
+          size={15}
+          color={currentView === 'monthly' ? Brand.onInk : Brand.inkMuted}
+          style={styles.icon}
+        />
         <Text
           style={[
             styles.toggleText,
@@ -38,6 +44,12 @@ export default function CalendarToggle({
         onPress={onWeeklyPress}
         activeOpacity={0.85}
       >
+        <Ionicons
+          name="list"
+          size={15}
+          color={currentView === 'weekly' ? Brand.onInk : Brand.inkMuted}
+          style={styles.icon}
+        />
         <Text
           style={[
             styles.toggleText,
@@ -58,25 +70,30 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginTop: 0,
     marginBottom: 10,
-    backgroundColor: '#EEF0F3',
+    backgroundColor: Brand.paperSoft,
     borderRadius: 22,
     padding: 4,
-    minWidth: 200,
+    minWidth: 220,
   },
   toggleButton: {
-    paddingVertical: 9,
-    paddingHorizontal: 28,
+    flex: 1,
+    flexDirection: 'row',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   activeButton: {
-    backgroundColor: ACCENT,
-    shadowColor: ACCENT,
+    backgroundColor: Brand.ink,
+    shadowColor: Brand.ink,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.22,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  icon: {
+    marginRight: 6,
   },
   toggleText: {
     fontSize: 15,
@@ -84,9 +101,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   activeText: {
-    color: '#FFFFFF',
+    color: Brand.onInk,
   },
   inactiveText: {
-    color: '#6B7280',
+    color: Brand.inkMuted,
   },
 });

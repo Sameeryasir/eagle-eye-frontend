@@ -21,7 +21,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import Sidebar from "../components/Sidebar";
-import HomeBottomNav from "../components/HomeBottomNav";
 import UpdateTaskModal from "../components/UpdateTaskModal";
 import FilterModal from "../components/FilterModal";
 import ErrorDialog from "../components/ErrorDialog";
@@ -1120,8 +1119,6 @@ function ViewAllTasksScreen({ navigation, route }) {
       )}
 
       
-      {!updateTaskModalVisible && <HomeBottomNav onAddPress={handleFabPress} />}
-
       <Sidebar
         isVisible={sidebarVisible}
         onClose={() => setSidebarVisible(false)}

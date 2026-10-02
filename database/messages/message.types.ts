@@ -1,5 +1,3 @@
-// App-facing message shapes used by the cache service (API / UI → SQLite).
-
 export interface MessageData {
   id: string | number;
   content?: string | null;

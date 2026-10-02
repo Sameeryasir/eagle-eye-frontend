@@ -87,10 +87,8 @@ import SplashScreen from "./components/SplashScreen";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import appEmitter from "./utils/appEmitter";
 
-import HomeScreen from "./screens/HomeScreen";
 import WidgetScreen from "./screens/WidgetScreen";
 import ProjectDetailsScreen from "./screens/ProjectDetailsScreen";
-import CalenderScreen from "./screens/CalenderScreen";
 import CalenderDetailScreen from "./screens/CalenderDetailScreen";
 import ViewAllTasksScreen from "./screens/ViewAllTasksScreen";
 import ViewAllLogScreen from "./screens/ViewAllLogScreen";
@@ -104,15 +102,27 @@ import PersonalScreen from "./screens/PersonalScreen";
 import FilesScreen from "./screens/FilesScreen";
 import ProjectAssignment from "./screens/ProjectAssignment";
 import WeekView from "./screens/WeekView";
-import ChatScreen from "./screens/ChatScreen";
 import UserChatScreen from "./screens/UserChatScreen";
 import SignatureScreen from "./screens/SignatureScreen";
-import NotificationScreen from "./screens/NotificationScreen";
 import AccountInfoScreen from "./screens/AccountInfoScreen";
 import ProjectFilesScreen from "./screens/ProjectFilesScreen";
 import { Brand } from "./constants/brandColors";
+import ScreenSafeArea from "./components/ScreenSafeArea";
+import HomeBottomNav from "./components/HomeBottomNav";
+import MainTabs from "./navigation/MainTabs";
 
 const Stack = createNativeStackNavigator();
+
+const HIDE_BOTTOM_NAV_ROUTES = new Set([
+  "UserChatScreen",
+  "SplashScreen",
+  "SignIn",
+  "LogIn",
+  "Register",
+  "RegisterCompany",
+  "OtpScreen",
+  "SignatureScreen",
+]);
 
 const AppHeader = ({
   title,
@@ -143,7 +153,7 @@ const AppHeader = ({
   const effectiveMenuPress = showMenu && onMenuPress ? onMenuPress : undefined;
 
   return (
-    <SafeAreaView style={{ backgroundColor: Brand.paper }} edges={["top"]}>
+    <View style={{ backgroundColor: Brand.paper }}>
       <StatusBar barStyle="dark-content" backgroundColor={Brand.paper} />
       <View style={{ position: "relative" }}>
         <Header
@@ -237,7 +247,7 @@ const AppHeader = ({
           </View>
         )}
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -247,6 +257,7 @@ const AppNavigator = () => {
   const { isLoading: authLoading, isAuthenticated } = useAuth();
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const navigationRef = useRef(null);
+  const [currentRouteName, setCurrentRouteName] = useState("HomeScreen");
   const [headerConfig, setHeaderConfig] = useState({
     visible: false,
     title: "",
@@ -271,16 +282,16 @@ const AppNavigator = () => {
           if (data?.type === "task-assignment" && data.taskId) {
             navigationRef.navigate("TaskDetails", { taskId: data.taskId });
           } else if (data?.type === "project-assignment" && data.projectId) {
-            navigationRef.navigate("HomeScreen");
+            navigationRef.navigate("MainTabs", { screen: "HomeScreen" });
           } else if (data?.type === "event-assignment" && data.eventId) {
-            navigationRef.navigate("CalenderScreen");
+            navigationRef.navigate("MainTabs", { screen: "CalenderScreen" });
           } else if (
             (data?.type === "project-conversation-created" ||
               data?.type === "conversation-created" ||
               data?.type === "chat-message") &&
             data.conversationId
           ) {
-            navigationRef.navigate("ChatScreen");
+            navigationRef.navigate("MainTabs", { screen: "ChatScreen" });
           }
         }
       }
@@ -304,7 +315,7 @@ const AppNavigator = () => {
 
     switch (itemId) {
       case "chats":
-        nav.navigate("ChatScreen");
+        nav.navigate("MainTabs", { screen: "ChatScreen" });
         break;
       case "files":
         nav.navigate("FilesScreen");
@@ -320,10 +331,6 @@ const AppNavigator = () => {
 
   const handleSidebarLogoutComplete = useCallback(() => {
     setSidebarVisible(false);
-    navigationRef.current?.reset({
-      index: 0,
-      routes: [{ name: "SignIn" }],
-    });
   }, []);
 
   const goBack = useCallback(() => {
@@ -345,6 +352,7 @@ const AppNavigator = () => {
         "RegisterCompany",
         "OtpScreen",
         "HomeScreen",
+        "MainTabs",
         "SignatureScreen",
       ]);
 
@@ -475,6 +483,7 @@ const AppNavigator = () => {
   const syncHeaderWithCurrentRoute = useCallback(() => {
     const currentRoute = navigationRef.current?.getCurrentRoute();
     if (currentRoute) {
+      setCurrentRouteName(currentRoute.name);
       updateHeaderForRoute(currentRoute);
     }
   }, [updateHeaderForRoute]);
@@ -494,50 +503,54 @@ const AppNavigator = () => {
               onStateChange={syncHeaderWithCurrentRoute}
             >
               <View style={{ flex: 1 }}>
-                {headerConfig.visible && (
-                  <AppHeader
-                    title={headerConfig.title}
-                    onMenuPress={
-                      headerConfig.leftIconName === "menu"
-                        ? handleMenuPress
-                        : headerConfig.onMenuPress
+                <ScreenSafeArea>
+                  {headerConfig.visible && (
+                    <AppHeader
+                      title={headerConfig.title}
+                      onMenuPress={
+                        headerConfig.leftIconName === "menu"
+                          ? handleMenuPress
+                          : headerConfig.onMenuPress
+                      }
+                      navigation={navigationRef.current}
+                      showMenu={headerConfig.showMenu}
+                      leftIconName={headerConfig.leftIconName}
+                      showRightIcon={headerConfig.showRightIcon}
+                      rightIconName={headerConfig.rightIconName}
+                      onRightPress={headerConfig.onRightPress}
+                    />
+                  )}
+                  <Stack.Navigator
+                    screenOptions={{
+                      headerShown: false,
+                      animation: "fade",
+                      animationDuration: 160,
+                      freezeOnBlur: true,
+                    }}
+                    initialRouteName={
+                      isAuthenticated ? "MainTabs" : "SplashScreen"
                     }
-                    navigation={navigationRef.current}
-                    showMenu={headerConfig.showMenu}
-                    leftIconName={headerConfig.leftIconName}
-                    showRightIcon={headerConfig.showRightIcon}
-                    rightIconName={headerConfig.rightIconName}
-                    onRightPress={headerConfig.onRightPress}
-                  />
-                )}
-                <Stack.Navigator
-                  screenOptions={{
-                    headerShown: false,
-                    animation: "fade",
-                    animationDuration: 160,
-                    freezeOnBlur: true,
-                  }}
-                  initialRouteName="SplashScreen"
-                >
-                  <Stack.Screen name="SplashScreen" component={SplashScreen} />
-                  <Stack.Screen name="SignIn" component={SignIn} />
-                  <Stack.Screen name="LogIn" component={LogIn} />
-                  <Stack.Screen name="Register" component={RegisterScreen} />
-                  <Stack.Screen
-                    name="RegisterCompany"
-                    component={RegisterCompanyScreen}
-                  />
-                  <Stack.Screen name="OtpScreen" component={Code} />
-                  <Stack.Screen name="HomeScreen" component={HomeScreen} />
+                  >
+                  {!isAuthenticated ? (
+                    <>
+                      <Stack.Screen name="SplashScreen" component={SplashScreen} />
+                      <Stack.Screen name="SignIn" component={SignIn} />
+                      <Stack.Screen name="LogIn" component={LogIn} />
+                      <Stack.Screen name="Register" component={RegisterScreen} />
+                      <Stack.Screen
+                        name="RegisterCompany"
+                        component={RegisterCompanyScreen}
+                      />
+                      <Stack.Screen name="OtpScreen" component={Code} />
+                    </>
+                  ) : (
+                    <>
+                  <Stack.Screen name="MainTabs" component={MainTabs} />
                   <Stack.Screen
                     name="ProjectDetails"
                     component={ProjectDetailsScreen}
                   />
                   <Stack.Screen name="WidgetScreen" component={WidgetScreen} />
-                  <Stack.Screen
-                    name="CalenderScreen"
-                    component={CalenderScreen}
-                  />
                   <Stack.Screen
                     name="CalenderDetailScreen"
                     component={CalenderDetailScreen}
@@ -581,7 +594,6 @@ const AppNavigator = () => {
                     component={ProjectAssignment}
                   />
                   <Stack.Screen name="WeekView" component={WeekView} />
-                  <Stack.Screen name="ChatScreen" component={ChatScreen} />
                   <Stack.Screen
                     name="UserChatScreen"
                     component={UserChatScreen}
@@ -591,10 +603,6 @@ const AppNavigator = () => {
                     component={SignatureScreen}
                   />
                   <Stack.Screen
-                    name="NotificationScreen"
-                    component={NotificationScreen}
-                  />
-                  <Stack.Screen
                     name="AccountInfo"
                     component={AccountInfoScreen}
                   />
@@ -602,7 +610,19 @@ const AppNavigator = () => {
                     name="ProjectFiles"
                     component={ProjectFilesScreen}
                   />
+                    </>
+                  )}
                 </Stack.Navigator>
+                </ScreenSafeArea>
+
+                {isAuthenticated &&
+                  !HIDE_BOTTOM_NAV_ROUTES.has(currentRouteName) && (
+                    <HomeBottomNav
+                      navigationRef={navigationRef}
+                      currentRouteName={currentRouteName}
+                      hideFab={currentRouteName === "NotificationScreen"}
+                    />
+                  )}
 
                 <Sidebar
                   isVisible={sidebarVisible}
@@ -623,10 +643,16 @@ const AppNavigator = () => {
 function AppToastHost() {
   const insets = useSafeAreaInsets();
   return (
-    <View pointerEvents="box-none" style={StyleSheet.absoluteFillObject}>
+    <View
+      pointerEvents="box-none"
+      style={[
+        StyleSheet.absoluteFillObject,
+        { zIndex: 99999, elevation: 99999 },
+      ]}
+    >
       <Toast
         position="top"
-        topOffset={Math.max(insets.top + 8, 40)}
+        topOffset={Math.max(insets.top + 12, 52)}
         visibilityTime={2800}
         autoHide
         swipeable={false}

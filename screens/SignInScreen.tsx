@@ -4,7 +4,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   ActivityIndicator,
   ScrollView,
@@ -49,7 +48,7 @@ const SignIn = () => {
       if (isLoading) return;
 
       if (isAuthenticated) {
-        navigation.replace("HomeScreen");
+        navigation.replace("MainTabs");
         return;
       }
 
@@ -249,7 +248,7 @@ const SignIn = () => {
   return (
     <View style={{ flex: 1, backgroundColor: Brand.paper }}>
       <StatusBar barStyle="dark-content" backgroundColor={Brand.paper} />
-      <SafeAreaView style={{ flex: 1 }}>
+      <View style={{ flex: 1 }}>
         {isCompactHeight ? (
           <ScrollView
             contentContainerStyle={{
@@ -279,7 +278,7 @@ const SignIn = () => {
             {actions}
           </View>
         )}
-      </SafeAreaView>
+      </View>
     </View>
   );
 };

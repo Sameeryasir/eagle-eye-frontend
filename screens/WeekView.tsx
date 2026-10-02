@@ -1,8 +1,7 @@
 // @ts-nocheck
 import React, { useState } from 'react';
-import { SafeAreaView, StyleSheet, View, Text, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import HomeBottomNav from '../components/HomeBottomNav';
 import CreateEventModal from '../components/CreateEventModal';
 
 const { width } = Dimensions.get('window');
@@ -96,7 +95,7 @@ export default function MyWeekView() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={goToPreviousWeek} style={styles.navButton}>
           <Ionicons name="chevron-back" size={24} color="#333" />
@@ -175,11 +174,6 @@ export default function MyWeekView() {
           })}
         </View>
       </ScrollView>
-      
-      <HomeBottomNav
-        onAddPress={handleFabPress}
-        keyboardVisible={false}
-      />
 
       <CreateEventModal
         visible={createEventModalVisible}
@@ -187,7 +181,7 @@ export default function MyWeekView() {
         selectedDate={selectedDate}
         onEventCreated={handleEventCreated}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 

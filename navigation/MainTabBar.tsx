@@ -2,7 +2,6 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Keyboard } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { CommonActions } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "../context/AuthContext";
@@ -11,71 +10,40 @@ import appEmitter from "../utils/appEmitter";
 import { Brand } from "../constants/brandColors";
 
 const LEFT_TABS = [
+  { key: "HomeScreen", label: "Home", icon: "home-outline", iconActive: "home" },
   {
-    key: "home",
-    label: "Home",
-    icon: "home-outline",
-    iconActive: "home",
-    route: "HomeScreen",
-  },
-  {
-    key: "profile",
+    key: "CalenderScreen",
     label: "Calendar",
     icon: "calendar-outline",
     iconActive: "calendar",
-    route: "CalenderScreen",
   },
 ];
 
 const RIGHT_TABS = [
   {
-    key: "chats",
+    key: "ChatScreen",
     label: "Chats",
     icon: "chatbubble-outline",
     iconActive: "chatbubble",
-    route: "ChatScreen",
   },
   {
-    key: "notifications",
+    key: "NotificationScreen",
     label: "Alerts",
     icon: "notifications-outline",
     iconActive: "notifications",
-    route: "NotificationScreen",
   },
 ];
 
-function tabFromRoute(routeName) {
-  switch (routeName) {
-    case "HomeScreen":
-      return "home";
-    case "CalenderScreen":
-    case "CalenderDetailScreen":
-    case "WeekView":
-      return "profile";
-    case "ChatScreen":
-      return "chats";
-    case "NotificationScreen":
-      return "notifications";
-    default:
-      return "home";
-  }
-}
-
 function NavTab({ tab, active, hasNewNotification, onPress }) {
   return (
-    <TouchableOpacity
-      style={styles.tab}
-      onPress={onPress}
-      activeOpacity={0.75}
-      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-    >
+    <TouchableOpacity style={styles.tab} onPress={onPress} activeOpacity={0.75}>
       <View>
         <Ionicons
           name={active ? tab.iconActive : tab.icon}
           size={22}
           color={active ? Brand.ink : Brand.inkFaint}
         />
-        {tab.key === "notifications" && hasNewNotification && (
+        {tab.key === "NotificationScreen" && hasNewNotification && (
           <View style={styles.dot} />
         )}
       </View>
@@ -92,23 +60,14 @@ function NavTab({ tab, active, hasNewNotification, onPress }) {
   );
 }
 
-export default function HomeBottomNav({
-  navigationRef,
-  currentRouteName = "HomeScreen",
-  hideFab = false,
-}) {
+export default function MainTabBar({ state, navigation }) {
   const insets = useSafeAreaInsets();
   const { userInfo } = useAuth();
-  const [activeTab, setActiveTab] = React.useState(() =>
-    tabFromRoute(currentRouteName)
-  );
   const [hasNewNotification, setHasNewNotification] = React.useState(false);
   const [keyboardVisible, setKeyboardVisible] = React.useState(false);
   const isSubscribedRef = React.useRef(false);
 
-  React.useEffect(() => {
-    setActiveTab(tabFromRoute(currentRouteName));
-  }, [currentRouteName]);
+  const focusedRoute = state.routes[state.index]?.name;
 
   React.useEffect(() => {
     const show = Keyboard.addListener("keyboardDidShow", () =>
@@ -159,9 +118,9 @@ export default function HomeBottomNav({
     if (!currentUserId) return undefined;
 
     const channelName = `user-notifications-${currentUserId}`;
-    const onNotificationScreen = currentRouteName === "NotificationScreen";
+    const onAlerts = focusedRoute === "NotificationScreen";
 
-    if (onNotificationScreen) {
+    if (onAlerts) {
       setHasNewNotification(false);
       try {
         if (pusher.channels?.channels?.[channelName]) {
@@ -189,7 +148,7 @@ export default function HomeBottomNav({
     }
 
     return undefined;
-  }, [userInfo?.id, currentRouteName]);
+  }, [userInfo?.id, focusedRoute]);
 
   React.useEffect(() => {
     const handleClearBadge = () => setHasNewNotification(false);
@@ -197,97 +156,84 @@ export default function HomeBottomNav({
     return () => appEmitter.off("clear-notification-badge", handleClearBadge);
   }, []);
 
-  if (keyboardVisible) {
-    return null;
-  }
-
-  const onTabPress = (tab) => {
-    setActiveTab(tab.key);
-    if (tab.key === "notifications") {
+  const onTabPress = (routeName) => {
+    const event = navigation.emit({
+      type: "tabPress",
+      target: state.routes.find((r) => r.name === routeName)?.key,
+      canPreventDefault: true,
+    });
+    if (event?.defaultPrevented) return;
+    navigation.navigate(routeName);
+    if (routeName === "NotificationScreen") {
       setHasNewNotification(false);
       appEmitter.emit("clear-notification-badge");
     }
-    const nav = navigationRef?.current;
-    if (!nav) return;
-    nav.dispatch(
-      CommonActions.navigate({
-        name: "MainTabs",
-        params: { screen: tab.route },
-      })
-    );
   };
 
-  const handleAddPress = () => {
-    if (currentRouteName === "HomeScreen") {
+  const handleFabPress = () => {
+    if (focusedRoute === "HomeScreen") {
       appEmitter.emit("home-fab-press");
       return;
     }
-    if (currentRouteName === "CalenderScreen") {
+    if (focusedRoute === "CalenderScreen") {
       appEmitter.emit("calendar-fab-press");
       return;
     }
-    if (currentRouteName === "ChatScreen") {
+    if (focusedRoute === "ChatScreen") {
       appEmitter.emit("chat-fab-press");
       return;
     }
-    const nav = navigationRef?.current;
-    nav?.navigate("CreateProject");
   };
+
+  const hideFab = focusedRoute === "NotificationScreen";
 
   return (
     <View
-      pointerEvents="box-none"
       style={[
-        styles.overlay,
-        { paddingBottom: Math.max(insets.bottom, 8) },
+        styles.wrap,
+        {
+          paddingBottom: Math.max(insets.bottom, 8),
+          opacity: keyboardVisible ? 0 : 1,
+          pointerEvents: keyboardVisible ? "none" : "auto",
+        },
       ]}
     >
-      <View style={styles.wrap}>
-        {LEFT_TABS.map((tab) => (
-          <NavTab
-            key={tab.key}
-            tab={tab}
-            active={activeTab === tab.key}
-            hasNewNotification={hasNewNotification}
-            onPress={() => onTabPress(tab)}
-          />
-        ))}
+      {LEFT_TABS.map((tab) => (
+        <NavTab
+          key={tab.key}
+          tab={tab}
+          active={focusedRoute === tab.key}
+          hasNewNotification={hasNewNotification}
+          onPress={() => onTabPress(tab.key)}
+        />
+      ))}
 
-        {!hideFab && (
-          <View style={styles.fabSlot}>
-            <TouchableOpacity
-              style={styles.fab}
-              onPress={handleAddPress}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="add" size={28} color={Brand.onInk} />
-            </TouchableOpacity>
-          </View>
-        )}
+      {!hideFab && (
+        <View style={styles.fabSlot}>
+          <TouchableOpacity
+            style={styles.fab}
+            onPress={handleFabPress}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="add" size={28} color={Brand.onInk} />
+          </TouchableOpacity>
+        </View>
+      )}
 
-        {RIGHT_TABS.map((tab) => (
-          <NavTab
-            key={tab.key}
-            tab={tab}
-            active={activeTab === tab.key}
-            hasNewNotification={hasNewNotification}
-            onPress={() => onTabPress(tab)}
-          />
-        ))}
-      </View>
+      {RIGHT_TABS.map((tab) => (
+        <NavTab
+          key={tab.key}
+          tab={tab}
+          active={focusedRoute === tab.key}
+          hasNewNotification={hasNewNotification}
+          onPress={() => onTabPress(tab.key)}
+        />
+      ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 1000,
-    elevation: 1000,
-  },
   wrap: {
     flexDirection: "row",
     alignItems: "flex-end",

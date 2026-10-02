@@ -15,7 +15,6 @@ import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Sidebar from "../components/Sidebar";
-import HomeBottomNav from "../components/HomeBottomNav";
 import UpdateLogModal from "../components/UpdateLogModal";
 import DeleteLogModal from "../components/DeleteLogModal";
 import { getUserRole } from "../services/utils/userRole";
@@ -269,9 +268,6 @@ function LogsDetailScreen({ navigation, route }) {
         <View className="flex-1 justify-center items-center">
           <Text className="text-[16px] text-[#666]">Loading log details...</Text>
         </View>
-
-        {/* Show HomeBottomNav during loading */}
-        <HomeBottomNav />
       </View>
     );
   }
@@ -295,9 +291,6 @@ function LogsDetailScreen({ navigation, route }) {
             <Text className="text-white text-[16px] font-semibold">Go Back</Text>
           </TouchableOpacity>
         </View>
-
-        {/* Show HomeBottomNav during error */}
-        <HomeBottomNav />
       </View>
     );
   }
@@ -310,9 +303,6 @@ function LogsDetailScreen({ navigation, route }) {
         <View className="flex-1 justify-center items-center">
           <Text className="text-[16px] text-[#666]">Log not found</Text>
         </View>
-
-        {/* Show HomeBottomNav when log not found */}
-        <HomeBottomNav />
       </View>
     );
   }
@@ -787,7 +777,6 @@ function LogsDetailScreen({ navigation, route }) {
       <Sidebar visible={sidebarVisible} onClose={() => setSidebarVisible(false)} />
 
       {/* Bottom Navigation */}
-      <HomeBottomNav />
 
       {/* Update Log Modal */}
       <UpdateLogModal

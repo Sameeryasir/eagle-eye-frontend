@@ -1,6 +1,3 @@
-// Single shared chat cache table (Nest/Node-style), keyed by conversation_id.
-// Replaces legacy per-chat tables: messages_<id>
-
 export const CHAT_MESSAGES_TABLE = "chat_messages";
 
 export const createChatMessagesTableSQL = (): string => `
@@ -40,7 +37,6 @@ export const createChatMessagesIndexesSQL = (): string[] => [
     ON ${CHAT_MESSAGES_TABLE} (conversation_id, status)`,
 ];
 
-/** Digits-only conversation id for queries / legacy table migration. */
 export function sanitizeConversationId(conversationId: string | number): string {
   const raw = String(conversationId ?? "").trim();
   const safe = raw.replace(/[^0-9]/g, "");
@@ -50,17 +46,14 @@ export function sanitizeConversationId(conversationId: string | number): string 
   return safe;
 }
 
-/** @deprecated Legacy per-chat table name — used only during one-time migration */
 export const getMessagesTableName = (conversationId: string | number): string => {
   return `messages_${sanitizeConversationId(conversationId)}`;
 };
 
-/** @deprecated */
 export const createMessagesTableSQL = (conversationId: string | number): string => {
   return createChatMessagesTableSQL();
 };
 
-/** @deprecated no-op aliases kept for old imports */
 export const addStatusColumnSQL = (_conversationId?: string | number): string => {
   return `SELECT 1`;
 };

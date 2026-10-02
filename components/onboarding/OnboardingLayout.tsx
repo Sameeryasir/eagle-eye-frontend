@@ -55,7 +55,7 @@ export function OnboardingLayout({
       >
         <View
           style={{
-            paddingTop: Math.max(insets.top, 8),
+            paddingTop: 8,
             paddingHorizontal: Math.max(horizontalPad - 12, 8),
             flexDirection: "row",
             alignItems: "center",

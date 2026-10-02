@@ -1,6 +1,4 @@
 // @ts-nocheck
-// Service layer: chat cache rules on top of MessageRepository (fast local load / sync).
-// Public function names match the old messageStorage API so screens keep working.
 import { SQLiteDatabase } from "expo-sqlite";
 import { MessageRow } from "../schema/messages.schema";
 import { MessageRepository } from "./message.repository";
@@ -9,7 +7,6 @@ import type { MessageData, SignatureFieldUpdate } from "./message.types";
 export type { MessageData, SignatureFieldUpdate } from "./message.types";
 export type { MessageRow } from "../schema/messages.schema";
 
-/** Map a SQLite row into the nested message shape the chat UI expects. */
 export const mapMessageRowToUi = (row: MessageRow) => {
   return {
     id: row.id,
@@ -48,7 +45,6 @@ export const mapMessageRowToUi = (row: MessageRow) => {
   };
 };
 
-/** Fast path: load a page of cached messages for a conversation (newest first). */
 export const loadCachedMessagesPage = (
   db: SQLiteDatabase,
   conversationId: string | number,
@@ -205,7 +201,6 @@ export const messagesTableExists = (
   conversationId: string
 ): boolean => {
   try {
-    // Shared table always created; "exists" means this chat has cached rows
     return MessageRepository.hasCachedMessages(db, conversationId);
   } catch (error) {
     console.error("❌ Error checking table existence:", error);

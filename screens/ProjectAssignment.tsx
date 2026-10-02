@@ -15,7 +15,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import HomeBottomNav from '../components/HomeBottomNav';
 import { getMyProjects } from '../services/projects/getProjectsByLoginUserId';
 import { assignProjectToEmployees } from '../services/projects/assignProject';
 import { getUserById } from '../services/user/getUserById';
@@ -281,7 +280,6 @@ function ProjectAssignment({ navigation, route }) {
       <View className="flex-1 bg-white">
         <StatusBar barStyle="light-content" backgroundColor="#3155A1" />
         <Loader size="large" color="#000000" text="Loading details..." />
-        <HomeBottomNav />
       </View>
     );
   }
@@ -520,7 +518,6 @@ function ProjectAssignment({ navigation, route }) {
       </ScrollView>
 
       {/* Bottom Navigation */}
-      <HomeBottomNav />
 
       {/* Project Selection Modal */}
       <Modal

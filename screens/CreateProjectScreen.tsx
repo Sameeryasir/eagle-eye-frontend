@@ -13,7 +13,6 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { createProject } from '../services/projects/createProject';
 import Toast from 'react-native-toast-message';
-import HomeBottomNav from '../components/HomeBottomNav';
 
 function CreateProjectScreen({ navigation }) {
   const [projectData, setProjectData] = useState({
@@ -360,8 +359,6 @@ function CreateProjectScreen({ navigation }) {
           minimumDate={startDate}
         />
       )}
-
-      <HomeBottomNav keyboardVisible={keyboardVisible} />
     </View>
   );
 }

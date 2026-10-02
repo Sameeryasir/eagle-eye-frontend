@@ -4,7 +4,6 @@ import {
   View,
   Text,
   FlatList,
-  SafeAreaView,
   ActivityIndicator,
   TouchableOpacity,
   Alert,
@@ -12,7 +11,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { MaterialIcons } from '@expo/vector-icons';
 import { getMyProjects } from '../services/projects/getProjectsByLoginUserId';
-import HomeBottomNav from '../components/HomeBottomNav';
 
 const FilesScreen = ({ navigation }) => {
   const [projects, setProjects] = useState([]);
@@ -83,7 +81,7 @@ const FilesScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-100">
+    <View className="flex-1 bg-gray-100">
       {/* Error State */}
       {error ? (
         <View className="flex-1 items-center justify-center px-8">
@@ -138,9 +136,7 @@ const FilesScreen = ({ navigation }) => {
           </Text>
         </View>
       )}
-      
-      <HomeBottomNav />
-    </SafeAreaView>
+    </View>
   );
 };
 

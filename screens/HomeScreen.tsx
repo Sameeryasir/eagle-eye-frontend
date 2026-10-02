@@ -72,13 +72,13 @@ import {
   useDeleteProjectMutation,
 } from "../hooks/queries";
 import Sidebar from "../components/Sidebar";
-import HomeBottomNav from "../components/HomeBottomNav";
 import CreateProject from "../components/CreateProject";
 import UpdateProjectModal from "../components/UpdateProjectModal";
 import { sendInvite } from "../services/auth/SendInvite";
 import { getUserById } from "../services/user/getUserById";
 import { useAuth } from "../context/AuthContext";
 import { Brand } from "../constants/brandColors";
+import appEmitter from "../utils/appEmitter";
 
 const STATUS_STYLES = {
   planning: { bg: "#E8F1FF", text: "#2563EB", bar: "#3B82F6" },
@@ -217,6 +217,13 @@ function HomeScreen({ navigation }) {
   useEffect(() => {
     const loadCompany = async () => {
       try {
+        const existingCompanyId =
+          userInfo?.company?.id || userInfo?.company_id || null;
+        if (existingCompanyId) {
+          setCurrentUserCompanyId(existingCompanyId);
+          return;
+        }
+
         const userId = userInfo?.id;
         if (userId) {
           const userData = await getUserById(userId);
@@ -229,7 +236,7 @@ function HomeScreen({ navigation }) {
       }
     };
     loadCompany();
-  }, [userInfo?.id]);
+  }, [userInfo?.id, userInfo?.company?.id, userInfo?.company_id]);
 
   useEffect(() => {
     const show = Keyboard.addListener("keyboardDidShow", () =>
@@ -242,6 +249,12 @@ function HomeScreen({ navigation }) {
       show?.remove();
       hide?.remove();
     };
+  }, []);
+
+  useEffect(() => {
+    const openCreate = () => setCreateProjectModalVisible(true);
+    appEmitter.on("home-fab-press", openCreate);
+    return () => appEmitter.off("home-fab-press", openCreate);
   }, []);
 
   const onRefresh = React.useCallback(() => {
@@ -594,7 +607,7 @@ function HomeScreen({ navigation }) {
   );
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
+    <View style={styles.root}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.flex}>
           <FlatList
@@ -602,7 +615,7 @@ function HomeScreen({ navigation }) {
             keyExtractor={(item) => String(item.id)}
             contentContainerStyle={{
               paddingHorizontal: 20,
-              paddingBottom: 24,
+              paddingBottom: 110,
               flexGrow: 1,
             }}
             showsVerticalScrollIndicator={false}
@@ -667,23 +680,19 @@ function HomeScreen({ navigation }) {
         </View>
       </TouchableWithoutFeedback>
 
-      <HomeBottomNav
-        keyboardVisible={keyboardVisible}
-        onAddPress={() => setCreateProjectModalVisible(true)}
-      />
-
       <Sidebar
         isVisible={sidebarVisible}
         onClose={() => setSidebarVisible(false)}
         onNavigate={(itemId) => {
           setSidebarVisible(false);
-          if (itemId === "chats") navigation.navigate("ChatScreen");
+          if (itemId === "chats") {
+            navigation.navigate("MainTabs", { screen: "ChatScreen" });
+          }
           if (itemId === "files") navigation.navigate("FilesScreen");
           if (itemId === "personnel") navigation.navigate("PersonalScreen");
         }}
         onLogoutComplete={() => {
           setSidebarVisible(false);
-          navigation.reset({ index: 0, routes: [{ name: "SignIn" }] });
         }}
       />
 
