@@ -1,28 +1,46 @@
 // @ts-nocheck
 import React from "react";
-import { View, Text, TouchableOpacity } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import {
   OnboardingLayout,
   OnboardingField,
   OnboardingFieldRow,
+  OnboardingPhoneField,
+  ProfileIdCardArt,
 } from "../components/onboarding/OnboardingLayout";
 import {
   OnboardingSteps,
   getOnboardingSession,
   saveOnboardingSession,
-  clearOnboardingSession,
 } from "../services/onboarding/onboardingSession";
-import { Brand } from "../constants/brandColors";
+import { useResponsiveLayout } from "../constants/responsiveLayout";
+import {
+  DEFAULT_PHONE_COUNTRY,
+  findCountryByIso,
+  buildFullPhone,
+} from "../constants/countryDialCodes";
+
+function formatNationalPhone(digits, countryIso) {
+  const d = String(digits || "").replace(/\D/g, "").slice(0, 15);
+  if (countryIso === "US" || countryIso === "CA") {
+    const us = d.slice(0, 10);
+    if (us.length <= 3) return us;
+    if (us.length <= 6) return `(${us.slice(0, 3)}) ${us.slice(3)}`;
+    return `(${us.slice(0, 3)}) ${us.slice(3, 6)}-${us.slice(6)}`;
+  }
+  return d;
+}
 
 const RegisterScreen = () => {
   const navigation = useNavigation();
+  const layout = useResponsiveLayout();
   const [form, setForm] = React.useState({
     firstName: "",
     lastName: "",
     email: "",
     phone: "",
   });
+  const [phoneCountry, setPhoneCountry] = React.useState(DEFAULT_PHONE_COUNTRY);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -34,8 +52,11 @@ const RegisterScreen = () => {
           firstName: session.firstName || "",
           lastName: session.lastName || "",
           email: session.email || "",
-          phone: session.phone || "",
+          phone: session.phoneNational || session.phone || "",
         });
+        if (session.phoneCountryIso) {
+          setPhoneCountry(findCountryByIso(session.phoneCountryIso));
+        }
       })();
       return () => {
         active = false;
@@ -53,6 +74,9 @@ const RegisterScreen = () => {
     form.lastName.trim().length >= 2 &&
     emailOk;
 
+  const nationalDigits = String(form.phone || "").replace(/\D/g, "");
+  const fullPhone = buildFullPhone(phoneCountry.dial, nationalDigits);
+
   React.useEffect(() => {
     const timer = setTimeout(() => {
       if (
@@ -67,11 +91,14 @@ const RegisterScreen = () => {
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
         email: form.email.trim().toLowerCase(),
-        phone: form.phone.trim() || "",
+        phone: fullPhone,
+        phoneNational: nationalDigits,
+        phoneCountryIso: phoneCountry.iso,
+        phoneDialCode: phoneCountry.dial,
       });
     }, 400);
     return () => clearTimeout(timer);
-  }, [form]);
+  }, [form, phoneCountry, fullPhone, nationalDigits]);
 
   const handleContinue = async () => {
     if (!isValid) return;
@@ -80,14 +107,12 @@ const RegisterScreen = () => {
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
       email: form.email.trim().toLowerCase(),
-      phone: form.phone.trim() || "",
+      phone: fullPhone,
+      phoneNational: nationalDigits,
+      phoneCountryIso: phoneCountry.iso,
+      phoneDialCode: phoneCountry.dial,
     });
     navigation.navigate("RegisterCompany");
-  };
-
-  const handleStartOver = async () => {
-    await clearOnboardingSession();
-    setForm({ firstName: "", lastName: "", email: "", phone: "" });
   };
 
   return (
@@ -96,41 +121,39 @@ const RegisterScreen = () => {
       totalSteps={2}
       title="Your details"
       subtitle="Create your personal account first. Next you’ll add your contracting company."
-      onBack={() =>
-        navigation.navigate("SignIn", { skipResume: true })
-      }
+      showBack
+      onBack={() => navigation.navigate("SignIn")}
+      showStepCaption={false}
+      headerAside={<ProfileIdCardArt size={layout.rs(92)} />}
       primaryLabel="Continue"
+      showPrimaryArrow
       onPrimary={handleContinue}
       primaryDisabled={!isValid}
-      secondary={
-        <TouchableOpacity
-          onPress={handleStartOver}
-          style={{ marginTop: 18, alignItems: "center" }}
-        >
-          <Text style={{ color: Brand.inkFaint, fontSize: 13 }}>
-            Clear and start over
-          </Text>
-        </TouchableOpacity>
-      }
     >
       <OnboardingFieldRow>
         <OnboardingField
           label="First name"
+          required
+          leftIcon="person-outline"
           value={form.firstName}
           onChangeText={(v) => setField("firstName", v)}
-          placeholder="First"
+          placeholder="First name"
           autoCapitalize="words"
         />
         <OnboardingField
           label="Last name"
+          required
+          leftIcon="person-outline"
           value={form.lastName}
           onChangeText={(v) => setField("lastName", v)}
-          placeholder="Last"
+          placeholder="Last name"
           autoCapitalize="words"
         />
       </OnboardingFieldRow>
       <OnboardingField
         label="Work email"
+        required
+        leftIcon="mail-outline"
         value={form.email}
         onChangeText={(v) => setField("email", v)}
         placeholder="you@company.com"
@@ -138,12 +161,21 @@ const RegisterScreen = () => {
         keyboardType="email-address"
         autoComplete="email"
       />
-      <OnboardingField
-        label="Phone (optional)"
-        value={form.phone}
-        onChangeText={(v) => setField("phone", v.replace(/[^\d]/g, ""))}
-        placeholder="Mobile number"
-        keyboardType="phone-pad"
+      <OnboardingPhoneField
+        country={phoneCountry}
+        onCountryChange={setPhoneCountry}
+        value={formatNationalPhone(form.phone, phoneCountry.iso)}
+        onChangeText={(v) =>
+          setField(
+            "phone",
+            v.replace(/\D/g, "").slice(0, phoneCountry.iso === "US" || phoneCountry.iso === "CA" ? 10 : 15)
+          )
+        }
+        placeholder={
+          phoneCountry.iso === "US" || phoneCountry.iso === "CA"
+            ? "(201) 555-0123"
+            : "Phone number"
+        }
       />
     </OnboardingLayout>
   );

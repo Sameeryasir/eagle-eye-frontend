@@ -1,21 +1,21 @@
 // @ts-nocheck
 import React from "react";
-import { Text, TouchableOpacity, View } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import Toast from "react-native-toast-message";
 import {
   OnboardingLayout,
   OnboardingField,
   OnboardingFieldRow,
+  OnboardingCountryField,
+  CompanyBuildingArt,
 } from "../components/onboarding/OnboardingLayout";
 import { registerCompany } from "../services/auth/Register";
 import {
   OnboardingSteps,
   getOnboardingSession,
   saveOnboardingSession,
-  clearOnboardingSession,
 } from "../services/onboarding/onboardingSession";
-import { Brand } from "../constants/brandColors";
+import { useResponsiveLayout } from "../constants/responsiveLayout";
 
 const emptyCompanyForm = {
   companyName: "",
@@ -33,6 +33,7 @@ const emptyCompanyForm = {
 
 const RegisterCompanyScreen = () => {
   const navigation = useNavigation();
+  const layout = useResponsiveLayout();
   const [loading, setLoading] = React.useState(false);
   const [userDraft, setUserDraft] = React.useState(null);
   const [form, setForm] = React.useState(emptyCompanyForm);
@@ -158,26 +159,19 @@ const RegisterCompanyScreen = () => {
           : "Add your contracting company profile."
       }
       onBack={() => navigation.goBack()}
+      showBack
+      showStepCaption
+      headerAside={<CompanyBuildingArt size={layout.rs(92)} />}
       primaryLabel="Create company"
+      showPrimaryArrow
       onPrimary={handleContinue}
       primaryDisabled={!isValid}
       primaryLoading={loading}
-      secondary={
-        <TouchableOpacity
-          onPress={async () => {
-            await clearOnboardingSession();
-            navigation.navigate("Register");
-          }}
-          style={{ marginTop: 18, alignItems: "center" }}
-        >
-          <Text style={{ color: Brand.inkFaint, fontSize: 13 }}>
-            Start over from your details
-          </Text>
-        </TouchableOpacity>
-      }
     >
       <OnboardingField
         label="Company name"
+        leftIcon="business-outline"
+        iconBoxed
         value={form.companyName}
         onChangeText={(v) => setField("companyName", v)}
         placeholder="Summit Builders LLC"
@@ -185,6 +179,8 @@ const RegisterCompanyScreen = () => {
       />
       <OnboardingField
         label="Street address (optional)"
+        leftIcon="location-outline"
+        iconBoxed
         value={form.address}
         onChangeText={(v) => setField("address", v)}
         placeholder="123 Main Street"
@@ -192,12 +188,16 @@ const RegisterCompanyScreen = () => {
       <OnboardingFieldRow>
         <OnboardingField
           label="City"
+          leftIcon="business-outline"
+          iconBoxed
           value={form.city}
           onChangeText={(v) => setField("city", v)}
           placeholder="City"
         />
         <OnboardingField
           label="State"
+          leftIcon="map-outline"
+          iconBoxed
           value={form.state}
           onChangeText={(v) => setField("state", v)}
           placeholder="State"
@@ -206,23 +206,23 @@ const RegisterCompanyScreen = () => {
       <OnboardingFieldRow>
         <OnboardingField
           label="ZIP / postal"
+          leftIcon="cube-outline"
+          iconBoxed
           value={form.postalCode}
           onChangeText={(v) => setField("postalCode", v)}
           placeholder="ZIP"
           autoCapitalize="characters"
         />
-        <OnboardingField
+        <OnboardingCountryField
           label="Country"
           value={form.country}
-          onChangeText={(v) => setField("country", v)}
-          placeholder="USA"
+          onChange={(code) => setField("country", code)}
         />
       </OnboardingFieldRow>
-
-      <View style={{ height: 8 }} />
-
       <OnboardingField
         label="Company phone (optional)"
+        leftIcon="call-outline"
+        iconBoxed
         value={form.companyPhone}
         onChangeText={(v) => setField("companyPhone", v.replace(/[^\d]/g, ""))}
         placeholder="Office phone"
@@ -230,31 +230,13 @@ const RegisterCompanyScreen = () => {
       />
       <OnboardingField
         label="Company email (optional)"
+        leftIcon="mail-outline"
+        iconBoxed
         value={form.companyEmail}
         onChangeText={(v) => setField("companyEmail", v)}
-        placeholder="office@company.com"
+        placeholder="Office email"
         autoCapitalize="none"
         keyboardType="email-address"
-      />
-      <OnboardingField
-        label="Website (optional)"
-        value={form.website}
-        onChangeText={(v) => setField("website", v)}
-        placeholder="https://..."
-        autoCapitalize="none"
-        keyboardType="url"
-      />
-      <OnboardingField
-        label="Trade / specialty (optional)"
-        value={form.trade}
-        onChangeText={(v) => setField("trade", v)}
-        placeholder="e.g. Electrical, General contractor"
-      />
-      <OnboardingField
-        label="License number (optional)"
-        value={form.licenseNumber}
-        onChangeText={(v) => setField("licenseNumber", v)}
-        placeholder="Contractor license #"
       />
     </OnboardingLayout>
   );
